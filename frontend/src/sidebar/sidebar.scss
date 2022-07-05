@@ -83,15 +83,6 @@ body {
     display: flex;
     flex-direction: column;
     overflow-y: auto;
-    header {
-      margin-bottom: 40px;
-      border-bottom: 1px solid #efefef;
-      h1 {
-        display: flex;
-        align-items: center;
-        transform: translateX(-20px);
-      }
-    }
 
     footer {
       margin-top: auto;
@@ -127,11 +118,6 @@ body {
     direction: rtl;
     text-align: right;
 
-    header {
-      h1 {
-        transform: translateX(20px);
-      }
-    }
     .block {
       direction: rtl;
       > span {
@@ -151,11 +137,6 @@ body {
 
   @media (max-width: 767.98px) {
     overflow-x: hidden;
-    header {
-      h1 {
-        font-size: 24px;
-      }
-    }
   }
   @media (max-width: $breakpoint-md) {
     .btn-toggle {

@@ -15,7 +15,7 @@ import './sidebar.css';
 
 export default () => {
 	return(
-		<ProSidebar breakPoint="md">
+		<ProSidebar breakPoint="md" style={{position: "fixed"}}>
 			<SidebarHeader>
 				<div className="sidebar-logo">
 					<h1>FinanceTracker</h1>
