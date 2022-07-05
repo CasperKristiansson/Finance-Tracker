@@ -3,13 +3,12 @@ import {
   ProSidebar,
   Menu,
   MenuItem,
-  SubMenu,
   SidebarHeader,
   SidebarFooter,
   SidebarContent,
 } from 'react-pro-sidebar';
-import { FaTachometerAlt, FaGem, FaList, FaGithub, FaRegLaughWink, FaHeart } from 'react-icons/fa';
-// import { Button } from 'semantic-ui-react';
+import { FaTachometerAlt, FaGem, FaRegLaughWink } from 'react-icons/fa';
+import { FiSettings } from 'react-icons/fi';
 
 import './sidebar.scss';
 import './sidebar.css';
@@ -41,7 +40,25 @@ export default () => {
 			</SidebarContent>
 
 			<SidebarFooter style={{ textAlign: 'center' }}>
-			</SidebarFooter>
-		</ProSidebar>
+        <div
+          className="sidebar-btn-wrapper"
+          style={{
+            padding: '20px 24px',
+          }}
+        >
+					<a
+            href="https://github.com/azouaoui-med/react-pro-sidebar"
+            target="_blank"
+            className="sidebar-btn"
+            rel="noopener noreferrer"
+          >
+          <FiSettings />
+          <span style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+            Settings
+          </span>
+					</a>
+        </div>
+      </SidebarFooter>
+    </ProSidebar>
 	);
 }
