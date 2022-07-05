@@ -1,5 +1,4 @@
 import './App.css';
-import './sidebar/sidebar.scss';
 
 import Sidebar from './sidebar/sidebar';
 

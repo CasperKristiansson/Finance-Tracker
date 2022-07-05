@@ -1,0 +1,11 @@
+.sidebar-logo {
+    padding: "15px 0px";
+    text-transform: 'uppercase';
+    font-weight: 'bold';
+    font-size: 14;
+    letter-spacing: '1px';
+}
+
+.sidebar-logo h1 {
+    text-align: center;
+}
