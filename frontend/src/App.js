@@ -8,11 +8,13 @@ function App() {
   return (
     <div className="App">
       <Sidebar />
-      <BrowserRouter>
-        <Routes>
-          <Route path="*" element={<Home />} />
-        </Routes>
-      </BrowserRouter>
+      <div>
+        <BrowserRouter>
+          <Routes>
+            <Route path="*" element={<Home />} />
+          </Routes>
+        </BrowserRouter>
+      </div>
     </div>
   );
 }
