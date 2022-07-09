@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+// import 'semantic-ui-css/semantic.min.css'
 import './index.css';
 import App from './App';
 import './sidebar/sidebar.css';
@@ -10,3 +11,8 @@ root.render(
     <App />
   </React.StrictMode>
 );
+<link
+    async
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/semantic-ui@2/dist/semantic.min.css"
+  />
