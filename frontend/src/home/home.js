@@ -13,12 +13,22 @@ export default () => {
 					<Grid.Row stretched>
 						<Grid.Column>
 							<Grid columns={"equal"}>
-								<Grid.Row stretched>
+								<Grid.Row>
 									<Grid.Column>
-										<Segment>1</Segment>
+										<Button
+											icon="plus"
+											content="Add Transaction"
+											color="green"
+											className={"main-section-button"}
+										/>
 									</Grid.Column>
 									<Grid.Column>
-										<Segment>2</Segment>
+										<Button
+											icon="file"
+											content="Import Excel"
+											color="blue"
+											className={"main-section-button"}
+										/>
 									</Grid.Column>
 								</Grid.Row>
 								<Grid.Row stretched>
