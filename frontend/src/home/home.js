@@ -39,66 +39,8 @@ export default () => {
 										<Segment>
 											<BarChart
 												title="2022"
-												data={{
-													labels: [
-														"January",
-														"February",
-														"March",
-														"April",
-														"May",
-														"June",
-														"July",
-														"August",
-														"September",
-														"October",
-														"November",
-														"December"
-													],
-													datasets: [
-														{
-															label: "Income",
-															backgroundColor: "rgba(255,99,132,0.2)",
-															borderColor: "rgba(255,99,132,1)",
-															borderWidth: 1,
-															hoverBackgroundColor: "rgba(255,99,132,1)",
-															hoverBorderColor: "rgba(255,99,132,1)",
-															data: [65, 59, 80, 81, 56, 55, 40, 80, 81, 56, 55, 40]
-														},
-														{
-															label: "Expenses",
-															backgroundColor: "rgba(54,162,235,0.2)",
-															borderColor: "rgba(54,162,235,1)",
-															borderWidth: 1,
-															hoverBackgroundColor: "rgba(54,162,235,1)",
-															hoverBorderColor: "rgba(54,162,235,1)",
-															data: [65, 59, 80, 81, 56, 55, 40, 80, 81, 56, 55, 40]
-														}
-													]
-												}}
-
-												options={{
-													title: {
-														display: true,
-														text: "Income and Expenses",
-														fontSize: 25
-													},
-													legend: {
-														display: true,
-														position: "right"
-													},
-													scales: {
-														x: {
-															grid: {
-																display: false
-															}
-														},
-														y: {
-															grid: {
-																display: false
-															}
-														}
-													}
-												}}
+												dataIncome={[65, 59, 80, 81, 56, 55, 40, 80, 81, 56, 55, 40]}
+												dataExpense={[65, 59, 80, 81, 56, 55, 40, 80, 81, 56, 55, 40]}												
 											/>
 										</Segment>
 									</Grid.Column>
