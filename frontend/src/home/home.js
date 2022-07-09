@@ -1,6 +1,7 @@
 import React from "react";
 import "./home.css";
-import { Grid, Segment } from "semantic-ui-react";
+import { Grid, Segment, Button } from "semantic-ui-react";
+import piechart from "../graphs/piechart";
 
 export default () => {
 	return (
@@ -28,10 +29,17 @@ export default () => {
 							</Grid>
 						</Grid.Column>
 						<Grid.Column>
-								<Segment>1</Segment>
+								<Segment>
+								<Button.Group>
+									<Button color="red">Expenses</Button>
+									<Button.Or />
+									<Button positive>Income</Button>
+								</Button.Group>
+								</Segment>
 						</Grid.Column>
 					</Grid.Row>
 				</Grid>
+				<Segment>1</Segment>
 			</div>
 		</div>
 		</>
