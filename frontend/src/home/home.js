@@ -73,7 +73,18 @@ export default () => {
 						</Grid.Column>
 					</Grid.Row>
 				</Grid>
-				<Segment>1</Segment>
+				<Segment>
+					<Grid columns={"equal"}>
+						<Grid.Row stretched>
+							<Grid.Column>
+								<Segment>1</Segment>
+							</Grid.Column>
+							<Grid.Column>
+								<Segment>2</Segment>
+							</Grid.Column>
+						</Grid.Row>
+					</Grid>
+				</Segment>
 			</div>
 		</div>
 		</>
