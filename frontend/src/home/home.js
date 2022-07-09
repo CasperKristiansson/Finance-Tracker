@@ -31,8 +31,10 @@ export default () => {
 										/>
 									</Grid.Column>
 								</Grid.Row>
+							</Grid>
+							<Grid className={"grid-max-height"}>
 								<Grid.Row stretched>
-									<Grid.Column>
+									<Grid.Column height={10}>
 										<Segment>3</Segment>
 									</Grid.Column>
 								</Grid.Row>
@@ -49,7 +51,7 @@ export default () => {
 										<PieChart 
 											title="Expenses"
 											data={{
-												labels: ["Food", "Transport", "Entertainment", "Other"],
+												labels: ["Food (25%)", "Transport", "Entertainment", "Other"],
 												datasets: [
 													{
 														label: "Expenses",
