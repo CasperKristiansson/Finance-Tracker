@@ -3,6 +3,7 @@ import "./home.css";
 import { Grid, Segment, Button } from "semantic-ui-react";
 import PieChart from "../graphs/piechart";
 import BarChart from "../graphs/barchart";
+import Table from "../graphs/table";
 
 export default () => {
 	return (
@@ -66,7 +67,7 @@ export default () => {
 					</Grid.Row>
 				</Grid>
 				<Segment>
-					<Grid columns={"equal"}>
+					{/* <Grid columns={"equal"}>
 						<Grid.Row stretched>
 							<Grid.Column>
 								<Segment>1</Segment>
@@ -75,8 +76,76 @@ export default () => {
 								<Segment>2</Segment>
 							</Grid.Column>
 						</Grid.Row>
-					</Grid>
-				</Segment>
+					</Grid> */}
+					</Segment>
+					<Table 
+						data={[
+							{
+								date: "01/01/2020",
+								category: "Food",
+								amount: 200,
+								account: "Checking",
+								type: "Income",
+								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
+							},
+							{
+								date: "01/01/2020",
+								category: "Food",
+								amount: 200,
+								account: "Checking",
+								type: "Income",
+								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
+							},
+							{
+								date: "01/01/2020",
+								category: "Food",
+								amount: 200,
+								account: "Checking",
+								type: "Income",
+								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
+							},
+							{
+								date: "01/01/2020",
+								category: "Food",
+								amount: 200,
+								account: "Checking",
+								type: "Expense",
+								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
+							},
+							{
+								date: "01/01/2020",
+								category: "Food",
+								amount: 200,
+								account: "Checking",
+								type: "Income",
+								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
+							},
+							{
+								date: "01/01/2020",
+								category: "Food",
+								amount: 200,
+								account: "Checking",
+								type: "Expense",
+								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
+							},
+							{
+								date: "01/01/2020",
+								category: "Food",
+								amount: 200,
+								account: "Checking",
+								type: "Expense",
+								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
+							},
+							{
+								date: "01/01/2020",
+								category: "Food",
+								amount: 200,
+								account: "Checking",
+								type: "Income",
+								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
+							},
+						]}
+					/>
 			</div>
 		</div>
 		</>
