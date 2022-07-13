@@ -23,7 +23,7 @@
     width: 100%;
     overflow: hidden;
     height: 125px;
-    bottom: 25px;
+    bottom: 50px;
     background-image: linear-gradient(to top, #86377b 20%, #27273c 80%);
 }
 .bgTop {
@@ -66,4 +66,18 @@
 }
 .waveAnimation .waveBottom {
     animation: move_wave 15s linear infinite;
+}
+
+.home-income-label-left {
+    z-index: 99999;
+    position: absolute;
+    left: 25%;
+    top: 35%;
+}
+
+.home-income-label-right {
+    z-index: 99999;
+    position: absolute;
+    right: 25%;
+    top: 43%;
 }
