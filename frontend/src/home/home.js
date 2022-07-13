@@ -4,6 +4,7 @@ import { Grid, Segment, Button } from "semantic-ui-react";
 import PieChart from "../graphs/piechart";
 import BarChart from "../graphs/barchart";
 import Table from "../graphs/table";
+import Banner from "./banner.js";
 
 export default () => {
 	return (
@@ -66,7 +67,7 @@ export default () => {
 						</Grid.Column>
 					</Grid.Row>
 				</Grid>
-				<Segment>
+				<Segment style={{height: "125px"}}>
 					{/* <Grid columns={"equal"}>
 						<Grid.Row stretched>
 							<Grid.Column>
@@ -77,6 +78,7 @@ export default () => {
 							</Grid.Column>
 						</Grid.Row>
 					</Grid> */}
+					<Banner />
 					</Segment>
 					<Table 
 						data={[
