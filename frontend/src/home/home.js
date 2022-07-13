@@ -67,7 +67,7 @@ export default () => {
 						</Grid.Column>
 					</Grid.Row>
 				</Grid>
-				<Segment style={{height: "125px"}}>
+				<Segment style={{height: "150px"}}>
 					{/* <Grid columns={"equal"}>
 						<Grid.Row stretched>
 							<Grid.Column>
