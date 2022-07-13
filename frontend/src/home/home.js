@@ -70,19 +70,19 @@ export default () => {
 				<Segment style={{height: "175px"}}>
 					<Banner />
 						<div className="ui statistic home-income-label-left green">
+							<div className="value">
+								40,509 kr
+							</div>
 							<div className="label" style={{color: "#21BA45"}}>
 								Income
 							</div>
-							<div className="value">
-								40,509 kr
-							</div>
 						</div>
 						<div className="ui statistic home-income-label-right red">
-							<div className="label" style={{color: "#DB2828"}}>
-								Expenses
-							</div>
 							<div className="value">
 								40,509 kr
+							</div>
+							<div className="label" style={{color: "#DB2828"}}>
+								Expenses
 							</div>
 						</div>
 					</Segment>
