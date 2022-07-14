@@ -22,7 +22,7 @@
     position: absolute;
     width: 100%;
     overflow: hidden;
-    height: 125px;
+    height: 150px;
     bottom: 50px;
     /* background-image: linear-gradient(to top, #86377b 20%, #27273c 80%); */
     background-image: linear-gradient(to bottom, #42896d, #3d926b, #3c9a67, #3da362, #42ab5a, #4bb459, #56be57, #61c754, #71d559, #81e35d, #91f162, #a2ff66);
@@ -73,12 +73,25 @@
     z-index: 99999;
     position: absolute;
     left: 25%;
-    top: 35%;
+    top: 45%;
 }
 
 .home-income-label-right {
     z-index: 99999;
     position: absolute;
     right: 25%;
-    top: 43%;
+    top: 53%;
+}
+
+.home-income-label {
+    z-index: 99999;
+    position: absolute;
+    left: 50%; 
+    transform: translate(-50%, -50%);
+    top: 15%;
+}
+
+.home-income-label h2 {
+    font-size: 50px;
+    color: white;
 }

@@ -67,8 +67,11 @@ export default () => {
 						</Grid.Column>
 					</Grid.Row>
 				</Grid>
-				<Segment style={{height: "175px"}}>
+				<Segment style={{height: "200px"}}>
 					<Banner />
+						<div className="home-income-label">
+							<h2>This Month</h2>
+						</div>
 						<div className="ui statistic home-income-label-left green">
 							<div className="value">
 								40,509 kr
