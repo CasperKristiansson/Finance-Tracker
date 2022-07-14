@@ -1,4 +1,4 @@
-import React from "react";
+import React, {useEffect, useState} from "react";
 import "./home.css";
 import { Grid, Segment, Button } from "semantic-ui-react";
 import PieChart from "../graphs/piechart";
@@ -7,6 +7,18 @@ import Table from "../graphs/table";
 import Banner from "./banner.js";
 
 export default () => {
+	const [yearIncome, setYearIncome] = useState([]);
+	const [yearExpenses, setYearExpenses] = useState([]);
+	const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+	const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+	const [transactions, setTransactions] = useState([]);
+	const [categories, setCategories] = useState([]);
+	const [categoriesIncome, setCategoriesIncome] = useState([]);
+	const [categoriesExpenses, setCategoriesExpenses] = useState([]);
+
+	useEffect(() => {
+	}, [])
+
 	return (
 		<>
 		<div className={"main-section"}>
