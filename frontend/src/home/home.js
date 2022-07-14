@@ -69,25 +69,6 @@ export default () => {
 				</Grid>
 				<Segment style={{height: "200px"}}>
 					<Banner />
-						<div className="home-income-label">
-							<h2>This Month</h2>
-						</div>
-						<div className="ui statistic home-income-label-left green">
-							<div className="value">
-								40,509 kr
-							</div>
-							<div className="label" style={{color: "#21BA45"}}>
-								Income
-							</div>
-						</div>
-						<div className="ui statistic home-income-label-right red">
-							<div className="value">
-								40,509 kr
-							</div>
-							<div className="label" style={{color: "#DB2828"}}>
-								Expenses
-							</div>
-						</div>
 					</Segment>
 					<Table 
 						data={[
