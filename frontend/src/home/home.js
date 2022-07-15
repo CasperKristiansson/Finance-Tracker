@@ -43,6 +43,23 @@ export default () => {
 	return (
 		<>
 		<div className={"main-section"}>
+			<div className={"date-picker"}>
+			<select class="ui dropdown" onChange={(e) => setCurrentYear(e.target.value)}>
+				<option value="">Pick Year</option>
+				{Array.from(Array(new Date().getFullYear() - 2018 + 1).keys()).map(i => {
+					return <option value={2018 + i}>{2018 + i}</option>;
+				})}
+			</select>
+				<div className={"button-group"}>
+				
+					<Button.Group>
+						<Button onClick={() => setCurrentMonth(currentMonth - 1)}>-</Button>
+						<div class="or" data-text={currentMonth + 1}></div>
+						<Button onClick={() => setCurrentMonth(currentMonth + 1)}>+</Button>
+					</Button.Group>
+
+				</div>
+			</div>
 			<h1>Monthly Overview</h1>
 			<div className={"main-section-content"}>
 				<Grid columns={2}>
@@ -91,7 +108,7 @@ export default () => {
 									</Button.Group>
 									<div className={"main-section-pie"}>
 										<PieChart 
-											title="Expenses"
+											title={pieChartType}
 											labels={categories}
 											data={categoriesAmount}
 										/>
