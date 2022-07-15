@@ -16,8 +16,9 @@ export default () => {
 	const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
 	const [transactions, setTransactions] = useState([]);
 	const [categories, setCategories] = useState([]);
-	const [categoriesIncome, setCategoriesIncome] = useState([]);
-	const [categoriesExpense, setCategoriesExpense] = useState([]);
+	const [categoriesAmount, setCategoriesAmount] = useState([]);
+
+	const [pieChartType, setPieChartType] = useState("Income");
 
 	useEffect(() => {
 		const q = query(collection(db, "transactions"), where("date", ">", new Date(currentYear, 0, 1)));
@@ -35,10 +36,9 @@ export default () => {
 	}, [transactions]);
 
 	useEffect(() => {
-		setCategories(getCategories(transactions, new Date(currentYear, currentMonth - 1, 1), "Income"));
-		// setCategoriesIncome(getCategories(transactions, "Income"));
-		// setCategoriesExpense(getCategories(transactions, "Expense"));
-	}, [transactions, currentMonth]);
+		setCategories(getCategories(transactions, new Date(currentYear, currentMonth - 1, 1), pieChartType));
+		setCategoriesAmount(getCategoriesAmount(transactions, new Date(currentYear, currentMonth - 1, 1), pieChartType));
+	}, [transactions, currentMonth, pieChartType]);
 
 	return (
 		<>
@@ -85,15 +85,15 @@ export default () => {
 						<Grid.Column>
 								<Segment>
 									<Button.Group>
-										<Button color="red">Expenses</Button>
+										<Button color="red" onClick={() => setPieChartType("Expense")}>Expenses</Button>
 										<Button.Or />
-										<Button positive>Income</Button>
+										<Button positive onClick={() => setPieChartType("Income")}>Income</Button>
 									</Button.Group>
 									<div className={"main-section-pie"}>
 										<PieChart 
 											title="Expenses"
-											labels={["Food (25%)", "Transport", "Entertainment", "Other"]}
-											data={[12, 19, 3, 5]}
+											labels={categories}
+											data={categoriesAmount}
 										/>
 									</div>
 								</Segment>
@@ -213,6 +213,33 @@ function getCategories(transactions, date, type) {
 
 	for (let i in categories) {
 		categoriesWithPercent.push(i + " (" + (categories[i] / categoriesTotal * 100).toFixed(2) + "%)");
+	}
+
+	return categoriesWithPercent;
+}
+
+function getCategoriesAmount(transactions, date, type) {
+	let categories = {};
+
+	for (let i = 0; i < transactions.length; i++) {
+		let dateCopy = new Date(date.getTime());
+		if (transactions[i].date.seconds * 1000
+			>= date &&
+			transactions[i].date.seconds * 1000
+			<= new Date(dateCopy.setMonth(dateCopy.getMonth() + 1)).getTime()) {
+			if (transactions[i].type === type)
+				if (categories[transactions[i].category]) categories[transactions[i].category] += transactions[i].amount;
+				else categories[transactions[i].category] = transactions[i].amount;
+		}
+	}
+
+	let categoriesTotal = 0;
+	for (let i in categories) categoriesTotal += categories[i];
+
+	let categoriesWithPercent = [];
+
+	for (let i in categories) {
+		categoriesWithPercent.push(categories[i]);
 	}
 
 	return categoriesWithPercent;
