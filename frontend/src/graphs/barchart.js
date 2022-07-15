@@ -64,8 +64,6 @@ export default (props) => {
         },
       ],
     });
-
-    console.log(props)
   }, [props.dataIncome, props.dataExpense]);
 
   var options = {

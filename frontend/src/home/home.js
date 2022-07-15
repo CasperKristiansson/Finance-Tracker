@@ -34,6 +34,12 @@ export default () => {
 		setYearExpense(getYearAmount(transactions, "Expense"));
 	}, [transactions]);
 
+	useEffect(() => {
+		setCategories(getCategories(transactions, new Date(currentYear, currentMonth - 1, 1), "Income"));
+		// setCategoriesIncome(getCategories(transactions, "Income"));
+		// setCategoriesExpense(getCategories(transactions, "Expense"));
+	}, [transactions, currentMonth]);
+
 	return (
 		<>
 		<div className={"main-section"}>
@@ -185,4 +191,29 @@ function getYearAmount(transactions, type) {
 		}
 	}
 	return income;
+}
+
+function getCategories(transactions, date, type) {
+	let categories = {};
+
+	for (let i = 0; i < transactions.length; i++) {
+		let dateCopy = new Date(date.getTime());
+		if (transactions[i].date.seconds * 1000 >= date &&
+			transactions[i].date.seconds * 1000 <= new Date(dateCopy.setMonth(dateCopy.getMonth() + 1)).getTime()) {
+			if (transactions[i].type === type)
+				if (categories[transactions[i].category]) categories[transactions[i].category] += transactions[i].amount;
+				else categories[transactions[i].category] = transactions[i].amount;
+		}
+	}
+
+	let categoriesTotal = 0;
+	for (let i in categories) categoriesTotal += categories[i];
+
+	let categoriesWithPercent = [];
+
+	for (let i in categories) {
+		categoriesWithPercent.push(i + " (" + (categories[i] / categoriesTotal * 100).toFixed(2) + "%)");
+	}
+
+	return categoriesWithPercent;
 }
