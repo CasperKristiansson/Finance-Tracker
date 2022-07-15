@@ -45,8 +45,8 @@ export default (props) => {
       labels: labels,
       datasets: [
         {
-          label: "Income",
-          data: props.dataIncome,
+          label: "Expense",
+          data: props.dataExpense,
           backgroundColor: backgroundColorIncome,
           borderColor: borderColorIncome,
           hoverBackgroundColor: hoverBackgroundColorIncome,
@@ -54,8 +54,8 @@ export default (props) => {
           borderWidth: borderWidth,
         },
         {
-          label: "Expenses",
-          data: props.dataExpense,
+          label: "Income",
+          data: props.dataIncome,
           backgroundColor: backgroundColorExpense,
           borderColor: borderColorExpense,
           hoverBackgroundColor: hoverBackgroundColorExpense,
@@ -64,7 +64,9 @@ export default (props) => {
         },
       ],
     });
-  }, [props.data]);
+
+    console.log(props)
+  }, [props.dataIncome, props.dataExpense]);
 
   var options = {
     title: {

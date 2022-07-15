@@ -6,18 +6,33 @@ import BarChart from "../graphs/barchart";
 import Table from "../graphs/table";
 import Banner from "./banner.js";
 
+import { collection, query, where, getDocs } from "firebase/firestore";
+import { db } from "../firebase";
+
 export default () => {
 	const [yearIncome, setYearIncome] = useState([]);
-	const [yearExpenses, setYearExpenses] = useState([]);
+	const [yearExpense, setYearExpense] = useState([]);
 	const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
 	const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
 	const [transactions, setTransactions] = useState([]);
 	const [categories, setCategories] = useState([]);
 	const [categoriesIncome, setCategoriesIncome] = useState([]);
-	const [categoriesExpenses, setCategoriesExpenses] = useState([]);
+	const [categoriesExpense, setCategoriesExpense] = useState([]);
 
 	useEffect(() => {
-	}, [])
+		const q = query(collection(db, "transactions"), where("date", ">", new Date(currentYear, 0, 1)));
+
+		getDocs(q).then(querySnapshot => {
+			setTransactions(querySnapshot.docs.map(doc => doc.data()));
+		}, (error) => {
+			console.log("Error getting documents: ", error);
+		});
+	}, [currentYear]);
+
+	useEffect(() => {
+		setYearIncome(getYearAmount(transactions, "Income"));
+		setYearExpense(getYearAmount(transactions, "Expense"));
+	}, [transactions]);
 
 	return (
 		<>
@@ -52,9 +67,9 @@ export default () => {
 									<Grid.Column>
 										<Segment>
 											<BarChart
-												title="2022"
-												dataIncome={[65, 59, 80, 81, 56, 55, 40, 80, 81, 56, 55, 40]}
-												dataExpense={[65, 59, 80, 81, 56, 55, 40, 80, 81, 56, 55, 40]}												
+												title={currentYear}
+												dataIncome={yearIncome}
+												dataExpense={yearExpense}												
 											/>
 										</Segment>
 									</Grid.Column>
@@ -154,4 +169,20 @@ export default () => {
 		</div>
 		</>
 	);
+}
+
+function getYearAmount(transactions, type) {
+	let income = [];
+	for (let i = 0; i < 12; i++) {
+		income.push(0);
+	}
+
+	for (let i = 0; i < transactions.length; i++) {
+		let month = new Date(transactions[i].date.seconds * 1000).getMonth();
+
+		if (transactions[i].type === type) {
+			income[month] += transactions[i].amount;
+		}
+	}
+	return income;
 }
