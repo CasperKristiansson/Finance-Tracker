@@ -101,7 +101,7 @@ export default () => {
 					</Grid.Row>
 				</Grid>
 				<Segment style={{height: "200px"}}>
-					<Banner />
+					<Banner income={yearIncome[currentMonth]} expenses={yearExpense[currentMonth]} />
 					</Segment>
 					<Table 
 						data={filterTransactions(transactions, new Date(currentYear, currentMonth, 1))}

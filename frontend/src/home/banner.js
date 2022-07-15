@@ -1,7 +1,7 @@
 import React from "react";
 import "./banner.css"
 
-export default () => {
+export default (props) => {
   return (
 		<>
 			<div className="waveWrapper waveAnimation">
@@ -20,7 +20,7 @@ export default () => {
 			</div>
 			<div className="ui statistic home-income-label-left green">
 				<div className="value">
-					40,509 kr
+					{props.income ? (props.income).toFixed(1) : 0} kr
 				</div>
 				<div className="label" style={{color: "#21BA45"}}>
 					Income
@@ -28,7 +28,7 @@ export default () => {
 			</div>
 			<div className="ui statistic home-income-label-right red">
 				<div className="value">
-					40,509 kr
+					{props.expenses ? (props.expenses).toFixed(1) : 0} kr
 				</div>
 				<div className="label" style={{color: "#DB2828"}}>
 					Expenses
