@@ -20,16 +20,21 @@ export default (props) => {
 					return (
 						<tr className={row.type == "Income" ? "positive" : "negative"}>
 							<td><i className="edit icon"></i></td>
-							<td>{row.date}</td>
+							<td>{stringifyTime(row.date)}</td>
 							<td>{row.category}</td>
 							<td>{row.amount}</td>
 							<td>{row.account}</td>
 							<td>{row.type}</td>
-							<td>{row.notes}</td>
+							<td>{row.note}</td>
 						</tr>
 					);
 				})}
 			</tbody>
 		</table>
 	);
+}
+
+function stringifyTime(date) {
+	date = new Date(date.seconds * 1000);
+	return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
 }

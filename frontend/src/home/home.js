@@ -13,7 +13,7 @@ export default () => {
 	const [yearIncome, setYearIncome] = useState([]);
 	const [yearExpense, setYearExpense] = useState([]);
 	const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-	const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+	const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() - 1);
 	const [transactions, setTransactions] = useState([]);
 	const [categories, setCategories] = useState([]);
 	const [categoriesAmount, setCategoriesAmount] = useState([]);
@@ -36,8 +36,8 @@ export default () => {
 	}, [transactions]);
 
 	useEffect(() => {
-		setCategories(getCategories(transactions, new Date(currentYear, currentMonth - 1, 1), pieChartType));
-		setCategoriesAmount(getCategoriesAmount(transactions, new Date(currentYear, currentMonth - 1, 1), pieChartType));
+		setCategories(getCategories(transactions, new Date(currentYear, currentMonth, 1), pieChartType));
+		setCategoriesAmount(getCategoriesAmount(transactions, new Date(currentYear, currentMonth, 1), pieChartType));
 	}, [transactions, currentMonth, pieChartType]);
 
 	return (
@@ -104,72 +104,7 @@ export default () => {
 					<Banner />
 					</Segment>
 					<Table 
-						data={[
-							{
-								date: "01/01/2020",
-								category: "Food",
-								amount: 200,
-								account: "Checking",
-								type: "Income",
-								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
-							},
-							{
-								date: "01/01/2020",
-								category: "Food",
-								amount: 200,
-								account: "Checking",
-								type: "Income",
-								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
-							},
-							{
-								date: "01/01/2020",
-								category: "Food",
-								amount: 200,
-								account: "Checking",
-								type: "Income",
-								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
-							},
-							{
-								date: "01/01/2020",
-								category: "Food",
-								amount: 200,
-								account: "Checking",
-								type: "Expense",
-								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
-							},
-							{
-								date: "01/01/2020",
-								category: "Food",
-								amount: 200,
-								account: "Checking",
-								type: "Income",
-								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
-							},
-							{
-								date: "01/01/2020",
-								category: "Food",
-								amount: 200,
-								account: "Checking",
-								type: "Expense",
-								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
-							},
-							{
-								date: "01/01/2020",
-								category: "Food",
-								amount: 200,
-								account: "Checking",
-								type: "Expense",
-								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
-							},
-							{
-								date: "01/01/2020",
-								category: "Food",
-								amount: 200,
-								account: "Checking",
-								type: "Income",
-								notes: "orem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad"
-							},
-						]}
+						data={filterTransactions(transactions, new Date(currentYear, currentMonth, 1))}
 					/>
 			</div>
 		</div>
@@ -243,4 +178,25 @@ function getCategoriesAmount(transactions, date, type) {
 	}
 
 	return categoriesWithPercent;
+}
+
+function filterTransactions(transactions, date) {
+	let filteredTransactions = [];
+	for (let i = 0; i < transactions.length; i++) {
+		let dateCopy = new Date(date.getTime());
+		if (transactions[i].date.seconds * 1000
+			>= date &&
+			transactions[i].date.seconds * 1000
+			<= new Date(dateCopy.setMonth(dateCopy.getMonth() + 1)).getTime()) {
+			filteredTransactions.push(transactions[i]);
+		}
+	}
+
+	for (let i = 0; i < filteredTransactions.length; i++) {
+		if (!filteredTransactions[i].note) {
+			filteredTransactions[i].note = "";
+		}
+	}
+
+	return filteredTransactions.reverse();
 }
