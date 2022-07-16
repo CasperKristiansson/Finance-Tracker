@@ -5,9 +5,9 @@ import './index.css';
 import App from './App';
 import './firebase.js';
 import './sidebar/sidebar.css';
-import {Chart, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title} from 'chart.js'
+import {Chart, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title, PointElement, LineElement} from 'chart.js'
 
-Chart.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
+Chart.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title, PointElement, LineElement);
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

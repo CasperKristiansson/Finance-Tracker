@@ -186,9 +186,10 @@ function getCategoriesAmount(transactions, date, type) {
 			>= date &&
 			transactions[i].date.seconds * 1000
 			<= new Date(dateCopy.setMonth(dateCopy.getMonth() + 1)).getTime()) {
-			if (transactions[i].type === type)
+			if (transactions[i].type === type) {
 				if (categories[transactions[i].category]) categories[transactions[i].category] += transactions[i].amount;
 				else categories[transactions[i].category] = transactions[i].amount;
+			}
 		}
 	}
 
