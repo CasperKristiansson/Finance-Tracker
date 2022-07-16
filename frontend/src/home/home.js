@@ -5,6 +5,7 @@ import PieChart from "../graphs/piechart";
 import BarChart from "../graphs/barchart";
 import Table from "../graphs/table";
 import Banner from "./banner.js";
+import Header from "./header.js"
 
 import { collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
@@ -21,13 +22,15 @@ export default () => {
 	const [pieChartType, setPieChartType] = useState("Income");
 
 	useEffect(() => {
-		const q = query(collection(db, "transactions"), where("date", ">", new Date(currentYear, 0, 1)));
+		// const q = query(collection(db, "transactions"), where("date", ">", new Date(currentYear, 0, 1)));
 
-		getDocs(q).then(querySnapshot => {
-			setTransactions(querySnapshot.docs.map(doc => doc.data()));
-		}, (error) => {
-			console.log("Error getting documents: ", error);
-		});
+		// getDocs(q).then(querySnapshot => {
+		// 	setTransactions(querySnapshot.docs.map(doc => doc.data()));
+		// 	console.log(querySnapshot.docs.map(doc => doc.data()));
+		// }, (error) => {
+		// 	console.log("Error getting documents: ", error);
+		// });
+		console.log(currentYear);
 	}, [currentYear]);
 
 	useEffect(() => {
@@ -40,27 +43,27 @@ export default () => {
 		setCategoriesAmount(getCategoriesAmount(transactions, new Date(currentYear, currentMonth, 1), pieChartType));
 	}, [transactions, currentMonth, pieChartType]);
 
+	// Handle the change of the year
+	const handleYearChange = (e) => {
+		if (e.target.value !== currentYear) {
+			setCurrentYear(e.target.value);
+		}
+	}
+
+	const handleMonthChange = (month) => {
+		if (month >= 0 && month < 12 && month !== currentMonth) {
+			setCurrentMonth(month);
+		}
+	}
+
 	return (
 		<>
 		<div className={"main-section"}>
-			<div className={"date-picker"}>
-			<select class="ui dropdown" onChange={(e) => setCurrentYear(e.target.value)}>
-				<option value="">Pick Year</option>
-				{Array.from(Array(new Date().getFullYear() - 2018 + 1).keys()).map(i => {
-					return <option value={2018 + i}>{2018 + i}</option>;
-				})}
-			</select>
-				<div className={"button-group"}>
-				
-					<Button.Group>
-						<Button onClick={() => setCurrentMonth(currentMonth - 1)}>-</Button>
-						<div class="or" data-text={currentMonth + 1}></div>
-						<Button onClick={() => setCurrentMonth(currentMonth + 1)}>+</Button>
-					</Button.Group>
-
-				</div>
-			</div>
-			<h1>Monthly Overview</h1>
+			<Header
+				handleYearChange={handleYearChange}
+				handleMonthChange={handleMonthChange}
+				currentMonth={currentMonth}
+			/>
 			<div className={"main-section-content"}>
 				<Grid columns={2}>
 					<Grid.Row stretched>
