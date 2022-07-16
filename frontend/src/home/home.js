@@ -21,6 +21,8 @@ export default () => {
 
 	const [pieChartType, setPieChartType] = useState("Income");
 
+	var oldYear;
+
 	useEffect(() => {
 		// const q = query(collection(db, "transactions"), where("date", ">", new Date(currentYear, 0, 1)));
 
@@ -30,7 +32,9 @@ export default () => {
 		// }, (error) => {
 		// 	console.log("Error getting documents: ", error);
 		// });
-		console.log(currentYear);
+		if (oldYear !== currentYear) {
+			oldYear = currentYear;
+		}
 	}, [currentYear]);
 
 	useEffect(() => {
