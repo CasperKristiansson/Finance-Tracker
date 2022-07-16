@@ -46,6 +46,16 @@ export default (props) => {
 						</Grid.Column>
 						<Grid.Column>
 							<Segment>
+								<PieChart
+									title={`Income / Expense`}
+									labels={[`Income ${getPercent(transactions, year, "Income")}`,
+										`Expense ${getPercent(transactions, year, "Expense")}`
+									]}
+									data={[
+										getTotal(transactions, year, "Income"),
+										getTotal(transactions, year, "Expense")
+									]}
+								/>
 							</Segment>
 						</Grid.Column>
 						<Grid.Column>
@@ -172,4 +182,36 @@ function getTransactionAmounts(transactions, year, type) {
 	});
 
 	return amounts;
+}
+
+function getTotal(transactions, year, type) {
+	let total = 0;
+	transactions.forEach(transaction => {
+		var currentDate = new Date(transaction.Date);
+		if (transaction.Type == type && currentDate.getFullYear() == year) {
+			total += transaction.Amount;
+		}
+	});
+
+	return total;
+}
+
+function getPercent(transactions, year, type) {
+	let total = 0;
+	transactions.forEach(transaction => {
+		var currentDate = new Date(transaction.Date);
+		if (currentDate.getFullYear() == year && transaction.Type != "Transfer-Out") {
+			total += transaction.Amount;
+		}
+	});
+
+	let percent = 0;
+	transactions.forEach(transaction => {
+		var currentDate = new Date(transaction.Date);
+		if (transaction.Type == type && currentDate.getFullYear() == year) {
+			percent += transaction.Amount;
+		}
+	});
+
+	return (percent / total * 100).toFixed(2) + "%";
 }
