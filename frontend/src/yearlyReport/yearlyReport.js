@@ -39,7 +39,7 @@ export default (props) => {
 							<Segment>
 								<PieChart
 									title={`Income`}
-									labels={getTransactionCategories(transactions, year, "Income")}
+									labels={getCategories(transactions, year, "Income")}
 									data={getTransactionAmounts(transactions, year, "Income")}
 								/>
 							</Segment>
@@ -52,7 +52,7 @@ export default (props) => {
 							<Segment>
 								<PieChart
 									title={`Expense`}
-									labels={getTransactionCategories(transactions, year, "Expense")}
+									labels={getCategories(transactions, year, "Expense")}
 									data={getTransactionAmounts(transactions, year, "Expense")}
 								/>
 							</Segment>
@@ -122,27 +122,34 @@ function calculateNetWorthIncrease(transactions, year) {
 	return netWorthIncrease;
 }
 
-function getTransactionCategories(transactions, year, type) {
-	// get all of the different categories for the given year by storing it in a map, and only keep the type
+function getCategories(transactions, year, type) {
 	let map = new Map();
+
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
 		if (transaction.Type == type && currentDate.getFullYear() == year) {
 			if (map.has(transaction.Category)) {
-				map.set(transaction.Category, map.get(transaction.Category) + 1);
+				map.set(transaction.Category, map.get(transaction.Category) + transaction.Amount);
 			}
 			else {
-				map.set(transaction.Category, 1);
+				map.set(transaction.Category, transaction.Amount);
 			}
 		}
 	});
 
-	let categories = [];
+	let categoriesTotal = 0;
 	map.forEach((value, key) => {
-		categories.push(key);
+		categoriesTotal += value;
 	});
 
-	return categories;
+	let categoriesWithPercent = [];
+	map.forEach((value, key) => {
+		categoriesWithPercent.push(
+			key + " " + " (" + (value / categoriesTotal * 100).toFixed(2) + "%)"
+		);
+	});
+
+	return categoriesWithPercent;
 }
 
 function getTransactionAmounts(transactions, year, type) {
