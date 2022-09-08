@@ -7,7 +7,7 @@ import Table from "../graphs/table";
 import Banner from "./banner.js";
 import Header from "./header.js"
 
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { getDocs, collection } from "firebase/firestore";
 import { db } from "../firebase";
 
 export default () => {
@@ -24,28 +24,28 @@ export default () => {
 	var oldYear;
 
 	useEffect(() => {
-		// const q = query(collection(db, "transactions"), where("date", ">", new Date(currentYear, 0, 1)));
+    var transactionsDict = {};
+    getDocs(collection(db, "transactions")).then((querySnapshot) => {
+      querySnapshot.forEach((doc) => {
+        transactionsDict = Object.assign(transactionsDict, convertData(doc.data()));
+      });
+      setTransactions(transactionsDict);
+    });
 
-		// getDocs(q).then(querySnapshot => {
-		// 	setTransactions(querySnapshot.docs.map(doc => doc.data()));
-		// 	console.log(querySnapshot.docs.map(doc => doc.data()));
-		// }, (error) => {
-		// 	console.log("Error getting documents: ", error);
-		// });
 		if (oldYear !== currentYear) {
 			oldYear = currentYear;
 		}
 	}, [currentYear]);
 
 	useEffect(() => {
-		setYearIncome(getYearAmount(transactions, "Income"));
-		setYearExpense(getYearAmount(transactions, "Expense"));
-	}, [transactions]);
+		setYearIncome(getYearAmount(transactions, "Income", currentYear));
+		// setYearExpense(getYearAmount(transactions, "Expense", currentYear));
+	}, [transactions, currentYear]);
 
-	useEffect(() => {
-		setCategories(getCategories(transactions, new Date(currentYear, currentMonth, 1), pieChartType));
-		setCategoriesAmount(getCategoriesAmount(transactions, new Date(currentYear, currentMonth, 1), pieChartType));
-	}, [transactions, currentMonth, pieChartType]);
+	// useEffect(() => {
+	// 	setCategories(getCategories(transactions, new Date(currentYear, currentMonth, 1), pieChartType));
+	// 	setCategoriesAmount(getCategoriesAmount(transactions, new Date(currentYear, currentMonth, 1), pieChartType));
+	// }, [transactions, currentMonth, pieChartType]);
 
 	// Handle the change of the year
 	const handleYearChange = (e) => {
@@ -63,7 +63,7 @@ export default () => {
 	return (
 		<>
 		<div className={"main-section"}>
-			<Header
+			{/* <Header
 				handleYearChange={handleYearChange}
 				handleMonthChange={handleMonthChange}
 				currentMonth={currentMonth}
@@ -130,26 +130,28 @@ export default () => {
 					<Table 
 						data={filterTransactions(transactions, new Date(currentYear, currentMonth, 1))}
 					/>
-			</div>
+			</div> */}
 		</div>
 		</>
 	);
 }
 
-function getYearAmount(transactions, type) {
-	let income = [];
-	for (let i = 0; i < 12; i++) {
-		income.push(0);
-	}
+function getYearAmount(transactionsGroup, type, currentYear) {
+  // Get the amount of each month for the current year
+  var yearAmount = [];
+  for (var i = 0; i < 12; i++) {
+    yearAmount.push(0);
+  }
 
-	for (let i = 0; i < transactions.length; i++) {
-		let month = new Date(transactions[i].date.seconds * 1000).getMonth();
+  console.log(transactionsGroup)
 
-		if (transactions[i].type === type) {
-			income[month] += transactions[i].amount;
-		}
-	}
-	return income;
+  // transactionsGroup.forEach((transactions) => {
+    
+  // });
+
+  // console.log(yearAmount);
+
+  return yearAmount;
 }
 
 function getCategories(transactions, date, type) {
@@ -203,6 +205,26 @@ function getCategoriesAmount(transactions, date, type) {
 	}
 
 	return categoriesWithPercent;
+}
+
+function convertData(transactionsData) {
+  let transactionsDict = {};
+
+  for(var i in transactionsData) {
+    var transaction = {
+      id: i,
+      date: new Date(transactionsData[i][0].seconds * 1000),
+      amount: transactionsData[i][1],
+      category: transactionsData[i][2],
+      description: transactionsData[i][3],
+      account: transactionsData[i][4],
+      type: transactionsData[i][5],
+    }
+
+    transactionsDict[i] = transaction;
+  }
+
+  return transactionsDict;
 }
 
 function filterTransactions(transactions, date) {
