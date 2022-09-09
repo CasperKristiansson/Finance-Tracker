@@ -6,7 +6,7 @@ export default (props) => {
 	return(
 		<div className={"home-header"}>
 			<div className={"date-picker"}>
-				<select class="ui dropdown home-picker" onChange={(e) => props.handleYearChange(e)}>
+				<select className="ui dropdown home-picker" onChange={(e) => props.handleYearChange(e)}>
 					<option value="">Pick Year</option>
 					{Array.from(Array(new Date().getFullYear() - 2018 + 1).keys()).map(i => {
 						return <option value={2018 + i}>{2018 + i}</option>;
@@ -16,7 +16,7 @@ export default (props) => {
 				
 					<Button.Group>
 						<Button onClick={() => props.handleMonthChange(props.currentMonth - 1)}>-</Button>
-						<div class="or" data-text={props.currentMonth + 1}></div>
+						<div className="or" data-text={props.currentMonth + 1}></div>
 						<Button onClick={() => props.handleMonthChange(props.currentMonth + 1)}>+</Button>
 					</Button.Group>
 
