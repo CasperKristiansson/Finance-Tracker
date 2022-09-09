@@ -1,12 +1,36 @@
-import React from "react";
+import React, {useEffect, useState} from "react";
 import { Grid, Segment, Button } from "semantic-ui-react";
 import BarChart from "../graphs/barchart";
 import LineChart from "../graphs/linechart";
 import PieChart from "../graphs/piechart";
 import { transactions } from "../data.js";
 
+import axios from "axios";
+
 export default (props) => {
-	var year = 2021;
+	const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const [transactions, setTransactions] = useState([]);
+
+  var oldYear;
+
+	useEffect(() => {
+    if (currentYear !== oldYear) {
+      var params = new URLSearchParams();
+      params.append('year', currentYear);
+      
+      axios.post('https://pktraffic.com/api/transactions.php', params).then(response => {
+        console.log(response.data);
+        setTransactions(response.data.transactions);
+      }).catch(response => {
+        console.log(response);
+      })
+
+      if (oldYear !== currentYear) {
+        oldYear = currentYear;
+      }
+    }
+    
+	}, [currentYear]);
 
 	return(
 		<>
@@ -17,17 +41,17 @@ export default (props) => {
 						<Grid.Column>
 							<Segment>
 								<BarChart
-									title={`Income / Expense for ${year}`}
-									dataIncome={getTransactionsType(transactions, year, "Income")}
-									dataExpense={getTransactionsType(transactions, year, "Expense")}
+									title={`Income / Expense for ${currentYear}`}
+									dataIncome={getTransactionsType(transactions, currentYear, "Income")}
+									dataExpense={getTransactionsType(transactions, currentYear, "Expense")}
 								/>
 							</Segment>
 						</Grid.Column>
 						<Grid.Column>
 							<Segment>
 								<LineChart
-									title={`Wealth Growth for ${year}`}
-									data={calculateNetWorthIncrease(transactions, year)}
+									title={`Wealth Growth for ${currentYear}`}
+									data={calculateNetWorthIncrease(transactions, currentYear)}
 								/>
 							</Segment>
 						</Grid.Column>
@@ -39,8 +63,8 @@ export default (props) => {
 							<Segment>
 								<PieChart
 									title={`Income`}
-									labels={getCategories(transactions, year, "Income")}
-									data={getTransactionAmounts(transactions, year, "Income")}
+									labels={getCategories(transactions, currentYear, "Income")}
+									data={getTransactionAmounts(transactions, currentYear, "Income")}
 								/>
 							</Segment>
 						</Grid.Column>
@@ -48,12 +72,12 @@ export default (props) => {
 							<Segment>
 								<PieChart
 									title={`Income / Expense`}
-									labels={[`Income ${getPercent(transactions, year, "Income")}`,
-										`Expense ${getPercent(transactions, year, "Expense")}`
+									labels={[`Income ${getPercent(transactions, currentYear, "Income")}`,
+										`Expense ${getPercent(transactions, currentYear, "Expense")}`
 									]}
 									data={[
-										getTotal(transactions, year, "Income"),
-										getTotal(transactions, year, "Expense")
+										getTotal(transactions, currentYear, "Income"),
+										getTotal(transactions, currentYear, "Expense")
 									]}
 								/>
 							</Segment>
@@ -62,8 +86,8 @@ export default (props) => {
 							<Segment>
 								<PieChart
 									title={`Expense`}
-									labels={getCategories(transactions, year, "Expense")}
-									data={getTransactionAmounts(transactions, year, "Expense")}
+									labels={getCategories(transactions, currentYear, "Expense")}
+									data={getTransactionAmounts(transactions, currentYear, "Expense")}
 								/>
 							</Segment>
 						</Grid.Column>
@@ -75,16 +99,16 @@ export default (props) => {
 	);
 }
 
-function getTransactionsType(transactions, year, type) {
+function getTransactionsType(transactions, currentYear, type) {
 	let map = new Map();
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
-		if (transaction.Type == type && currentDate.getFullYear() == year) {
+		if (transaction.Type == type) {
 			var month = currentDate.getMonth();
 			if (map.has(month)) {
-				map.set(month, map.get(month) + transaction.Amount);
+				map.set(month, map.get(month) + parseInt(transaction.Amount));
 			} else {
-				map.set(month, transaction.Amount);
+				map.set(month, parseInt(transaction.Amount));
 			}
 		}
 	});
@@ -92,15 +116,15 @@ function getTransactionsType(transactions, year, type) {
 	return Array.from(map.values());
 }
 
-function calculateNetWorthIncrease(transactions, year) {
+function calculateNetWorthIncrease(transactions, currentYear) {
 	let startAmount = 0;
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
-		if (currentDate.getFullYear() < year) {
+		if (currentDate.getFullYear() < currentYear) {
 			if (transaction.Type == "Income") {
-				startAmount += transaction.Amount;
+				startAmount += parseInt(transaction.Amount);
 			} else {
-				startAmount -= transaction.Amount;
+				startAmount -= parseInt(transaction.Amount);
 			}
 		}
 	});
@@ -108,12 +132,12 @@ function calculateNetWorthIncrease(transactions, year) {
 	let map = new Map();
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
-		if (currentDate.getFullYear() == year && transaction.Type != "Transfer-Out") {
+		if (currentDate.getFullYear() == currentYear && transaction.Type != "Transfer-Out") {
 			var month = currentDate.getMonth();
 			if (transaction.Type == "Income") {
-				var amount = transaction.Amount;
+				var amount = parseInt(transaction.Amount);
 			} else if (transaction.Type == "Expense") {
-				var amount = -transaction.Amount;
+				var amount = -parseInt(transaction.Amount);
 			}
 			if (map.has(month)) {
 				map.set(month, map.get(month) + amount);
@@ -132,17 +156,17 @@ function calculateNetWorthIncrease(transactions, year) {
 	return netWorthIncrease;
 }
 
-function getCategories(transactions, year, type) {
+function getCategories(transactions, currentYear, type) {
 	let map = new Map();
 
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
-		if (transaction.Type == type && currentDate.getFullYear() == year) {
+		if (transaction.Type == type && currentDate.getFullYear() == currentYear) {
 			if (map.has(transaction.Category)) {
-				map.set(transaction.Category, map.get(transaction.Category) + transaction.Amount);
+				map.set(transaction.Category, map.get(transaction.Category) + parseInt(transaction.Amount));
 			}
 			else {
-				map.set(transaction.Category, transaction.Amount);
+				map.set(transaction.Category, parseInt(transaction.Amount));
 			}
 		}
 	});
@@ -162,16 +186,16 @@ function getCategories(transactions, year, type) {
 	return categoriesWithPercent;
 }
 
-function getTransactionAmounts(transactions, year, type) {
+function getTransactionAmounts(transactions, currentYear, type) {
 	let map = new Map();
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
-		if (transaction.Type == type && currentDate.getFullYear() == year) {
+		if (transaction.Type == type && currentDate.getFullYear() == currentYear) {
 			if (map.has(transaction.Category)) {
-				map.set(transaction.Category, map.get(transaction.Category) + transaction.Amount);
+				map.set(transaction.Category, map.get(transaction.Category) + parseInt(transaction.Amount));
 			}
 			else {
-				map.set(transaction.Category, transaction.Amount);
+				map.set(transaction.Category, parseInt(transaction.Amount));
 			}
 		}
 	});
@@ -184,32 +208,32 @@ function getTransactionAmounts(transactions, year, type) {
 	return amounts;
 }
 
-function getTotal(transactions, year, type) {
+function getTotal(transactions, currentYear, type) {
 	let total = 0;
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
-		if (transaction.Type == type && currentDate.getFullYear() == year) {
-			total += transaction.Amount;
+		if (transaction.Type == type && currentDate.getFullYear() == currentYear) {
+			total += parseInt(transaction.Amount);
 		}
 	});
 
 	return total;
 }
 
-function getPercent(transactions, year, type) {
+function getPercent(transactions, currentYear, type) {
 	let total = 0;
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
-		if (currentDate.getFullYear() == year && transaction.Type != "Transfer-Out") {
-			total += transaction.Amount;
+		if (currentDate.getFullYear() == currentYear && transaction.Type != "Transfer-Out") {
+			total += parseInt(transaction.Amount);
 		}
 	});
 
 	let percent = 0;
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
-		if (transaction.Type == type && currentDate.getFullYear() == year) {
-			percent += transaction.Amount;
+		if (transaction.Type == type && currentDate.getFullYear() == currentYear) {
+			percent += parseInt(transaction.Amount);
 		}
 	});
 
