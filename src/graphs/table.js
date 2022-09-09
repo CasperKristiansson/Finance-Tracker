@@ -1,6 +1,5 @@
 import React from "react";
 
-
 export default (props) => {
 	return (
 		<table className="ui table">
@@ -18,14 +17,14 @@ export default (props) => {
 			<tbody>
 				{props.data.map((row) => {
 					return (
-						<tr className={row.type == "Income" ? "positive" : "negative"}>
+						<tr className={row.Type == "Income" ? "positive" : "negative"}>
 							<td><i className="edit icon"></i></td>
-							<td>{stringifyTime(row.date)}</td>
-							<td>{row.category}</td>
-							<td>{row.amount}</td>
-							<td>{row.account}</td>
-							<td>{row.type}</td>
-							<td>{row.note}</td>
+							<td>{stringifyTime(row.Date)}</td>
+							<td>{row.Category}</td>
+							<td>{row.Amount}</td>
+							<td>{row.Account}</td>
+							<td>{row.Type}</td>
+							<td>{row.Note}</td>
 						</tr>
 					);
 				})}
@@ -35,6 +34,6 @@ export default (props) => {
 }
 
 function stringifyTime(date) {
-	date = new Date(date.seconds * 1000);
-	return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}`;
+  let dateArray = date.split(" ");
+  return dateArray[0];
 }

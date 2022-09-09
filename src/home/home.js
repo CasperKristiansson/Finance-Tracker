@@ -13,7 +13,8 @@ export default () => {
 	const [yearIncome, setYearIncome] = useState([]);
 	const [yearExpense, setYearExpense] = useState([]);
 	const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-	const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() - 1);
+	// const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() - 1);
+	const [currentMonth, setCurrentMonth] = useState(2);
 	const [transactions, setTransactions] = useState([]);
 	const [categories, setCategories] = useState([]);
 	const [categoriesAmount, setCategoriesAmount] = useState([]);
@@ -222,18 +223,16 @@ function getCategoriesAmount(transactions, date, type) {
 function filterTransactions(transactions, date) {
 	let filteredTransactions = [];
 	for (let i = 0; i < transactions.length; i++) {
-		let dateCopy = new Date(date.getTime());
-		if (transactions[i].Date
-			>= date &&
-			transactions[i].Date
-			<= new Date(dateCopy.setMonth(dateCopy.getMonth() + 1)).getTime()) {
-			filteredTransactions.push(transactions[i]);
-		}
+		var transactionDate = new Date(transactions[i].Date);
+
+    if (transactionDate.getMonth() == date.getMonth()) {
+      filteredTransactions.push(transactions[i]);
+    }
 	}
 
 	for (let i = 0; i < filteredTransactions.length; i++) {
-		if (!filteredTransactions[i].note) {
-			filteredTransactions[i].note = "";
+		if (!filteredTransactions[i].Description) {
+			filteredTransactions[i].Description = "";
 		}
 	}
 
