@@ -10,6 +10,8 @@ import Header from "./header.js"
 import { getDocs, collection } from "firebase/firestore";
 import { db } from "../firebase";
 
+import axios from 'axios';
+
 export default () => {
 	const [yearIncome, setYearIncome] = useState([]);
 	const [yearExpense, setYearExpense] = useState([]);
@@ -24,23 +26,27 @@ export default () => {
 	var oldYear;
 
 	useEffect(() => {
-    var transactionsDict = {};
-    getDocs(collection(db, "transactions")).then((querySnapshot) => {
-      querySnapshot.forEach((doc) => {
-        transactionsDict = Object.assign(transactionsDict, convertData(doc.data()));
-      });
-      setTransactions(transactionsDict);
-    });
+    if (currentYear !== oldYear) {
+      var params = new URLSearchParams();
+      params.append('year', currentYear);
+      
+      axios.post('https://pktraffic.com/api/transactions.php', params).then(response => {
+        console.log(response.data);
+      }).catch(response => {
+        console.log(response);
+      })
 
-		if (oldYear !== currentYear) {
-			oldYear = currentYear;
-		}
+      if (oldYear !== currentYear) {
+        oldYear = currentYear;
+      }
+    }
+    
 	}, [currentYear]);
 
-	useEffect(() => {
-		setYearIncome(getYearAmount(transactions, "Income", currentYear));
-		// setYearExpense(getYearAmount(transactions, "Expense", currentYear));
-	}, [transactions, currentYear]);
+	// useEffect(() => {
+	// 	setYearIncome(getYearAmount(transactions, "Income", currentYear));
+	// 	// setYearExpense(getYearAmount(transactions, "Expense", currentYear));
+	// }, [transactions, currentYear]);
 
 	// useEffect(() => {
 	// 	setCategories(getCategories(transactions, new Date(currentYear, currentMonth, 1), pieChartType));
