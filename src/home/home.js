@@ -113,7 +113,7 @@ export default () => {
 							</Grid>
 						</Grid.Column>
 						<Grid.Column>
-								{/* <Segment>
+								<Segment>
 									<Button.Group>
 										<Button color="red" onClick={() => setPieChartType("Expense")}>Expenses</Button>
 										<Button.Or />
@@ -126,7 +126,7 @@ export default () => {
 											data={categoriesAmount}
 										/>
 									</div>
-								</Segment> */}
+								</Segment>
 						</Grid.Column>
 					</Grid.Row>
 				</Grid>
@@ -218,8 +218,6 @@ function getCategoriesAmount(transactions, date, type) {
 	for (let i in categories) {
 		categoriesArray.push(categories[i]);
 	}
-
-  console.log(categoriesArray)
 
 	return categoriesArray;
 }
