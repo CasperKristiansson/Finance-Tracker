@@ -32,6 +32,7 @@ export default () => {
       
       axios.post('https://pktraffic.com/api/transactions.php', params).then(response => {
         console.log(response.data);
+        setTransactions(response.data.transactions);
       }).catch(response => {
         console.log(response);
       })
@@ -43,17 +44,16 @@ export default () => {
     
 	}, [currentYear]);
 
-	// useEffect(() => {
-	// 	setYearIncome(getYearAmount(transactions, "Income", currentYear));
-	// 	// setYearExpense(getYearAmount(transactions, "Expense", currentYear));
-	// }, [transactions, currentYear]);
+	useEffect(() => {
+		setYearIncome(getYearAmount(transactions, "Income"));
+		setYearExpense(getYearAmount(transactions, "Expense"));
+	}, [transactions, currentYear]);
 
 	// useEffect(() => {
 	// 	setCategories(getCategories(transactions, new Date(currentYear, currentMonth, 1), pieChartType));
 	// 	setCategoriesAmount(getCategoriesAmount(transactions, new Date(currentYear, currentMonth, 1), pieChartType));
 	// }, [transactions, currentMonth, pieChartType]);
 
-	// Handle the change of the year
 	const handleYearChange = (e) => {
 		if (e.target.value !== currentYear) {
 			setCurrentYear(e.target.value);
@@ -69,7 +69,7 @@ export default () => {
 	return (
 		<>
 		<div className={"main-section"}>
-			{/* <Header
+			<Header
 				handleYearChange={handleYearChange}
 				handleMonthChange={handleMonthChange}
 				currentMonth={currentMonth}
@@ -113,7 +113,7 @@ export default () => {
 							</Grid>
 						</Grid.Column>
 						<Grid.Column>
-								<Segment>
+								{/* <Segment>
 									<Button.Group>
 										<Button color="red" onClick={() => setPieChartType("Expense")}>Expenses</Button>
 										<Button.Or />
@@ -126,38 +126,37 @@ export default () => {
 											data={categoriesAmount}
 										/>
 									</div>
-								</Segment>
+								</Segment> */}
 						</Grid.Column>
 					</Grid.Row>
 				</Grid>
 				<Segment style={{height: "200px"}}>
-					<Banner income={yearIncome[currentMonth]} expenses={yearExpense[currentMonth]} />
+					{/* <Banner income={yearIncome[currentMonth]} expenses={yearExpense[currentMonth]} /> */}
 					</Segment>
-					<Table 
+					{/* <Table 
 						data={filterTransactions(transactions, new Date(currentYear, currentMonth, 1))}
-					/>
-			</div> */}
+					/> */}
+			</div>
 		</div>
 		</>
 	);
 }
 
-function getYearAmount(transactionsGroup, type, currentYear) {
-  // Get the amount of each month for the current year
-  var yearAmount = [];
-  for (var i = 0; i < 12; i++) {
-    yearAmount.push(0);
-  }
+function getYearAmount(transactions, type) {
+	let income = [];
+	for (let i = 0; i < 12; i++) {
+		income.push(0);
+	}
 
-  console.log(transactionsGroup)
+	for (let i = 0; i < transactions.length; i++) {
+		let month = new Date(transactions[i].Date).getMonth();
 
-  // transactionsGroup.forEach((transactions) => {
-    
-  // });
+		if (transactions[i].Type === type) {
+			income[month] += parseInt(transactions[i].Amount);
+		}
+	}
 
-  // console.log(yearAmount);
-
-  return yearAmount;
+	return income;
 }
 
 function getCategories(transactions, date, type) {
@@ -165,8 +164,8 @@ function getCategories(transactions, date, type) {
 
 	for (let i = 0; i < transactions.length; i++) {
 		let dateCopy = new Date(date.getTime());
-		if (transactions[i].date.seconds * 1000 >= date &&
-			transactions[i].date.seconds * 1000 <= new Date(dateCopy.setMonth(dateCopy.getMonth() + 1)).getTime()) {
+		if (transactions[i].Date >= date &&
+			transactions[i].Date <= new Date(dateCopy.setMonth(dateCopy.getMonth() + 1)).getTime()) {
 			if (transactions[i].type === type)
 				if (categories[transactions[i].category]) categories[transactions[i].category] += transactions[i].amount;
 				else categories[transactions[i].category] = transactions[i].amount;
@@ -213,33 +212,13 @@ function getCategoriesAmount(transactions, date, type) {
 	return categoriesWithPercent;
 }
 
-function convertData(transactionsData) {
-  let transactionsDict = {};
-
-  for(var i in transactionsData) {
-    var transaction = {
-      id: i,
-      date: new Date(transactionsData[i][0].seconds * 1000),
-      amount: transactionsData[i][1],
-      category: transactionsData[i][2],
-      description: transactionsData[i][3],
-      account: transactionsData[i][4],
-      type: transactionsData[i][5],
-    }
-
-    transactionsDict[i] = transaction;
-  }
-
-  return transactionsDict;
-}
-
 function filterTransactions(transactions, date) {
 	let filteredTransactions = [];
 	for (let i = 0; i < transactions.length; i++) {
 		let dateCopy = new Date(date.getTime());
-		if (transactions[i].date.seconds * 1000
+		if (transactions[i].Date
 			>= date &&
-			transactions[i].date.seconds * 1000
+			transactions[i].Date
 			<= new Date(dateCopy.setMonth(dateCopy.getMonth() + 1)).getTime()) {
 			filteredTransactions.push(transactions[i]);
 		}
