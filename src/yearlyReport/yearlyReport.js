@@ -14,6 +14,8 @@ export default (props) => {
 	const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [transactions, setTransactions] = useState([]);
   const [netCalc, setNetCalc] = useState(new Map());
+  const [incomeCalc, setIncomeCalc] = useState(new Map());
+  const [expenseCalc, setExpenseCalc] = useState(new Map());
 
   var oldYear;
 
@@ -38,6 +40,8 @@ export default (props) => {
 
   useEffect(() => {
     setNetCalc(netChange(transactions));
+    setIncomeCalc(transactionType(transactions, "Income"));
+    setExpenseCalc(transactionType(transactions, "Expense"));
   }, [transactions]);
 
   const handleYearChange = (e) => {
@@ -113,6 +117,12 @@ export default (props) => {
         <TableMonth 
 					data={netCalc}
 				/>
+        <TableMonth
+          data={incomeCalc}
+        />
+        <TableMonth
+          data={expenseCalc}
+        />
 			</div>
 		</div>
 		</>
@@ -295,7 +305,6 @@ function netChange(transactions) {
     map.get("End Balance")[i] = endBalance;
   }
 
-  // Calulate the total and average for income, expense, and net
   let totalIncome = 0;
   let totalExpense = 0;
   let totalNet = 0;
@@ -316,6 +325,65 @@ function netChange(transactions) {
   map.forEach((value, key) => {
     obj[key] = value;
   });
+
+  return obj;
+}
+
+function transactionType(transactions, type) {
+  var categories = []
+
+  transactions.forEach(transaction => {
+    if (transaction.Type == type) {
+      categories.push(transaction.Category);
+    }
+  });
+
+  let map = new Map();
+
+  categories.forEach(category => {
+    map.set(category, {});
+  });
+
+  for (let i = 0; i < 14; i++) {
+    map.forEach((value, key) => {
+      map.get(key)[i] = 0;
+    });
+  }
+
+  transactions.forEach(transaction => {
+    var currentDate = new Date(transaction.Date);
+    var month = currentDate.getMonth();
+    if (transaction.Type == type) {
+      map.get(transaction.Category)[month] += parseInt(transaction.Amount);
+    }
+  });
+  
+  map.forEach((value, key) => {
+    let total = 0;
+    for (let i = 0; i < 12; i++) {
+      total += map.get(key)[i];
+    }
+    map.get(key)[12] = total;
+    map.get(key)[13] = total / 12;
+  });
+
+  map.set("Total", {});
+  
+  for (let i = 0; i < 14; i++) {
+    let total = 0;
+    map.forEach((value, key) => {
+      total += map.get(key)[i];
+    });
+
+    map.get("Total")[i] = total;
+  }
+
+  let obj = {};
+  map.forEach((value, key) => {
+    obj[key] = value;
+  });
+
+  console.log(obj)
 
   return obj;
 }
