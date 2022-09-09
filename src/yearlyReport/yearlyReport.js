@@ -3,7 +3,8 @@ import { Grid, Segment, Button } from "semantic-ui-react";
 import BarChart from "../graphs/barchart";
 import LineChart from "../graphs/linechart";
 import PieChart from "../graphs/piechart";
-import { transactions } from "../data.js";
+import Header from "./headerYearReport.js"
+
 
 import axios from "axios";
 
@@ -32,9 +33,18 @@ export default (props) => {
     
 	}, [currentYear]);
 
+  const handleYearChange = (e) => {
+		if (e.target.value !== currentYear) {
+			setCurrentYear(e.target.value);
+		}
+	}
+
 	return(
 		<>
 		<div className={"main-section"}>
+      <Header
+				handleYearChange={handleYearChange}
+			/>
 			<div className={"main-section-content"}>
 				<Grid columns={2}>
 					<Grid.Row stretched>
