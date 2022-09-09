@@ -372,7 +372,9 @@ function transactionType(transactions, type) {
   for (let i = 0; i < 14; i++) {
     let total = 0;
     map.forEach((value, key) => {
-      total += map.get(key)[i];
+      if (map.get(key)[i] != undefined) {
+        total += map.get(key)[i];
+      }
     });
 
     map.get("Total")[i] = total;
@@ -382,8 +384,6 @@ function transactionType(transactions, type) {
   map.forEach((value, key) => {
     obj[key] = value;
   });
-
-  console.log(obj)
 
   return obj;
 }
