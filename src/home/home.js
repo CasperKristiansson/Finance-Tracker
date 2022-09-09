@@ -51,7 +51,7 @@ export default () => {
 
 	useEffect(() => {
 		setCategories(getCategories(transactions, new Date(currentYear, currentMonth, 1), pieChartType));
-		// setCategoriesAmount(getCategoriesAmount(transactions, new Date(currentYear, currentMonth, 1), pieChartType));
+		setCategoriesAmount(getCategoriesAmount(transactions, new Date(currentYear, currentMonth, 1), pieChartType));
 	}, [transactions, currentMonth, pieChartType]);
 
 	const handleYearChange = (e) => {
@@ -196,28 +196,32 @@ function getCategoriesAmount(transactions, date, type) {
 	let categories = {};
 
 	for (let i = 0; i < transactions.length; i++) {
-		let dateCopy = new Date(date.getTime());
-		if (transactions[i].date.seconds * 1000
-			>= date &&
-			transactions[i].date.seconds * 1000
-			<= new Date(dateCopy.setMonth(dateCopy.getMonth() + 1)).getTime()) {
-			if (transactions[i].type === type) {
-				if (categories[transactions[i].category]) categories[transactions[i].category] += transactions[i].amount;
-				else categories[transactions[i].category] = transactions[i].amount;
-			}
-		}
+    let transactionDate = new Date(transactions[i].Date);
+		
+    if (transactionDate.getMonth == date.getMonth && transactions[i].Type == type) {
+      if (!categories[transactions[i].Category]) {
+        categories[transactions[i].Category] = parseInt(transactions[i].Amount);
+      } else {
+        categories[transactions[i].Category] += parseInt(transactions[i].Amount);
+      }
+    }
 	}
 
-	let categoriesTotal = 0;
-	for (let i in categories) categoriesTotal += categories[i];
+  for (let category in categories) {
+    if (categories[category] < 0) {
+      delete categories[category];
+    }
+  }
 
-	let categoriesWithPercent = [];
+	let categoriesArray = [];
 
 	for (let i in categories) {
-		categoriesWithPercent.push(categories[i]);
+		categoriesArray.push(categories[i]);
 	}
 
-	return categoriesWithPercent;
+  console.log(categoriesArray)
+
+	return categoriesArray;
 }
 
 function filterTransactions(transactions, date) {
