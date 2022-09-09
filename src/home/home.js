@@ -7,9 +7,6 @@ import Table from "../graphs/table";
 import Banner from "./banner.js";
 import Header from "./header.js"
 
-import { getDocs, collection } from "firebase/firestore";
-import { db } from "../firebase";
-
 import axios from 'axios';
 
 export default () => {
@@ -131,11 +128,11 @@ export default () => {
 					</Grid.Row>
 				</Grid>
 				<Segment style={{height: "200px"}}>
-					{/* <Banner income={yearIncome[currentMonth]} expenses={yearExpense[currentMonth]} /> */}
+					<Banner income={yearIncome[currentMonth]} expenses={yearExpense[currentMonth]} />
 					</Segment>
-					{/* <Table 
+					<Table 
 						data={filterTransactions(transactions, new Date(currentYear, currentMonth, 1))}
-					/> */}
+					/>
 			</div>
 		</div>
 		</>
@@ -165,7 +162,7 @@ function getCategories(transactions, date, type) {
 	for (let i = 0; i < transactions.length; i++) {
     let transactionDate = new Date(transactions[i].Date);
 		
-    if (transactionDate.getMonth == date.getMonth && transactions[i].Type == type) {
+    if (transactionDate.getMonth() == date.getMonth() && transactions[i].Type == type) {
       if (!categories[transactions[i].Category]) {
         categories[transactions[i].Category] = parseInt(transactions[i].Amount);
       } else {
@@ -198,7 +195,7 @@ function getCategoriesAmount(transactions, date, type) {
 	for (let i = 0; i < transactions.length; i++) {
     let transactionDate = new Date(transactions[i].Date);
 		
-    if (transactionDate.getMonth == date.getMonth && transactions[i].Type == type) {
+    if (transactionDate.getMonth() == date.getMonth() && transactions[i].Type == type) {
       if (!categories[transactions[i].Category]) {
         categories[transactions[i].Category] = parseInt(transactions[i].Amount);
       } else {
