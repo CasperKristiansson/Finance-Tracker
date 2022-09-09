@@ -33,6 +33,10 @@ export default (props) => {
     
 	}, [currentYear]);
 
+  useEffect(() => {
+    netChange(transactions);
+  }, [transactions]);
+
   const handleYearChange = (e) => {
 		if (e.target.value !== currentYear) {
 			setCurrentYear(e.target.value);
@@ -248,4 +252,42 @@ function getPercent(transactions, currentYear, type) {
 	});
 
 	return (percent / total * 100).toFixed(2) + "%";
+}
+
+function netChange(transactions) {
+  let map = new Map();
+
+  map.set("Income", {});
+  map.set("Expense", {});
+  map.set("NET", {});
+  map.set("End Balance", {});
+
+  for (let i = 0; i < 14; i++) {
+    map.get("Income")[i] = 0;
+    map.get("Expense")[i] = 0;
+    map.get("NET")[i] = 0;
+    map.get("End Balance")[i] = 0;
+  }
+
+  transactions.forEach(transaction => {
+    var currentDate = new Date(transaction.Date);
+    var month = currentDate.getMonth();
+    if (transaction.Type == "Income") {
+      map.get("Income")[month] += parseInt(transaction.Amount);
+    } else if (transaction.Type == "Expense") {
+      map.get("Expense")[month] += parseInt(transaction.Amount);
+    }
+  });
+
+  for (let i = 0; i < 14; i++) {
+    map.get("NET")[i] = map.get("Income")[i] - map.get("Expense")[i];
+  }
+
+  let endBalance = 0;
+  for (let i = 0; i < 14; i++) {
+    endBalance += map.get("NET")[i];
+    map.get("End Balance")[i] = endBalance;
+  }
+
+  return map;
 }
