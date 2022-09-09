@@ -5,6 +5,7 @@ export default (props) => {
 		<table className="ui table">
 			<thead>
 				<tr>
+          <th>Type</th>
 					<th>Jan</th>
 					<th>Feb</th>
 					<th>Mar</th>
@@ -17,31 +18,34 @@ export default (props) => {
           <th>Oct</th>
           <th>Nov</th>
           <th>Dec</th>
-          <th>Total</th>
-          <th>Average</th>
+          <th>Tot</th>
+          <th>Avg</th>
 				</tr>
 			</thead>
 			<tbody>
-				{props.data.map((row) => {
-					return (
-						<tr className={''}>
-							<td>{row.Jan}</td>
-              <td>{row.Feb}</td>
-              <td>{row.Mar}</td>
-              <td>{row.Apr}</td>
-              <td>{row.May}</td>
-              <td>{row.Jun}</td>
-              <td>{row.Jul}</td>
-              <td>{row.Aug}</td>
-              <td>{row.Sep}</td>
-              <td>{row.Oct}</td>
-              <td>{row.Nov}</td>
-              <td>{row.Dec}</td>
-              <td>{row.Total}</td>
-              <td>{row.Average}</td>
-						</tr>
-					);
-				})}
+        {
+          Object.entries(props.data).map(([key, value]) => {
+            return (
+              <tr>
+                <td className="netTitle">{key}</td>
+                <td>{value[0].toFixed(1)}</td>
+                <td>{value[1].toFixed(1)}</td>
+                <td>{value[2].toFixed(1)}</td>
+                <td>{value[3].toFixed(1)}</td>
+                <td>{value[4].toFixed(1)}</td>
+                <td>{value[5].toFixed(1)}</td>
+                <td>{value[6].toFixed(1)}</td>
+                <td>{value[7].toFixed(1)}</td>
+                <td>{value[8].toFixed(1)}</td>
+                <td>{value[9].toFixed(1)}</td>
+                <td>{value[10].toFixed(1)}</td>
+                <td>{value[11].toFixed(1)}</td>
+                <td>{value[12].toFixed(1)}</td>
+                <td>{value[13].toFixed(1)}</td>
+              </tr>
+            );
+          })
+        }        
 			</tbody>
 		</table>
 	);

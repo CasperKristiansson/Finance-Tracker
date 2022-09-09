@@ -4,13 +4,16 @@ import BarChart from "../graphs/barchart";
 import LineChart from "../graphs/linechart";
 import PieChart from "../graphs/piechart";
 import Header from "./headerYearReport.js"
+import Table from "../graphs/tableMonth.js";
 
 
 import axios from "axios";
+import TableMonth from "../graphs/tableMonth.js";
 
 export default (props) => {
 	const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
   const [transactions, setTransactions] = useState([]);
+  const [netCalc, setNetCalc] = useState(new Map());
 
   var oldYear;
 
@@ -34,7 +37,7 @@ export default (props) => {
 	}, [currentYear]);
 
   useEffect(() => {
-    netChange(transactions);
+    setNetCalc(netChange(transactions));
   }, [transactions]);
 
   const handleYearChange = (e) => {
@@ -107,6 +110,9 @@ export default (props) => {
 						</Grid.Column>
 					</Grid.Row>
 				</Grid>
+        <TableMonth 
+					data={netCalc}
+				/>
 			</div>
 		</div>
 		</>
@@ -284,10 +290,32 @@ function netChange(transactions) {
   }
 
   let endBalance = 0;
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 12; i++) {
     endBalance += map.get("NET")[i];
     map.get("End Balance")[i] = endBalance;
   }
 
-  return map;
+  // Calulate the total and average for income, expense, and net
+  let totalIncome = 0;
+  let totalExpense = 0;
+  let totalNet = 0;
+  for (let i = 0; i < 12; i++) {
+    totalIncome += map.get("Income")[i];
+    totalExpense += map.get("Expense")[i];
+    totalNet += map.get("NET")[i];
+  }
+
+  map.get("Income")[12] = totalIncome;
+  map.get("Expense")[12] = totalExpense;
+  map.get("NET")[12] = totalNet;
+  map.get("Income")[13] = totalIncome / 12;
+  map.get("Expense")[13] = totalExpense / 12;
+  map.get("NET")[13] = totalNet / 12;
+
+  let obj = {};
+  map.forEach((value, key) => {
+    obj[key] = value;
+  });
+
+  return obj;
 }

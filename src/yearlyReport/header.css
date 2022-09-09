@@ -16,3 +16,8 @@
     column-gap: 15px;
     bottom: 15px;
 }
+
+.netTitle {
+    font-size: 15px;
+    font-weight: 600;
+}
