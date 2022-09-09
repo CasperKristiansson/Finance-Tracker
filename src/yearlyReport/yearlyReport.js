@@ -116,12 +116,18 @@ export default (props) => {
 				</Grid>
         <TableMonth 
 					data={netCalc}
+          color={"black"}
+          type={""}
 				/>
         <TableMonth
           data={incomeCalc}
+          color={"green"}
+          type={"positive"}
         />
         <TableMonth
           data={expenseCalc}
+          color={"red"}
+          type={"negative"}
         />
 			</div>
 		</div>

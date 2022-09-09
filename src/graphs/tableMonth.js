@@ -2,7 +2,7 @@ import React from "react";
 
 export default (props) => {
 	return (
-		<table className="ui table">
+		<table className={`ui ${props.color} celled selectable table`}>
 			<thead>
 				<tr>
           <th>Type</th>
@@ -26,7 +26,7 @@ export default (props) => {
         {
           Object.entries(props.data).map(([key, value]) => {
             return (
-              <tr>
+              <tr className={props.type}>
                 <td className="netTitle">{key}</td>
                 <td>{value[0].toFixed(1)}</td>
                 <td>{value[1].toFixed(1)}</td>
