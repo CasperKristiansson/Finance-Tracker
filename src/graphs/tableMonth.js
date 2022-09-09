@@ -26,7 +26,7 @@ export default (props) => {
         {
           Object.entries(props.data).map(([key, value]) => {
             return (
-              <tr className={props.type}>
+              <tr className={`${props.type} ${key == "Total" ? "netTotal" : ""}`}>
                 <td className="netTitle">{key}</td>
                 <td>{value[0].toFixed(1)}</td>
                 <td>{value[1].toFixed(1)}</td>
