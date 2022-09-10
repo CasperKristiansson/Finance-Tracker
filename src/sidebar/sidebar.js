@@ -37,7 +37,7 @@ export default () => {
 					</MenuItem>
 					<MenuItem icon={<FontAwesomeIcon icon={faFileCircleCheck} />}>
 						Total Report
-						<Link to="/" />
+						<Link to="/totalReport" />
 					</MenuItem>
 					<MenuItem icon={<FontAwesomeIcon icon={faLandmark} />}>
 						Loans Report
