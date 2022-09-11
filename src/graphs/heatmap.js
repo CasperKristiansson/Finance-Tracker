@@ -13,18 +13,33 @@ export default (props) => {
 		chart: {
 			height: 350,
 			type: 'heatmap',
+			toolbar: {
+        show: true,
+        offsetX: 0,
+        offsetY: 0,
+        tools: {
+          download: true,
+          selection: false,
+          zoom: false,
+          zoomin: false,
+          zoomout: false,
+          pan: false,
+          reset: false | '<img src="/static/icons/reset.png" width="20">',
+          customIcons: []
+        },
+			},
 		},
 		colors: ["#008FFB"],
-		title: {
-			text: 'HeatMap Chart Income'
-		},
 		plotOptions: {
       heatmap: {
         colorScale: {
           ranges: props.color
       	}
     	}
-		}
+		},
+		toolbar: {
+			show: false,
+		},
 	};
 
   return (
