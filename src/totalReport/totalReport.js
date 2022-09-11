@@ -472,33 +472,112 @@ function getPercent(transactions, type) {
 }
 
 function getHeatMapData(transactions, type) {
-	// Return a 2d array where the first dimension is the year and the second dimension is the month.
-	// The value at the index is the amount of money spent in that month.
-	let map = new Map();
-	transactions.forEach(transaction => {
-		var currentDate = new Date(transaction.Date);
-		if (transaction.Type == type) {
-			let year = currentDate.getFullYear();
-			let month = currentDate.getMonth();
-			let key = year + "-" + month;
-			if (map.has(key)) {
-				map.set(key, map.get(key) + parseInt(transaction.Amount));
+	let assetsMap = new Map();
+
+	let firstDate = getFirstTransactionDate(transactions);
+	let currentDate = new Date();
+	let currentMonth = currentDate.getMonth();
+	let currentYear = currentDate.getFullYear();
+
+	let month = 0;
+	let year = firstDate.getFullYear();
+
+	while (year < currentYear || (year === currentYear && month <= currentMonth)) {
+		let date = new Date(year, month, 1);
+		let dateString = date.getFullYear() + "-" + (date.getMonth() + 1);
+		assetsMap.set(dateString, 0);
+		month++;
+		if (month > 11) {
+			month = 0;
+			year++;
+		}
+	}
+
+	for (let i = 0; i < transactions.length; i++) {
+		let date = new Date(transactions[i].Date);
+		let year = date.getFullYear();
+		let month = date.getMonth() + 1;
+		let key = year + "-" + month;
+	
+		let value = assetsMap.get(key);
+		if (isNaN(transactions[i].Amount)) {
+			continue;
+		}
+		if (transactions[i].Type === type) {
+			value += parseInt(transactions[i].Amount);
+		}
+
+		assetsMap.set(key, value);
+	}
+
+	let heatMap = [];
+
+	assetsMap.forEach((value, key) => {
+		// get the key month
+		let month = parseInt(key.split("-")[1]);
+		// Check if heatmap already has a value for this month in the format where heatMap = [{name: month}]
+		let monthExists = false;
+		for (let i = 0; i < heatMap.length; i++) {
+			if (heatMap[i].name === month) {
+				// if value is 0 replace it with null
+				if (value === 0) {
+					heatMap[i].data.push(null);
+				} else {
+					heatMap[i].data.push(value);
+				}
+				monthExists = true;
+				break;
 			}
-			else {
-				map.set(key, parseInt(transaction.Amount));
+		}
+		// If the month does not exist in the heatmap then add it.
+		if (!monthExists) {
+			// if value is 0 replace it with null
+			if (value === 0) {
+				heatMap.push({ name: month, data: [null] });
+			} else {
+				heatMap.push({ name: month, data: [value] });
 			}
 		}
 	});
 
-	let data = [];
-	let labels = [];
-	map.forEach((value, key) => {
-		data.push(value);
-		labels.push(key);
+	// sort it by month 
+	heatMap.sort((a, b) => {
+		return b.name - a.name;	
 	});
 
-	return {
-		xLabels: labels,
-		data: data
-	};
+	// Replace the number of the month with the name of the month.
+	for (let i = 0; i < heatMap.length; i++) {
+		heatMap[i].name = getMonthName(heatMap[i].name);
+	}
+
+	return heatMap;
+}
+
+function getMonthName(month) {
+	switch (month) {
+		case 1:
+			return "January";
+		case 2:
+			return "February";
+		case 3:
+			return "March";
+		case 4:
+			return "April";
+		case 5:
+			return "May";
+		case 6:
+			return "June";
+		case 7:
+			return "July";
+		case 8:
+			return "August";
+		case 9:
+			return "September";
+		case 10:
+			return "October";
+		case 11:
+			return "November";
+		case 12:
+			return "December";
+	}
 }

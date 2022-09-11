@@ -3,7 +3,7 @@ import Chart from 'react-apexcharts'
 
 
 export default (props) => {
-  const [data, setData] = React.useState({xLabels: [], data: [[]]});
+  const [data, setData] = React.useState([{}]);
 
   React.useEffect(() => {
     setData(props.data);
@@ -14,12 +14,9 @@ export default (props) => {
 			height: 350,
 			type: 'heatmap',
 		},
-		dataLabels: {
-			enabled: false
-		},
 		colors: ["#008FFB"],
 		title: {
-			text: 'HeatMap Chart (Single color)'
+			text: 'HeatMap Chart Income'
 		},
 	};
 
@@ -27,7 +24,7 @@ export default (props) => {
     <>
 		<div id="chart">
       <h2>{props.title}</h2>
-      <Chart series={[{name: "e", data: ([1,2,3])}]} type="heatmap" options={options} height={350} />
+      <Chart series={props.data} type="heatmap" options={options} height={350} />
 		</div>
     </>
   );
