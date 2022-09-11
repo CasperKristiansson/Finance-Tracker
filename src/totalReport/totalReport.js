@@ -25,6 +25,78 @@ var netWorthLineChart = {
 	borderWidth: 2
 }
 
+var heatMapIncomeColors = [
+	{
+		from: -1000000,
+		to: -1,
+		name: '0 <',
+		color: '#F15B46'
+	},
+	{
+		from: 0,
+		to: 10000,
+		name: '0 - 10k',
+		color: '#6DC47B'
+	},
+	{
+		from: 10000,
+		to: 30000,
+		name: '10k - 30k',
+		color: '#54A979'
+	},
+	{
+		from: 30000,
+		to: 50000,
+		name: '30k - 50k',
+		color: '#3E8D76'
+	},
+	{
+		from: 50000,
+		to: 100000,
+		name: '50k - 100k',
+		color: '#2B7271'
+	},
+	{
+		from: 100000,
+		to: 2000000,
+		name: '100k <',
+		color: '#18472b'
+	},						
+]
+
+var heatMapExpenseColors = [
+	{
+		from: 0,
+		to: 4000,
+		name: '0 - 4k',
+		color: '#EE4540'
+	},
+	{
+		from: 4000,
+		to: 10000,
+		name: '4k - 10k',
+		color: '#C72B41'
+	},
+	{
+		from: 10000,
+		to: 15000,
+		name: '10k - 15k',
+		color: '#800834'
+	},
+	{
+		from: 15000,
+		to: 20000,
+		name: '15k - 20k',
+		color: '#530332'
+	},
+	{
+		from: 20000,
+		to: 4000000,
+		name: '20k <',
+		color: '#2E122D'
+	},
+]
+
 export default (props) => {
   const [transactions, setTransactions] = useState([]);
 	const [loans, setLoans] = useState([]);
@@ -35,6 +107,7 @@ export default (props) => {
 
 	var loadedTransactions = false;
 	var loadedLoans = false;
+
 
 	useEffect(() => {
 		if (!loadedTransactions) {
@@ -152,16 +225,18 @@ export default (props) => {
 								<HeatMap
 									title={`Income`}
 									data={getHeatMapData(transactions, "Income")}
+									color={heatMapIncomeColors}
 								/>
 							</Segment>
 						</Grid.Column>
 						<Grid.Column>
-							{/* <Segment>
+							<Segment>
 								<HeatMap
 									title={`Expense`}
 									data={getHeatMapData(transactions, "Expense")}
+									color={heatMapExpenseColors}
 								/>
-							</Segment> */}
+							</Segment>
 						</Grid.Column>
 					</Grid.Row>
 				</Grid>
@@ -515,15 +590,17 @@ function getHeatMapData(transactions, type) {
 	assetsMap.forEach((value, key) => {
 		// get the key month
 		let month = parseInt(key.split("-")[1]);
+		// get the key year
+		let year = parseInt(key.split("-")[0]);
 		// Check if heatmap already has a value for this month in the format where heatMap = [{name: month}]
 		let monthExists = false;
 		for (let i = 0; i < heatMap.length; i++) {
 			if (heatMap[i].name === month) {
 				// if value is 0 replace it with null
 				if (value === 0) {
-					heatMap[i].data.push(null);
+					heatMap[i].data.push({x: year, y: value});
 				} else {
-					heatMap[i].data.push(value);
+					heatMap[i].data.push({x: year, y: value});
 				}
 				monthExists = true;
 				break;
@@ -533,9 +610,9 @@ function getHeatMapData(transactions, type) {
 		if (!monthExists) {
 			// if value is 0 replace it with null
 			if (value === 0) {
-				heatMap.push({ name: month, data: [null] });
+				heatMap.push({ name: month, data: [{x: year, y: value}] });
 			} else {
-				heatMap.push({ name: month, data: [value] });
+				heatMap.push({ name: month, data: [{x: year, y: value}] });
 			}
 		}
 	});

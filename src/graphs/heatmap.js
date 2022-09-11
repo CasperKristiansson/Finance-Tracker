@@ -18,6 +18,13 @@ export default (props) => {
 		title: {
 			text: 'HeatMap Chart Income'
 		},
+		plotOptions: {
+      heatmap: {
+        colorScale: {
+          ranges: props.color
+      	}
+    	}
+		}
 	};
 
   return (
