@@ -3,6 +3,7 @@ import { Grid, Segment, Button } from "semantic-ui-react";
 import BarChart from "../graphs/barchart";
 import LineChart from "../graphs/linechart";
 import PieChart from "../graphs/piechart";
+import HeatMap from "../graphs/heatmap";
 import Table from "../graphs/tableMonth.js";
 
 import axios from "axios";
@@ -141,6 +142,26 @@ export default (props) => {
 									data={getTransactionAmounts(transactions, "Expense")}
 								/>
 							</Segment>
+						</Grid.Column>
+					</Grid.Row>
+				</Grid>
+				<Grid columns={2}>
+					<Grid.Row stretched>
+						<Grid.Column>
+							<Segment>
+								<HeatMap
+									title={`Income`}
+									data={getHeatMapData(transactions, "Income")}
+								/>
+							</Segment>
+						</Grid.Column>
+						<Grid.Column>
+							{/* <Segment>
+								<HeatMap
+									title={`Expense`}
+									data={getHeatMapData(transactions, "Expense")}
+								/>
+							</Segment> */}
 						</Grid.Column>
 					</Grid.Row>
 				</Grid>
@@ -448,4 +469,36 @@ function getPercent(transactions, type) {
 	});
 
 	return (percent / total * 100).toFixed(2) + "%";
+}
+
+function getHeatMapData(transactions, type) {
+	// Return a 2d array where the first dimension is the year and the second dimension is the month.
+	// The value at the index is the amount of money spent in that month.
+	let map = new Map();
+	transactions.forEach(transaction => {
+		var currentDate = new Date(transaction.Date);
+		if (transaction.Type == type) {
+			let year = currentDate.getFullYear();
+			let month = currentDate.getMonth();
+			let key = year + "-" + month;
+			if (map.has(key)) {
+				map.set(key, map.get(key) + parseInt(transaction.Amount));
+			}
+			else {
+				map.set(key, parseInt(transaction.Amount));
+			}
+		}
+	});
+
+	let data = [];
+	let labels = [];
+	map.forEach((value, key) => {
+		data.push(value);
+		labels.push(key);
+	});
+
+	return {
+		xLabels: labels,
+		data: data
+	};
 }
