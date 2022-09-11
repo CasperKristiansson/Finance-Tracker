@@ -5,7 +5,6 @@ import LineChart from "../graphs/linechart";
 import PieChart from "../graphs/piechart";
 import Table from "../graphs/tableMonth.js";
 
-
 import axios from "axios";
 import TableMonth from "../graphs/tableMonth.js";
 
@@ -97,17 +96,53 @@ export default (props) => {
 					</Grid.Row>
 				</Grid>
 				<Grid columns={1}>
+					<Grid.Column>
+						<Segment>
+							<LineChart
+								title={`Net Worth`}
+								data={netWorthData.data}
+								labels={netWorthData.labels}
+								height={80}
+								colors={netWorthLineChart}
+							/>
+						</Segment>
+					</Grid.Column>
+				</Grid>
+				<Grid columns={3}>
+					<Grid.Row stretched>
 						<Grid.Column>
 							<Segment>
-								<LineChart
-									title={`Net Worth`}
-									data={netWorthData.data}
-									labels={netWorthData.labels}
-									height={80}
-									colors={netWorthLineChart}
+								<PieChart
+									title={`Income`}
+									labels={getCategories(transactions, "Income")}
+									data={getTransactionAmounts(transactions, "Income")}
 								/>
 							</Segment>
 						</Grid.Column>
+						<Grid.Column>
+							<Segment>
+								<PieChart
+									title={`Income / Expense`}
+									labels={[`Income ${getPercent(transactions, "Income")}`,
+										`Expense ${getPercent(transactions, "Expense")}`
+									]}
+									data={[
+										getTotal(transactions, "Income"),
+										getTotal(transactions, "Expense")
+									]}
+								/>
+							</Segment>
+						</Grid.Column>
+						<Grid.Column>
+							<Segment>
+								<PieChart
+									title={`Expense`}
+									labels={getCategories(transactions, "Expense")}
+									data={getTransactionAmounts(transactions, "Expense")}
+								/>
+							</Segment>
+						</Grid.Column>
+					</Grid.Row>
 				</Grid>
 			</div>
 		</div>
@@ -330,4 +365,87 @@ function calculateNetWorth(transactions, loans) {
 		labels: labels,
 		data: assets
 	};
+}
+
+function getCategories(transactions, type) {
+	let map = new Map();
+
+	transactions.forEach(transaction => {
+		var currentDate = new Date(transaction.Date);
+		if (transaction.Type == type) {
+			if (map.has(transaction.Category)) {
+				map.set(transaction.Category, map.get(transaction.Category) + parseInt(transaction.Amount));
+			}
+			else {
+				map.set(transaction.Category, parseInt(transaction.Amount));
+			}
+		}
+	});
+
+	let categoriesTotal = 0;
+	map.forEach((value, key) => {
+		categoriesTotal += value;
+	});
+
+	let categoriesWithPercent = [];
+	map.forEach((value, key) => {
+		categoriesWithPercent.push(
+			key + " " + " (" + (value / categoriesTotal * 100).toFixed(2) + "%)"
+		);
+	});
+
+	return categoriesWithPercent;
+}
+
+function getTransactionAmounts(transactions, type) {
+	let map = new Map();
+	transactions.forEach(transaction => {
+		if (transaction.Type == type) {
+			if (map.has(transaction.Category)) {
+				map.set(transaction.Category, map.get(transaction.Category) + parseInt(transaction.Amount));
+			}
+			else {
+				map.set(transaction.Category, parseInt(transaction.Amount));
+			}
+		}
+	});
+
+	let amounts = [];
+	map.forEach((value, key) => {
+		amounts.push(value);
+	});
+
+	return amounts;
+}
+
+function getTotal(transactions, type) {
+	let total = 0;
+	transactions.forEach(transaction => {
+		var currentDate = new Date(transaction.Date);
+		if (transaction.Type == type) {
+			total += parseInt(transaction.Amount);
+		}
+	});
+
+	return total;
+}
+
+function getPercent(transactions, type) {
+	let total = 0;
+	transactions.forEach(transaction => {
+		var currentDate = new Date(transaction.Date);
+		if (transaction.Type != "Transfer-Out") {
+			total += parseInt(transaction.Amount);
+		}
+	});
+
+	let percent = 0;
+	transactions.forEach(transaction => {
+		var currentDate = new Date(transaction.Date);
+		if (transaction.Type == type) {
+			percent += parseInt(transaction.Amount);
+		}
+	});
+
+	return (percent / total * 100).toFixed(2) + "%";
 }
