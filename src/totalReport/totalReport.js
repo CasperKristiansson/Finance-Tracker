@@ -14,7 +14,15 @@ var loansLineChart = {
 	borderColorExpense: "rgba(255,99,132,1)",
 	hoverBackgroundColorExpense: "rgba(255, 99, 132, 0.4)",
 	hoverBorderColorExpense: "rgba(255,99,132,1)",
-	borderWidth: 1
+	borderWidth: 2
+}
+
+var netWorthLineChart = {
+	backgroundColorExpense: "rgba(50, 155, 0, 0.2)",
+	borderColorExpense: "rgba(50, 155, 0, 1)",
+	hoverBackgroundColorExpense: "rgba(50, 155, 0, 0.4)",
+	hoverBorderColorExpense: "rgba(50, 155, 0, 1)",
+	borderWidth: 2
 }
 
 export default (props) => {
@@ -87,6 +95,19 @@ export default (props) => {
 							</Segment>
 						</Grid.Column>
 					</Grid.Row>
+				</Grid>
+				<Grid columns={1}>
+						<Grid.Column>
+							<Segment>
+								<LineChart
+									title={`Net Worth`}
+									data={netWorthData.data}
+									labels={netWorthData.labels}
+									height={80}
+									colors={netWorthLineChart}
+								/>
+							</Segment>
+						</Grid.Column>
 				</Grid>
 			</div>
 		</div>
@@ -219,5 +240,94 @@ function calculateLoans(loans) {
 	return {
 		labels: labels,
 		data: data
+	};
+}
+
+function calculateNetWorth(transactions, loans) {
+	let assetsMap = new Map();
+
+	let firstDate = getFirstTransactionDate(transactions);
+	let currentDate = new Date();
+	let currentMonth = currentDate.getMonth();
+	let currentYear = currentDate.getFullYear();
+
+	let month = firstDate.getMonth();
+	let year = firstDate.getFullYear();
+
+	while (year < currentYear || (year === currentYear && month <= currentMonth)) {
+		let date = new Date(year, month, 1);
+		let dateString = date.getFullYear() + "-" + (date.getMonth() + 1);
+		assetsMap.set(dateString, 0);
+		month++;
+		if (month > 11) {
+			month = 0;
+			year++;
+		}
+	}
+	
+	for (let i = 0; i < transactions.length; i++) {
+		let date = new Date(transactions[i].Date);
+		let year = date.getFullYear();
+		let month = date.getMonth() + 1;
+		let key = year + "-" + month;
+	
+		let value = assetsMap.get(key);
+		if (isNaN(transactions[i].Amount)) {
+			continue;
+		}
+
+		if (transactions[i].Type === "Expense") {
+			value -= parseInt(transactions[i].Amount);
+		} else if (transactions[i].Type === "Income") {
+			value += parseInt(transactions[i].Amount);
+		} else {
+			continue;
+		}
+		assetsMap.set(key, value);
+	}
+
+	for (let i = 0; i < loans.length; i++) {
+		let date = new Date(loans[i].date);
+		let year = date.getFullYear();
+		let month = date.getMonth() + 1;
+		let key = year + "-" + month;
+	
+		let value = assetsMap.get(key);
+		if (isNaN(loans[i].amount)) {
+			continue;
+		}
+		value -= parseInt(loans[i].amount);
+		assetsMap.set(key, value);
+	}
+
+	let assets = [];
+	let labels = [];
+
+	assetsMap.forEach((value, key) => {
+		if (assets.length === 0) {
+			assets.push(value);
+		} else {
+			assets.push(value + assets[assets.length - 1]);
+		}
+		labels.push(key);
+	});
+
+	// With the labels only keep a maximum of 10 labels. This means that we only show¨
+	// a maximum of 10 labels on the x-axis.
+	if (labels.length > 20) {
+		let step = Math.floor(labels.length / 20);
+		// It is important that if a label is not shown that a empty string is added
+		// to the labels array. This is because the labels array and the data array
+		// must have the same length.
+		for (let i = 0; i < labels.length; i++) {
+			if (i % step !== 0) {
+				labels[i] = "";
+			}
+		}
+	}
+
+	return {
+		labels: labels,
+		data: assets
 	};
 }

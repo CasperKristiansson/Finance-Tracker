@@ -49,7 +49,7 @@ export default (props) => {
   var options = {
     title: {
       display: true,
-      text: "Wealth",
+      text: props.title,
       fontSize: 25
     },
     legend: {
@@ -73,7 +73,7 @@ export default (props) => {
   return (
     <>
       <h2>{props.title}</h2>
-      <Line data={data} options={options} />
+      <Line data={data} options={options} height={props.height}/>
     </>
   );
 };
