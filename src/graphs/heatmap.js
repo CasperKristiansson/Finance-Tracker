@@ -1,14 +1,7 @@
 import React from "react";
 import Chart from 'react-apexcharts'
 
-
 export default (props) => {
-  const [data, setData] = React.useState([{}]);
-
-  React.useEffect(() => {
-    setData(props.data);
-  }, [props.data]);
-
 	var options = {
 		chart: {
 			height: 350,
