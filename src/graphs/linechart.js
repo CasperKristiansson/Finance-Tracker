@@ -14,20 +14,7 @@ export default (props) => {
     ],
   });
 
-  var labels = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
+  console.log(props);
 
   var backgroundColorExpense = "rgba(54, 162, 235, 0.2)";
   var borderColorExpense = "rgba(54, 162, 235, 1)";
@@ -37,7 +24,7 @@ export default (props) => {
 
   React.useEffect(() => {
     setData({
-      labels: labels,
+      labels: props.labels,
       datasets: [
         {
           label: "Wealth",

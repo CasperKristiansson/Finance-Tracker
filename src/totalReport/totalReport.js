@@ -11,6 +11,8 @@ import TableMonth from "../graphs/tableMonth.js";
 
 export default (props) => {
   const [transactions, setTransactions] = useState([]);
+	const [assetsLabels, setAssetsLabels] = useState([]);
+	const [assetsData, setAssetsData] = useState([]);
 
 	var loadedTransactions = false;
 
@@ -27,6 +29,13 @@ export default (props) => {
 		}
 	}, []);
 
+	useEffect(() => {
+		var assetsData = calculateAssets(transactions);
+		setAssetsLabels(assetsData.labels);
+		setAssetsData(assetsData.data);
+
+	}, [transactions]);
+
 	return(
 		<>
 		<div className={"main-section"}>
@@ -37,7 +46,8 @@ export default (props) => {
 							<Segment>
 								<LineChart
 									title={`Assets`}
-									data={calculateAssets(transactions)}
+									data={assetsData}
+									labels={assetsLabels}
 								/>
 							</Segment>
 						</Grid.Column>
@@ -79,8 +89,6 @@ function calculateAssets(transactions) {
 		}
 	}
 
-	console.log(assetsMap);
-
 	for (let i = 0; i < transactions.length; i++) {
 		let date = new Date(transactions[i].Date);
 		let year = date.getFullYear();
@@ -91,7 +99,14 @@ function calculateAssets(transactions) {
 		if (isNaN(transactions[i].Amount)) {
 			continue;
 		}
-		value += parseInt(transactions[i].Amount);
+
+		if (transactions[i].Type === "Expense") {
+			value -= parseInt(transactions[i].Amount);
+		} else if (transactions[i].Type === "Income") {
+			value += parseInt(transactions[i].Amount);
+		} else {
+			continue;
+		}
 		assetsMap.set(key, value);
 	}
 
@@ -99,9 +114,27 @@ function calculateAssets(transactions) {
 	let labels = [];
 
 	assetsMap.forEach((value, key) => {
-		assets.push(value);
+		if (assets.length === 0) {
+			assets.push(value);
+		} else {
+			assets.push(value + assets[assets.length - 1]);
+		}
 		labels.push(key);
 	});
+
+	// With the labels only keep a maximum of 10 labels. This means that we only show¨
+	// a maximum of 10 labels on the x-axis.
+	if (labels.length > 10) {
+		let step = Math.floor(labels.length / 10);
+		// It is important that if a label is not shown that a empty string is added
+		// to the labels array. This is because the labels array and the data array
+		// must have the same length.
+		for (let i = 0; i < labels.length; i++) {
+			if (i % step !== 0) {
+				labels[i] = "";
+			}
+		}
+	}
 
 	return {
 		labels: labels,
