@@ -11,10 +11,13 @@ import TableMonth from "../graphs/tableMonth.js";
 
 export default (props) => {
   const [transactions, setTransactions] = useState([]);
+	const [loans, setLoans] = useState([]);
+
 	const [assetsLabels, setAssetsLabels] = useState([]);
 	const [assetsData, setAssetsData] = useState([]);
 
 	var loadedTransactions = false;
+	var loadedLoans = false;
 
 	useEffect(() => {
 		if (!loadedTransactions) {
@@ -27,7 +30,19 @@ export default (props) => {
 
 			loadedTransactions = true;
 		}
+
+		if (!loadedLoans) {
+			axios.get('https://pktraffic.com/api/loans.php').then(response => {
+				console.log(response.data);
+				setLoans(response.data.loans);
+			}).catch(response => {
+				console.log(response);
+			});
+
+			loadedLoans = true;
+		}
 	}, []);
+	
 
 	useEffect(() => {
 		var assetsData = calculateAssets(transactions);
