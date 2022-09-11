@@ -200,8 +200,11 @@ function calculateLoans(loans) {
 		} else {
 			data.push(parseInt(loans[i].amount) + data[i-1]);
 		}
-	
-		labels.push(loans[i].date);
+		
+		// Convert the date string from 2021-01-01 to 2021-1, or 2021-10-09 to 2021-10
+		let date = loans[i].date.split("-");
+		labels.push(date[0] + "-" + parseInt(date[1]));
+
 	}
 
 	// With the labels only keep a maximum of 10 labels. This means that we only show¨
