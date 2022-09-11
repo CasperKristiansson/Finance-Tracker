@@ -19,6 +19,21 @@ export default (props) => {
 
   var oldYear;
 
+	var labels = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ];
+
 	useEffect(() => {
     if (currentYear !== oldYear) {
       var params = new URLSearchParams();
@@ -73,6 +88,7 @@ export default (props) => {
 								<LineChart
 									title={`Wealth Growth for ${currentYear}`}
 									data={calculateNetWorthIncrease(transactions, currentYear)}
+									labels={labels}
 								/>
 							</Segment>
 						</Grid.Column>
