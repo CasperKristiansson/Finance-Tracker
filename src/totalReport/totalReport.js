@@ -21,10 +21,9 @@ export default (props) => {
   const [transactions, setTransactions] = useState([]);
 	const [loans, setLoans] = useState([]);
 
-	const [assetsLabels, setAssetsLabels] = useState([]);
-	const [assetsData, setAssetsData] = useState([]);
-	const [loansLabels, setLoansLabels] = useState([]);
-	const [loansData, setLoansData] = useState([]);
+	const [assetsData, setAssetsData] = useState({labels: [], data: []});
+	const [loansData, setLoansData] = useState({labels: [], data: []});
+	const [netWorthData, setNetWorthData] = useState({labels: [], data: []});
 
 	var loadedTransactions = false;
 	var loadedLoans = false;
@@ -34,6 +33,7 @@ export default (props) => {
 			axios.get('https://pktraffic.com/api/transactionsTotal.php').then(response => {
 				console.log(response.data);
 				setTransactions(response.data.transactions);
+				setAssetsData(calculateAssets(response.data.transactions));
 			}).catch(response => {
 				console.log(response);
 			});
@@ -45,6 +45,7 @@ export default (props) => {
 			axios.get('https://pktraffic.com/api/loans.php').then(response => {
 				console.log(response.data);
 				setLoans(response.data.transactions);
+				setLoansData(calculateLoans(response.data.transactions));
 			}).catch(response => {
 				console.log(response);
 			});
@@ -55,16 +56,10 @@ export default (props) => {
 	
 
 	useEffect(() => {
-		var assetsData = calculateAssets(transactions);
-		setAssetsLabels(assetsData.labels);
-		setAssetsData(assetsData.data);
-	}, [transactions]);
-
-	useEffect(() => {
-		var loansData = calculateLoans(loans);
-		setLoansLabels(loansData.labels);
-		setLoansData(loansData.data);
-	}, [loans]);
+		if (transactions.length > 0 && loans.length > 0) {
+			setNetWorthData(calculateNetWorth(transactions, loans));
+		}
+	}, [transactions, loans]);
 
 	return(
 		<>
@@ -76,8 +71,8 @@ export default (props) => {
 							<Segment>
 								<LineChart
 									title={`Assets`}
-									data={assetsData}
-									labels={assetsLabels}
+									data={assetsData.data}
+									labels={assetsData.labels}
 								/>
 							</Segment>
 						</Grid.Column>
@@ -85,8 +80,8 @@ export default (props) => {
 							<Segment>
 								<LineChart
 									title={`Loans`}
-									data={loansData}
-									labels={loansLabels}
+									data={loansData.data}
+									labels={loansData.labels}
 									colors={loansLineChart}
 								/>
 							</Segment>
