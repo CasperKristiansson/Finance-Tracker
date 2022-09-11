@@ -9,12 +9,22 @@ import Table from "../graphs/tableMonth.js";
 import axios from "axios";
 import TableMonth from "../graphs/tableMonth.js";
 
+var loansLineChart = {
+	backgroundColorExpense: "rgba(255, 99, 132, 0.2)",
+	borderColorExpense: "rgba(255,99,132,1)",
+	hoverBackgroundColorExpense: "rgba(255, 99, 132, 0.4)",
+	hoverBorderColorExpense: "rgba(255,99,132,1)",
+	borderWidth: 1
+}
+
 export default (props) => {
   const [transactions, setTransactions] = useState([]);
 	const [loans, setLoans] = useState([]);
 
 	const [assetsLabels, setAssetsLabels] = useState([]);
 	const [assetsData, setAssetsData] = useState([]);
+	const [loansLabels, setLoansLabels] = useState([]);
+	const [loansData, setLoansData] = useState([]);
 
 	var loadedTransactions = false;
 	var loadedLoans = false;
@@ -34,7 +44,7 @@ export default (props) => {
 		if (!loadedLoans) {
 			axios.get('https://pktraffic.com/api/loans.php').then(response => {
 				console.log(response.data);
-				setLoans(response.data.loans);
+				setLoans(response.data.transactions);
 			}).catch(response => {
 				console.log(response);
 			});
@@ -48,8 +58,13 @@ export default (props) => {
 		var assetsData = calculateAssets(transactions);
 		setAssetsLabels(assetsData.labels);
 		setAssetsData(assetsData.data);
-
 	}, [transactions]);
+
+	useEffect(() => {
+		var loansData = calculateLoans(loans);
+		setLoansLabels(loansData.labels);
+		setLoansData(loansData.data);
+	}, [loans]);
 
 	return(
 		<>
@@ -68,10 +83,12 @@ export default (props) => {
 						</Grid.Column>
 						<Grid.Column>
 							<Segment>
-								{/* <LineChart
+								<LineChart
 									title={`Loans`}
-									data={calculateLoads(transactions)}
-								/> */}
+									data={loansData}
+									labels={loansLabels}
+									colors={loansLineChart}
+								/>
 							</Segment>
 						</Grid.Column>
 					</Grid.Row>
@@ -171,4 +188,38 @@ function getFirstTransactionDate(transactions) {
 	}
 
 	return firstDate;
+}
+
+function calculateLoans(loans) {
+	var data = []
+	var labels = []
+
+	for (let i = 0; i < loans.length; i++) {
+		if (i === 0) {
+			data.push(parseInt(loans[i].amount));
+		} else {
+			data.push(parseInt(loans[i].amount) + data[i-1]);
+		}
+	
+		labels.push(loans[i].date);
+	}
+
+	// With the labels only keep a maximum of 10 labels. This means that we only show¨
+	// a maximum of 10 labels on the x-axis.
+	if (labels.length > 10) {
+		let step = Math.floor(labels.length / 10);
+		// It is important that if a label is not shown that a empty string is added
+		// to the labels array. This is because the labels array and the data array
+		// must have the same length.
+		for (let i = 0; i < labels.length; i++) {
+			if (i % step !== 0) {
+				labels[i] = "";
+			}
+		}
+	}
+
+	return {
+		labels: labels,
+		data: data
+	};
 }

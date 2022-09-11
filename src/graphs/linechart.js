@@ -14,20 +14,27 @@ export default (props) => {
     ],
   });
 
-  console.log(props);
-
-  var backgroundColorExpense = "rgba(54, 162, 235, 0.2)";
-  var borderColorExpense = "rgba(54, 162, 235, 1)";
-  var hoverBackgroundColorExpense = "rgba(54, 162, 235, 1)";
-  var hoverBorderColorExpense = "rgba(54, 162, 235, 1)";
-  var borderWidth = 1
+  if (!props.colors) {
+    var backgroundColorExpense = "rgba(54, 162, 235, 0.2)";
+    var borderColorExpense = "rgba(54, 162, 235, 1)";
+    var hoverBackgroundColorExpense = "rgba(54, 162, 235, 1)";
+    var hoverBorderColorExpense = "rgba(54, 162, 235, 1)";
+    var borderWidth = 2
+  } else {
+    var backgroundColorExpense = props.colors.backgroundColorExpense;
+    var borderColorExpense = props.colors.borderColorExpense;
+    var hoverBackgroundColorExpense = props.colors.hoverBackgroundColorExpense;
+    var hoverBorderColorExpense = props.colors.hoverBorderColorExpense;
+    var borderWidth = props.colors.borderWidth
+  }
+  
 
   React.useEffect(() => {
     setData({
       labels: props.labels,
       datasets: [
         {
-          label: "Wealth",
+          label: props.title,
           data: props.data,
           backgroundColor: backgroundColorExpense,
           borderColor: borderColorExpense,
