@@ -153,6 +153,9 @@ export default (props) => {
 
 function getTransactionsType(transactions, currentYear, type) {
 	let map = new Map();
+	for (let i = 0; i < 12; i++) {
+		map.set(i, 0);
+	}
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
 		if (transaction.Type == type) {
