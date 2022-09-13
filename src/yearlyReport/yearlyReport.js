@@ -185,6 +185,10 @@ function calculateNetWorthIncrease(transactions, currentYear) {
 	});
 
 	let map = new Map();
+	for (let i = 0; i < 12; i++) {
+		map.set(i, startAmount);
+	}
+
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
 		if (currentDate.getFullYear() == currentYear && transaction.Type != "Transfer-Out") {
