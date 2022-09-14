@@ -7,11 +7,10 @@ import {
   SidebarFooter,
   SidebarContent,
 } from 'react-pro-sidebar';
-import { FaRegLaughWink } from 'react-icons/fa';
 import { FiSettings } from 'react-icons/fi';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { Link } from 'react-router-dom';
-import { faFileCircleCheck, faLandmark, faMoneyBillWave , faUser, faGlobe} from '@fortawesome/free-solid-svg-icons'
+import { faFileCircleCheck, faLandmark, faMoneyBillWave , faUser, faGlobe, faTrophy} from '@fortawesome/free-solid-svg-icons'
 
 import './sidebar.scss';
 import './sidebar.css';
@@ -46,6 +45,9 @@ export default () => {
 					<MenuItem icon={<FontAwesomeIcon icon={faLandmark} />}>
 						Loans Report
 						<Link to="/" />
+					</MenuItem>
+					<MenuItem icon={<FontAwesomeIcon icon={faTrophy} />}>
+						Milestones
 					</MenuItem>
 				</Menu>
 
