@@ -78,6 +78,28 @@ export default (props) => {
 				handleYearChange={handleYearChange}
 			/>
 			<div className={"main-section-content"}>
+			<Grid columns={3}>
+					<Grid.Row stretched>
+						<Grid.Column>
+							<Segment>
+								<h3 className="ui red header">Expenses</h3>
+								<h1 className="ui red header">{numberWithCommas(getTotal(transactions, currentYear, "Expense"))} kr</h1>
+							</Segment>
+						</Grid.Column>
+						<Grid.Column>
+							<Segment>
+								<h3 className="ui green header">Income</h3>
+								<h1 className="ui green header">{numberWithCommas(getTotal(transactions, currentYear, "Income"))} kr</h1>
+							</Segment>
+						</Grid.Column>
+						<Grid.Column>
+							<Segment>
+								<h3 className="ui blue header">Net Worth Change</h3>
+								<h1 className="ui blue header">{numberWithCommas(netWorth)} kr</h1>
+							</Segment>
+						</Grid.Column>
+					</Grid.Row>
+				</Grid>
 				<Grid columns={2}>
 					<Grid.Row stretched>
 						<Grid.Column>
@@ -96,28 +118,6 @@ export default (props) => {
 									data={calculateNetWorthIncrease(transactions, currentYear)}
 									labels={labels}
 								/>
-							</Segment>
-						</Grid.Column>
-					</Grid.Row>
-				</Grid>
-				<Grid columns={3}>
-					<Grid.Row stretched>
-						<Grid.Column>
-							<Segment>
-								<h3 className="ui red header">Total Expenses</h3>
-								<h1 className="ui red header">${numberWithCommas(getTotal(transactions, currentYear, "Expense"))}</h1>
-							</Segment>
-						</Grid.Column>
-						<Grid.Column>
-							<Segment>
-								<h3 className="ui green header">Total Income</h3>
-								<h1 className="ui green header">${numberWithCommas(getTotal(transactions, currentYear, "Income"))}</h1>
-							</Segment>
-						</Grid.Column>
-						<Grid.Column>
-							<Segment>
-								<h3 className="ui blue header">Net Worth</h3>
-								<h1 className="ui blue header">${numberWithCommas(netWorth)}</h1>
 							</Segment>
 						</Grid.Column>
 					</Grid.Row>

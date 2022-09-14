@@ -151,19 +151,19 @@ export default (props) => {
 						<Grid.Column>
 							<Segment>
 								<h3 className="ui green header">Net Worth</h3>
-								<h1 className="ui green header">${numberWithCommas(netWorthData.data[netWorthData.data.length - 1])}</h1>
+								<h1 className="ui green header">{numberWithCommas(netWorthData.data[netWorthData.data.length - 1])} kr</h1>
 							</Segment>
 						</Grid.Column>
 						<Grid.Column>
 							<Segment>
 								<h3 className="ui red header">Total Loans</h3>
-								<h1 className="ui red header">${numberWithCommas(loansData.data[loansData.data.length - 1])}</h1>
+								<h1 className="ui red header">{numberWithCommas(loansData.data[loansData.data.length - 1])} kr</h1>
 							</Segment>
 						</Grid.Column>
 						<Grid.Column>
 							<Segment>
 								<h3 className="ui blue header">Total Assets</h3>
-								<h1 className="ui blue header">${numberWithCommas(assetsData.data[assetsData.data.length - 1])}</h1>
+								<h1 className="ui blue header">{numberWithCommas(assetsData.data[assetsData.data.length - 1])} kr</h1>
 							</Segment>
 						</Grid.Column>
 					</Grid.Row>
