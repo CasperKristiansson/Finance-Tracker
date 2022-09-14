@@ -146,6 +146,28 @@ export default (props) => {
 		<>
 		<div className={"main-section"}>
 			<div className={"main-section-content"}>
+				<Grid columns={3}>
+					<Grid.Row stretched>
+						<Grid.Column>
+							<Segment>
+								<h3 className="ui green header">Net Worth</h3>
+								<h1 className="ui green header">${numberWithCommas(netWorthData.data[netWorthData.data.length - 1])}</h1>
+							</Segment>
+						</Grid.Column>
+						<Grid.Column>
+							<Segment>
+								<h3 className="ui red header">Total Loans</h3>
+								<h1 className="ui red header">${numberWithCommas(loansData.data[loansData.data.length - 1])}</h1>
+							</Segment>
+						</Grid.Column>
+						<Grid.Column>
+							<Segment>
+								<h3 className="ui blue header">Total Assets</h3>
+								<h1 className="ui blue header">${numberWithCommas(assetsData.data[assetsData.data.length - 1])}</h1>
+							</Segment>
+						</Grid.Column>
+					</Grid.Row>
+				</Grid>
 				<Grid columns={2}>
 					<Grid.Row stretched>
 						<Grid.Column>
@@ -657,4 +679,12 @@ function getMonthName(month) {
 		case 12:
 			return "December";
 	}
+}
+
+function numberWithCommas(x) {
+	if (x === undefined) {
+		return "0";
+	}
+
+	return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 }
