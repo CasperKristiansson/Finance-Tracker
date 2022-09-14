@@ -16,6 +16,7 @@ export default (props) => {
   const [netCalc, setNetCalc] = useState(new Map());
   const [incomeCalc, setIncomeCalc] = useState(new Map());
   const [expenseCalc, setExpenseCalc] = useState(new Map());
+	const [netWorth, setNetWorth] = useState(0);
 
   var oldYear;
 
@@ -59,6 +60,11 @@ export default (props) => {
     setExpenseCalc(transactionType(transactions, "Expense"));
   }, [transactions]);
 
+	useEffect(() => {
+		const net = calculateNetWorthIncrease(transactions, currentYear);
+		setNetWorth(net[net.length - 1]);
+	}, [transactions, currentYear]);
+
   const handleYearChange = (e) => {
 		if (e.target.value !== currentYear) {
 			setCurrentYear(e.target.value);
@@ -90,6 +96,28 @@ export default (props) => {
 									data={calculateNetWorthIncrease(transactions, currentYear)}
 									labels={labels}
 								/>
+							</Segment>
+						</Grid.Column>
+					</Grid.Row>
+				</Grid>
+				<Grid columns={3}>
+					<Grid.Row stretched>
+						<Grid.Column>
+							<Segment>
+								<h3 className="ui red header">Total Expenses</h3>
+								<h1 className="ui red header">${numberWithCommas(getTotal(transactions, currentYear, "Expense"))}</h1>
+							</Segment>
+						</Grid.Column>
+						<Grid.Column>
+							<Segment>
+								<h3 className="ui green header">Total Income</h3>
+								<h1 className="ui green header">${numberWithCommas(getTotal(transactions, currentYear, "Income"))}</h1>
+							</Segment>
+						</Grid.Column>
+						<Grid.Column>
+							<Segment>
+								<h3 className="ui blue header">Net Worth</h3>
+								<h1 className="ui blue header">${numberWithCommas(netWorth)}</h1>
 							</Segment>
 						</Grid.Column>
 					</Grid.Row>
@@ -416,3 +444,12 @@ function transactionType(transactions, type) {
 
   return obj;
 }
+
+function numberWithCommas(x) {
+	if (x === undefined) {
+		return "0";
+	}
+
+	return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
