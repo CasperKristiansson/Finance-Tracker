@@ -14,21 +14,6 @@ export default (props) => {
     ],
   });
 
-  var labels = [
-    "January",
-    "February",
-    "March",
-    "April",
-    "May",
-    "June",
-    "July",
-    "August",
-    "September",
-    "October",
-    "November",
-    "December",
-  ];
-
   var backgroundColorIncome = "rgba(255, 99, 132, 0.2)";
   var borderColorIncome = "rgba(255, 99, 132, 1)";
   var hoverBackgroundColorIncome = "rgba(255, 99, 132, 1)";
@@ -42,7 +27,7 @@ export default (props) => {
 
   React.useEffect(() => {
     setData({
-      labels: labels,
+      labels: props.labels,
       datasets: [
         {
           label: "Expense",
@@ -64,7 +49,8 @@ export default (props) => {
         },
       ],
     });
-  }, [props.dataIncome, props.dataExpense]);
+
+  }, [props]);
 
   var options = {
     title: {
@@ -93,7 +79,7 @@ export default (props) => {
   return (
     <>
       <h2>{props.title}</h2>
-      <Bar data={data} options={options} />
+      <Bar data={data} options={options} height={props.height}/>
     </>
   );
 };

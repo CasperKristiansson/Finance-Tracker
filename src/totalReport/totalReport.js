@@ -105,6 +105,8 @@ export default (props) => {
 	const [loansData, setLoansData] = useState({labels: [], data: []});
 	const [netWorthData, setNetWorthData] = useState({labels: [], data: []});
 
+	const [barChartData, setBarChartData] = useState({labels: [], income: [], expenses: []});
+
 	var loadedTransactions = false;
 	var loadedLoans = false;
 
@@ -141,6 +143,11 @@ export default (props) => {
 			setNetWorthData(calculateNetWorth(transactions, loans));
 		}
 	}, [transactions, loans]);
+
+	useEffect(() => {
+		var data = calculateBarChart(transactions);
+		setBarChartData(data);		
+	}, [transactions]);
 
 	return(
 		<>
@@ -200,6 +207,19 @@ export default (props) => {
 								labels={netWorthData.labels}
 								height={80}
 								colors={netWorthLineChart}
+							/>
+						</Segment>
+					</Grid.Column>
+				</Grid>
+				<Grid columns={1}>
+					<Grid.Column>
+						<Segment>
+							<BarChart
+								title={`Income vs Expenses`}
+								labels={barChartData.labels}
+								dataIncome={barChartData.income}
+								dataExpense={barChartData.expenses}
+								height={75}
 							/>
 						</Segment>
 					</Grid.Column>
@@ -687,4 +707,58 @@ function numberWithCommas(x) {
 	}
 
 	return x.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function calculateBarChart(transactions) {
+	// Return a data item containing three items. One array of the years. One for the income that year and one for the expenses that year.
+	let years = new Map();
+	let income = new Map();
+	let expenses = new Map();
+	
+	// iterate through the transactions
+	for (let i = 0; i < transactions.length; i++) {
+		// Add the year to the map if it does not exist.
+		let date = new Date(transactions[i].Date);
+		let year = date.getFullYear();
+		if (!years.has(year)) {
+			years.set(year, 0);
+		}
+
+		// Add the amount to the income or expenses array.
+		if (transactions[i].Type === "Income") {
+			if (!income.has(year)) {
+				income.set(year, 0);
+			}
+			income.set(year, income.get(year) + parseInt(transactions[i].Amount));
+		} else if (transactions[i].Type === "Expense") {
+			if (!expenses.has(year)) {
+				expenses.set(year, 0);
+			}
+			expenses.set(year, expenses.get(year) + parseInt(transactions[i].Amount));
+		}
+	}
+
+	// Create the data object.
+	let data = {
+		labels: [],
+		income: [],
+		expenses: []
+	};
+
+	// Add the years to the data object.
+	years.forEach((value, key) => {
+		data.labels.push(key);
+	});
+
+	// Add the income to the data object.
+	income.forEach((value, key) => {
+		data.income.push(value);
+	});
+
+	// Add the expenses to the data object.
+	expenses.forEach((value, key) => {
+		data.expenses.push(value);
+	});
+
+	return data;
 }

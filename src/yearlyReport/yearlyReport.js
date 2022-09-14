@@ -108,6 +108,7 @@ export default (props) => {
 									title={`Income / Expense for ${currentYear}`}
 									dataIncome={getTransactionsType(transactions, currentYear, "Income")}
 									dataExpense={getTransactionsType(transactions, currentYear, "Expense")}
+									labels={labels}
 								/>
 							</Segment>
 						</Grid.Column>

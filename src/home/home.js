@@ -102,7 +102,8 @@ export default () => {
 											<BarChart
 												title={currentYear}
 												dataIncome={yearIncome}
-												dataExpense={yearExpense}												
+												dataExpense={yearExpense}	
+												labels={["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]}
 											/>
 										</Segment>
 									</Grid.Column>
