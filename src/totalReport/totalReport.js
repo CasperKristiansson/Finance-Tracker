@@ -107,6 +107,10 @@ export default (props) => {
 
 	const [barChartData, setBarChartData] = useState({labels: [], income: [], expenses: []});
 
+	const [tableIncome, setTableIncome] = useState(new Map());
+	const [tableExpense, setTableExpense] = useState(new Map());
+
+
 	var loadedTransactions = false;
 	var loadedLoans = false;
 
@@ -146,7 +150,10 @@ export default (props) => {
 
 	useEffect(() => {
 		var data = calculateBarChart(transactions);
-		setBarChartData(data);		
+		setBarChartData(data);	
+		
+		setTableIncome(transactionType(transactions, "Income"));
+		setTableExpense(transactionType(transactions, "Expense"));
 	}, [transactions]);
 
 	return(
@@ -282,6 +289,22 @@ export default (props) => {
 						</Grid.Column>
 					</Grid.Row>
 				</Grid>
+				<Segment>
+					<h1>Income</h1>
+					<TableMonth 
+						data={tableIncome}
+						color={"green"}
+						type={""}
+					/>
+				</Segment>
+				<Segment>
+					<h1>Expenses</h1>
+					<TableMonth
+						data={tableExpense}
+						color={"red"}
+						type={""}
+					/>
+				</Segment>
 			</div>
 		</div>
 		</>
@@ -761,4 +784,77 @@ function calculateBarChart(transactions) {
 	});
 
 	return data;
+}
+
+function transactionType(transactions, type) {
+  var yearMap = new Map();
+
+	for (let i = 0; i < transactions.length; i++) {
+		let date = new Date(transactions[i].Date);
+		let year = date.getFullYear();
+		if (!yearMap.has(year)) {
+			yearMap.set(year, 0);
+		}
+	}
+
+	var years = [];
+
+	yearMap.forEach((value, key) => {
+		years.push(key);
+	});
+
+  let map = new Map();
+
+  years.forEach(year => {
+    map.set(year, {});
+  });
+
+  for (let i = 0; i < 14; i++) {
+    map.forEach((value, key) => {
+      map.get(key)[i] = 0;
+    });
+  }
+
+  transactions.forEach(transaction => {
+    var currentDate = new Date(transaction.Date);
+    var month = currentDate.getMonth();
+    if (transaction.Type == type) {
+      map.get(currentDate.getFullYear())[month] += parseInt(transaction.Amount);
+    }
+  });
+  
+  map.forEach((value, key) => {
+    let total = 0;
+    for (let i = 0; i < 12; i++) {
+      total += map.get(key)[i];
+    }
+    map.get(key)[12] = total;
+    map.get(key)[13] = total / 12;
+  });
+
+  map.set("Total", {});
+  
+  for (let i = 0; i < 14; i++) {
+    let total = 0;
+    map.forEach((value, key) => {
+      if (map.get(key)[i] != undefined) {
+        total += map.get(key)[i];
+      }
+    });
+
+    map.get("Total")[i] = total;
+  }
+
+	map.set("Average", {});
+
+	for (let i = 0; i < 14; i++) {
+		map.get("Average")[i] = map.get("Total")[i] / map.size;
+	}
+
+  let obj = {};
+  map.forEach((value, key) => {
+    obj[key] = value;
+  });
+
+  return obj;
 }
