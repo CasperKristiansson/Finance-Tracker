@@ -13,7 +13,7 @@ export default () => {
 	const [yearIncome, setYearIncome] = useState([]);
 	const [yearExpense, setYearExpense] = useState([]);
 	const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-	const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+	const [currentMonth, setCurrentMonth] = useState(getStartMonth());
 	const [transactions, setTransactions] = useState([]);
 	const [categories, setCategories] = useState([]);
 	const [categoriesAmount, setCategoriesAmount] = useState([]);
@@ -236,4 +236,13 @@ function filterTransactions(transactions, date) {
 	}
 
 	return filteredTransactions.reverse();
+}
+
+function getStartMonth() {
+	var startMonth = new Date().getMonth() - 1
+	if (startMonth < 0) {
+		return 0;
+	} else {
+		return startMonth;
+	}
 }
