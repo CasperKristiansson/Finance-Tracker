@@ -11,7 +11,7 @@ import { FaRegLaughWink } from 'react-icons/fa';
 import { FiSettings } from 'react-icons/fi';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { Link } from 'react-router-dom';
-import { faFileCircleCheck, faLandmark, faMoneyBillWave } from '@fortawesome/free-solid-svg-icons'
+import { faFileCircleCheck, faLandmark, faMoneyBillWave , faUser, faGlobe} from '@fortawesome/free-solid-svg-icons'
 
 import './sidebar.scss';
 import './sidebar.css';
@@ -39,6 +39,10 @@ export default () => {
 						Total Report
 						<Link to="/totalReport" />
 					</MenuItem>
+					<MenuItem icon={<FontAwesomeIcon icon={faUser} />}>
+						Accounts Report
+						<Link to="/" />
+					</MenuItem>
 					<MenuItem icon={<FontAwesomeIcon icon={faLandmark} />}>
 						Loans Report
 						<Link to="/" />
@@ -46,8 +50,11 @@ export default () => {
 				</Menu>
 
 				<Menu iconShape="circle">
-					<MenuItem icon={<FaRegLaughWink />}>
-						Report
+					<MenuItem icon={<FontAwesomeIcon icon={faGlobe} />}>
+						Transactions
+					</MenuItem>
+					<MenuItem icon={<FontAwesomeIcon icon={faUser} />}>
+						Accounts
 					</MenuItem>
 				</Menu>
 			</SidebarContent>
