@@ -321,6 +321,14 @@ export default (props) => {
 						type={""}
 					/>
 				</Segment>
+				<Segment>
+					<h1>Expense Categories</h1>
+					<TableCustom
+						data={tableCategoriesExpense}
+						color={"red"}
+						type={""}
+					/>
+				</Segment>
 			</div>
 		</div>
 		</>
@@ -936,7 +944,6 @@ function transactionCategories(transactions, type) {
   });
 
   map.set("Total", {});
-	map.set("Average", {});
   
   years.forEach(year => {
 		let total = 0;
@@ -946,7 +953,6 @@ function transactionCategories(transactions, type) {
 			}
 		});
 		map.get("Total")[year] = total;
-		map.get("Average")[year] = total / map.size;
 	});
 
 	let total = 0;
@@ -957,15 +963,6 @@ function transactionCategories(transactions, type) {
 	});
 	map.get("Total")["Total"] = total;
 	map.get("Total")["Average"] = total / years.length;
-
-	let average = 0;
-	map.forEach((value, key) => {
-		if (map.get(key)["Average"] !== undefined) {
-			average += map.get(key)["Average"];
-		}
-	});
-	map.get("Average")["Total"] = average;
-	map.get("Average")["Average"] = average / years.length;
 
 	// Make sure that every single value in the map is toFixed(1)
 	map.forEach((value, key) => {
