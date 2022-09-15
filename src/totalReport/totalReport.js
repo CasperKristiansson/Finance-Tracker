@@ -8,6 +8,8 @@ import Table from "../graphs/tableMonth.js";
 
 import axios from "axios";
 import TableMonth from "../graphs/tableMonth.js";
+import tableCustom from "../graphs/tableCustom";
+import TableCustom from "../graphs/tableCustom";
 
 var loansLineChart = {
 	backgroundColorExpense: "rgba(255, 99, 132, 0.2)",
@@ -109,6 +111,8 @@ export default (props) => {
 
 	const [tableIncome, setTableIncome] = useState(new Map());
 	const [tableExpense, setTableExpense] = useState(new Map());
+	const [tableCategoriesIncome, setTableCategoriesIncome] = useState(new Map());
+	const [tableCategoriesExpense, setTableCategoriesExpense] = useState(new Map());
 
 
 	var loadedTransactions = false;
@@ -154,6 +158,10 @@ export default (props) => {
 		
 		setTableIncome(transactionType(transactions, "Income"));
 		setTableExpense(transactionType(transactions, "Expense"));
+
+		setTableCategoriesIncome(transactionCategories(transactions, "Income"));
+		setTableCategoriesExpense(transactionCategories(transactions, "Expense"));
+
 	}, [transactions]);
 
 	return(
@@ -302,6 +310,14 @@ export default (props) => {
 					<TableMonth
 						data={tableExpense}
 						color={"red"}
+						type={""}
+					/>
+				</Segment>
+				<Segment>
+					<h1>Income Categories</h1>
+					<TableCustom
+						data={tableCategoriesIncome}
+						color={"green"}
 						type={""}
 					/>
 				</Segment>
@@ -850,6 +866,115 @@ function transactionType(transactions, type) {
 	for (let i = 0; i < 14; i++) {
 		map.get("Average")[i] = map.get("Total")[i] / map.size;
 	}
+
+  let obj = {};
+  map.forEach((value, key) => {
+    obj[key] = value;
+  });
+
+  return obj;
+}
+
+function transactionCategories(transactions, type) {
+  var categories = []
+
+  transactions.forEach(transaction => {
+    if (transaction.Type == type) {
+      categories.push(transaction.Category);
+    }
+  });
+
+  let map = new Map();
+
+  categories.forEach(category => {
+    map.set(category, {});
+  });
+
+  // Get how many different years there are.
+	var yearMap = new Map();
+
+	for (let i = 0; i < transactions.length; i++) {
+		let date = new Date(transactions[i].Date);
+		let year = date.getFullYear();
+		if (!yearMap.has(year)) {
+			yearMap.set(year, 0);
+		}
+	}
+	
+	// Get the length of the years map.
+	var years = [];
+	yearMap.forEach((value, key) => {
+		years.push(key);
+	});
+
+	years.forEach(year => {
+		map.forEach((value, key) => {
+			map.get(key)[year] = 0;
+		});
+	});
+
+	map.forEach((value, key) => {
+		map.get(key)["Total"] = 0;
+		map.get(key)["Average"] = 0;
+	});
+
+  transactions.forEach(transaction => {
+    var currentDate = new Date(transaction.Date);
+    var year = currentDate.getFullYear();
+    if (transaction.Type == type) {
+      map.get(transaction.Category)[year] += parseInt(transaction.Amount);
+    }
+  });
+
+  map.forEach((value, key) => {
+    let total = 0;
+    years.forEach(year => {
+			total += map.get(key)[year];
+		});
+		map.get(key)["Total"] = total;
+		map.get(key)["Average"] = total / years.length;
+  });
+
+  map.set("Total", {});
+	map.set("Average", {});
+  
+  years.forEach(year => {
+		let total = 0;
+		map.forEach((value, key) => {
+			if (map.get(key)[year] !== undefined) {
+				total += map.get(key)[year];
+			}
+		});
+		map.get("Total")[year] = total;
+		map.get("Average")[year] = total / map.size;
+	});
+
+	let total = 0;
+	map.forEach((value, key) => {
+		if (map.get(key)["Total"] !== undefined) {
+			total += map.get(key)["Total"];
+		}
+	});
+	map.get("Total")["Total"] = total;
+	map.get("Total")["Average"] = total / years.length;
+
+	let average = 0;
+	map.forEach((value, key) => {
+		if (map.get(key)["Average"] !== undefined) {
+			average += map.get(key)["Average"];
+		}
+	});
+	map.get("Average")["Total"] = average;
+	map.get("Average")["Average"] = average / years.length;
+
+	// Make sure that every single value in the map is toFixed(1)
+	map.forEach((value, key) => {
+		years.forEach(year => {
+			map.get(key)[year] = map.get(key)[year].toFixed(1);
+		});
+		map.get(key)["Total"] = map.get(key)["Total"].toFixed(1);
+		map.get(key)["Average"] = map.get(key)["Average"].toFixed(1);
+	});
 
   let obj = {};
   map.forEach((value, key) => {
