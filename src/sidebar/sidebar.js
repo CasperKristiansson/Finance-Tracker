@@ -57,6 +57,7 @@ export default () => {
 					</MenuItem>
 					<MenuItem icon={<FontAwesomeIcon icon={faUser} />}>
 						Accounts
+						<Link to="/accounts" />
 					</MenuItem>
 				</Menu>
 			</SidebarContent>
