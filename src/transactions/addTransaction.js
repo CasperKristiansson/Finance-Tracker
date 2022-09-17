@@ -10,6 +10,7 @@ import {
 } from 'semantic-ui-react'
 
 import axios from 'axios';
+import './transaction.css'
 
 export default () => {
 	const [transactionType, setTransactionType] = useState("Income");
@@ -59,7 +60,6 @@ export default () => {
 							<>
 								<Form.Field>
 									<label>Date</label>
-									<Input placeholder='Date' />
 								</Form.Field>
 								<Form.Field>
 									<label>From</label>
