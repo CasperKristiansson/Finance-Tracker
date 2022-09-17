@@ -236,7 +236,7 @@ function filterTransactions(transactions, date) {
 		}
 	}
 
-	return filteredTransactions.reverse();
+	return filteredTransactions;
 }
 
 function getStartMonth() {
