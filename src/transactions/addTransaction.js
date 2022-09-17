@@ -21,40 +21,39 @@ export default () => {
 
 	const handleChange = (e, { value }) => setTransactionType(value)
 
-	useEffect(() => {
-		console.log(transactionType);
-	}, [transactionType]);
-
 	return (
 		<div className={"main-section"}>
 			<div className={"main-section-content"}>
 				<h1>Add New Transaction</h1>
-				<div className="ui form">
+				<div className="transaction-form">
 					<Form>
-						<Form.Field>
-							<label>Transaction Type</label>
-							<Radio
+						<label>Transaction Type</label>
+						<Form.Group widths='equal'>
+							<Form.Field
+								control={Radio}
 								label='Income'
 								name='radioGroup'
 								value='Income'
 								onChange={handleChange}
 								checked={transactionType === 'Income'}
 							/>
-							<Radio
+							<Form.Field
+								control={Radio}
 								label='Expense'
 								name='radioGroup'
 								value='Expense'
 								onChange={handleChange}
 								checked={transactionType === 'Expense'}
 							/>
-							<Radio
+							<Form.Field
+								control={Radio}
 								label='Transfer'
 								name='radioGroup'
 								value='Transfer'
 								onChange={handleChange}
 								checked={transactionType === 'Transfer'}
 							/>
-						</Form.Field>
+						</Form.Group>
 
 						{transactionType === "Transfer" ? (
 							<>
