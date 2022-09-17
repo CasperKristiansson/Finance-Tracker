@@ -42,12 +42,11 @@ export default (props) => {
 					{accounts.map((account, index) => {
 						return(
 							<Grid.Column key={index}>
-								<Segment className="left aligned accountInformation">
-									{/* Add a Randomized colored divider above the account.Title */}
+								<Segment className={`left aligned accountInformation ui ${account.Balance > 0 ? "green" : "red"} `}>
 									<h3>{account.Title}</h3>
 									<Divider inverted />
 									<h4>Available Balance</h4>
-									<h2>{account.Balance}</h2>
+									<h2>{account.Balance.toLocaleString()}</h2>
 								</Segment>
 							</Grid.Column>
 						);
@@ -91,10 +90,6 @@ function getAccounts(transactions) {
 				accountNames.push(transaction.Account);
 				accounts.push({Title: transaction.Account, Balance: transactionAmount});
 			}
-		}		
-
-		if (transaction.Amount > 100000) {
-			console.log(transaction);
 		}
 	});
 
