@@ -6,6 +6,7 @@ import BarChart from "../graphs/barchart";
 import Table from "../graphs/table";
 import Banner from "./banner.js";
 import Header from "./header.js"
+import { useNavigate } from "react-router-dom";
 
 import axios from 'axios';
 
@@ -63,6 +64,8 @@ export default () => {
 		}
 	}
 
+	let navigate = useNavigate();
+
 	return (
 		<>
 		<div className={"main-section"}>
@@ -83,6 +86,9 @@ export default () => {
 											content="Add Transaction"
 											color="green"
 											className={"main-section-button"}
+											onClick={() => {
+												navigate("/addTransaction");
+											}}
 										/>
 									</Grid.Column>
 									<Grid.Column>
