@@ -2,5 +2,10 @@
     width: 50%;
     /* Center the div */
     margin: auto;
-    
+}
+
+.date-picker-form {
+    width: 200px;
+    /* Center the div */
+    margin: auto;
 }
