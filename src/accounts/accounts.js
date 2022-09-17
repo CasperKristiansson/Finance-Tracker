@@ -78,17 +78,25 @@ function getAccounts(transactions) {
 			} else {
 				accounts[accountNames.indexOf(transaction.Category)].Balance += parseInt(transaction.Amount);
 			}
-		} else {
+		}
+		else {
+			var transactionAmount = parseInt(transaction.Amount);
+			if (transaction.Type === "Expense") {
+				transactionAmount = -transactionAmount;
+			}
+				
 			if (accountNames.includes(transaction.Account)) {
-				accounts[accountNames.indexOf(transaction.Account)].Balance += parseInt(transaction.Amount);
+				accounts[accountNames.indexOf(transaction.Account)].Balance += transactionAmount;
 			} else {
 				accountNames.push(transaction.Account);
-				accounts.push({Title: transaction.Account, Balance: parseInt(transaction.Amount)});
+				accounts.push({Title: transaction.Account, Balance: transactionAmount});
 			}
+		}		
+
+		if (transaction.Amount > 100000) {
+			console.log(transaction);
 		}
 	});
-
-	console.log(accounts);
 
 	return accounts;
 }
