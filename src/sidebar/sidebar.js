@@ -48,6 +48,7 @@ export default () => {
 					</MenuItem>
 					<MenuItem icon={<FontAwesomeIcon icon={faTrophy} />}>
 						Milestones
+						<Link to="/milestones" />
 					</MenuItem>
 				</Menu>
 
