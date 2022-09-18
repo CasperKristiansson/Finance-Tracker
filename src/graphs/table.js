@@ -18,7 +18,11 @@ export default (props) => {
 				{props.data.map((row) => {
 					return (
 						<tr className={row.Type == "Income" ? "positive" : "negative"}>
-							<td><i className="edit icon"></i></td>
+							<td>
+								<a href={`/editTransaction/${row.id_incr}`}>
+									<i className="edit icon" />
+								</a>
+							</td>
 							<td>{stringifyTime(row.Date)}</td>
 							<td>{row.Category}</td>
 							<td>{row.Amount}</td>

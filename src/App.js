@@ -6,6 +6,7 @@ import YearlyReport from './yearlyReport/yearlyReport';
 import TotalReport from './totalReport/totalReport';
 import Accounts from './accounts/accounts';
 import AddTransaction from './transactions/addTransaction';
+import EditTransaction from './transactions/editTransaction';
 import { Route, Routes, Navigate, BrowserRouter } from 'react-router-dom';
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
             <Route path="/totalReport" element={<TotalReport />} />
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/addTransaction" element={<AddTransaction />} />
+            <Route path="/editTransaction/*" element={<EditTransaction />} />
           </Routes>
         </div>
       </BrowserRouter>
