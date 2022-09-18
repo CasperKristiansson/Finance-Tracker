@@ -26,14 +26,22 @@ export default () => {
 	const [expenseCategories, setExpenseCategories] = useState([]);
 	const [accounts, setAccounts] = useState([]);
 
+	var transactionInformationLoaded = false;
+
 	useEffect(() => {
-		axios.get('https://pktraffic.com/api/transactionInformation.php').then(response => {
-			setIncomeCategories(response.data.categories);
-			setExpenseCategories(response.data.categories);
-			setAccounts(response.data.accounts);
-		}).catch(response => {
-			console.log(response);
-		})
+		if(!transactionInformationLoaded) {
+			axios.get('https://pktraffic.com/api/transactionInformation.php').then(response => {
+				setIncomeCategories(getCategories(response.data.categories, "Income"));
+				setExpenseCategories(getCategories(response.data.categories, "Expense"));
+				setAccounts(getAccounts(response.data.accounts));
+
+				console.log(response.data)
+			}).catch(response => {
+				console.log(response);
+			});
+
+			transactionInformationLoaded = true;
+		}
 	}, []);
 
 	const handleChange = (e, { value }) => setTransactionType(value)
@@ -155,7 +163,7 @@ export default () => {
 							</Form.Field>
 							<Form.Field>
 								<label>Amount</label>
-								<Input placeholder='Amount' />
+								<Input placeholder='Amount' type="number"/>
 							</Form.Field>
 							<Form.Field>
 								<label>Note</label>
@@ -177,7 +185,8 @@ function getCurrentDate() {
 	const year = date.getFullYear();
 	const month = date.getMonth() + 1;
 	const day = date.getDate();
-	return `${year}-${month}-${day}`;
+
+	return `${year}-${month < 10 ? `0${month}` : `${month}`}-${day < 10 ? `0${day}` : `${day}`}`;
 }
 
 function getColor(transactionType) {
@@ -189,4 +198,26 @@ function getColor(transactionType) {
 		case "Transfer":
 			return "blue";
 	}
+}
+
+function getAccounts(accounts) {
+	return accounts.map((account) => {
+		return {
+			key: account.Account,
+			text: account.Account,
+			value: account.Account,
+		};
+	});
+}
+
+function getCategories(categories, type) {
+	return categories
+		.filter((category) => category.Type === type)
+		.map((category) => {
+			return {
+				key: category.Category,
+				text: category.Category,
+				value: category.Category,
+			};
+		});
 }
