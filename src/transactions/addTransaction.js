@@ -8,7 +8,8 @@ import {
   Segment,
   Select,
   TextArea,
-	Dropdown
+	Dropdown,
+	Message
 } from 'semantic-ui-react'
 
 import axios from 'axios';
@@ -25,6 +26,8 @@ export default () => {
 	const [incomeCategories, setIncomeCategories] = useState([]);
 	const [expenseCategories, setExpenseCategories] = useState([]);
 	const [accounts, setAccounts] = useState([]);
+	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [successSubmitting, setSuccessSubmitting] = useState(null);
 
 	var transactionInformationLoaded = false;
 
@@ -47,6 +50,7 @@ export default () => {
 	const handleChange = (e, { value }) => setTransactionType(value)
 
 	const handleSubmit = () => {
+		setIsSubmitting(true);
 		var params = new URLSearchParams();
 		params.append('type', transactionType);
 		params.append('amount', transactionAmount);
@@ -56,9 +60,12 @@ export default () => {
 		params.append('account', transactionAccount);
 
 		axios.post('https://pktraffic.com/api/addTransaction.php', params).then(response => {
+			setIsSubmitting(false);
+			setSuccessSubmitting(response.data.success);
 			console.log(response);
 		}).catch(response => {
 			console.log(response);
+			setIsSubmitting(false);
 		});
 	}
 
@@ -68,7 +75,7 @@ export default () => {
 				<h1>Add New Transaction</h1>
 				<div className="transaction-form">
 				<Segment className={`ui ${getColor(transactionType)}`}>
-					<Form>
+					<Form className={getSuccessCode(successSubmitting, isSubmitting)}>
 						<Form.Field>
 							<label>Transaction Type</label>
 						</Form.Field>
@@ -186,6 +193,16 @@ export default () => {
 							</Form.Field>
 						</>
 						)}
+					<Message
+						success
+						header='Form Completed'
+						content="Transaction has been added"
+					/>
+					<Message
+						error
+						header='Form Error'
+						content="Please fill out all fields"
+					/>
 					<Button type='submit' color={getColor(transactionType)} onClick={handleSubmit}>Submit</Button>					
 					</Form>
 					</Segment>
@@ -235,4 +252,20 @@ function getCategories(categories, type) {
 				value: category.Category,
 			};
 		});
+}
+
+function getSuccessCode(successSubmitting, isSubmitting) {
+	if (isSubmitting) {
+		return "ui loading form";
+	}
+
+	if (successSubmitting) {
+		return "ui success form";
+	}
+
+	if (successSubmitting === false) {
+		return "ui error form";
+	}
+
+	return "";
 }
