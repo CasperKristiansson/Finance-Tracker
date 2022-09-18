@@ -50,14 +50,16 @@ export default () => {
 		if (transactionType === "Transfer") {
 			transactionType = "Transfer-Out";
 		}
-		axios.post('https://pktraffic.com/api/addTransaction.php', {
-			type: transactionType,
-			amount: transactionAmount,
-			date: transactionDate,
-			category: transactionCategory,
-			description: transactionDescription,
-			account: transactionAccount
-		}).then(response => {
+
+		var params = new URLSearchParams();
+		params.append('type', transactionType);
+		params.append('amount', transactionAmount);
+		params.append('date', transactionDate);
+		params.append('category', transactionCategory);
+		params.append('description', transactionDescription);
+		params.append('account', transactionAccount);
+
+		axios.post('https://pktraffic.com/api/addTransaction.php', params).then(response => {
 			console.log(response);
 		}).catch(response => {
 			console.log(response);
