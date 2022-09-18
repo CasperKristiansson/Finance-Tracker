@@ -1,6 +1,10 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
+import './table.css';
 
 export default (props) => {
+	let navigate = useNavigate();
+
 	return (
 		<table className="ui table">
 			<thead>
@@ -19,7 +23,7 @@ export default (props) => {
 					return (
 						<tr className={getTransactionColor(row.Type)}>
 							<td>
-								<a href={`/editTransaction/${row.id_incr}`}>
+								<a onClick={() => navigate(`/editTransaction/${row.id_incr}`)} className="pointer-on-hover">
 									<i className="edit icon" />
 								</a>
 							</td>
