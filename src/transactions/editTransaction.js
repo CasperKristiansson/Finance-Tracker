@@ -37,13 +37,15 @@ export default () => {
 			params.append("id", window.location.pathname.split("/").pop());
 			axios.post('https://pktraffic.com/api/getTransaction.php', params).then(response => {
 				console.log(response.data)
-
-				setTransactionType(response.data.transaction[0].Type);
-				setTransactionAmount(response.data.transaction[0].Amount);
-				setTransactionDate(formatDate(response.data.transaction[0].Date));
-				setTransactionCategory(response.data.transaction[0].Category);
-				setTransactionDescription(response.data.transaction[0].Note);
-				setTransactionAccount(response.data.transaction[0].Account);
+				// If the transaction exists
+				if(response.data.transaction.length > 0) {
+					setTransactionType(response.data.transaction[0].Type);
+					setTransactionAmount(response.data.transaction[0].Amount);
+					setTransactionDate(formatDate(response.data.transaction[0].Date));
+					setTransactionCategory(response.data.transaction[0].Category);
+					setTransactionDescription(response.data.transaction[0].Note);
+					setTransactionAccount(response.data.transaction[0].Account);
+				}
 			}).catch(response => {
 				console.log(response);
 			});
@@ -103,7 +105,7 @@ export default () => {
 	return (
 		<div className={"main-section"}>
 			<div className={"main-section-content"}>
-				<h1>Add New Transaction</h1>
+				<h1>Edit Transaction</h1>
 				<div className="transaction-form">
 				<Segment className={`ui ${getColor(transactionType)}`}>
 					<Form className={getSuccessCode(successSubmitting, isSubmitting)}>
