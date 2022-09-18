@@ -33,6 +33,8 @@ export default () => {
 
 	useEffect(() => {
 		if(!transactionInformationLoaded) {
+			setIsSubmitting(true);
+
 			var params = new URLSearchParams();
 			params.append("id", window.location.pathname.split("/").pop());
 			axios.post('https://pktraffic.com/api/getTransaction.php', params).then(response => {
@@ -48,6 +50,8 @@ export default () => {
 				} else {
 					alert("Transaction does not exist");
 				}
+
+				setIsSubmitting(false);
 			}).catch(response => {
 				console.log(response);
 			});
