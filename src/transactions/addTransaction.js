@@ -47,10 +47,6 @@ export default () => {
 	const handleChange = (e, { value }) => setTransactionType(value)
 
 	const handleSubmit = () => {
-		if (transactionType === "Transfer") {
-			transactionType = "Transfer-Out";
-		}
-
 		var params = new URLSearchParams();
 		params.append('type', transactionType);
 		params.append('amount', transactionAmount);
@@ -97,9 +93,9 @@ export default () => {
 								control={Radio}
 								label='Transfer'
 								name='radioGroup'
-								value='Transfer'
+								value='Transfer-Out'
 								onChange={handleChange}
-								checked={transactionType === 'Transfer'}
+								checked={transactionType === 'Transfer-Out'}
 							/>
 						</Form.Group>
 
@@ -115,7 +111,7 @@ export default () => {
 							</div>
 						</Form.Field>
 
-						{transactionType === "Transfer" ? (
+						{transactionType === "Transfer-Out" ? (
 							<>
 								<Form.Field>
 									<label>From</label>
@@ -151,7 +147,6 @@ export default () => {
 									<label>Note</label>
 									<TextArea placeholder='Note' />
 								</Form.Field>
-								<Button type='submit'>Submit</Button>
 							</>
 						) : (
 							<>
@@ -189,9 +184,9 @@ export default () => {
 								<label>Note</label>
 								<TextArea placeholder='Note' onChange={(e, {value}) => setTransactionDescription(value)}/>
 							</Form.Field>
-							<Button type='submit' color={getColor(transactionType)} onClick={handleSubmit}>Submit</Button>
 						</>
-						)}						
+						)}
+					<Button type='submit' color={getColor(transactionType)} onClick={handleSubmit}>Submit</Button>					
 					</Form>
 					</Segment>
 				</div>
@@ -215,7 +210,7 @@ function getColor(transactionType) {
 			return "green";
 		case "Expense":
 			return "red";
-		case "Transfer":
+		case "Transfer-Out":
 			return "blue";
 	}
 }
