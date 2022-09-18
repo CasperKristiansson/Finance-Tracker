@@ -40,7 +40,7 @@ export default () => {
 					</MenuItem>
 					<MenuItem icon={<FontAwesomeIcon icon={faUser} />}>
 						Accounts Report
-						<Link to="/" />
+						<Link to="/accountsReport" />
 					</MenuItem>
 					<MenuItem icon={<FontAwesomeIcon icon={faLandmark} />}>
 						Loans Report

@@ -5,6 +5,7 @@ import Home from './home/home';
 import YearlyReport from './yearlyReport/yearlyReport';
 import TotalReport from './totalReport/totalReport';
 import Accounts from './accounts/accounts';
+import AccountsReport from './accounts/accountsReport';
 import AddTransaction from './transactions/addTransaction';
 import EditTransaction from './transactions/editTransaction';
 import { Route, Routes, Navigate, BrowserRouter } from 'react-router-dom';
@@ -20,6 +21,7 @@ function App() {
             <Route path="/yearlyReport" element={<YearlyReport />} />
             <Route path="/totalReport" element={<TotalReport />} />
             <Route path="/accounts" element={<Accounts />} />
+            <Route path="/accountsReport" element={<AccountsReport />} />
             <Route path="/addTransaction" element={<AddTransaction />} />
             <Route path="/editTransaction/*" element={<EditTransaction />} />
           </Routes>
