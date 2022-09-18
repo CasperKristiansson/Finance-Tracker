@@ -8,6 +8,7 @@ import Accounts from './accounts/accounts';
 import AccountsReport from './accounts/accountsReport';
 import AddTransaction from './transactions/addTransaction';
 import EditTransaction from './transactions/editTransaction';
+import EditAccount from './transactions/editAccount';
 import { Route, Routes, Navigate, BrowserRouter } from 'react-router-dom';
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
             <Route path="/accountsReport" element={<AccountsReport />} />
             <Route path="/addTransaction" element={<AddTransaction />} />
             <Route path="/editTransaction/*" element={<EditTransaction />} />
+            <Route path="/editAccount/*" element={<EditAccount />} />
           </Routes>
         </div>
       </BrowserRouter>
