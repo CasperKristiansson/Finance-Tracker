@@ -17,7 +17,7 @@ export default (props) => {
 			<tbody>
 				{props.data.map((row) => {
 					return (
-						<tr className={row.Type == "Income" ? "positive" : "negative"}>
+						<tr className={getTransactionColor(row.Type)}>
 							<td>
 								<a href={`/editTransaction/${row.id_incr}`}>
 									<i className="edit icon" />
@@ -40,4 +40,15 @@ export default (props) => {
 function stringifyTime(date) {
   let dateArray = date.split(" ");
   return dateArray[0];
+}
+
+function getTransactionColor(transactionType) {
+	switch(transactionType) {
+		case "Income":
+			return "positive"
+		case "Expense":
+			return "negative"
+		default:
+			return ""
+	}
 }
