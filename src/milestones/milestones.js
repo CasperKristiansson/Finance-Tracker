@@ -10,7 +10,7 @@ import { useNavigate } from "react-router-dom";
 
 
 export default (props) => {
-	const [milestones, setMilestones] = useState({});
+	const [milestones, setMilestones] = useState([]);
 	var loadedTransactions = false;
 
 	let navigate = useNavigate();
@@ -34,7 +34,21 @@ export default (props) => {
 			<div className={"main-section-content"}>
 				<h1>MileStones</h1>
 				{/* Create  Milestones. Meaning create a table like view. Show the milestone amount and when it was achived. */}
-				
+				{milestones.map((milestone, index) => {
+					// Display the milestone if it has been achieved, the date it was achieved, and the time it took to achieve it in days. Also display a title for the milestone.
+					return (
+						<div className={"milestone"}>
+							<Segment color={milestone.achieved ? "green" : "red"}>
+								<Header size="medium">{milestone.title}</Header>
+								<Divider inverted />
+								<h4>Date Achieved</h4>
+								<p>{milestone.achievedDate}</p>
+								<h4>Days to Achieve</h4>
+								<p>{milestone.achievedTime}</p>
+							</Segment>
+						</div>
+					);
+				})}
 			</div>
 		</div>
 		</>
@@ -111,13 +125,23 @@ function calculateMilestones(transactions) {
 				milestones[milestone].achieved = true;
 				milestones[milestone].achievedDate = transactions[i].Date;
 				milestones[milestone].achievedTime = calculateTime(date, transactions[i].Date);
+
+				var date = transactions[i].Date;
 			}
 		}
 	}
 
-	console.log(milestones);
+	var milestonesArray = [];
+	for (var milestone in milestones) {
+		milestonesArray.push({
+			title: "Achieve $" + milestone,
+			achieved: milestones[milestone].achieved,
+			achievedDate: milestones[milestone].achievedDate,
+			achievedTime: milestones[milestone].achievedTime
+		});
+	}
 
-	return milestones;
+	return milestonesArray;
 }
 
 function calculateTime(date1, date2) {
