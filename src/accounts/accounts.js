@@ -1,11 +1,12 @@
 import React, {useEffect, useState} from "react";
-import { Grid, Segment, Divider } from "semantic-ui-react";
+import { Grid, Segment, Divider, Button, Icon, Header } from "semantic-ui-react";
 import BarChart from "../graphs/barchart";
 import LineChart from "../graphs/linechart";
 import PieChart from "../graphs/piechart";
 import HeatMap from "../graphs/heatmap";
 import Table from "../graphs/tableMonth.js";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 
 import "./accounts.css";
 
@@ -13,6 +14,8 @@ export default (props) => {
 	const [transactions, setTransactions] = useState([]);
 	const [accounts, setAccounts] = useState([{Title: "Loading...", Balance: "Loading..."}]);
 	var loadedTransactions = false;
+
+	let navigate = useNavigate();
 
 	useEffect(() => {
 		if (!loadedTransactions) {
@@ -43,7 +46,16 @@ export default (props) => {
 						return(
 							<Grid.Column key={index}>
 								<Segment className={`left aligned accountInformation ui ${account.Balance > 0 ? "green" : "red"} `}>
-									<h3>{account.Title}</h3>
+									<Button icon
+										floated="right"
+										size="mini"
+										color="gray"
+										onClick={() => navigate(`/editAccount/?account=${account.Title}&balance=${account.Balance}`)}
+									>
+										<Icon name="edit" />
+									</Button>
+									<Header size="medium" floated="left">{account.Title}</Header>
+									<br />
 									<Divider inverted />
 									<h4>Available Balance</h4>
 									<h2>{account.Balance.toLocaleString()}</h2>
