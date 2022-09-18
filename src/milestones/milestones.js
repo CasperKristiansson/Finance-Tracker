@@ -8,6 +8,9 @@ import './milestones.css';
 
 export default (props) => {
 	const [milestones, setMilestones] = useState([]);
+	const [transactions, setTransactions] = useState([]);
+	const [loans, setLoans] = useState([]);
+	
 	var loadedTransactions = false;
 
 	let navigate = useNavigate();
@@ -16,7 +19,14 @@ export default (props) => {
 		if (!loadedTransactions) {
 			axios.get('https://pktraffic.com/api/transactionsTotal.php').then(response => {
 				console.log(response.data);
-				setMilestones(calculateMilestones(response.data.transactions));
+				setTransactions(response.data.transactions);
+			}).catch(response => {
+				console.log(response);
+			});
+
+			axios.get('https://pktraffic.com/api/loans.php').then(response => {
+				console.log(response.data);
+				setLoans(response.data.transactions);
 			}).catch(response => {
 				console.log(response);
 			});
@@ -24,6 +34,20 @@ export default (props) => {
 			loadedTransactions = true;
 		}
 	}, []);
+
+	useEffect(() => {
+		if (transactions.length > 0 && loans.length > 0) {
+			loans.forEach(loan => {
+				transactions.push({
+					"Type": "Expense",
+					"Amount": loan.amount,
+					"Date": loan.date,
+				});
+			});
+			setMilestones(calculateMilestones(transactions));
+		}
+	}, [transactions, loans]);
+
 	
 	return(
 		<>
