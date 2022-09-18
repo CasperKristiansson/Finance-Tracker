@@ -73,25 +73,31 @@ export default () => {
 		params.append('category', transactionCategory);
 		params.append('description', transactionDescription);
 		params.append('account', transactionAccount);
+		params.append('id', window.location.pathname.split("/").pop());
 
-		axios.post('https://pktraffic.com/api/addTransaction.php', params).then(response => {
+		axios.post('https://pktraffic.com/api/editTransaction.php', params).then(response => {
 			setIsSubmitting(false);
 			setSuccessSubmitting(response.data.success);
 			console.log(response);
-
-			clearFields();
 		}).catch(response => {
 			console.log(response);
 			setIsSubmitting(false);
 		});
 	}
 
-	const clearFields = () => {
-		setTransactionType("Income");
-		setTransactionAmount("");
-		setTransactionCategory("");
-		setTransactionDescription("");
-		setTransactionAccount("");
+	const handleDelete = () => {
+		setIsSubmitting(true);
+		var params = new URLSearchParams();
+		params.append('id', window.location.pathname.split("/").pop());
+
+		axios.post('https://pktraffic.com/api/deleteTransaction.php', params).then(response => {
+			setIsSubmitting(false);
+			setSuccessSubmitting(response.data.success);
+			console.log(response);
+		}).catch(response => {
+			console.log(response);
+			setIsSubmitting(false);
+		});
 	}
 
 	return (
@@ -221,14 +227,17 @@ export default () => {
 					<Message
 						success
 						header='Form Completed'
-						content="Transaction has been added"
+						content="Transaction has been modified"
 					/>
 					<Message
 						error
 						header='Form Error'
-						content="Please fill out all fields"
+						content="Something went wrong"
 					/>
-					<Button type='submit' color={getColor(transactionType)} onClick={handleSubmit}>Submit</Button>					
+					<Form.Field widths='equal'>
+						<Button type='submit' color={getColor(transactionType)} onClick={handleSubmit}>Submit</Button>					
+						<Button type='submit' color="gray" onClick={handleDelete}>Delete</Button>
+					</Form.Field>
 					</Form>
 					</Segment>
 				</div>
