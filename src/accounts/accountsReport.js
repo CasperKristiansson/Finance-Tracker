@@ -38,7 +38,7 @@ export default (props) => {
 					{accounts.map((account, index) => {
 						return(
 							<Grid.Column key={index}>
-								<Segment className={`left aligned accountInformation ui ${account.Balance > 0 ? "green" : "red"} `}>
+								<Segment className={`left aligned accountInformation ui ${account.Balance[account.Balance.length - 1] >= 0 ? "green" : "red"} `}>
 									<h3>{account.Title}</h3>
 									<Divider inverted />
 									<h4>Available Balance</h4>
