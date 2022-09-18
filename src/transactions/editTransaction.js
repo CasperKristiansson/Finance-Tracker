@@ -45,6 +45,8 @@ export default () => {
 					setTransactionCategory(response.data.transaction[0].Category);
 					setTransactionDescription(response.data.transaction[0].Note);
 					setTransactionAccount(response.data.transaction[0].Account);
+				} else {
+					alert("Transaction does not exist");
 				}
 			}).catch(response => {
 				console.log(response);
