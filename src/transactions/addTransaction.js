@@ -17,7 +17,7 @@ import './transaction.css'
 
 export default () => {
 	const [transactionType, setTransactionType] = useState("Income");
-	const [transactionAmount, setTransactionAmount] = useState(0);
+	const [transactionAmount, setTransactionAmount] = useState("");
 	const [transactionDate, setTransactionDate] = useState(getCurrentDate());
 	const [transactionCategory, setTransactionCategory] = useState("");
 	const [transactionDescription, setTransactionDescription] = useState("");
@@ -63,10 +63,20 @@ export default () => {
 			setIsSubmitting(false);
 			setSuccessSubmitting(response.data.success);
 			console.log(response);
+
+			clearFields();
 		}).catch(response => {
 			console.log(response);
 			setIsSubmitting(false);
 		});
+	}
+
+	const clearFields = () => {
+		setTransactionType("Income");
+		setTransactionAmount("");
+		setTransactionCategory("");
+		setTransactionDescription("");
+		setTransactionAccount("");
 	}
 
 	return (
@@ -148,11 +158,11 @@ export default () => {
 								</Form.Field>
 								<Form.Field>
 									<label>Amount</label>
-									<Input placeholder='Amount' type="number" onChange={(e, {value}) => setTransactionAmount(value)}/>
+									<Input placeholder='Amount' type="number" value={transactionAmount} onChange={(e, {value}) => setTransactionAmount(value)}/>
 								</Form.Field>
 								<Form.Field>
 									<label>Note</label>
-									<TextArea placeholder='Note' />
+									<TextArea placeholder='Note' onChange={(e, {value}) => setTransactionDescription(value)} value={transactionDescription} />
 								</Form.Field>
 							</>
 						) : (
@@ -185,11 +195,11 @@ export default () => {
 							</Form.Field>
 							<Form.Field>
 								<label>Amount</label>
-								<Input placeholder='Amount' type="number" onChange={(e, {value}) => setTransactionAmount(value)}/>
+								<Input placeholder='Amount' type="number" value={transactionAmount} onChange={(e, {value}) => setTransactionAmount(value)}/>
 							</Form.Field>
 							<Form.Field>
 								<label>Note</label>
-								<TextArea placeholder='Note' onChange={(e, {value}) => setTransactionDescription(value)}/>
+								<TextArea placeholder='Note' onChange={(e, {value}) => setTransactionDescription(value)} value={transactionDescription} />
 							</Form.Field>
 						</>
 						)}
