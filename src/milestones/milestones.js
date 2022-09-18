@@ -1,12 +1,9 @@
 import React, {useEffect, useState} from "react";
 import { Grid, Segment, Divider, Button, Icon, Header } from "semantic-ui-react";
-import BarChart from "../graphs/barchart";
-import LineChart from "../graphs/linechart";
-import PieChart from "../graphs/piechart";
-import HeatMap from "../graphs/heatmap";
-import Table from "../graphs/tableMonth.js";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+
+import './milestones.css';
 
 
 export default (props) => {
@@ -34,21 +31,25 @@ export default (props) => {
 			<div className={"main-section-content"}>
 				<h1>MileStones</h1>
 				{/* Create  Milestones. Meaning create a table like view. Show the milestone amount and when it was achived. */}
-				{milestones.map((milestone, index) => {
-					// Display the milestone if it has been achieved, the date it was achieved, and the time it took to achieve it in days. Also display a title for the milestone.
-					return (
-						<div className={"milestone"}>
-							<Segment color={milestone.achieved ? "green" : "red"}>
-								<Header size="medium">{milestone.title}</Header>
-								<Divider inverted />
-								<h4>Date Achieved</h4>
-								<p>{milestone.achievedDate}</p>
-								<h4>Days to Achieve</h4>
-								<p>{milestone.achievedTime}</p>
-							</Segment>
-						</div>
-					);
-				})}
+				<Grid columns={2}>
+					{milestones.map((milestone, index) => {
+						// Display the milestone if it has been achieved, the date it was achieved, and the time it took to achieve it in days. Also display a title for the milestone.
+						return (
+							<Grid.Column key={index}>
+								<div className={"milestone"}>
+									<Segment color={milestone.achieved ? "green" : "red"}>
+										<Header size="medium">{`Milestone ${parseInt(milestone.title).toLocaleString()}kr`}</Header>
+										<Divider inverted />
+										<h4>Date Achieved</h4>
+										<p>{milestone.achievedDate !== null ? milestone.achievedDate : "Not Achieved"}</p>
+										<h4>Days to Achieve</h4>
+										<p>{milestone.achievedTime !== null ? `${milestone.achievedTime} days` : "Not Achieved"}</p>
+									</Segment>
+								</div>
+							</Grid.Column>
+						);
+					})}
+				</Grid>
 			</div>
 		</div>
 		</>
@@ -101,7 +102,12 @@ function calculateMilestones(transactions) {
 			achieved: false,
 			achievedDate: null,
 			achievedTime: null
-		}
+		},
+		3000000: {
+			achieved: false,
+			achievedDate: null,
+			achievedTime: null
+		},
 	}
 
 	// sort the transactions
@@ -123,7 +129,7 @@ function calculateMilestones(transactions) {
 		for (var milestone in milestones) {
 			if (milestones[milestone].achieved === false && total >= milestone) {
 				milestones[milestone].achieved = true;
-				milestones[milestone].achievedDate = transactions[i].Date;
+				milestones[milestone].achievedDate = formatDate(transactions[i].Date);
 				milestones[milestone].achievedTime = calculateTime(date, transactions[i].Date);
 
 				var date = transactions[i].Date;
@@ -134,7 +140,7 @@ function calculateMilestones(transactions) {
 	var milestonesArray = [];
 	for (var milestone in milestones) {
 		milestonesArray.push({
-			title: "Achieve $" + milestone,
+			title: milestone,
 			achieved: milestones[milestone].achieved,
 			achievedDate: milestones[milestone].achievedDate,
 			achievedTime: milestones[milestone].achievedTime
@@ -152,4 +158,8 @@ function calculateTime(date1, date2) {
 	var diffDays = Math.ceil(timeDiff / (1000 * 3600 * 24));
 
 	return diffDays;
+}
+
+function formatDate(date) {
+	return date.split(" ")[0];
 }
