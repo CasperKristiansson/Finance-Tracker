@@ -46,6 +46,24 @@ export default () => {
 
 	const handleChange = (e, { value }) => setTransactionType(value)
 
+	const handleSubmit = () => {
+		if (transactionType === "Transfer") {
+			transactionType = "Transfer-Out";
+		}
+		axios.post('https://pktraffic.com/api/addTransaction.php', {
+			type: transactionType,
+			amount: transactionAmount,
+			date: transactionDate,
+			category: transactionCategory,
+			description: transactionDescription,
+			account: transactionAccount
+		}).then(response => {
+			console.log(response);
+		}).catch(response => {
+			console.log(response);
+		});
+	}
+
 	return (
 		<div className={"main-section"}>
 			<div className={"main-section-content"}>
@@ -125,7 +143,7 @@ export default () => {
 								</Form.Field>
 								<Form.Field>
 									<label>Amount</label>
-									<Input placeholder='Amount' type="number"/>
+									<Input placeholder='Amount' type="number" onChange={(e, {value}) => setTransactionAmount(value)}/>
 								</Form.Field>
 								<Form.Field>
 									<label>Note</label>
@@ -163,13 +181,13 @@ export default () => {
 							</Form.Field>
 							<Form.Field>
 								<label>Amount</label>
-								<Input placeholder='Amount' type="number"/>
+								<Input placeholder='Amount' type="number" onChange={(e, {value}) => setTransactionAmount(value)}/>
 							</Form.Field>
 							<Form.Field>
 								<label>Note</label>
-								<TextArea placeholder='Note' />
+								<TextArea placeholder='Note' onChange={(e, {value}) => setTransactionDescription(value)}/>
 							</Form.Field>
-							<Button type='submit' color={getColor(transactionType)}>Submit</Button>
+							<Button type='submit' color={getColor(transactionType)} onClick={handleSubmit}>Submit</Button>
 						</>
 						)}						
 					</Form>
