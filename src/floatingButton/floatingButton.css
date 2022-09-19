@@ -6,4 +6,5 @@
     /* The button should be 50px in width and height */
     /* The button should have a border radius of 50% */
     border-radius: 50% !important;
+    z-index: 9999999;
 }
