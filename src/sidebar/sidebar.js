@@ -42,10 +42,6 @@ export default () => {
 						Accounts Report
 						<Link to="/accountsReport" />
 					</MenuItem>
-					<MenuItem icon={<FontAwesomeIcon icon={faLandmark} />}>
-						Loans Report
-						<Link to="/" />
-					</MenuItem>
 					<MenuItem icon={<FontAwesomeIcon icon={faTrophy} />}>
 						Milestones
 						<Link to="/milestones" />
@@ -53,9 +49,6 @@ export default () => {
 				</Menu>
 
 				<Menu iconShape="circle">
-					<MenuItem icon={<FontAwesomeIcon icon={faGlobe} />}>
-						Transactions
-					</MenuItem>
 					<MenuItem icon={<FontAwesomeIcon icon={faUser} />}>
 						Accounts
 						<Link to="/accounts" />
