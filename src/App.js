@@ -10,6 +10,7 @@ import AddTransaction from './transactions/addTransaction';
 import EditTransaction from './transactions/editTransaction';
 import EditAccount from './transactions/editAccount';
 import Milestones from './milestones/milestones';
+import FloatingButton from './floatingButton/floatingButton';
 import { Route, Routes, Navigate, BrowserRouter } from 'react-router-dom';
 
 function App() {
@@ -30,6 +31,7 @@ function App() {
             <Route path="/milestones" element={<Milestones />} />
           </Routes>
         </div>
+        <FloatingButton />
       </BrowserRouter>
     </div>
   );
