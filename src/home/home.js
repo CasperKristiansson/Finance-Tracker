@@ -8,6 +8,8 @@ import Banner from "./banner.js";
 import Header from "./header.js"
 import { useNavigate } from "react-router-dom";
 
+import { excel } from "xlsx";
+
 import axios from 'axios';
 
 export default () => {
@@ -64,6 +66,39 @@ export default () => {
 		}
 	}
 
+	var XLSX = require("xlsx");
+
+	const handleExcelSubmit = () => {
+		var input = document.createElement('input');
+		input.type = 'file';
+		input.accept = '.xlsx';
+
+		input.onchange = e => {
+			var file = e.target.files[0];
+			var reader = new FileReader();
+			reader.readAsBinaryString(file);
+			reader.onload = function (e) {
+				var data = e.target.result;
+				var workbook = XLSX.read(data, {
+					type: 'binary'
+				});
+				var sheetName = workbook.SheetNames[0];
+				var sheet = workbook.Sheets[sheetName];
+				var data = XLSX.utils.sheet_to_json(sheet);
+
+				var params = new URLSearchParams();
+				params.append('transactions', JSON.stringify(data));
+
+				axios.post('https://pktraffic.com/api/addTransactions.php', params).then(response => {
+					console.log(response.data);
+				}).catch(response => {
+					console.log(response);
+				})
+			}
+		}
+		input.click();
+	}
+
 	let navigate = useNavigate();
 
 	return (
@@ -97,6 +132,9 @@ export default () => {
 											content="Import Excel"
 											color="blue"
 											className={"main-section-button"}
+											onClick={() => {
+												handleExcelSubmit();
+											}}
 										/>
 									</Grid.Column>
 								</Grid.Row>
