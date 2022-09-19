@@ -76,7 +76,9 @@ export default () => {
 		input.onchange = e => {
 			var file = e.target.files[0];
 			var reader = new FileReader();
+
 			reader.readAsBinaryString(file);
+
 			reader.onload = function (e) {
 				var data = e.target.result;
 				var workbook = XLSX.read(data, {
@@ -85,6 +87,37 @@ export default () => {
 				var sheetName = workbook.SheetNames[0];
 				var sheet = workbook.Sheets[sheetName];
 				var data = XLSX.utils.sheet_to_json(sheet);
+
+				for(var i = 0; i < data.length; i++) {
+					if (!data[i].hasOwnProperty("Date")) {
+						data[i]["Date"] = "";
+					}
+					if (!data[i].hasOwnProperty("Type")) {
+						data[i]["Type"] = "Not Specified";
+					}
+					if (!data[i].hasOwnProperty("Category")) {
+						data[i]["Category"] = "Not Specified";
+					}
+					if (!data[i].hasOwnProperty("Amount")) {
+						data[i]["Amount"] = "0";
+					}
+					if (!data[i].hasOwnProperty("Description")) {
+						data[i]["Description"] = "Not Specified";
+					}
+					if (!data[i].hasOwnProperty("Account")) {
+						data[i]["Account"] = "Not Specified";
+					}
+
+					var date = new Date(data[i]["Date"]);
+					var year = date.getFullYear();
+					var month = date.getMonth() + 1;
+					var day = date.getDate();
+					var hour = date.getHours();
+					var minute = date.getMinutes();
+					var second = date.getSeconds();
+
+					data[i]["Date"] = year + "-" + month + "-" + day + " " + hour + ":" + minute + ":" + second;
+				}
 
 				var params = new URLSearchParams();
 				params.append('transactions', JSON.stringify(data));
