@@ -1,6 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import './table.css';
+import { Icon } from "semantic-ui-react";
 
 export default (props) => {
 	let navigate = useNavigate();
@@ -24,7 +25,8 @@ export default (props) => {
 						<tr className={getTransactionColor(row.Type)}>
 							<td>
 								<a onClick={() => navigate(`/editTransaction/${row.id_incr}`)} className="pointer-on-hover">
-									<i className="edit icon" />
+									{/* Create a edit icon from semantic */}
+									<Icon name="edit" color={"grey"}/>
 								</a>
 							</td>
 							<td>{stringifyTime(row.Date)}</td>
