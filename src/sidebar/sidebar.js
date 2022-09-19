@@ -53,6 +53,10 @@ export default () => {
 						Accounts
 						<Link to="/accounts" />
 					</MenuItem>
+					<MenuItem icon={<FontAwesomeIcon icon={faGlobe} />}>
+						Templates
+						<Link to="/templates" />
+					</MenuItem>
 				</Menu>
 			</SidebarContent>
 
