@@ -13,6 +13,7 @@ import Milestones from './milestones/milestones';
 import FloatingButton from './floatingButton/floatingButton';
 import Download from './download/download';
 import Login from './login/login';
+import Logout from './login/logout';
 
 import { Route, Routes, BrowserRouter, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -35,28 +36,40 @@ function App() {
   const [user, setUser] = useState(null);
   const [auth, setAuth] = useState(null);
 
+	var loadedUser = false;
+
   useEffect(() => {
-    console.log('Checking login');
-    var authVar = getAuth()
-    setAuth(authVar);
+    if (!loadedUser) {
+      var authVar = getAuth()
+      loadedUser = true;
+      setAuth(authVar);
 
-    setPersistence(authVar, browserLocalPersistence).then(() => {
-      onAuthStateChanged(authVar, (user) => {
-          if (user) {
-            setUser(user);
-            setLoggedIn(true);
-            setLoading(false);
-          } else {
-            setLoggedIn(false);
-            setLoading(false);
+      setPersistence(authVar, browserLocalPersistence).then(() => {
+        onAuthStateChanged(authVar, (user) => {
+            if (user) {
+              setUser(user);
+              setLoggedIn(true);
+              setLoading(false);
 
-            if (window.location.pathname !== '/login') {
-              window.location.href = '/login';
+            } else {
+              setLoggedIn(false);
+              setLoading(false);
+
+              if (window.location.pathname !== '/login') {
+                window.location.href = '/login';
+              }
             }
-          }
+        });
       });
-    });
+    }
+    
   }, []);
+
+  const handleLogOut = () => {
+    auth.signOut().then(() => {
+      window.location.href = '/login';
+    });
+  }
 
   return (
     <div className="App">
@@ -83,9 +96,13 @@ function App() {
               <Route path="/editAccount/*" element={<EditAccount user={user} />} />
               <Route path="/milestones" element={<Milestones user={user} />} />
               <Route path="/download" element={<Download user={user} />} />
+              <Route path="/logout" element={<Logout signOut={handleLogOut} />} />
               </>
             ) : (
+              <>
+              <Route path="/" element={<></>} />
               <Route path="/login" element={<Login auth={auth} setUser={(user) => setUser(user)} />} />
+              </>
             )}
           </Routes>
         </div>
