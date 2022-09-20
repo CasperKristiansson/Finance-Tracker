@@ -12,6 +12,8 @@ import {
 	Message
 } from 'semantic-ui-react'
 
+import { useNavigate } from "react-router-dom";
+
 import axios from 'axios';
 import './transaction.css'
 
@@ -27,6 +29,8 @@ export default (props) => {
 	const [accounts, setAccounts] = useState([]);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [successSubmitting, setSuccessSubmitting] = useState(null);
+
+	let navigate = useNavigate();
 
 	useEffect(() => {
 		const urlParams = new URLSearchParams(window.location.search);
@@ -72,7 +76,10 @@ export default (props) => {
 		axios.post('https://pktraffic.com/api/addTransaction.php', params).then(response => {
 			setIsSubmitting(false);
 			setSuccessSubmitting(response.data.success);
-			console.log(response);
+
+			setTimeout(() => {
+				navigate("/accounts");
+			}, 3000);
 		}).catch(response => {
 			console.log(response);
 			setIsSubmitting(false);
