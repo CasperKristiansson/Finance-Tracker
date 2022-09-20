@@ -24,10 +24,38 @@ export default (props) => {
 		const wb = { Sheets: { data: ws }, SheetNames: ["data"] };
 		const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
 		const data = new Blob([excelBuffer], { type: 'xlsx' });
-		
+
 		var date = new Date();
 		var fileName = "Transactions_" + date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate() + ".xlsx";
 		FileSaver.saveAs(data, fileName);
+	}
+
+	var handleAllLoans = () => {
+		axios.get('https://pktraffic.com/api/loans.php').then(response => {
+			console.log(response.data);
+			
+			const ws = XLSX.utils.json_to_sheet(response.data.transactions);
+      const wb = { Sheets: { data: ws }, SheetNames: ["data"] };
+      const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const data = new Blob([excelBuffer], { type: 'xlsx' });
+      FileSaver.saveAs(data, 'All Loans.xlsx');
+		}).catch(response => {
+			console.log(response);
+		});
+	}
+
+	var handleAllTransactions = () => {
+		axios.get('https://pktraffic.com/api/transactionsTotal.php').then(response => {
+			console.log(response.data);
+			
+			const ws = XLSX.utils.json_to_sheet(response.data.transactions);
+      const wb = { Sheets: { data: ws }, SheetNames: ["data"] };
+      const excelBuffer = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+      const data = new Blob([excelBuffer], { type: 'xlsx' });
+      FileSaver.saveAs(data, 'All Transactions.xlsx');
+		}).catch(response => {
+			console.log(response);
+		});
 	}
 
 	return(
@@ -51,7 +79,17 @@ export default (props) => {
 								<Segment>
 									<Header as="h2">All Transactions</Header>
 									<Divider />
-									<Button color="blue" icon labelPosition="left" onClick={() => window.open("http://localhost:3000/template/transactions")}>
+									<Button color="blue" icon labelPosition="left" onClick={handleAllTransactions}>
+										<Icon name="download" />
+										Download
+									</Button>
+								</Segment>
+							</Grid.Column>
+							<Grid.Column>
+								<Segment>
+									<Header as="h2">All Loans</Header>
+									<Divider />
+									<Button color="blue" icon labelPosition="left" onClick={handleAllLoans}>
 										<Icon name="download" />
 										Download
 									</Button>
