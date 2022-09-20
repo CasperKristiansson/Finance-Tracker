@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from "react";
 import "./home.css";
-import { Grid, Segment, Button } from "semantic-ui-react";
+import { Grid, Segment, Button, Message } from "semantic-ui-react";
 import PieChart from "../graphs/piechart";
 import BarChart from "../graphs/barchart";
 import Table from "../graphs/table";
@@ -22,6 +22,9 @@ export default (props) => {
 	const [categoriesAmount, setCategoriesAmount] = useState([]);
 
 	const [pieChartType, setPieChartType] = useState("Income");
+
+	const [showMessage, setShowMessage] = useState(false);
+	const [excelUploadedSuccessfully, setExcelUploadedSuccessfully] = useState(false);
 
 	var oldYear;
 
@@ -97,6 +100,10 @@ export default (props) => {
 
 				axios.post('https://pktraffic.com/api/addTransactions.php', params).then(response => {
 					console.log(response.data);
+					if (response.data.success) {
+						setExcelUploadedSuccessfully(true);
+						setShowMessage(true);
+					}
 				}).catch(response => {
 					console.log(response);
 				})
@@ -109,6 +116,30 @@ export default (props) => {
 
 	return (
 		<>
+		<div className="message-sticky">
+			{showMessage ? 
+					excelUploadedSuccessfully ? (
+						<>
+						<Message positive>
+							<Message.Header>Upload Complete</Message.Header>
+							<p>
+								The excel document was <b>successfully</b> uploaded!
+							</p>
+						</Message>
+						</>
+					) : (
+						<>
+						<Message negative>
+							<Message.Header>Upload Failed</Message.Header>
+							<p>
+								The excel document was <b>not</b> uploaded!
+							</p>
+						</Message>
+						</>
+					)
+				: null
+			}
+		</div>
 		<div className={"main-section"}>
 			<Header
 				handleYearChange={handleYearChange}
