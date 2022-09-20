@@ -15,7 +15,7 @@ import {
 import axios from 'axios';
 import './transaction.css'
 
-export default () => {
+export default (props) => {
 	const [transactionType, setTransactionType] = useState("Income");
 	const [oldTransactionAmount, setOldTransactionAmount] = useState("");
 	const [transactionAmount, setTransactionAmount] = useState("");
@@ -47,6 +47,7 @@ export default () => {
 		params.append('category', transactionCategory);
 		params.append('description', transactionDescription);
 		params.append('account', transactionAccount);
+		params.append('userID', props.userID);
 
 		axios.post('https://pktraffic.com/api/addTransaction.php', params).then(response => {
 			setIsSubmitting(false);

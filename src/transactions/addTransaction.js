@@ -15,7 +15,7 @@ import {
 import axios from 'axios';
 import './transaction.css'
 
-export default () => {
+export default (props) => {
 	const [transactionType, setTransactionType] = useState("Income");
 	const [transactionAmount, setTransactionAmount] = useState("");
 	const [transactionDate, setTransactionDate] = useState(getCurrentDate());
@@ -33,7 +33,10 @@ export default () => {
 
 	useEffect(() => {
 		if(!transactionInformationLoaded) {
-			axios.get('https://pktraffic.com/api/transactionInformation.php').then(response => {
+			var params = new URLSearchParams();
+			params.append('userID', props.userID);
+
+			axios.post('https://pktraffic.com/api/transactionInformation.php', params).then(response => {
 				setIncomeCategories(getCategories(response.data.categories, "Income"));
 				setExpenseCategories(getCategories(response.data.categories, "Expense"));
 				setAccounts(getAccounts(response.data.accounts));
@@ -58,6 +61,7 @@ export default () => {
 		params.append('category', transactionCategory);
 		params.append('description', transactionDescription);
 		params.append('account', transactionAccount);
+		params.append('userID', props.userID);
 
 		axios.post('https://pktraffic.com/api/addTransaction.php', params).then(response => {
 			setIsSubmitting(false);

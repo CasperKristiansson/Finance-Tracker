@@ -12,7 +12,7 @@ import { excel } from "xlsx";
 
 import axios from 'axios';
 
-export default () => {
+export default (props) => {
 	const [yearIncome, setYearIncome] = useState([]);
 	const [yearExpense, setYearExpense] = useState([]);
 	const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -29,6 +29,7 @@ export default () => {
     if (currentYear !== oldYear) {
       var params = new URLSearchParams();
       params.append('year', currentYear);
+	  params.append('userID', props.userID);
       
       axios.post('https://pktraffic.com/api/transactions.php', params).then(response => {
         console.log(response.data);
@@ -92,6 +93,7 @@ export default () => {
 
 				var params = new URLSearchParams();
 				params.append('transactions', JSON.stringify(data));
+				params.append('userID', props.userID);
 
 				axios.post('https://pktraffic.com/api/addTransactions.php', params).then(response => {
 					console.log(response.data);

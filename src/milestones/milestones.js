@@ -17,14 +17,17 @@ export default (props) => {
 
 	useEffect(() => {
 		if (!loadedTransactions) {
-			axios.get('https://pktraffic.com/api/transactionsTotal.php').then(response => {
+			var params = new URLSearchParams();
+			params.append('userID', props.userID);
+
+			axios.post('https://pktraffic.com/api/transactionsTotal.php', params).then(response => {
 				console.log(response.data);
 				setTransactions(response.data.transactions);
 			}).catch(response => {
 				console.log(response);
 			});
 
-			axios.get('https://pktraffic.com/api/loans.php').then(response => {
+			axios.post('https://pktraffic.com/api/loans.php', params).then(response => {
 				console.log(response.data);
 				setLoans(response.data.transactions);
 			}).catch(response => {

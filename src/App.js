@@ -51,6 +51,7 @@ function App() {
               setLoggedIn(true);
               setLoading(false);
 
+
             } else {
               setLoggedIn(false);
               setLoading(false);
@@ -86,16 +87,16 @@ function App() {
           <Routes>
             {loggedIn && !loading ? (
               <>
-              <Route path="/" element={<Home user={user} />} />
-              <Route path="/yearlyReport" element={<YearlyReport user={user} />} />
-              <Route path="/totalReport" element={<TotalReport user={user} />} />
-              <Route path="/accounts" element={<Accounts user={user} />} />
-              <Route path="/accountsReport" element={<AccountsReport user={user} />} />
-              <Route path="/addTransaction" element={<AddTransaction user={user} />} />
-              <Route path="/editTransaction/*" element={<EditTransaction user={user} />} />
-              <Route path="/editAccount/*" element={<EditAccount user={user} />} />
-              <Route path="/milestones" element={<Milestones user={user} />} />
-              <Route path="/download" element={<Download user={user} />} />
+              <Route path="/" element={<Home userID={user.uid} />} />
+              <Route path="/yearlyReport" element={<YearlyReport userID={user.uid} />} />
+              <Route path="/totalReport" element={<TotalReport userID={user.uid} />} />
+              <Route path="/accounts" element={<Accounts userID={user.uid} />} />
+              <Route path="/accountsReport" element={<AccountsReport userID={user.uid} />} />
+              <Route path="/addTransaction" element={<AddTransaction userID={user.uid} />} />
+              <Route path="/editTransaction/*" element={<EditTransaction userID={user.uid} />} />
+              <Route path="/editAccount/*" element={<EditAccount userID={user.uid} />} />
+              <Route path="/milestones" element={<Milestones userID={user.uid} />} />
+              <Route path="/download" element={<Download userID={user.uid} />} />
               <Route path="/logout" element={<Logout signOut={handleLogOut} />} />
               </>
             ) : (

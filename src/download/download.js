@@ -31,7 +31,10 @@ export default (props) => {
 	}
 
 	var handleAllLoans = () => {
-		axios.get('https://pktraffic.com/api/loans.php').then(response => {
+		var params = new URLSearchParams();
+		params.append('userID', props.userID);
+	
+		axios.post('https://pktraffic.com/api/loans.php', params).then(response => {
 			console.log(response.data);
 			
 			const ws = XLSX.utils.json_to_sheet(response.data.transactions);
@@ -45,7 +48,10 @@ export default (props) => {
 	}
 
 	var handleAllTransactions = () => {
-		axios.get('https://pktraffic.com/api/transactionsTotal.php').then(response => {
+		var params = new URLSearchParams();
+		params.append('userID', props.userID);
+
+		axios.post('https://pktraffic.com/api/transactionsTotal.php', params).then(response => {
 			console.log(response.data);
 			
 			const ws = XLSX.utils.json_to_sheet(response.data.transactions);

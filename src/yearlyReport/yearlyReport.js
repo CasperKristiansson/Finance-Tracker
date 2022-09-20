@@ -39,6 +39,7 @@ export default (props) => {
     if (currentYear !== oldYear) {
       var params = new URLSearchParams();
       params.append('year', currentYear);
+	  params.append('userID', props.userID);
       
       axios.post('https://pktraffic.com/api/transactions.php', params).then(response => {
         console.log(response.data);

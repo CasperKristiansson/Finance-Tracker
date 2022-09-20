@@ -15,7 +15,7 @@ import {
 import axios from 'axios';
 import './transaction.css'
 
-export default () => {
+export default (props) => {
 	const [transactionType, setTransactionType] = useState("Income");
 	const [transactionAmount, setTransactionAmount] = useState("");
 	const [transactionDate, setTransactionDate] = useState(getCurrentDate());
@@ -37,6 +37,8 @@ export default () => {
 
 			var params = new URLSearchParams();
 			params.append("id", window.location.pathname.split("/").pop());
+			params.append('userID', props.userID);
+
 			axios.post('https://pktraffic.com/api/getTransaction.php', params).then(response => {
 				console.log(response.data)
 				// If the transaction exists
@@ -56,7 +58,10 @@ export default () => {
 				console.log(response);
 			});
 
-			axios.get('https://pktraffic.com/api/transactionInformation.php').then(response => {
+			var params = new URLSearchParams();
+			params.append('userID', props.userID);
+
+			axios.post('https://pktraffic.com/api/transactionInformation.php', params).then(response => {
 				setIncomeCategories(getCategories(response.data.categories, "Income"));
 				setExpenseCategories(getCategories(response.data.categories, "Expense"));
 				setAccounts(getAccounts(response.data.accounts));
@@ -82,6 +87,7 @@ export default () => {
 		params.append('description', transactionDescription);
 		params.append('account', transactionAccount);
 		params.append('id', window.location.pathname.split("/").pop());
+		params.append('userID', props.userID);
 
 		axios.post('https://pktraffic.com/api/editTransaction.php', params).then(response => {
 			setIsSubmitting(false);
@@ -97,6 +103,7 @@ export default () => {
 		setIsSubmitting(true);
 		var params = new URLSearchParams();
 		params.append('id', window.location.pathname.split("/").pop());
+		params.append('userID', props.userID);
 
 		axios.post('https://pktraffic.com/api/deleteTransaction.php', params).then(response => {
 			setIsSubmitting(false);
