@@ -101,8 +101,18 @@ export default (props) => {
 				axios.post('https://pktraffic.com/api/addTransactions.php', params).then(response => {
 					console.log(response.data);
 					if (response.data.success) {
-						setExcelUploadedSuccessfully(true);
 						setShowMessage(true);
+						setExcelUploadedSuccessfully(true);
+						setTimeout(() => {
+							setShowMessage(false);
+						}, 5000);
+						navigate("/");
+					} else {
+						setShowMessage(true);
+						setExcelUploadedSuccessfully(false);
+						setTimeout(() => {
+							setShowMessage(false);
+						}, 5000);
 					}
 				}).catch(response => {
 					console.log(response);

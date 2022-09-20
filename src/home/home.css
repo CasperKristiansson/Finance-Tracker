@@ -17,3 +17,11 @@
 .grid-max-height {
     height: 100%;
 }
+
+.message-sticky {
+    position: fixed;
+    top: 25px;
+    right: 25px;
+    width: 500px;
+    z-index: 999;
+}
