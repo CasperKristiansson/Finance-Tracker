@@ -32,11 +32,14 @@ export default (props) => {
 		const urlParams = new URLSearchParams(window.location.search);
 		setTransactionAccount(urlParams.get("account"));
 		setOldTransactionAmount(urlParams.get("balance"));
-		setTransactionCategory("Adjustment");
 		setTransactionType("Income");
-	}, []);
 
-	const handleChange = (e, { value }) => setTransactionType(value)
+		if (urlParams.get("account") === "Nordnet") {
+			setTransactionCategory("Investment");
+		} else {
+			setTransactionCategory("Adjustment");
+		}
+	}, []);
 
 	const handleSubmit = () => {
 		setIsSubmitting(true);
