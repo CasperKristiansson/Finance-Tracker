@@ -51,7 +51,9 @@ function App() {
               setLoggedIn(true);
               setLoading(false);
 
-
+              if (window.location.pathname === '/login') {
+                window.location.href = '/';
+              }
             } else {
               setLoggedIn(false);
               setLoading(false);
@@ -98,11 +100,24 @@ function App() {
               <Route path="/milestones" element={<Milestones userID={user.uid} />} />
               <Route path="/download" element={<Download userID={user.uid} />} />
               <Route path="/logout" element={<Logout signOut={handleLogOut} />} />
+
+              <Route path="/login" element={<></>} />
               </>
             ) : (
               <>
-              <Route path="/" element={<></>} />
               <Route path="/login" element={<Login auth={auth} setUser={(user) => setUser(user)} />} />
+
+              <Route path="/" element={<></>} />
+              <Route path="/yearlyReport" element={<></>} />
+              <Route path="/totalReport" element={<></>} />
+              <Route path="/accounts" element={<></>} />
+              <Route path="/accountsReport" element={<></>} />
+              <Route path="/addTransaction" element={<></>} />
+              <Route path="/editTransaction/*" element={<></>} />
+              <Route path="/editAccount/*" element={<></>} />
+              <Route path="/milestones" element={<></>} />
+              <Route path="/download" element={<></>} />
+              <Route path="/logout" element={<></>} />
               </>
             )}
           </Routes>
