@@ -1,9 +1,6 @@
 import React, { useEffect } from "react";
 
 export default (props) => {
-	useEffect(() => {
-		console.log(props);
-	}, [props]);
 	return (
 		<table className={`ui ${props.color} celled selectable table`}>
 			<thead>

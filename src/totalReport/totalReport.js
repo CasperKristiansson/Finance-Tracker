@@ -127,6 +127,7 @@ export default (props) => {
 			axios.post('https://pktraffic.com/api/transactionsTotal.php', params).then(response => {
 				console.log(response.data);
 				setTransactions(response.data.transactions);
+				setAssetsData(calculateAssets(response.data.transactions));
 			}).catch(response => {
 				console.log(response);
 			});

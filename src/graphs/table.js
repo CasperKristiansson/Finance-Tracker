@@ -20,9 +20,9 @@ export default (props) => {
 				</tr>
 			</thead>
 			<tbody>
-				{props.data.map((row) => {
+				{props.data.map((row, index) => {
 					return (
-						<tr className={getTransactionColor(row.Type)}>
+						<tr className={getTransactionColor(row.Type)} key={`homeTable${index}`}>
 							<td>
 								<a onClick={() => navigate(`/editTransaction/${row.id_incr}`)} className="pointer-on-hover">
 									{/* Create a edit icon from semantic */}
