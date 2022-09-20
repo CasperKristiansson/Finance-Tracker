@@ -36,6 +36,8 @@ export default (props) => {
 
 		if (urlParams.get("account") === "Nordnet") {
 			setTransactionCategory("Investment");
+		} else if (urlParams.get("account") === "Danske Bank") {
+			setTransactionCategory("Bospar");
 		} else {
 			setTransactionCategory("Adjustment");
 		}
