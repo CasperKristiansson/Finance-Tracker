@@ -122,6 +122,9 @@ function App() {
             )}
           </Routes>
         </div>
+        <br />
+        <br />
+        <br />
       </BrowserRouter>
     </div>
   );
