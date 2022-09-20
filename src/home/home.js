@@ -103,10 +103,11 @@ export default (props) => {
 					if (response.data.success) {
 						setShowMessage(true);
 						setExcelUploadedSuccessfully(true);
+
 						setTimeout(() => {
 							setShowMessage(false);
+							window.location.reload();
 						}, 5000);
-						navigate("/");
 					} else {
 						setShowMessage(true);
 						setExcelUploadedSuccessfully(false);
