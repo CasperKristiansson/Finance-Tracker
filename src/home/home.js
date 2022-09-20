@@ -286,6 +286,11 @@ function filterTransactions(transactions, date) {
 		}
 	}
 
+	// Sort the transactions on Date
+	filteredTransactions.sort(function(a, b) {
+		return new Date(b.Date) - new Date(a.Date);
+	});
+
 	return filteredTransactions;
 }
 

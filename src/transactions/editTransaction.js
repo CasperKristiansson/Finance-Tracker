@@ -13,6 +13,7 @@ import {
 } from 'semantic-ui-react'
 
 import axios from 'axios';
+import { useNavigate } from "react-router-dom";
 import './transaction.css'
 
 export default (props) => {
@@ -77,6 +78,8 @@ export default (props) => {
 
 	const handleChange = (e, { value }) => setTransactionType(value)
 
+	let navigate = useNavigate();
+
 	const handleSubmit = () => {
 		setIsSubmitting(true);
 		var params = new URLSearchParams();
@@ -93,6 +96,10 @@ export default (props) => {
 			setIsSubmitting(false);
 			setSuccessSubmitting(response.data.success);
 			console.log(response);
+			// Sleep for two seconds than redirect to the home page
+			setTimeout(() => {
+				navigate("/");
+			}, 2500);
 		}).catch(response => {
 			console.log(response);
 			setIsSubmitting(false);
@@ -108,6 +115,10 @@ export default (props) => {
 		axios.post('https://pktraffic.com/api/deleteTransaction.php', params).then(response => {
 			setIsSubmitting(false);
 			setSuccessSubmitting(response.data.success);
+			setTimeout(() => {
+				navigate("/");
+			}, 2500);
+
 			console.log(response);
 		}).catch(response => {
 			console.log(response);
