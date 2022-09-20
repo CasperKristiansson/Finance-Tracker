@@ -32,14 +32,16 @@ export default (props) => {
 		const urlParams = new URLSearchParams(window.location.search);
 		setTransactionAccount(urlParams.get("account"));
 		setOldTransactionAmount(urlParams.get("balance"));
-		setTransactionType("Income");
 
 		if (urlParams.get("account") === "Nordnet") {
 			setTransactionCategory("Investment");
+			setTransactionType("Income");
 		} else if (urlParams.get("account") === "Danske Bank") {
 			setTransactionCategory("Bospar");
+			setTransactionType("Income");
 		} else {
 			setTransactionCategory("Adjustment");
+			setTransactionType("Expense");
 		}
 	}, []);
 
@@ -47,12 +49,25 @@ export default (props) => {
 		setIsSubmitting(true);
 		var params = new URLSearchParams();
 		params.append('type', transactionType);
-		params.append('amount', (transactionAmount - oldTransactionAmount));
 		params.append('date', transactionDate);
 		params.append('category', transactionCategory);
 		params.append('description', transactionDescription);
 		params.append('account', transactionAccount);
 		params.append('userID', props.userID);
+
+		var amount = 0;
+		if (transactionType === "Income") {
+			amount = transactionAmount - oldTransactionAmount;
+		} else {
+			amount = oldTransactionAmount - transactionAmount;
+			// if amount is negative, make it positive
+			if (amount < 0) {
+				amount = amount * -1;
+			}
+		}
+
+		params.append('amount', amount);
+
 
 		axios.post('https://pktraffic.com/api/addTransaction.php', params).then(response => {
 			setIsSubmitting(false);
