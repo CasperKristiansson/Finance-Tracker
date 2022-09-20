@@ -52,7 +52,6 @@ export default (props) => {
 									<Button icon
 										floated="right"
 										size="mini"
-										color="gray"
 										onClick={() => navigate(`/editAccount/?account=${account.Title}&balance=${account.Balance}`)}
 									>
 										<Icon name="edit" />
