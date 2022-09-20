@@ -878,7 +878,7 @@ function transactionType(transactions, type) {
 	map.set("Average", {});
 
 	for (let i = 0; i < 14; i++) {
-		map.get("Average")[i] = map.get("Total")[i] / map.size;
+		map.get("Average")[i] = map.get("Total")[i] / (map.size - 2);
 	}
 
   let obj = {};
