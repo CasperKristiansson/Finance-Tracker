@@ -10,7 +10,7 @@ import {
 import { FiSettings } from 'react-icons/fi';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { Link } from 'react-router-dom';
-import { faFileCircleCheck, faLandmark, faMoneyBillWave , faUser, faGlobe, faTrophy} from '@fortawesome/free-solid-svg-icons'
+import { faFileCircleCheck, faLandmark, faMoneyBillWave , faUser, faGlobe, faTrophy, faDownload} from '@fortawesome/free-solid-svg-icons'
 
 import './sidebar.scss';
 import './sidebar.css';
@@ -53,9 +53,9 @@ export default () => {
 						Accounts
 						<Link to="/accounts" />
 					</MenuItem>
-					<MenuItem icon={<FontAwesomeIcon icon={faGlobe} />}>
-						Templates
-						<Link to="/templates" />
+					<MenuItem icon={<FontAwesomeIcon icon={faDownload} />}>
+						Download
+						<Link to="/download" />
 					</MenuItem>
 				</Menu>
 			</SidebarContent>

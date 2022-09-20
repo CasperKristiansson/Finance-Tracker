@@ -11,6 +11,7 @@ import EditTransaction from './transactions/editTransaction';
 import EditAccount from './transactions/editAccount';
 import Milestones from './milestones/milestones';
 import FloatingButton from './floatingButton/floatingButton';
+import Download from './download/download';
 import { Route, Routes, Navigate, BrowserRouter } from 'react-router-dom';
 
 function App() {
@@ -29,6 +30,7 @@ function App() {
             <Route path="/editTransaction/*" element={<EditTransaction />} />
             <Route path="/editAccount/*" element={<EditAccount />} />
             <Route path="/milestones" element={<Milestones />} />
+            <Route path="/download" element={<Download />} />
           </Routes>
         </div>
         <FloatingButton />
