@@ -1,3 +1,7 @@
+<p align="center">
+<img src="https://user-images.githubusercontent.com/36133918/192075691-b5892073-923e-4d1e-ae62-3ad963725e7f.png" height="400"/>
+</p>
+
 # Finance Tracker
 *A project which solved an issue of mine which was tracking my finance. This Finance Tracking application gives overviews of expenses and income to give its users an easy way to explore their data.*
 
@@ -10,6 +14,10 @@ An easy solution for this (kind of time-consuming 😊) was to in a more program
 - The website is made using **React** and website authentication is made using **Firebase**
 - Eight different **API endpoints** were developed to manage the data between the application and the database
 - Python Pandas to clean the old transaction data
+
+<p align="center">
+<img src="https://user-images.githubusercontent.com/36133918/192075699-af6a3a35-a098-4d0d-bb82-da15273d24ad.jpg" height="400"/>
+</p>
 
 ## Features
 The overview page is what the user is first presented with when entering the website. The overview view gives the user an insight into last month's income and expenses and a bar chart for this year's income and expenses. The page also includes two sections where the user can either add a new transaction or upload an excel document. The second part of the page includes a list of transactions where the user can easily navigate and see the different transactions made. The table gives the user the option to edit each transaction.
