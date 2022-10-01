@@ -24,6 +24,7 @@ export default (props) => {
 	const [pieChartType, setPieChartType] = useState("Income");
 
 	const [showMessage, setShowMessage] = useState(false);
+	const [message, setMessage] = useState("");
 	const [excelUploadedSuccessfully, setExcelUploadedSuccessfully] = useState(false);
 
 	var oldYear;
@@ -94,23 +95,58 @@ export default (props) => {
 
 				data = validateData(data);
 
-				var params = new URLSearchParams();
-				params.append('transactions', JSON.stringify(data));
+				if (!data.data) {
+					setMessage(
+						<>
+						<Message negative>
+							<Message.Header>Upload Failed</Message.Header>
+							<p>
+								{data.errorMessage}
+							</p>
+						</Message>
+						</>
+					)
+					setShowMessage(true);
+					setTimeout(() => {
+						setShowMessage(false);
+					}, 5000);
+				} else {
+					var params = new URLSearchParams();
+				params.append('transactions', JSON.stringify(data.data));
 				params.append('userID', props.userID);
 
 				axios.post('https://pktraffic.com/api/addTransactions.php', params).then(response => {
 					console.log(response.data);
 					if (response.data.success) {
+						setMessage(
+							<>
+							<Message positive>
+								<Message.Header>Upload Complete</Message.Header>
+								<p>
+									The excel document was <b>successfully</b> uploaded!
+								</p>
+							</Message>
+							</>
+						)
 						setShowMessage(true);
-						setExcelUploadedSuccessfully(true);
 
 						setTimeout(() => {
 							setShowMessage(false);
 							window.location.reload();
-						}, 5000);
+						}, 3000);
 					} else {
+						setMessage(
+							<>
+							<Message negative>
+								<Message.Header>Upload Failed</Message.Header>
+								<p>
+									There was a database error. Please try again later.
+								</p>
+							</Message>
+							</>
+						)
 						setShowMessage(true);
-						setExcelUploadedSuccessfully(false);
+
 						setTimeout(() => {
 							setShowMessage(false);
 						}, 5000);
@@ -118,6 +154,7 @@ export default (props) => {
 				}).catch(response => {
 					console.log(response);
 				})
+				}				
 			}
 		}
 		input.click();
@@ -128,28 +165,7 @@ export default (props) => {
 	return (
 		<>
 		<div className="message-sticky">
-			{showMessage ? 
-					excelUploadedSuccessfully ? (
-						<>
-						<Message positive>
-							<Message.Header>Upload Complete</Message.Header>
-							<p>
-								The excel document was <b>successfully</b> uploaded!
-							</p>
-						</Message>
-						</>
-					) : (
-						<>
-						<Message negative>
-							<Message.Header>Upload Failed</Message.Header>
-							<p>
-								The excel document was <b>not</b> uploaded!
-							</p>
-						</Message>
-						</>
-					)
-				: null
-			}
+			{showMessage ? message : null}
 		</div>
 		<div className={"main-section"}>
 			<Header
@@ -346,24 +362,35 @@ function getStartMonth() {
 }
 
 function validateData(data) {
+	if (data.length === 1) {
+		if (data[0].Date === "" && data[0].Description === "" && data[0].Amount === "" && data[0].Type === "" && data[0].Category === "") {
+			return {"data": null, "errorMessage": "No data found"};
+		}
+	}
+
 	for(var i = 0; i < data.length; i++) {
 		if (!data[i].hasOwnProperty("Date")) {
-			data[i]["Date"] = "";
+			return {"data": null, "errorMessage": "Date is missing at row " + (i + 1)};
 		}
 		if (!data[i].hasOwnProperty("Type")) {
-			data[i]["Type"] = "Not Specified";
+			return {"data": null, "errorMessage": "Type is missing at row " + (i + 1)};
 		}
 		if (!data[i].hasOwnProperty("Category")) {
-			data[i]["Category"] = "Not Specified";
+			return {"data": null, "errorMessage": "Category is missing at row " + (i + 1)};
 		}
 		if (!data[i].hasOwnProperty("Amount")) {
-			data[i]["Amount"] = "0";
+			return {"data": null, "errorMessage": "Amount is missing at row " + (i + 1)};
 		}
 		if (!data[i].hasOwnProperty("Description")) {
-			data[i]["Description"] = "Not Specified";
+			data[i]["Description"] = "";
 		}
 		if (!data[i].hasOwnProperty("Account")) {
-			data[i]["Account"] = "Not Specified";
+			return {"data": null, "errorMessage": "Account is missing at row " + (i + 1)};
+		}
+
+		if (typeof data[i].Date === "number") {
+			data[i].Date = new Date((data[i].Date - (25567 + 2)) * 86400 * 1000);
+			data[i].Date = data[i].Date.toISOString().slice(0, 10);
 		}
 
 		var date = new Date(data[i]["Date"]);
@@ -374,8 +401,9 @@ function validateData(data) {
 		var minute = date.getMinutes();
 		var second = date.getSeconds();
 
+
 		data[i]["Date"] = year + "-" + month + "-" + day + " " + hour + ":" + minute + ":" + second;
 	}
 
-	return data;
+	return {"data": data, "errorMessage": ""};
 }
