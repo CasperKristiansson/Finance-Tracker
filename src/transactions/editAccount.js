@@ -63,10 +63,15 @@ export default (props) => {
 		if (transactionType === "Income") {
 			amount = transactionAmount - oldTransactionAmount;
 		} else {
-			amount = oldTransactionAmount - transactionAmount;
-			// if amount is negative, make it positive
-			if (amount < 0) {
-				amount = amount * -1;
+			// Check if transactionAmount is bigger than oldTransactionAmount
+			if (transactionAmount > oldTransactionAmount) {
+				amount = transactionAmount - oldTransactionAmount;
+			} else {
+				amount = oldTransactionAmount - transactionAmount;
+				// if amount is negative, make it positive
+				if (amount < 0) {
+					amount = amount * -1;
+				}
 			}
 		}
 
@@ -84,6 +89,16 @@ export default (props) => {
 			console.log(response);
 			setIsSubmitting(false);
 		});
+	}
+
+	const handleTransactionAmountChange = (value) => {
+		setTransactionAmount(value);
+		// Check if oldTransactionAmount is less than transactionAmount
+		if (oldTransactionAmount < value || transactionAccount === "Nordnet" || transactionAccount === "Danske Bank") {
+			setTransactionType("Income");
+		} else {
+			setTransactionType("Expense");
+		}
 	}
 
 	return (
@@ -106,7 +121,7 @@ export default (props) => {
 						</Form.Field>
 						<Form.Field>
 							<label>New Account Amount</label>
-							<Input placeholder='New Account Amount' type="number" value={transactionAmount} onChange={(e, {value}) => setTransactionAmount(value)}/>
+							<Input placeholder='New Account Amount' type="number" value={transactionAmount} onChange={(e, {value}) => handleTransactionAmountChange(value)}/>
 						</Form.Field>
 						<Form.Field>
 							<label>Note</label>
