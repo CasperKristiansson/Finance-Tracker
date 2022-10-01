@@ -67,8 +67,8 @@ export default () => {
             padding: '20px 24px',
           }}
         >
-					<a
-            href="https://github.com/azouaoui-med/react-pro-sidebar"
+		<a
+            href="https://github.com/CasperKristiansson/Finance-Tracker"
             target="_blank"
             className="sidebar-btn"
             rel="noopener noreferrer"
