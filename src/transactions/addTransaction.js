@@ -83,6 +83,28 @@ export default (props) => {
 		setTransactionAccount("");
 	}
 
+	const handleTransactionAccountChange = (value) => {
+		if(accounts.filter(account => account.value === value).length === 0) {
+			setAccounts([...accounts, {key: value, text: value, value: value}]);
+		}
+
+		setTransactionAccount(value);
+	}
+
+	const handleTransactionCategoryChange = (value) => {
+		if(transactionType === "Income") {
+			if(incomeCategories.filter(category => category.value === value).length === 0) {
+				setIncomeCategories([...incomeCategories, {key: value, text: value, value: value}]);
+			}
+		} else {
+			if(expenseCategories.filter(category => category.value === value).length === 0) {
+				setExpenseCategories([...expenseCategories, {key: value, text: value, value: value}]);
+			}
+		}
+
+		setTransactionCategory(value);
+	}
+
 	return (
 		<div className={"main-section"}>
 			<div className={"main-section-content"}>
@@ -144,7 +166,7 @@ export default (props) => {
 										fluid
 										allowAdditions
 										value={transactionAccount}
-										onChange={(e, {value}) => setTransactionAccount(value)}
+										onChange={(e, {value}) => handleTransactionAccountChange(value)}
 									/>
 								</Form.Field>
 								<Form.Field>
@@ -157,7 +179,7 @@ export default (props) => {
 										fluid
 										allowAdditions
 										value={transactionCategory}
-										onChange={(e, {value}) => setTransactionCategory(value)}
+										onChange={(e, {value}) => handleTransactionCategoryChange(value)}
 									/>
 								</Form.Field>
 								<Form.Field>
@@ -181,7 +203,7 @@ export default (props) => {
 									fluid
 									allowAdditions
 									value={transactionAccount}
-									onChange={(e, {value}) => setTransactionAccount(value)}
+									onChange={(e, {value}) => handleTransactionAccountChange(value)}
 								/>
 							</Form.Field>
 							<Form.Field>
@@ -194,7 +216,7 @@ export default (props) => {
 									fluid
 									allowAdditions
 									value={transactionCategory}
-									onChange={(e, {value}) => setTransactionCategory(value)}
+									onChange={(e, {value}) => handleTransactionCategoryChange(value)}
 								/>
 							</Form.Field>
 							<Form.Field>
