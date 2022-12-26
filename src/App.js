@@ -28,6 +28,7 @@ import {
   signInWithEmailAndPassword,
   updateProfile
 } from "firebase/auth";
+import TransactionsView from './transactionsView/transactionsView';
 
 
 function App() {
@@ -99,6 +100,7 @@ function App() {
               <Route path="/editAccount/*" element={<EditAccount userID={user.uid} />} />
               <Route path="/milestones" element={<Milestones userID={user.uid} />} />
               <Route path="/download" element={<Download userID={user.uid} />} />
+              <Route path="/transactionsView" element={<TransactionsView userID={user.uid} />} />
               <Route path="/logout" element={<Logout signOut={handleLogOut} />} />
 
               <Route path="/login" element={<></>} />
@@ -117,6 +119,7 @@ function App() {
               <Route path="/editAccount/*" element={<></>} />
               <Route path="/milestones" element={<></>} />
               <Route path="/download" element={<></>} />
+              <Route path="/transactionsView" element={<></>} />
               <Route path="/logout" element={<></>} />
               </>
             )}
