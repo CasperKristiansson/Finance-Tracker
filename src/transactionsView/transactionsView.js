@@ -4,6 +4,7 @@ import axios from 'axios';
 
 import Table from './table';
 import Pagination from './pagination';
+import Options from './options';
 
 
 export default (props) => {
@@ -45,7 +46,7 @@ export default (props) => {
 			console.log(response);
 		})
     
-  }, [itemOffset, itemsPerPage, newSearch]);
+  }, [itemOffset, itemsPerPage, newSearch, option]);
 
   useEffect(() => {
     setCurrentItems([]);
@@ -67,6 +68,11 @@ export default (props) => {
 
   return (
     <div className="pagination-list pagination-dashboard">
+			<Options
+				option={option}
+				setOption={setOption}
+				handleNewSearch={handleNewSearch}
+			/>
       <Table
         data={currentItems}
       />
