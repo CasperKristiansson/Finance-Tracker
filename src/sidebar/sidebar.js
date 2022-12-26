@@ -10,7 +10,7 @@ import {
 import { FiSettings } from 'react-icons/fi';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { Link } from 'react-router-dom';
-import { faFileCircleCheck, faLandmark, faMoneyBillWave , faUser, faGlobe, faTrophy, faDownload} from '@fortawesome/free-solid-svg-icons'
+import { faFileCircleCheck, faLandmark, faMoneyBillWave , faUser, faGlobe, faTrophy, faDownload, faPaperclip} from '@fortawesome/free-solid-svg-icons'
 
 import './sidebar.scss';
 import './sidebar.css';
@@ -37,6 +37,10 @@ export default () => {
 					<MenuItem icon={<FontAwesomeIcon icon={faFileCircleCheck} />}>
 						Total Report
 						<Link to="/totalReport" />
+					</MenuItem>
+					<MenuItem icon={<FontAwesomeIcon icon={faPaperclip} />}>
+						Transactions View
+						<Link to="/transactionsView" />
 					</MenuItem>
 					<MenuItem icon={<FontAwesomeIcon icon={faUser} />}>
 						Accounts Report
@@ -77,7 +81,7 @@ export default () => {
           <span style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
             Settings
           </span>
-					</a>
+		</a>
         </div>
       </SidebarFooter>
     </ProSidebar>
