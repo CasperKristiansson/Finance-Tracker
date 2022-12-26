@@ -1,10 +1,13 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import './table.css';
 import { Icon } from "semantic-ui-react";
 
 export default (props) => {
 	let navigate = useNavigate();
+
+	useEffect(() => {
+		console.log(props.data);
+	}, [props.data]);
 
 	return (
 		<table className="ui table">
@@ -20,7 +23,7 @@ export default (props) => {
 				</tr>
 			</thead>
 			<tbody>
-				{props.data.map((row, index) => {
+				{props.data ? props.data.map((row, index) => {
 					return (
 						<tr className={getTransactionColor(row.Type)} key={`homeTable${index}`}>
 							<td>
@@ -36,7 +39,7 @@ export default (props) => {
 							<td>{row.Note}</td>
 						</tr>
 					);
-				})}
+				}) : null}
 			</tbody>
 		</table>
 	);
