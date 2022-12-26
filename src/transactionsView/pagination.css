@@ -20,6 +20,7 @@
 .pagination li:first-child {
 	background-color: #64C3FE;
 	border-radius: 5px;
+    cursor: pointer;
 }
 
 .pagination a:hover:not(.selected) {
