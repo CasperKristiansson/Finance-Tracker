@@ -1,11 +1,13 @@
 import { Form, Select, Container } from 'semantic-ui-react'
 
 const transactionTypes = [
+	{ key: '', text: 'All', value: ''},
   { key: 'i', text: 'Income', value: 'income' },
   { key: 'e', text: 'Expense', value: 'expense' },
 ]
 
 const transactionCategories = [
+	{ key: '', text: 'All', value: ''},
   { key: 'r', text: 'Rent', value: 'rent' },
   { key: 's', text: 'Groceries', value: 'groceries' },
   { key: 'o', text: 'Other', value: 'other' },
