@@ -32,9 +32,7 @@ export default (props) => {
 	// If props.option.transactionType is not empty, filter the array of objects by the type
 	// If props.option.transactionType is empty, filter the array of all objects by the type
 
-	useEffect(() => {
-		console.log('transactionCategories', props.transactionCategories)
-	
+	useEffect(() => {	
 		if (props.transactionCategories) {
 			setTransactionCategories([{ key: '', text: 'All', value: '' }, ...props.transactionCategories
 				.filter((category) => {
@@ -63,7 +61,7 @@ export default (props) => {
 
   return (
     <Container textAlign='center'>
-      <Form inline>
+      <Form>
         <Form.Group inline>
           <Form.Field control={Select} label='Transaction Type' options={transactionTypes} placeholder='Select transaction type' name='transactionType' value={props.option.transactionType} onChange={handleChange} />
           <Form.Field control={Select} label='Transaction Category' options={transactionCategories} placeholder='Select transaction category' name='transactionCategory' value={props.option.transactionCategory} onChange={handleChange} />
