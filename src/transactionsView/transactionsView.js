@@ -15,6 +15,7 @@ export default (props) => {
   const [itemOffset, setItemOffset] = useState(0);
   const [recordsLength, setRecordsLength] = useState(0);
   const [newSearch, setNewSearch] = useState(false);
+	const [transactionCategories, setTransactionCategories] = useState([]);
 	const [option, setOption] = useState({
 		sort: 'Date',
 		transactionType: '',
@@ -35,6 +36,8 @@ export default (props) => {
 		params.append('startDate', option.startDate);
 		params.append('endDate', option.endDate);
 
+		console.log(params);
+
 		axios.post("https://pktraffic.com/api/transactionsView.php", params).then(response => {
 			console.log(response.data);
 			if (response.data.count !== recordsLength) {
@@ -48,11 +51,17 @@ export default (props) => {
     
   }, [itemOffset, itemsPerPage, newSearch, option]);
 
-  useEffect(() => {
-    setCurrentItems([]);
-    setItemOffset(0);
-    setCurrPage(0);
-  }, [props.endPoint]);
+	useEffect(() => {
+		var params = new URLSearchParams();
+		params.append('userID', props.userID);
+	
+		axios.post("https://pktraffic.com/api/transactionsViewType.php", params).then(response => {
+			console.log(response.data.types);
+			setTransactionCategories(response.data.types);
+		}).catch(response => {
+			console.log(response);
+		})
+	}, []);
 
   const handlePageClick = (event) => {
     const newOffset = (event.selected * itemsPerPage) % recordsLength;
@@ -72,6 +81,7 @@ export default (props) => {
 				option={option}
 				setOption={setOption}
 				handleNewSearch={handleNewSearch}
+				transactionCategories={transactionCategories}
 			/>
       <Table
         data={currentItems}
