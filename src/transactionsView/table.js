@@ -5,10 +5,6 @@ import { Icon } from "semantic-ui-react";
 export default (props) => {
 	let navigate = useNavigate();
 
-	useEffect(() => {
-		console.log(props.data);
-	}, [props.data]);
-
 	return (
 		<table className="ui table">
 			<thead>
