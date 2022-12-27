@@ -36,7 +36,6 @@ export default (props) => {
 		params.append('startDate', option.startDate);
 		params.append('endDate', option.endDate);
 
-		console.log(params);
 
 		axios.post("https://pktraffic.com/api/transactionsView.php", params).then(response => {
 			console.log(response.data);
