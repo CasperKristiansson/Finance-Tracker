@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import './pagination.css';
 import axios from 'axios';
-
 import Table from './table';
 import Pagination from './pagination';
 import Options from './options';
 
 
-export default (props) => {
+const TransactionsView = (props) => {
   const itemsPerPage = 15;
   const [currentItems, setCurrentItems] = useState([]);
   const [pageCount, setPageCount] = useState(0);
@@ -28,8 +27,8 @@ export default (props) => {
     var params = new URLSearchParams();
 
 		params.append('userID', props.userID)
-    params.append('offset', itemOffset);
-    params.append('limit', itemsPerPage);
+		params.append('offset', itemOffset);
+		params.append('limit', itemsPerPage);
 		params.append('sort', option.sort);
 		params.append('transactionType', option.transactionType);
 		params.append('transactionCategory', option.transactionCategory);
@@ -39,16 +38,14 @@ export default (props) => {
 
 		axios.post("https://pktraffic.com/api/transactionsView.php", params).then(response => {
 			console.log(response.data);
-			if (response.data.count !== recordsLength) {
-				setPageCount(Math.ceil(response.data.count / itemsPerPage));
-				setRecordsLength(response.data.count);
-			}
+			setPageCount(Math.ceil(response.data.count / itemsPerPage));
+			setRecordsLength(response.data.count);
 			setCurrentItems(response.data.transactions);
 		}).catch(response => {
 			console.log(response);
 		})
     
-  }, [itemOffset, itemsPerPage, newSearch, option]);
+  }, [itemOffset, itemsPerPage, newSearch, option, props.userID]);
 
 	useEffect(() => {
 		var params = new URLSearchParams();
@@ -60,7 +57,7 @@ export default (props) => {
 		}).catch(response => {
 			console.log(response);
 		})
-	}, []);
+	}, [props.userID]);
 
   const handlePageClick = (event) => {
     const newOffset = (event.selected * itemsPerPage) % recordsLength;
@@ -97,3 +94,5 @@ export default (props) => {
     </div>
   );
 };
+
+export default TransactionsView;

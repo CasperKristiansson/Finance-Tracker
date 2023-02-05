@@ -1,9 +1,9 @@
-import React, {useEffect, useState} from "react";
+import React from "react";
 import { Button, Icon, Popup } from "semantic-ui-react";
 import { useNavigate } from "react-router-dom";
 import './floatingButton.css';
 
-export default (props) => {	
+const FloatingButton = () => {	
 
 	var navigate = useNavigate();
 	return(
@@ -27,3 +27,4 @@ export default (props) => {
 	);
 };
 
+export default FloatingButton;

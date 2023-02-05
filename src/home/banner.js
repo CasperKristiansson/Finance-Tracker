@@ -1,7 +1,7 @@
 import React from "react";
 import "./banner.css"
 
-export default (props) => {
+const Banner = (props) => {
   return (
 		<>
 			<div className="waveWrapper waveAnimation">
@@ -36,4 +36,6 @@ export default (props) => {
 			</div>
 		</>
   );
-}
+};
+
+export default Banner;

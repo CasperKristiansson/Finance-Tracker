@@ -15,19 +15,12 @@ import Download from './download/download';
 import Login from './login/login';
 import Logout from './login/logout';
 
-import { Route, Routes, BrowserRouter, useNavigate } from 'react-router-dom';
+import { Route, Routes, BrowserRouter } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 
 import { } from './firebase.js';
 
-import {
-  getAuth,
-  onAuthStateChanged,
-  setPersistence,
-  browserLocalPersistence,
-  signInWithEmailAndPassword,
-  updateProfile
-} from "firebase/auth";
+import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
 import TransactionsView from './transactionsView/transactionsView';
 
 
@@ -37,36 +30,31 @@ function App() {
   const [user, setUser] = useState(null);
   const [auth, setAuth] = useState(null);
 
-	var loadedUser = false;
 
   useEffect(() => {
-    if (!loadedUser) {
-      var authVar = getAuth()
-      loadedUser = true;
-      setAuth(authVar);
+    var authVar = getAuth()
+    setAuth(authVar);
 
-      setPersistence(authVar, browserLocalPersistence).then(() => {
-        onAuthStateChanged(authVar, (user) => {
-            if (user) {
-              setUser(user);
-              setLoggedIn(true);
-              setLoading(false);
+    setPersistence(authVar, browserLocalPersistence).then(() => {
+      onAuthStateChanged(authVar, (user) => {
+          if (user) {
+            setUser(user);
+            setLoggedIn(true);
+            setLoading(false);
 
-              if (window.location.pathname === '/login') {
-                window.location.href = '/';
-              }
-            } else {
-              setLoggedIn(false);
-              setLoading(false);
-
-              if (window.location.pathname !== '/login') {
-                window.location.href = '/login';
-              }
+            if (window.location.pathname === '/login') {
+              window.location.href = '/';
             }
-        });
+          } else {
+            setLoggedIn(false);
+            setLoading(false);
+
+            if (window.location.pathname !== '/login') {
+              window.location.href = '/login';
+            }
+          }
       });
-    }
-    
+    });    
   }, []);
 
   const handleLogOut = () => {

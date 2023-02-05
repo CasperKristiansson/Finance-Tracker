@@ -1,7 +1,7 @@
 import React from "react";
 import { Line } from "react-chartjs-2";
 
-export default (props) => {
+const LineChart = (props) => {
   const [data, setData] = React.useState({
     labels: [],
     datasets: [
@@ -14,22 +14,13 @@ export default (props) => {
     ],
   });
 
-  if (!props.colors) {
-    var backgroundColorExpense = "rgba(54, 162, 235, 0.2)";
-    var borderColorExpense = "rgba(54, 162, 235, 1)";
-    var hoverBackgroundColorExpense = "rgba(54, 162, 235, 1)";
-    var hoverBorderColorExpense = "rgba(54, 162, 235, 1)";
-    var borderWidth = 2
-  } else {
-    var backgroundColorExpense = props.colors.backgroundColorExpense;
-    var borderColorExpense = props.colors.borderColorExpense;
-    var hoverBackgroundColorExpense = props.colors.hoverBackgroundColorExpense;
-    var hoverBorderColorExpense = props.colors.hoverBorderColorExpense;
-    var borderWidth = props.colors.borderWidth
-  }
-  
-
   React.useEffect(() => {
+    var backgroundColorExpense = !props.colors ? "rgba(54, 162, 235, 0.2)" : props.colors.backgroundColorExpense;
+    var borderColorExpense = !props.colors ? "rgba(54, 162, 235, 1)" : props.colors.borderColorExpense;
+    var hoverBackgroundColorExpense = !props.colors ? "rgba(54, 162, 235, 1)" : props.colors.hoverBackgroundColorExpense;
+    var hoverBorderColorExpense = !props.colors ? "rgba(54, 162, 235, 1)" : props.colors.hoverBorderColorExpense;
+    var borderWidth = !props.colors ? 2 : props.colors.borderWidth;  
+
     setData({
       labels: props.labels,
       datasets: [
@@ -44,7 +35,7 @@ export default (props) => {
         },
       ],
     });
-  }, [props.data]);
+  }, [props.data, props.colors, props.labels, props.title]);
 
   var options = {
     title: {
@@ -77,3 +68,5 @@ export default (props) => {
     </>
   );
 };
+
+export default LineChart;

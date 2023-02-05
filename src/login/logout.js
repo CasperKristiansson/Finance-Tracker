@@ -1,12 +1,14 @@
 import React, { useEffect } from "react";
 
-export default (props) => {
+const Logout = (props) => {
   useEffect(() => {
 		props.signOut();
-	}, []);
+	}, [props]);
 
   return (
     <>
 		</>
   );
 };
+
+export default Logout;

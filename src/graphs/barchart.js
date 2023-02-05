@@ -1,7 +1,7 @@
 import React from "react";
 import { Bar } from "react-chartjs-2";
 
-export default (props) => {
+const BarChart = (props) => {
   const [data, setData] = React.useState({
     labels: [],
     datasets: [
@@ -14,18 +14,18 @@ export default (props) => {
     ],
   });
 
-  var backgroundColorIncome = "rgba(255, 99, 132, 0.2)";
-  var borderColorIncome = "rgba(255, 99, 132, 1)";
-  var hoverBackgroundColorIncome = "rgba(255, 99, 132, 1)";
-  var hoverBorderColorIncome = "rgba(255, 99, 132, 1)";
-
-  var backgroundColorExpense = "rgba(54, 162, 235, 0.2)";
-  var borderColorExpense = "rgba(54, 162, 235, 1)";
-  var hoverBackgroundColorExpense = "rgba(54, 162, 235, 1)";
-  var hoverBorderColorExpense = "rgba(54, 162, 235, 1)";
-  var borderWidth = 1
-
   React.useEffect(() => {
+    var backgroundColorIncome = "rgba(255, 99, 132, 0.2)";
+    var borderColorIncome = "rgba(255, 99, 132, 1)";
+    var hoverBackgroundColorIncome = "rgba(255, 99, 132, 1)";
+    var hoverBorderColorIncome = "rgba(255, 99, 132, 1)";
+
+    var backgroundColorExpense = "rgba(54, 162, 235, 0.2)";
+    var borderColorExpense = "rgba(54, 162, 235, 1)";
+    var hoverBackgroundColorExpense = "rgba(54, 162, 235, 1)";
+    var hoverBorderColorExpense = "rgba(54, 162, 235, 1)";
+    var borderWidth = 1
+
     setData({
       labels: props.labels,
       datasets: [
@@ -83,3 +83,5 @@ export default (props) => {
     </>
   );
 };
+
+export default BarChart;

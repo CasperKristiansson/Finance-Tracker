@@ -1,8 +1,7 @@
 import React from "react";
-import { Grid, Segment, Button } from "semantic-ui-react";
 import "./header.css"
 
-export default (props) => {
+const headerYearlyReport = (props) => {
 	return(
 		<div className={"home-header"}>
 			<div className={"dateYearly"}>
@@ -17,3 +16,5 @@ export default (props) => {
 		</div>
 	);
 }
+
+export default headerYearlyReport;

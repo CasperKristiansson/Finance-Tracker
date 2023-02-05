@@ -1,22 +1,11 @@
 import React, {useEffect, useState} from "react";
-import {
-  Button,
-  Checkbox,
-  Form,
-  Input,
-  Radio,
-  Segment,
-  Select,
-  TextArea,
-	Dropdown,
-	Message
-} from 'semantic-ui-react'
+import { Button, Form, Input, Radio, Segment, TextArea, Dropdown, Message} from 'semantic-ui-react'
 
 import axios from 'axios';
 import { useNavigate } from "react-router-dom";
 import './transaction.css'
 
-export default (props) => {
+const EditTransaction = (props) => {
 	const [transactionType, setTransactionType] = useState("Income");
 	const [transactionAmount, setTransactionAmount] = useState("");
 	const [transactionDate, setTransactionDate] = useState(getCurrentDate());
@@ -30,51 +19,45 @@ export default (props) => {
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [successSubmitting, setSuccessSubmitting] = useState(null);
 
-	var transactionInformationLoaded = false;
-
 	useEffect(() => {
-		if(!transactionInformationLoaded) {
-			setIsSubmitting(true);
+		setIsSubmitting(true);
 
-			var params = new URLSearchParams();
-			params.append("id", window.location.pathname.split("/").pop());
-			params.append('userID', props.userID);
+		var params = new URLSearchParams();
+		params.append("id", window.location.pathname.split("/").pop());
+		params.append('userID', props.userID);
 
-			axios.post('https://pktraffic.com/api/getTransaction.php', params).then(response => {
-				console.log(response.data)
-				// If the transaction exists
-				if(response.data.transaction.length > 0) {
-					setTransactionType(response.data.transaction[0].Type);
-					setTransactionAmount(response.data.transaction[0].Amount);
-					setTransactionDate(formatDate(response.data.transaction[0].Date));
-					setTransactionCategory(response.data.transaction[0].Category);
-					setTransactionDescription(response.data.transaction[0].Note);
-					setTransactionAccount(response.data.transaction[0].Account);
-				} else {
-					alert("Transaction does not exist");
-				}
+		axios.post('https://pktraffic.com/api/getTransaction.php', params).then(response => {
+			console.log(response.data)
+			// If the transaction exists
+			if(response.data.transaction.length > 0) {
+				setTransactionType(response.data.transaction[0].Type);
+				setTransactionAmount(response.data.transaction[0].Amount);
+				setTransactionDate(formatDate(response.data.transaction[0].Date));
+				setTransactionCategory(response.data.transaction[0].Category);
+				setTransactionDescription(response.data.transaction[0].Note);
+				setTransactionAccount(response.data.transaction[0].Account);
+			} else {
+				alert("Transaction does not exist");
+			}
 
-				setIsSubmitting(false);
-			}).catch(response => {
-				console.log(response);
-			});
+			setIsSubmitting(false);
+		}).catch(response => {
+			console.log(response);
+		});
 
-			var params = new URLSearchParams();
-			params.append('userID', props.userID);
+		params = new URLSearchParams();
+		params.append('userID', props.userID);
 
-			axios.post('https://pktraffic.com/api/transactionInformation.php', params).then(response => {
-				setIncomeCategories(getCategories(response.data.categories, "Income"));
-				setExpenseCategories(getCategories(response.data.categories, "Expense"));
-				setAccounts(getAccounts(response.data.accounts));
+		axios.post('https://pktraffic.com/api/transactionInformation.php', params).then(response => {
+			setIncomeCategories(getCategories(response.data.categories, "Income"));
+			setExpenseCategories(getCategories(response.data.categories, "Expense"));
+			setAccounts(getAccounts(response.data.accounts));
 
-				console.log(response.data)
-			}).catch(response => {
-				console.log(response);
-			});
-
-			transactionInformationLoaded = true;
-		}
-	}, []);
+			console.log(response.data)
+		}).catch(response => {
+			console.log(response);
+		});
+	}, [props.userID]);
 
 	const handleChange = (e, { value }) => setTransactionType(value)
 
@@ -284,7 +267,7 @@ export default (props) => {
 					/>
 					<Form.Field widths='equal'>
 						<Button type='submit' color={getColor(transactionType)} onClick={handleSubmit}>Submit</Button>					
-						<Button type='submit' color="gray" onClick={handleDelete}>Delete</Button>
+						<Button type='submit' color="grey" onClick={handleDelete}>Delete</Button>
 					</Form.Field>
 					</Form>
 					</Segment>
@@ -311,6 +294,8 @@ function getColor(transactionType) {
 			return "red";
 		case "Transfer-Out":
 			return "blue";
+		default:
+			return "black";
 	}
 }
 
@@ -355,3 +340,5 @@ function getSuccessCode(successSubmitting, isSubmitting) {
 function formatDate(date) {
 	return date.split(" ")[0];
 }
+
+export default EditTransaction;
