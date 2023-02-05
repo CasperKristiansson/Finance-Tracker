@@ -1,37 +1,26 @@
 import React, {useEffect, useState} from "react";
 import { Grid, Segment, Divider, Button, Icon, Header } from "semantic-ui-react";
-import BarChart from "../graphs/barchart";
-import LineChart from "../graphs/linechart";
-import PieChart from "../graphs/piechart";
-import HeatMap from "../graphs/heatmap";
-import Table from "../graphs/tableMonth.js";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-
 import "./accounts.css";
 
-export default (props) => {
+const Accounts = (props) => {
 	const [transactions, setTransactions] = useState([]);
 	const [accounts, setAccounts] = useState([{Title: "Loading...", Balance: "Loading..."}]);
-	var loadedTransactions = false;
 
 	let navigate = useNavigate();
 
 	useEffect(() => {
-		if (!loadedTransactions) {
-			var params = new URLSearchParams();
-			params.append('userID', props.userID);
+		var params = new URLSearchParams();
+		params.append('userID', props.userID);
 
-			axios.post('https://pktraffic.com/api/transactionsTotal.php', params).then(response => {
-				console.log(response.data);
-				setTransactions(response.data.transactions);
-			}).catch(response => {
-				console.log(response);
-			});
-
-			loadedTransactions = true;
-		}
-	}, []);
+		axios.post('https://pktraffic.com/api/transactionsTotal.php', params).then(response => {
+			console.log(response.data);
+			setTransactions(response.data.transactions);
+		}).catch(response => {
+			console.log(response);
+		});
+	}, [props.userID]);
 
 	useEffect(() => {
 		if (transactions.length > 0) {
@@ -109,3 +98,5 @@ function getAccounts(transactions) {
 
 	return accounts;
 }
+
+export default Accounts;
