@@ -1,8 +1,8 @@
 import React from "react";
-import { Grid, Segment, Button } from "semantic-ui-react";
+import { Button } from "semantic-ui-react";
 import "./header.css"
 
-export default (props) => {
+const Header = (props) => {
 	return(
 		<div className={"home-header"}>
 			<div className={"date-picker"}>
@@ -25,4 +25,6 @@ export default (props) => {
 			<h1>Monthly Overview</h1>
 		</div>
 	);
-}
+};
+
+export default Header;

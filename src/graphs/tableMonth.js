@@ -1,6 +1,6 @@
 import React from "react";
 
-export default (props) => {
+const TableMonth = (props) => {
 	return (
 		<table className={`ui ${props.color} celled selectable table`}>
 			<thead>
@@ -50,3 +50,5 @@ export default (props) => {
 		</table>
 	);
 }
+
+export default TableMonth;
