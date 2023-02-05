@@ -1,24 +1,21 @@
 import React, {useEffect, useState} from "react";
-import { Grid, Segment, Button } from "semantic-ui-react";
+import { Grid, Segment } from "semantic-ui-react";
+import axios from "axios";
+
 import BarChart from "../graphs/barchart";
 import LineChart from "../graphs/linechart";
 import PieChart from "../graphs/piechart";
 import Header from "./headerYearReport.js"
-import Table from "../graphs/tableMonth.js";
-
-
-import axios from "axios";
 import TableMonth from "../graphs/tableMonth.js";
 
-export default (props) => {
+const YearlyReport = (props) => {
 	const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+	const [oldYear, setOldYear] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [netCalc, setNetCalc] = useState(new Map());
   const [incomeCalc, setIncomeCalc] = useState(new Map());
   const [expenseCalc, setExpenseCalc] = useState(new Map());
 	const [netWorth, setNetWorth] = useState(0);
-
-  var oldYear;
 
 	var labels = [
     "January",
@@ -39,7 +36,7 @@ export default (props) => {
     if (currentYear !== oldYear) {
       var params = new URLSearchParams();
       params.append('year', currentYear);
-	  params.append('userID', props.userID);
+	  	params.append('userID', props.userID);
       
       axios.post('https://pktraffic.com/api/transactions.php', params).then(response => {
         console.log(response.data);
@@ -48,9 +45,7 @@ export default (props) => {
         console.log(response);
       })
 
-      if (oldYear !== currentYear) {
-        oldYear = currentYear;
-      }
+      setOldYear(currentYear);
     }
     
 	}, [currentYear]);
@@ -180,6 +175,8 @@ export default (props) => {
 		</>
 	);
 }
+
+export default YearlyReport;
 
 function getTransactionsType(transactions, currentYear, type) {
 	let map = new Map();
