@@ -48,7 +48,7 @@ const YearlyReport = (props) => {
       setOldYear(currentYear);
     }
     
-	}, [currentYear]);
+	}, [currentYear, oldYear, props.userID]);
 
   useEffect(() => {
     setNetCalc(netChange(transactions));
@@ -185,7 +185,7 @@ function getTransactionsType(transactions, currentYear, type) {
 	}
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
-		if (transaction.Type == type) {
+		if (transaction.Type === type) {
 			var month = currentDate.getMonth();
 			if (map.has(month)) {
 				map.set(month, map.get(month) + parseInt(transaction.Amount));
@@ -203,7 +203,7 @@ function calculateNetWorthIncrease(transactions, currentYear) {
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
 		if (currentDate.getFullYear() < currentYear) {
-			if (transaction.Type == "Income") {
+			if (transaction.Type === "Income") {
 				startAmount += parseInt(transaction.Amount);
 			} else {
 				startAmount -= parseInt(transaction.Amount);
@@ -216,14 +216,17 @@ function calculateNetWorthIncrease(transactions, currentYear) {
 		map.set(i, startAmount);
 	}
 
+	var amount = 0;
+
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
-		if (currentDate.getFullYear() == currentYear && transaction.Type != "Transfer-Out") {
+
+		if (currentDate.getFullYear() === Number(currentYear) && transaction.Type !== "Transfer-Out") {
 			var month = currentDate.getMonth();
-			if (transaction.Type == "Income") {
-				var amount = parseInt(transaction.Amount);
-			} else if (transaction.Type == "Expense") {
-				var amount = -parseInt(transaction.Amount);
+			if (transaction.Type === "Income") {
+				amount = parseInt(transaction.Amount);
+			} else if (transaction.Type === "Expense") {
+				amount = -parseInt(transaction.Amount);
 			}
 			if (map.has(month)) {
 				map.set(month, map.get(month) + amount);
@@ -247,7 +250,7 @@ function getCategories(transactions, currentYear, type) {
 
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
-		if (transaction.Type == type && currentDate.getFullYear() == currentYear) {
+		if (transaction.Type === type && currentDate.getFullYear() === Number(currentYear)) {
 			if (map.has(transaction.Category)) {
 				map.set(transaction.Category, map.get(transaction.Category) + parseInt(transaction.Amount));
 			}
@@ -265,7 +268,7 @@ function getCategories(transactions, currentYear, type) {
 	let categoriesWithPercent = [];
 	map.forEach((value, key) => {
 		categoriesWithPercent.push(
-			key + " " + " (" + (value / categoriesTotal * 100).toFixed(2) + "%)"
+			key + " (" + (value / categoriesTotal * 100).toFixed(2) + "%)"
 		);
 	});
 
@@ -276,7 +279,7 @@ function getTransactionAmounts(transactions, currentYear, type) {
 	let map = new Map();
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
-		if (transaction.Type == type && currentDate.getFullYear() == currentYear) {
+		if (transaction.Type === type && currentDate.getFullYear() === Number(currentYear)) {
 			if (map.has(transaction.Category)) {
 				map.set(transaction.Category, map.get(transaction.Category) + parseInt(transaction.Amount));
 			}
@@ -298,7 +301,7 @@ function getTotal(transactions, currentYear, type) {
 	let total = 0;
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
-		if (transaction.Type == type && currentDate.getFullYear() == currentYear) {
+		if (transaction.Type === type && currentDate.getFullYear() === Number(currentYear)) {
 			total += parseInt(transaction.Amount);
 		}
 	});
@@ -310,7 +313,7 @@ function getPercent(transactions, currentYear, type) {
 	let total = 0;
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
-		if (currentDate.getFullYear() == currentYear && transaction.Type != "Transfer-Out") {
+		if (currentDate.getFullYear() === Number(currentYear) && transaction.Type !== "Transfer-Out") {
 			total += parseInt(transaction.Amount);
 		}
 	});
@@ -318,7 +321,7 @@ function getPercent(transactions, currentYear, type) {
 	let percent = 0;
 	transactions.forEach(transaction => {
 		var currentDate = new Date(transaction.Date);
-		if (transaction.Type == type && currentDate.getFullYear() == currentYear) {
+		if (transaction.Type === type && currentDate.getFullYear() === Number(currentYear)) {
 			percent += parseInt(transaction.Amount);
 		}
 	});
@@ -344,9 +347,9 @@ function netChange(transactions) {
   transactions.forEach(transaction => {
     var currentDate = new Date(transaction.Date);
     var month = currentDate.getMonth();
-    if (transaction.Type == "Income") {
+    if (transaction.Type === "Income") {
       map.get("Income")[month] += parseInt(transaction.Amount);
-    } else if (transaction.Type == "Expense") {
+    } else if (transaction.Type === "Expense") {
       map.get("Expense")[month] += parseInt(transaction.Amount);
     }
   });
@@ -389,7 +392,7 @@ function transactionType(transactions, type) {
   var categories = []
 
   transactions.forEach(transaction => {
-    if (transaction.Type == type) {
+    if (transaction.Type === type) {
       categories.push(transaction.Category);
     }
   });
@@ -409,7 +412,7 @@ function transactionType(transactions, type) {
   transactions.forEach(transaction => {
     var currentDate = new Date(transaction.Date);
     var month = currentDate.getMonth();
-    if (transaction.Type == type) {
+    if (transaction.Type === type) {
       map.get(transaction.Category)[month] += parseInt(transaction.Amount);
     }
   });
@@ -428,7 +431,7 @@ function transactionType(transactions, type) {
   for (let i = 0; i < 14; i++) {
     let total = 0;
     map.forEach((value, key) => {
-      if (map.get(key)[i] != undefined) {
+      if (map.get(key)[i] !== undefined) {
         total += map.get(key)[i];
       }
     });
