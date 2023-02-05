@@ -1,14 +1,12 @@
 import React, {useEffect, useState} from "react";
-import { Grid, Segment, Button } from "semantic-ui-react";
+import { Grid, Segment } from "semantic-ui-react";
 import BarChart from "../graphs/barchart";
 import LineChart from "../graphs/linechart";
 import PieChart from "../graphs/piechart";
 import HeatMap from "../graphs/heatmap";
-import Table from "../graphs/tableMonth.js";
 
 import axios from "axios";
 import TableMonth from "../graphs/tableMonth.js";
-import tableCustom from "../graphs/tableCustom";
 import TableCustom from "../graphs/tableCustom";
 
 var loansLineChart = {
@@ -99,8 +97,8 @@ var heatMapExpenseColors = [
 	},
 ]
 
-export default (props) => {
-  const [transactions, setTransactions] = useState([]);
+const TotalReport = (props) => {
+  	const [transactions, setTransactions] = useState([]);
 	const [loans, setLoans] = useState([]);
 
 	const [assetsData, setAssetsData] = useState({labels: [], data: []});
@@ -114,42 +112,29 @@ export default (props) => {
 	const [tableCategoriesIncome, setTableCategoriesIncome] = useState(new Map());
 	const [tableCategoriesExpense, setTableCategoriesExpense] = useState(new Map());
 
-
-	var loadedTransactions = false;
-	var loadedLoans = false;
-
-
 	useEffect(() => {
-		if (!loadedTransactions) {
-			var params = new URLSearchParams();
-			params.append('userID', props.userID);
+		var params = new URLSearchParams();
+		params.append('userID', props.userID);
 
-			axios.post('https://pktraffic.com/api/transactionsTotal.php', params).then(response => {
-				console.log(response.data);
-				setTransactions(response.data.transactions);
-				setAssetsData(calculateAssets(response.data.transactions));
-			}).catch(response => {
-				console.log(response);
-			});
+		axios.post('https://pktraffic.com/api/transactionsTotal.php', params).then(response => {
+			console.log(response.data);
+			setTransactions(response.data.transactions);
+			setAssetsData(calculateAssets(response.data.transactions));
+		}).catch(response => {
+			console.log(response);
+		});
 
-			loadedTransactions = true;
-		}
+		params = new URLSearchParams();
+		params.append('userID', props.userID);
 
-		if (!loadedLoans) {
-			var params = new URLSearchParams();
-			params.append('userID', props.userID);
-
-			axios.post('https://pktraffic.com/api/loans.php', params).then(response => {
-				console.log(response.data);
-				setLoans(response.data.transactions);
-				setLoansData(calculateLoans(response.data.transactions));
-			}).catch(response => {
-				console.log(response);
-			});
-
-			loadedLoans = true;
-		}
-	}, []);
+		axios.post('https://pktraffic.com/api/loans.php', params).then(response => {
+			console.log(response.data);
+			setLoans(response.data.transactions);
+			setLoansData(calculateLoans(response.data.transactions));
+		}).catch(response => {
+			console.log(response);
+		});
+	}, [props.userID]);
 	
 
 	useEffect(() => {
@@ -562,8 +547,7 @@ function getCategories(transactions, type) {
 	let map = new Map();
 
 	transactions.forEach(transaction => {
-		var currentDate = new Date(transaction.Date);
-		if (transaction.Type == type) {
+		if (transaction.Type === type) {
 			if (map.has(transaction.Category)) {
 				map.set(transaction.Category, map.get(transaction.Category) + parseInt(transaction.Amount));
 			}
@@ -581,7 +565,7 @@ function getCategories(transactions, type) {
 	let categoriesWithPercent = [];
 	map.forEach((value, key) => {
 		categoriesWithPercent.push(
-			key + " " + " (" + (value / categoriesTotal * 100).toFixed(2) + "%)"
+			`${key} (${((value / categoriesTotal) * 100).toFixed(2)}%)`
 		);
 	});
 
@@ -591,7 +575,7 @@ function getCategories(transactions, type) {
 function getTransactionAmounts(transactions, type) {
 	let map = new Map();
 	transactions.forEach(transaction => {
-		if (transaction.Type == type) {
+		if (transaction.Type === type) {
 			if (map.has(transaction.Category)) {
 				map.set(transaction.Category, map.get(transaction.Category) + parseInt(transaction.Amount));
 			}
@@ -612,8 +596,7 @@ function getTransactionAmounts(transactions, type) {
 function getTotal(transactions, type) {
 	let total = 0;
 	transactions.forEach(transaction => {
-		var currentDate = new Date(transaction.Date);
-		if (transaction.Type == type) {
+		if (transaction.Type === type) {
 			total += parseInt(transaction.Amount);
 		}
 	});
@@ -624,16 +607,14 @@ function getTotal(transactions, type) {
 function getPercent(transactions, type) {
 	let total = 0;
 	transactions.forEach(transaction => {
-		var currentDate = new Date(transaction.Date);
-		if (transaction.Type != "Transfer-Out") {
+		if (transaction.Type !== "Transfer-Out") {
 			total += parseInt(transaction.Amount);
 		}
 	});
 
 	let percent = 0;
 	transactions.forEach(transaction => {
-		var currentDate = new Date(transaction.Date);
-		if (transaction.Type == type) {
+		if (transaction.Type === type) {
 			percent += parseInt(transaction.Amount);
 		}
 	});
@@ -751,6 +732,8 @@ function getMonthName(month) {
 			return "November";
 		case 12:
 			return "December";
+		default:
+			return "Unknown";
 	}
 }
 
@@ -848,7 +831,7 @@ function transactionType(transactions, type) {
   transactions.forEach(transaction => {
     var currentDate = new Date(transaction.Date);
     var month = currentDate.getMonth();
-    if (transaction.Type == type) {
+    if (transaction.Type === type) {
       map.get(currentDate.getFullYear())[month] += parseInt(transaction.Amount);
     }
   });
@@ -867,7 +850,7 @@ function transactionType(transactions, type) {
   for (let i = 0; i < 14; i++) {
     let total = 0;
     map.forEach((value, key) => {
-      if (map.get(key)[i] != undefined) {
+      if (map.get(key)[i] !== undefined) {
         total += map.get(key)[i];
       }
     });
@@ -893,7 +876,7 @@ function transactionCategories(transactions, type) {
   var categories = []
 
   transactions.forEach(transaction => {
-    if (transaction.Type == type) {
+    if (transaction.Type === type) {
       categories.push(transaction.Category);
     }
   });
@@ -935,7 +918,7 @@ function transactionCategories(transactions, type) {
   transactions.forEach(transaction => {
     var currentDate = new Date(transaction.Date);
     var year = currentDate.getFullYear();
-    if (transaction.Type == type) {
+    if (transaction.Type === type) {
       map.get(transaction.Category)[year] += parseInt(transaction.Amount);
     }
   });
@@ -986,3 +969,5 @@ function transactionCategories(transactions, type) {
 
   return obj;
 }
+
+export default TotalReport;
