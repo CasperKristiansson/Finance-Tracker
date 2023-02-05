@@ -1,13 +1,12 @@
-import React, {useEffect, useState} from "react";
+import React from "react";
 import { Grid, Segment, Divider, Button, Icon, Header } from "semantic-ui-react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
 
 import * as FileSaver from "file-saver";
 import * as XLSX from "xlsx";
 
 
-export default (props) => {
+const Download = (props) => {
 	var handleTransactionTemplate = () => {
 		const jsonFormat = [
 			{
@@ -108,3 +107,5 @@ export default (props) => {
 		</>
 	);
 };
+
+export default Download;
