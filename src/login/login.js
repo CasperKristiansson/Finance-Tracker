@@ -1,17 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Grid, Segment, Divider, Button, Icon, Header } from "semantic-ui-react";
+import { signInWithEmailAndPassword } from "firebase/auth";
 
-import {
-  getAuth,
-  onAuthStateChanged,
-  setPersistence,
-  browserLocalPersistence,
-  signInWithEmailAndPassword,
-  updateProfile
-} from "firebase/auth";
-
-export default (props) => {
+const Login = (props) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState(""); 
 
@@ -91,3 +83,5 @@ export default (props) => {
 		</>
   );
 };
+
+export default Login;
