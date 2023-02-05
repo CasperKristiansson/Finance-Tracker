@@ -1,7 +1,7 @@
 import React from "react";
 import Chart from 'react-apexcharts'
 
-export default (props) => {
+const Heatmap = (props) => {
 	var options = {
 		chart: {
 			height: 350,
@@ -44,3 +44,5 @@ export default (props) => {
     </>
   );
 };
+
+export default Heatmap;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Form, Select, Container } from 'semantic-ui-react'
 
-export default (props) => {
+const Options = (props) => {
 	const [transactionCategories, setTransactionCategories] = useState([]);
 
   const handleChange = (e, { name, value }) => {
@@ -72,4 +72,6 @@ export default (props) => {
       </Form>
     </Container>
   )
-}
+};
+
+export default Options;

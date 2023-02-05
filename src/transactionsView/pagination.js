@@ -1,7 +1,7 @@
 import React from "react";
 import ReactPaginate from 'react-paginate';
 
-export default(props) => {
+const Pagination = (props) => {
 	return (
 		<div className="pagination-controls">
 			<ReactPaginate
@@ -24,3 +24,5 @@ export default(props) => {
 		</div>
 	);
 };
+
+export default Pagination;

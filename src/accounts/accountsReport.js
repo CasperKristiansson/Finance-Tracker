@@ -5,26 +5,21 @@ import axios from "axios";
 
 import "./accounts.css";
 
-export default (props) => {
+const AccountsReport = (props) => {
 	const [transactions, setTransactions] = useState([]);
 	const [accounts, setAccounts] = useState([{Title: "Loading...", Balance: "Loading..."}]);
-	var loadedTransactions = false;
 
 	useEffect(() => {
-		if (!loadedTransactions) {
-			var params = new URLSearchParams();
-			params.append('userID', props.userID);
+		var params = new URLSearchParams();
+		params.append('userID', props.userID);
 
-			axios.post('https://pktraffic.com/api/transactionsTotal.php', params).then(response => {
-				console.log(response.data);
-				setTransactions(response.data.transactions);
-			}).catch(response => {
-				console.log(response);
-			});
-
-			loadedTransactions = true;
-		}
-	}, []);
+		axios.post('https://pktraffic.com/api/transactionsTotal.php', params).then(response => {
+			console.log(response.data);
+			setTransactions(response.data.transactions);
+		}).catch(response => {
+			console.log(response);
+		});
+	}, [props.userID]);
 
 	useEffect(() => {
 		if (transactions.length > 0) {
@@ -72,12 +67,13 @@ function getAccounts(transactions) {
 	});
 
 	transactions.forEach(transaction => {
+		var index = null;
 		if (transaction.Type === "Transfer-Out") {
 			if (!accountNames.includes(transaction.Account)) {
 				accountNames.push(transaction.Account);
 				accounts.push({Title: transaction.Account, Balance: [-parseInt(transaction.Amount)], Labels: [formatDate(transaction.Date)]});
 			} else {
-				var index = accountNames.indexOf(transaction.Account);
+				index = accountNames.indexOf(transaction.Account);
 				accounts[index].Balance.push(
 					accounts[index].Balance[accounts[index].Balance.length - 1] - parseInt(transaction.Amount)
 				);
@@ -88,7 +84,7 @@ function getAccounts(transactions) {
 				accountNames.push(transaction.Category);
 				accounts.push({Title: transaction.Category, Balance: [parseInt(transaction.Amount)], Labels: [formatDate(transaction.Date)]});
 			} else {
-				var index = accountNames.indexOf(transaction.Category);
+				index = accountNames.indexOf(transaction.Category);
 				accounts[index].Balance.push(
 					accounts[index].Balance[accounts[index].Balance.length - 1] + parseInt(transaction.Amount)
 				);
@@ -102,7 +98,7 @@ function getAccounts(transactions) {
 			}
 				
 			if (accountNames.includes(transaction.Account)) {
-				var index = accountNames.indexOf(transaction.Account);
+				index = accountNames.indexOf(transaction.Account);
 				accounts[index].Balance.push(
 					accounts[index].Balance[accounts[index].Balance.length - 1] + transactionAmount
 				);
@@ -151,3 +147,5 @@ function getAccounts(transactions) {
 function formatDate(date) {
 	return date.split(" ")[0];
 }
+
+export default AccountsReport;
