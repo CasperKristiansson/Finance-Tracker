@@ -1,6 +1,6 @@
-import React, { useEffect } from "react";
+import React from "react";
 
-export default (props) => {
+const TableCustom = (props) => {
 	return (
 		<table className={`ui ${props.color} celled selectable table`}>
 			<thead>
@@ -28,3 +28,5 @@ export default (props) => {
 		</table>
 	);
 }
+
+export default TableCustom;
