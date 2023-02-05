@@ -1,21 +1,9 @@
 import React, {useEffect, useState} from "react";
-import {
-  Button,
-  Checkbox,
-  Form,
-  Input,
-  Radio,
-  Segment,
-  Select,
-  TextArea,
-	Dropdown,
-	Message
-} from 'semantic-ui-react'
-
+import { Button, Form, Input, Radio, Segment, TextArea, Dropdown, Message } from 'semantic-ui-react'
 import axios from 'axios';
 import './transaction.css'
 
-export default (props) => {
+const AddTransaction = (props) => {
 	const [transactionType, setTransactionType] = useState("Income");
 	const [transactionAmount, setTransactionAmount] = useState("");
 	const [transactionDate, setTransactionDate] = useState(getCurrentDate());
@@ -29,26 +17,20 @@ export default (props) => {
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [successSubmitting, setSuccessSubmitting] = useState(null);
 
-	var transactionInformationLoaded = false;
-
 	useEffect(() => {
-		if(!transactionInformationLoaded) {
-			var params = new URLSearchParams();
-			params.append('userID', props.userID);
+		var params = new URLSearchParams();
+		params.append('userID', props.userID);
 
-			axios.post('https://pktraffic.com/api/transactionInformation.php', params).then(response => {
-				setIncomeCategories(getCategories(response.data.categories, "Income"));
-				setExpenseCategories(getCategories(response.data.categories, "Expense"));
-				setAccounts(getAccounts(response.data.accounts));
+		axios.post('https://pktraffic.com/api/transactionInformation.php', params).then(response => {
+			setIncomeCategories(getCategories(response.data.categories, "Income"));
+			setExpenseCategories(getCategories(response.data.categories, "Expense"));
+			setAccounts(getAccounts(response.data.accounts));
 
-				console.log(response.data)
-			}).catch(response => {
-				console.log(response);
-			});
-
-			transactionInformationLoaded = true;
-		}
-	}, []);
+			console.log(response.data)
+		}).catch(response => {
+			console.log(response);
+		});
+	}, [props.userID]);
 
 	const handleChange = (e, { value }) => setTransactionType(value)
 
@@ -265,6 +247,8 @@ function getColor(transactionType) {
 			return "red";
 		case "Transfer-Out":
 			return "blue";
+		default:
+			return "grey";
 	}
 }
 
@@ -305,3 +289,5 @@ function getSuccessCode(successSubmitting, isSubmitting) {
 
 	return "";
 }
+
+export default AddTransaction;
