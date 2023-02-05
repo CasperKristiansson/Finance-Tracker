@@ -1,23 +1,11 @@
 import React, {useEffect, useState} from "react";
-import {
-  Button,
-  Checkbox,
-  Form,
-  Input,
-  Radio,
-  Segment,
-  Select,
-  TextArea,
-	Dropdown,
-	Message
-} from 'semantic-ui-react'
-
+import { Button, Form, Input, Segment, TextArea, Message } from 'semantic-ui-react'
 import { useNavigate } from "react-router-dom";
-
 import axios from 'axios';
 import './transaction.css'
 
-export default (props) => {
+
+const EditAccount = (props) => {
 	const [transactionType, setTransactionType] = useState("Income");
 	const [oldTransactionAmount, setOldTransactionAmount] = useState("");
 	const [transactionAmount, setTransactionAmount] = useState("");
@@ -26,7 +14,6 @@ export default (props) => {
 	const [transactionDescription, setTransactionDescription] = useState("");
 	const [transactionAccount, setTransactionAccount] = useState("");
 
-	const [accounts, setAccounts] = useState([]);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [successSubmitting, setSuccessSubmitting] = useState(null);
 
@@ -163,29 +150,9 @@ function getColor(transactionType) {
 			return "red";
 		case "Transfer-Out":
 			return "blue";
+		default:
+			return "grey";
 	}
-}
-
-function getAccounts(accounts) {
-	return accounts.map((account) => {
-		return {
-			key: account.Account,
-			text: account.Account,
-			value: account.Account,
-		};
-	});
-}
-
-function getCategories(categories, type) {
-	return categories
-		.filter((category) => category.Type === type)
-		.map((category) => {
-			return {
-				key: category.Category,
-				text: category.Category,
-				value: category.Category,
-			};
-		});
 }
 
 function getSuccessCode(successSubmitting, isSubmitting) {
@@ -203,3 +170,5 @@ function getSuccessCode(successSubmitting, isSubmitting) {
 
 	return "";
 }
+
+export default EditAccount;
