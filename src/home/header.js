@@ -9,7 +9,7 @@ const Header = (props) => {
 				<select className="ui dropdown home-picker" onChange={(e) => props.handleYearChange(e)}>
 					<option value="">Pick Year</option>
 					{Array.from(Array(new Date().getFullYear() - 2018 + 1).keys()).map(i => {
-						return <option value={2018 + i}>{2018 + i}</option>;
+						return <option value={2018 + i} key={i} >{2018 + i}</option>;
 					})}
 				</select>
 				<div className={"button-group"}>
