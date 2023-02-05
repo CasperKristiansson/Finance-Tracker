@@ -11,12 +11,13 @@ import Banner from "./banner.js";
 import Header from "./header.js"
 
 
-export default (props) => {
+const Home = (props) => {
 	const [month, year] = getStartPeriod();
 	
 	const [yearIncome, setYearIncome] = useState([]);
 	const [yearExpense, setYearExpense] = useState([]);
 	const [currentYear, setCurrentYear] = useState(year ? year : new Date().getFullYear());
+	const [oldYear, setOldYear] = useState(null);
 	const [currentMonth, setCurrentMonth] = useState(month ? month : getStartMonth());
 	const [transactions, setTransactions] = useState([]);
 	const [categories, setCategories] = useState([]);
@@ -26,8 +27,6 @@ export default (props) => {
 
 	const [showMessage, setShowMessage] = useState(false);
 	const [message, setMessage] = useState("");
-
-	var oldYear;
 
 	useEffect(() => {
     if (currentYear !== oldYear) {
@@ -42,12 +41,10 @@ export default (props) => {
         console.log(response);
       })
 
-      if (oldYear !== currentYear) {
-        oldYear = currentYear;
-      }
+      setOldYear(currentYear);
     }
     
-	}, [currentYear]);
+	}, [currentYear, oldYear, props.userID]);
 
 	useEffect(() => {
 		if (currentYear !== year || currentMonth !== month) {
@@ -56,7 +53,7 @@ export default (props) => {
 			params.append("month", currentMonth);
 			window.history.pushState({}, "", "?" + params.toString());
 		}
-	}, [currentYear, currentMonth]);
+	}, [currentYear, currentMonth, year, month]);
 
 	useEffect(() => {
 		setYearIncome(getYearAmount(transactions, "Income"));
@@ -66,7 +63,7 @@ export default (props) => {
 	useEffect(() => {
 		setCategories(getCategories(transactions, new Date(currentYear, currentMonth, 1), pieChartType));
 		setCategoriesAmount(getCategoriesAmount(transactions, new Date(currentYear, currentMonth, 1), pieChartType));
-	}, [transactions, currentMonth, pieChartType]);
+	}, [transactions, currentMonth, pieChartType, currentYear]);
 
 	const handleYearChange = (e) => {
 		if (e.target.value !== currentYear) {
@@ -100,7 +97,7 @@ export default (props) => {
 				});
 				var sheetName = workbook.SheetNames[0];
 				var sheet = workbook.Sheets[sheetName];
-				var data = XLSX.utils.sheet_to_json(sheet);
+				data = XLSX.utils.sheet_to_json(sheet);
 
 				data = validateData(data);
 
@@ -303,7 +300,7 @@ function getCategories(transactions, date, type) {
 	for (let i = 0; i < transactions.length; i++) {
     let transactionDate = new Date(transactions[i].Date);
 		
-    if (transactionDate.getMonth() == date.getMonth() && transactions[i].Type == type) {
+    if (transactionDate.getMonth() === date.getMonth() && transactions[i].Type === type) {
       if (!categories[transactions[i].Category]) {
         categories[transactions[i].Category] = parseInt(transactions[i].Amount);
       } else {
@@ -336,7 +333,7 @@ function getCategoriesAmount(transactions, date, type) {
 	for (let i = 0; i < transactions.length; i++) {
     let transactionDate = new Date(transactions[i].Date);
 		
-    if (transactionDate.getMonth() == date.getMonth() && transactions[i].Type == type) {
+    if (transactionDate.getMonth() === date.getMonth() && transactions[i].Type === type) {
       if (!categories[transactions[i].Category]) {
         categories[transactions[i].Category] = parseInt(transactions[i].Amount);
       } else {
@@ -365,7 +362,7 @@ function filterTransactions(transactions, date) {
 	for (let i = 0; i < transactions.length; i++) {
 		var transactionDate = new Date(transactions[i].Date);
 
-    if (transactionDate.getMonth() == date.getMonth()) {
+    if (transactionDate.getMonth() === date.getMonth()) {
       filteredTransactions.push(transactions[i]);
     }
 	}
@@ -439,3 +436,5 @@ function validateData(data) {
 
 	return {"data": data, "errorMessage": ""};
 }
+
+export default Home;
