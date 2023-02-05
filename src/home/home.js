@@ -1,4 +1,7 @@
 import React, {useEffect, useState} from "react";
+import axios from 'axios';
+import { useNavigate } from "react-router-dom";
+
 import "./home.css";
 import { Grid, Segment, Button, Message } from "semantic-ui-react";
 import PieChart from "../graphs/piechart";
@@ -6,16 +9,11 @@ import BarChart from "../graphs/barchart";
 import Table from "../graphs/table";
 import Banner from "./banner.js";
 import Header from "./header.js"
-import { useNavigate } from "react-router-dom";
 
-import { excel } from "xlsx";
-
-import axios from 'axios';
 
 export default (props) => {
 	const [month, year] = getStartPeriod();
 	
-
 	const [yearIncome, setYearIncome] = useState([]);
 	const [yearExpense, setYearExpense] = useState([]);
 	const [currentYear, setCurrentYear] = useState(year ? year : new Date().getFullYear());
@@ -28,7 +26,6 @@ export default (props) => {
 
 	const [showMessage, setShowMessage] = useState(false);
 	const [message, setMessage] = useState("");
-	const [excelUploadedSuccessfully, setExcelUploadedSuccessfully] = useState(false);
 
 	var oldYear;
 
