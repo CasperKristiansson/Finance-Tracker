@@ -1,8 +1,8 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "semantic-ui-react";
 
-export default (props) => {
+const Table = (props) => {
 	let navigate = useNavigate();
 
 	return (
@@ -23,9 +23,9 @@ export default (props) => {
 					return (
 						<tr className={getTransactionColor(row.Type)} key={`homeTable${index}`}>
 							<td>
-								<a onClick={() => navigate(`/editTransaction/${row.id_incr}`)} className="pointer-on-hover">
-									<Icon name="edit" color={"grey"}/>
-								</a>
+								<button onClick={() => navigate(`/editTransaction/${row.id_incr}`)} className="pointer-on-hover">
+									<Icon name="edit" color={"grey"} />
+								</button>
 							</td>
 							<td>{stringifyTime(row.Date)}</td>
 							<td>{row.Category}</td>
@@ -56,3 +56,5 @@ function getTransactionColor(transactionType) {
 			return ""
 	}
 }
+
+export default Table;

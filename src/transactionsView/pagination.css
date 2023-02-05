@@ -156,6 +156,11 @@ thead {
 	font-size: 15px;
 }
 
+.pointer-on-hover {
+	border: none;
+	background-color: transparent;
+}
+
 .mobile-page-count {
 	font-size: 16px;
 	position: absolute;
