@@ -1,21 +1,14 @@
 import 'react-pro-sidebar/dist/css/styles.css';
-import {
-  ProSidebar,
-  Menu,
-  MenuItem,
-  SidebarHeader,
-  SidebarFooter,
-  SidebarContent,
-} from 'react-pro-sidebar';
+import { ProSidebar, Menu, MenuItem, SidebarHeader, SidebarFooter, SidebarContent, } from 'react-pro-sidebar';
 import { FiSettings } from 'react-icons/fi';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { Link } from 'react-router-dom';
-import { faFileCircleCheck, faLandmark, faMoneyBillWave , faUser, faGlobe, faTrophy, faDownload, faPaperclip} from '@fortawesome/free-solid-svg-icons'
+import { faFileCircleCheck, faMoneyBillWave , faUser, faTrophy, faDownload, faPaperclip} from '@fortawesome/free-solid-svg-icons'
 
 import './sidebar.scss';
 import './sidebar.css';
 
-export default () => {
+const Sidebar = () => {
 	return(
 		<ProSidebar breakPoint="md" style={{position: "fixed"}}>
 			<SidebarHeader>
@@ -87,3 +80,5 @@ export default () => {
     </ProSidebar>
 	);
 }
+
+export default Sidebar;
