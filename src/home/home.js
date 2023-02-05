@@ -13,10 +13,13 @@ import { excel } from "xlsx";
 import axios from 'axios';
 
 export default (props) => {
+	const [month, year] = getStartPeriod();
+	
+
 	const [yearIncome, setYearIncome] = useState([]);
 	const [yearExpense, setYearExpense] = useState([]);
-	const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
-	const [currentMonth, setCurrentMonth] = useState(getStartMonth());
+	const [currentYear, setCurrentYear] = useState(year ? year : new Date().getFullYear());
+	const [currentMonth, setCurrentMonth] = useState(month ? month : getStartMonth());
 	const [transactions, setTransactions] = useState([]);
 	const [categories, setCategories] = useState([]);
 	const [categoriesAmount, setCategoriesAmount] = useState([]);
@@ -48,6 +51,15 @@ export default (props) => {
     }
     
 	}, [currentYear]);
+
+	useEffect(() => {
+		if (currentYear !== year || currentMonth !== month) {
+			var params = new URLSearchParams();
+			params.append("year", currentYear);
+			params.append("month", currentMonth);
+			window.history.pushState({}, "", "?" + params.toString());
+		}
+	}, [currentYear, currentMonth]);
 
 	useEffect(() => {
 		setYearIncome(getYearAmount(transactions, "Income"));
@@ -246,6 +258,29 @@ export default (props) => {
 		</div>
 		</>
 	);
+}
+
+function getStartPeriod() {
+	var url = window.location.href;
+	var params = new URLSearchParams(url.split("?")[1]);
+	var month = params.get("month");
+	var year = params.get("year");
+
+	if (month !== null) {
+		month = parseInt(month);
+		if (month < 0 || month > 11) {
+			month = null;
+		}
+	}
+
+	if (year !== null) {
+		year = parseInt(year);
+		if (year < 2000 || year > 2100) {
+			year = null;
+		}
+	}
+
+	return [month, year];
 }
 
 function getYearAmount(transactions, type) {
