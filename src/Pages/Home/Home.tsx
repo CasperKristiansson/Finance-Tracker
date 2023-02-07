@@ -1,9 +1,11 @@
 import React, {useEffect, useState} from "react";
 import { createUseStyles } from "react-jss";
+import axios from 'axios';
 
 import { Header } from './ChildComponents/Header';
 
-import { getStartPeriod, MonthYear } from '../../Utils/Date';
+import { GetStartPeriod } from '../../Utils/Date';
+import { ConvertTransactions, Transaction } from '../../Utils/Transactions';
 
 const useStyles = createUseStyles({
 	mainSection: {
@@ -34,17 +36,33 @@ const useStyles = createUseStyles({
 export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 	const classes = useStyles();
 
-	const [period, setPeriod] = useState(getStartPeriod());
+	const [period, setPeriod] = useState(GetStartPeriod());
+
+	const [transactions, setTransactions] = useState([] as Transaction[]);
 
 	const [yearIncome, setYearIncome] = useState([]);
 	const [yearExpense, setYearExpense] = useState([]);
 	const [oldYear, setOldYear] = useState(null);
-	const [transactions, setTransactions] = useState([]);
 	const [categories, setCategories] = useState([]);
 	const [categoriesAmount, setCategoriesAmount] = useState([]);
 	const [pieChartType, setPieChartType] = useState("Income");
 	const [showMessage, setShowMessage] = useState(false);
 	const [message, setMessage] = useState("");
+
+	useEffect(() => {
+    var params = new URLSearchParams();
+    params.append('year', period.year.toString());
+	  params.append('userID', userID);
+      
+		axios.post('https://pktraffic.com/api/transactions.php', params).then(response => {
+			console.log(response.data);
+			
+			setTransactions(ConvertTransactions(response.data.transactions));
+		}).catch(response => {
+			console.log(response);
+		});
+    
+	}, [period.year]);
 
 	useEffect(() => {
 		var params = new URLSearchParams();
