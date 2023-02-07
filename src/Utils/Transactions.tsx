@@ -55,6 +55,43 @@ export function ConvertTransactions(data: any[]): Transaction[] {
 
     return data;
 }
+
+/**
+ * ? Pie Chart Calculations
+ */
+
+/**
+ * This function returns the categories of the transactions based on the date and type
+ * @Returns an array of strings [category (percentage), category (percentage), ...]
+ */
+export function GetCategoriesType(transactions: Transaction[], date: Date, type: string): string[] {
+	let categories: { [category: string]: number } = {};
+
+	for (let i = 0; i < transactions.length; i++) {           
+        if (new Date(transactions[i].Date).getMonth() === date.getMonth() && transactions[i].Type === type) {
+            if (!categories[transactions[i].Category]) {
+                categories[transactions[i].Category] = transactions[i].Amount;
+            } else {
+                categories[transactions[i].Category] += transactions[i].Amount;
+            }
+        }
+	}
+
+    for (let category in categories) if (categories[category] < 0) delete categories[category];
+
+	let categoriesTotal: number = 0;
+	for (let i in categories) categoriesTotal += categories[i];
+
+	let categoriesName: string[] = [];
+
+	for (let i in categories) {
+		categoriesName.push(i + " (" + (categories[i] / categoriesTotal * 100).toFixed(2) + "%)");
+	}
+
+	return categoriesName;
+}
+
+
 /**
  * ? Bar Chart Calculations
  */
