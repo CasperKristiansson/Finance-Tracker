@@ -7,9 +7,9 @@ import { getStartPeriod, MonthYear } from '../../Utils/Date';
 
 const useStyles = createUseStyles({
 	mainSection: {
-		paddingTop: 0,
+		paddingTop: 1,
 		marginLeft: 270,
-		padding: "25px 25px",
+		padding: "100px 25px",
 	},
 	mainSectionPie: {
 		marginLeft: "25%",
