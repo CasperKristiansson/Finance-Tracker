@@ -44,16 +44,16 @@ export function ConvertTransactions(data: any[]): Transaction[] {
 
         transactions.push({
             Account: data[i].Account,
-            Amount: data[i].Amount,
+            Amount: parseFloat(data[i].Amount),
             Category: data[i].Category,
             Date: data[i].Date,
-            Note: data[i].Description,
+            Note: data[i].Note,
             Type: data[i].Type,
             ID: data[i].id_incr,
         });
     }
 
-    return data;
+    return transactions;
 }
 
 
@@ -89,6 +89,8 @@ export function GetCategoriesLabels(transactions: Transaction[], month: number, 
 		categoriesName.push(i + " (" + (categories[i] / categoriesTotal * 100).toFixed(2) + "%)");
 	}
 
+    if (categoriesName.length === 0) categoriesName.push("No Income");
+
 	return categoriesName;
 }
 
@@ -111,6 +113,8 @@ export function GetCategoriesAmount(transactions: Transaction[], month: number, 
 
 	for (let i in categories) result.push(categories[i]);
 
+    if (result.length === 0) result.push(1);
+
 	return result;
 }
 
@@ -125,8 +129,8 @@ export function GetCategoriesAmount(transactions: Transaction[], month: number, 
  * The function returns an array of numbers, where the first number is the total amount spent or received in January, the second number is the total amount spent or received in February, and so on.
  * @Returns Array of numbers [0,0,0, ...]
  */
-export function GetMonthOfYearAmountType(transactions: Transaction[], type: string, year: number=NaN): number[] {
-	let result: number[] = [];
+export function GetMonthOfYearAmount(transactions: Transaction[], type: string, year: number=NaN): number[] {
+    let result: number[] = [];
 	for (let i = 0; i < 12; i++) result.push(0);
 
     if (year) {
