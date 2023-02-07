@@ -55,3 +55,31 @@ export function ConvertTransactions(data: any[]): Transaction[] {
 
     return data;
 }
+/**
+ * ? Bar Chart Calculations
+ */
+
+/**
+ * This function returns the total amount of money spent or received in each month of the year.
+ * This function takes in an array of transactions and a string that indicates whether the function should return the amount spent or received. 
+ * The function returns an array of numbers, where the first number is the total amount spent or received in January, the second number is the total amount spent or received in February, and so on.
+ * @Returns Array of numbers [0,0,0, ...]
+ */
+export function GetMonthOfYearAmountType(transactions: Transaction[], type: string, year: number=NaN): number[] {
+	let result: number[] = [];
+	for (let i = 0; i < 12; i++) result.push(0);
+
+    if (year) {
+        transactions = transactions.filter((transaction) => {
+            return new Date(transaction.Date).getFullYear() === year;
+        });
+    }
+
+	for (let i = 0; i < transactions.length; i++) {
+		if (transactions[i].Type === type) {
+			result[new Date(transactions[i].Date).getMonth()] += transactions[i].Amount;
+		}
+	}
+
+	return result;
+}
