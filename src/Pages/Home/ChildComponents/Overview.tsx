@@ -7,7 +7,7 @@ import { MonthsShort, MonthYear } from "../../../Utils/Date";
 import { ExcelUpload, ExcelUploadData } from "../../../Utils/Excel";
 import PieChart from "../../../graphs/piechart";
 import BarChart from "../../../graphs/barchart";
-import { GetMonthOfYearAmount, Transaction } from "../../../Utils/Transactions";
+import { GetMonthOfYearAmountType, Transaction, GetCategoriesLabels, GetCategoriesAmount } from "../../../Utils/Transactions";
 
 const useStyles = createUseStyles({
 });
@@ -60,8 +60,8 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 								<Segment>
 									<BarChart
 										title={period.year}
-										dataIncome={GetMonthOfYearAmount(transactions, "Income")}
-										dataExpense={GetMonthOfYearAmount(transactions, "Expense")}	
+										dataIncome={GetMonthOfYearAmountType(transactions, "Income")}
+										dataExpense={GetMonthOfYearAmountType(transactions, "Expense")}	
 										labels={MonthsShort}
 									/>
 								</Segment>
@@ -79,8 +79,8 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 							<div className={"main-section-pie"}>
 								<PieChart 
 									title={pieChartType}
-									labels={categories}
-									data={categoriesAmount}
+									labels={GetCategoriesLabels(transactions, period.month, pieChartType)}
+									data={GetCategoriesAmount(transactions, period.month, pieChartType)}
 								/>
 							</div>
 						</Segment>
