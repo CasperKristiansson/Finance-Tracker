@@ -3,18 +3,25 @@ import { createUseStyles } from "react-jss";
 import { Grid, Segment, Button } from "semantic-ui-react";
 import { useNavigate } from "react-router-dom";
 
-import { MonthsShort } from "../../../Utils/Date";
-import { ExcelUpload, ExcelUploadData } from "../../../Utils/excel";
+import { MonthsShort, MonthYear } from "../../../Utils/Date";
+import { ExcelUpload, ExcelUploadData } from "../../../Utils/Excel";
+import PieChart from "../../../graphs/piechart";
+import BarChart from "../../../graphs/barchart";
+import { GetMonthOfYearAmount, Transaction } from "../../../Utils/Transactions";
 
 const useStyles = createUseStyles({
 });
 
-export const Overview: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
+export const Overview: React.FC<{ userID: string, period: MonthYear, transactions: Transaction[] }> = ({ userID, period, transactions }): JSX.Element => {
 	const classes = useStyles();
 	let navigate = useNavigate();
 
+	const [pieChartType, setPieChartType] = React.useState("Income");
+
 	const handleExcelSubmit = () => {
-		const excelUpload: ExcelUploadData = ExcelUpload(userID);
+		ExcelUpload(userID).then((data: ExcelUploadData) => {
+			console.log(data);
+		});
 	};
 
 	return(
@@ -52,9 +59,9 @@ export const Overview: React.FC<{ userID: string }> = ({ userID }): JSX.Element 
 							<Grid.Column>
 								<Segment>
 									<BarChart
-										title={currentYear}
-										dataIncome={yearIncome}
-										dataExpense={yearExpense}	
+										title={period.year}
+										dataIncome={GetMonthOfYearAmount(transactions, "Income")}
+										dataExpense={GetMonthOfYearAmount(transactions, "Expense")}	
 										labels={MonthsShort}
 									/>
 								</Segment>
