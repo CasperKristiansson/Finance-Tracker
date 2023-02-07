@@ -4,6 +4,7 @@ import axios from 'axios';
 
 import { Header } from './ChildComponents/Header';
 import { Overview } from "./ChildComponents/Overview";
+import { Banner } from "./ChildComponents/Banner";
 
 import { GetStartPeriod } from '../../Utils/Date';
 import { ConvertTransactions, Transaction } from '../../Utils/Transactions';
@@ -88,7 +89,11 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 				userID={userID}
 				transactions={transactions}
 				period={period}
-			/>				
+			/>
+			<Banner
+				transactions={transactions}
+				month={period.month}
+			/>		
 		</div>
 		</>
 	);
