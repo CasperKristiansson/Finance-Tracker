@@ -56,19 +56,20 @@ export function ConvertTransactions(data: any[]): Transaction[] {
     return data;
 }
 
+
 /**
  * ? Pie Chart Calculations
  */
 
 /**
- * This function returns the categories of the transactions based on the date and type
+ * This function returns the categories of the transactions based on the month and type
  * @Returns an array of strings [category (percentage), category (percentage), ...]
  */
-export function GetCategoriesType(transactions: Transaction[], date: Date, type: string): string[] {
+export function GetCategoriesLabels(transactions: Transaction[], month: number, type: string): string[] {
 	let categories: { [category: string]: number } = {};
 
 	for (let i = 0; i < transactions.length; i++) {           
-        if (new Date(transactions[i].Date).getMonth() === date.getMonth() && transactions[i].Type === type) {
+        if (new Date(transactions[i].Date).getMonth() === month && transactions[i].Type === type) {
             if (!categories[transactions[i].Category]) {
                 categories[transactions[i].Category] = transactions[i].Amount;
             } else {
@@ -89,6 +90,28 @@ export function GetCategoriesType(transactions: Transaction[], date: Date, type:
 	}
 
 	return categoriesName;
+}
+
+export function GetCategoriesAmount(transactions: Transaction[], month: number, type: string): number[] {
+    let categories: { [category: string]: number } = {};
+
+	for (let i = 0; i < transactions.length; i++) {
+        if (new Date(transactions[i].Date).getMonth() === month && transactions[i].Type === type) {
+            if (!categories[transactions[i].Category]) {
+                categories[transactions[i].Category] = transactions[i].Amount;
+            } else {
+                categories[transactions[i].Category] += transactions[i].Amount;
+            }
+        }
+	}
+
+  for (let category in categories) if (categories[category] < 0) delete categories[category];
+
+	let result: number[] = [];
+
+	for (let i in categories) result.push(categories[i]);
+
+	return result;
 }
 
 
