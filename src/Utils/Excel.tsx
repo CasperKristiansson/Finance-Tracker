@@ -7,88 +7,101 @@ export interface ExcelUploadData {
 	errorElement: JSX.Element | null;
 }
 
-export function ExcelUpload(userID: string): ExcelUploadData {
-	var result: ExcelUploadData = {
+export function ExcelUpload(userID: string): Promise<ExcelUploadData> {
+	return new Promise((resolve, reject) => {
+	  var result: ExcelUploadData = {
 		success: true,
 		errorMessage: "",
 		errorElement: null
-	};
-
-	var XLSX = require("xlsx");
-
-	var input: HTMLInputElement = document.createElement('input');
-	input.type = 'file';
-	input.accept = '.xlsx';
-
-	input.onchange = e => {
+	  };
+  
+	  var XLSX = require("xlsx");
+  
+	  var input: HTMLInputElement = document.createElement('input');
+	  input.type = 'file';
+	  input.accept = '.xlsx';
+  
+	  input.onchange = e => {
 		var input = e.target as HTMLInputElement;
-
+  
 		if (!input || !input.files) {
-			return { success: false, errorMessage: "No file selected" };
+		  reject({ success: false, errorMessage: "No file selected" });
+		  return null;
+		}
+
+		if (!input.files) {
+			reject({ success: false, errorMessage: "No file selected" });
+			return null;
 		}
 		
 		var file: File = input.files[0];
 		var reader: FileReader = new FileReader();
-
+  
 		reader.readAsBinaryString(file);
-
+  
 		reader.onload = function (e) {
-			if (!e.target) {
-				return { success: false, errorMessage: "No file selected" };
-			}
-
-			var data = e.target.result;
-			var workbook = XLSX.read(data, {
-				type: 'binary'
-			});
-			var sheetName: string = workbook.SheetNames[0];
-			var sheet = workbook.Sheets[sheetName];
-			const excelData = XLSX.utils.sheet_to_json(sheet);
-
-			const validatedData: DataValidation = validateData(excelData);
-
-			if (!validatedData.errorMessage || !data) {
-				return { success: false, errorMessage: validatedData.errorMessage };
-			};
-
-			var params = new URLSearchParams();
-			params.append('transactions', JSON.stringify(validatedData.data));
-			params.append('userID', userID);
-
-			axios.post('https://pktraffic.com/api/addTransactions.php', params).then(response => {
-				console.log(response.data);
-				if (response.data.success) {
-					result.errorElement = (
-						<>
-						<Message positive>
-							<Message.Header>Upload Complete</Message.Header>
-							<p>
-								The excel document was <b>successfully</b> uploaded!
-							</p>
-						</Message>
-						</>
-					);
-				} else {
-					result.errorElement = (
-						<>
-						<Message negative>
-							<Message.Header>Upload Failed</Message.Header>
-							<p>
-								There was a database error. Please try again later.
-							</p>
-						</Message>
-						</>
-					);
-				}
-			}).catch(response => {
-				console.log(response);
+		  if (!e.target) {
+			reject({ success: false, errorMessage: "No file selected" });
+			return null;
+		  }
+  
+		  var data = e.target.result;
+		  var workbook = XLSX.read(data, {
+			type: 'binary'
+		  });
+		  var sheetName: string = workbook.SheetNames[0];
+		  var sheet = workbook.Sheets[sheetName];
+		  const excelData = XLSX.utils.sheet_to_json(sheet);
+  
+		  const validatedData: DataValidation = validateData(excelData);
+  
+		  if (!validatedData.errorMessage || !data) {
+			reject({ success: false, errorMessage: validatedData.errorMessage });
+			return null;
+		  };
+  
+		  var params = new URLSearchParams();
+		  params.append('transactions', JSON.stringify(validatedData.data));
+		  params.append('userID', userID);
+  
+		  axios.post('https://pktraffic.com/api/addTransactions.php', params)
+			.then(response => {
+			  console.log(response.data);
+			  if (response.data.success) {
+				result.errorElement = (
+				  <>
+				  <Message positive>
+					<Message.Header>Upload Complete</Message.Header>
+					<p>
+					  The excel document was <b>successfully</b> uploaded!
+					</p>
+				  </Message>
+				  </>
+				);
+				resolve(result);
+			  } else {
+				result.errorElement = (
+				  <>
+				  <Message negative>
+					<Message.Header>Upload Failed</Message.Header>
+					<p>
+					  There was a database error. Please try again later.
+					</p>
+				  </Message>
+				  </>
+				);
+				resolve(result);
+			  }
 			})
-			}				
+			.catch(response => {
+			  console.log(response);
+			  reject({ success: false, errorMessage: response });
+			});
+		  }        
 		}
-	input.click();
-
-	return result;
-}
+	  input.click();
+	});
+  }
 
 
 interface DataValidation {
