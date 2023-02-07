@@ -2,7 +2,6 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { JssProvider } from 'react-jss';
 
-import './firebase.js';
 import './sidebar/sidebar.css';
 import {Chart, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title, PointElement, LineElement} from 'chart.js'
 

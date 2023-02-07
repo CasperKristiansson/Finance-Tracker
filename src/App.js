@@ -18,7 +18,7 @@ import Logout from './login/logout';
 import { Route, Routes, BrowserRouter } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 
-import { } from './firebase.js';
+import './firebase.ts';
 
 import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
 import TransactionsView from './transactionsView/transactionsView';
