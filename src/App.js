@@ -1,7 +1,7 @@
 import './App.css';
 
 import Sidebar from './sidebar/sidebar';
-import Home from './home/home';
+import { Home } from './Pages/Home/Home';
 import YearlyReport from './yearlyReport/yearlyReport';
 import TotalReport from './totalReport/totalReport';
 import Accounts from './accounts/accounts';
