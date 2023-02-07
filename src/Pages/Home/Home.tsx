@@ -3,6 +3,7 @@ import { createUseStyles } from "react-jss";
 import axios from 'axios';
 
 import { Header } from './ChildComponents/Header';
+import { Overview } from "./ChildComponents/Overview";
 
 import { GetStartPeriod } from '../../Utils/Date';
 import { ConvertTransactions, Transaction } from '../../Utils/Transactions';
@@ -12,17 +13,6 @@ const useStyles = createUseStyles({
 		paddingTop: 1,
 		marginLeft: 270,
 		padding: "100px 25px",
-	},
-	mainSectionPie: {
-		marginLeft: "25%",
-		marginRight: "25%",
-	},
-	mainSectionButton: {
-		width: "100%",
-		height: 70,
-	},
-	gridMaxHeight: {
-		height: "100%",
 	},
 	messageSticky: {
 		position: "fixed",
@@ -56,7 +46,7 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
       
 		axios.post('https://pktraffic.com/api/transactions.php', params).then(response => {
 			console.log(response.data);
-			
+
 			setTransactions(ConvertTransactions(response.data.transactions));
 		}).catch(response => {
 			console.log(response);
@@ -94,6 +84,11 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 				currentMonth={period.month}
 				handleMonthChange={handleMonthChange}	
 			/>
+			<Overview
+				userID={userID}
+				transactions={transactions}
+				period={period}
+			/>				
 		</div>
 		</>
 	);

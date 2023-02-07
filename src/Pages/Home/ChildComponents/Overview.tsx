@@ -7,9 +7,20 @@ import { MonthsShort, MonthYear } from "../../../Utils/Date";
 import { ExcelUpload, ExcelUploadData } from "../../../Utils/Excel";
 import PieChart from "../../../graphs/piechart";
 import BarChart from "../../../graphs/barchart";
-import { GetMonthOfYearAmountType, Transaction, GetCategoriesLabels, GetCategoriesAmount } from "../../../Utils/Transactions";
+import { GetMonthOfYearAmount, Transaction, GetCategoriesLabels, GetCategoriesAmount } from "../../../Utils/Transactions";
 
 const useStyles = createUseStyles({
+	transactionButton: {
+		width: "100%",
+		height: 70,
+	},
+	gridMaxHeight: {
+		height: "100%",
+	},
+	mainSectionPie: {
+		marginLeft: "25%",
+		marginRight: "25%",
+	},
 });
 
 export const Overview: React.FC<{ userID: string, period: MonthYear, transactions: Transaction[] }> = ({ userID, period, transactions }): JSX.Element => {
@@ -35,7 +46,7 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 									icon="plus"
 									content="Add Transaction"
 									color="green"
-									className={"main-section-button"}
+									className={classes.transactionButton}
 									onClick={() => {
 										navigate("/addTransaction");
 									}}
@@ -46,7 +57,7 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 									icon="file"
 									content="Import Excel"
 									color="blue"
-									className={"main-section-button"}
+									className={classes.transactionButton}
 									onClick={() => {
 										handleExcelSubmit();
 									}}
@@ -54,14 +65,14 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 							</Grid.Column>
 						</Grid.Row>
 					</Grid>
-					<Grid className={"grid-max-height"}>
+					<Grid className={classes.gridMaxHeight}>
 						<Grid.Row stretched>
 							<Grid.Column>
 								<Segment>
 									<BarChart
 										title={period.year}
-										dataIncome={GetMonthOfYearAmountType(transactions, "Income")}
-										dataExpense={GetMonthOfYearAmountType(transactions, "Expense")}	
+										dataIncome={GetMonthOfYearAmount(transactions, "Income")}
+										dataExpense={GetMonthOfYearAmount(transactions, "Expense")}	
 										labels={MonthsShort}
 									/>
 								</Segment>
@@ -76,7 +87,7 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 								<Button.Or />
 								<Button positive onClick={() => setPieChartType("Income")}>Income</Button>
 							</Button.Group>
-							<div className={"main-section-pie"}>
+							<div className={classes.mainSectionPie}>
 								<PieChart 
 									title={pieChartType}
 									labels={GetCategoriesLabels(transactions, period.month, pieChartType)}
