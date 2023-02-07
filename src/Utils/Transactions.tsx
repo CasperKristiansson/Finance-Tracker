@@ -2,7 +2,7 @@ export interface Transaction {
     Account: string;
     Amount: number;
     Category: string;
-    Date: string;
+    Date: Date;
     Note: string;
     Type: string;
     ID: number;
@@ -37,16 +37,11 @@ export function ConvertTransactions(data: any[]): Transaction[] {
             return [];
         }
 
-        if (typeof data[i].Date === "number") {
-            data[i].Date = new Date((data[i].Date - (25567 + 2)) * 86400 * 1000);
-            data[i].Date = data[i].Date.toISOString().slice(0, 10);
-        }
-
         transactions.push({
             Account: data[i].Account,
             Amount: parseFloat(data[i].Amount),
             Category: data[i].Category,
-            Date: data[i].Date,
+            Date: new Date(data[i].Date),
             Note: data[i].Note,
             Type: data[i].Type,
             ID: data[i].id_incr,
@@ -54,6 +49,22 @@ export function ConvertTransactions(data: any[]): Transaction[] {
     }
 
     return transactions;
+}
+
+
+// This function filters the transactions based on the month provided.
+// It iterates through the transactions and checks the month of the date of each one. If the month matches the month provided it adds the transaction to the filteredTransactions array.
+// It returns the filteredTransactions array.
+export function FilterTransactionsMonth(transactions: Transaction[], month: number): Transaction[] {
+    let filteredTransactions: Transaction[] = [];
+
+    for (let i = 0; i < transactions.length; i++) {
+        if (transactions[i].Date.getMonth() === month) {
+            filteredTransactions.push(transactions[i]);
+        }
+    }
+
+    return filteredTransactions;
 }
 
 
@@ -69,7 +80,7 @@ export function GetCategoriesLabels(transactions: Transaction[], month: number, 
 	let categories: { [category: string]: number } = {};
 
 	for (let i = 0; i < transactions.length; i++) {           
-        if (new Date(transactions[i].Date).getMonth() === month && transactions[i].Type === type) {
+        if (transactions[i].Date.getMonth() === month && transactions[i].Type === type) {
             if (!categories[transactions[i].Category]) {
                 categories[transactions[i].Category] = transactions[i].Amount;
             } else {
@@ -98,7 +109,7 @@ export function GetCategoriesAmount(transactions: Transaction[], month: number, 
     let categories: { [category: string]: number } = {};
 
 	for (let i = 0; i < transactions.length; i++) {
-        if (new Date(transactions[i].Date).getMonth() === month && transactions[i].Type === type) {
+        if (transactions[i].Date.getMonth() === month && transactions[i].Type === type) {
             if (!categories[transactions[i].Category]) {
                 categories[transactions[i].Category] = transactions[i].Amount;
             } else {
@@ -135,13 +146,13 @@ export function GetMonthOfYearAmount(transactions: Transaction[], type: string, 
 
     if (year) {
         transactions = transactions.filter((transaction) => {
-            return new Date(transaction.Date).getFullYear() === year;
+            return transaction.Date.getFullYear() === year;
         });
     }
 
 	for (let i = 0; i < transactions.length; i++) {
 		if (transactions[i].Type === type) {
-			result[new Date(transactions[i].Date).getMonth()] += transactions[i].Amount;
+			result[transactions[i].Date.getMonth()] += transactions[i].Amount;
 		}
 	}
 
