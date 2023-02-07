@@ -1,38 +1,10 @@
 import React, {useEffect, useState} from "react";
 import { createUseStyles } from "react-jss";
 
-import { HomeHeader } from './ChildComponents/HomeHeader';
+import { Header } from './ChildComponents/Header';
 
-import { getStartPeriod } from '../../Utils/Date';
+import { getStartPeriod, MonthYear } from '../../Utils/Date';
 
-// Convert to jss
-// .main-section {
-// 	padding-top: 0px;
-// 	margin-left: 270px;
-// 	padding: 25px 25px;
-// }
-
-// .main-section-pie {
-// 	margin-left: 25%;
-// 	margin-right: 25%;
-// }
-
-// .main-section-button {
-// 	width: 100%;
-// 	height: 70px;
-// }
-
-// .grid-max-height {
-// 	height: 100%;
-// }
-
-// .message-sticky {
-// 	position: fixed;
-// 	top: 25px;
-// 	right: 25px;
-// 	width: 500px;
-// 	z-index: 999;
-// }
 const useStyles = createUseStyles({
 	mainSection: {
 		paddingTop: 0,
@@ -74,27 +46,35 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 	const [showMessage, setShowMessage] = useState(false);
 	const [message, setMessage] = useState("");
 
+	useEffect(() => {
+		var params = new URLSearchParams();
+		params.append("year", period.year.toString());
+		params.append("month", period.month.toString());
+		window.history.pushState({}, "", "?" + params.toString());
+	}, [period]);
+
+	const handleMonthChange = (month: number) => {
+		if (month < 0) {
+			setPeriod({ ...period, month: 11, year: period.year - 1 });
+		} else if (month > 11) {
+			setPeriod({ ...period, month: 0, year: period.year + 1 });
+		} else {
+			setPeriod({ ...period, month: month });
+		}
+	};
+
 	return (
 		<>
 		<div className={classes.messageSticky}>
 			{showMessage ? message : null}
 		</div>
 		<div className={classes.mainSection}>
-			<HomeHeader
+			<Header
 				handleYearChange={(e: { target: { value: string; }; }) => {
-					console.log(e.target.value)
-					setPeriod({ ...period, year: parseInt(e.target.value) });
+					setPeriod({ year: parseInt(e.target.value), month: 0 });
 				}}
 				currentMonth={period.month}
-				handleMonthChange={(month: number) => {
-					if (month < 0) {
-						setPeriod({ ...period, month: 11, year: period.year - 1 });
-					} else if (month > 11) {
-						setPeriod({ ...period, month: 0, year: period.year + 1 });
-					} else {
-						setPeriod({ ...period, month: month });
-					}
-				}}
+				handleMonthChange={handleMonthChange}	
 			/>
 		</div>
 		</>

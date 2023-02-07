@@ -27,7 +27,7 @@ const useStyles = createUseStyles({
 	},
 });
 
-export const HomeHeader: React.FC<{ handleYearChange: any, currentMonth: number, handleMonthChange: any }> = ({ handleYearChange, currentMonth, handleMonthChange }): JSX.Element => {
+export const Header: React.FC<{ handleYearChange: any, currentMonth: number, handleMonthChange: any }> = ({ handleYearChange, currentMonth, handleMonthChange }): JSX.Element => {
 
 	const classes = useStyles();
 
