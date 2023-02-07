@@ -1,14 +1,14 @@
 import axios from 'axios';
 import { Message } from "semantic-ui-react";
 
-export interface ExcelUpload {
+export interface ExcelUploadData {
 	success: boolean;
 	errorMessage: string;
 	errorElement: JSX.Element | null;
 }
 
-export function handleExcelSubmit(userID: string): ExcelUpload {
-	var result: ExcelUpload = {
+export function ExcelUpload(userID: string): ExcelUploadData {
+	var result: ExcelUploadData = {
 		success: true,
 		errorMessage: "",
 		errorElement: null

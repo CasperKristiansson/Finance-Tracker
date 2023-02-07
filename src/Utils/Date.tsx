@@ -1,9 +1,12 @@
+export const MonthsShort: string[] = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+export const MonthsLong: string[] = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+
 export interface MonthYear {
 	month: number;
 	year: number;
 }
 
-export function getStartPeriod(): MonthYear {
+export function GetStartPeriod(): MonthYear {
 	var url: string = window.location.href;
 	var params: URLSearchParams = new URLSearchParams(url.split("?")[1]);
 	
