@@ -5,7 +5,7 @@ import { Home } from './Pages/Home/Home';
 import YearlyReport from './yearlyReport/yearlyReport';
 import TotalReport from './totalReport/totalReport';
 import { Accounts } from './Pages/Accounts/Accounts';
-import AccountsReport from './accounts/accountsReport';
+import { AccountsReport } from './Pages/AccountsReport/AccountsReport';
 import AddTransaction from './transactions/addTransaction';
 import EditTransaction from './transactions/editTransaction';
 import EditAccount from './transactions/editAccount';

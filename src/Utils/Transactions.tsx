@@ -1,3 +1,5 @@
+import { StringifyTimeShort } from "./Date";
+
 export interface Transaction {
     Account: string;
     Amount: number;
@@ -169,6 +171,10 @@ export interface Account {
     Balance: number;
 }
 
+/**
+ * This function returns the balance of each account.
+ * @returns Account[] -> [{Name: "Account Name", Balance: 0}, ...]
+ */
 export function GetAccountsBalance(transactions: Transaction[]): Account[] {
 	let accounts: { [account: string]: number } = {};
 
@@ -198,4 +204,93 @@ export function GetAccountsBalance(transactions: Transaction[]): Account[] {
     }
 
     return result;
+}
+
+export interface AccountGraph {
+    Name: string;
+    Balance: number[];
+    Labels: string[];
+}
+
+/**
+ * This function belongs to the page AccountsReport. This function returns an array of AccountGraph objects,
+ * where each AccountGraph object contains the name of the account, the balance of the account, and
+ * the labels of the account.
+ * 
+ * @returns AccountGraph[] -> [{Name: "Account Name", Balance: [0, 100, 200, ...], Labels: ["Jan 1", "Jan 2", "Jan 3", ...]}, ...]
+ */
+export function GetAccountsBalanceGraph(transactions: Transaction[]): AccountGraph[] {
+    let accounts: { [account: string]: AccountGraph } = {};
+
+	transactions.sort((a, b) => {
+		return a.Date.getTime() - b.Date.getTime();
+	});
+
+	transactions.forEach(transaction => {
+		if (transaction.Type === "Transfer-Out") {
+            if (!accounts[transaction.Account]) {
+                accounts[transaction.Account] = {
+                    Name: transaction.Account,
+                    Balance: [-transaction.Amount],
+                    Labels: [StringifyTimeShort(transaction.Date)]
+                };
+            } else {
+                accounts[transaction.Account].Balance.push(
+                    accounts[transaction.Account].Balance[accounts[transaction.Account].Balance.length - 1] - transaction.Amount
+                );
+                accounts[transaction.Account].Labels.push(StringifyTimeShort(transaction.Date));
+            }
+
+            if (!accounts[transaction.Category]) {
+                accounts[transaction.Category] = {
+                    Name: transaction.Category,
+                    Balance: [transaction.Amount],
+                    Labels: [StringifyTimeShort(transaction.Date)]
+                };
+            } else {
+                accounts[transaction.Category].Balance.push(
+                    accounts[transaction.Category].Balance[accounts[transaction.Category].Balance.length - 1] + transaction.Amount
+                );
+                accounts[transaction.Category].Labels.push(StringifyTimeShort(transaction.Date));
+            }
+		}
+		else {
+			if (transaction.Type === "Expense") transaction.Amount = -transaction.Amount;
+
+            if (!accounts[transaction.Account]) {
+                accounts[transaction.Account] = {
+                    Name: transaction.Account,
+                    Balance: [transaction.Amount],
+                    Labels: [StringifyTimeShort(transaction.Date)]
+                };
+            } else {
+                accounts[transaction.Account].Balance.push(
+                    accounts[transaction.Account].Balance[accounts[transaction.Account].Balance.length - 1] + transaction.Amount
+                );
+                accounts[transaction.Account].Labels.push(StringifyTimeShort(transaction.Date));
+            }
+		}
+	});
+
+    let result: AccountGraph[] = [];
+
+    for (let i in accounts) {
+        let account: AccountGraph = accounts[i];
+
+        account.Balance = account.Balance.slice(Math.max(account.Balance.length - 40, 0));
+        account.Labels = account.Labels.slice(Math.max(account.Labels.length - 40, 0));
+        result.push(account);
+    }
+
+    for (let i = 0; i < result.length; i++) {
+        let labels = result[i].Labels;
+        let newLabels: string[] = [];
+        for (let j = 0; j < labels.length; j++) {
+            if (j % Math.floor(labels.length / 7) === 0) newLabels.push(labels[j]);
+            else newLabels.push("");
+        }
+        result[i].Labels = newLabels;
+    }
+
+	return result;
 }
