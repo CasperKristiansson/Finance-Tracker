@@ -60,15 +60,12 @@ export function ConvertTransactions(data: any[]): Transaction[] {
 export function FilterTransactionsMonth(transactions: Transaction[], month: number): Transaction[] {
     let filteredTransactions: Transaction[] = [];
 
-    for (let i = 0; i < transactions.length; i++) {
-        if (transactions[i].Date.getMonth() === month) {
-            filteredTransactions.push(transactions[i]);
-        }
-    }
+    filteredTransactions = transactions.filter((transaction) => {
+        return transaction.Date.getMonth() === month;
+    });
 
     return filteredTransactions;
 }
-
 
 /**
  * ? Pie Chart Calculations
