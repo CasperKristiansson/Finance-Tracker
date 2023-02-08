@@ -27,7 +27,7 @@ export const Accounts: React.FC<{ userID: string, transactions: Transaction }> =
 		}).catch(response => {
 			console.log(response);
 		});
-	}, []);
+	}, [userID]);
 	
 	return (
 		<>

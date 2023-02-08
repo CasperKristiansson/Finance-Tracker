@@ -1,6 +1,6 @@
 import React from "react";
 import { createUseStyles } from "react-jss";
-import { Grid, Segment, Button } from "semantic-ui-react";
+import { Segment } from "semantic-ui-react";
 import { GetMonthOfYearAmount, Transaction } from "../../../Utils/Transactions";
 
 const useStyles = createUseStyles({

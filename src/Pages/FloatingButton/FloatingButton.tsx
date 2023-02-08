@@ -1,5 +1,5 @@
 
-import React, {useEffect, useState} from "react";
+import React from "react";
 import { createUseStyles } from "react-jss";
 import { useNavigate } from "react-router-dom";
 import { Button, Icon, Popup } from "semantic-ui-react";
@@ -14,7 +14,7 @@ const useStyles = createUseStyles({
 	},
 });
 
-export const FloatingButton: React.FC<{  }> = ({  }): JSX.Element => {
+export const FloatingButton: React.FC<null> = (): JSX.Element => {
 	const classes = useStyles();
   const navigate = useNavigate();
 

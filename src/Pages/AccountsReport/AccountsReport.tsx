@@ -1,17 +1,10 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
-import { createUseStyles } from "react-jss"
 import { Divider, Grid, Segment } from "semantic-ui-react";
 import LineChart from "../../graphs/linechart";
 import { AccountGraph, ConvertTransactions, GetAccountsBalanceGraph } from "../../Utils/Transactions";
 
-const useStyles = createUseStyles({
-
-});
-
 export const AccountsReport: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
-	const classes = useStyles();
-
 	const[accounts, setAccounts] = useState([{Name: "Loading...", Balance: [0], Labels: [""]}] as AccountGraph[]);
 
 	useEffect(() => {
@@ -23,7 +16,7 @@ export const AccountsReport: React.FC<{ userID: string }> = ({ userID }): JSX.El
 		}).catch(response => {
 			console.log(response);
 		});
-	}, []);
+	}, [userID]);
 
 	return (
 		<>
@@ -32,7 +25,7 @@ export const AccountsReport: React.FC<{ userID: string }> = ({ userID }): JSX.El
 			{accounts.map((account, index) => {
 				return(
 					<Grid.Column key={index}>
-						<Segment className={`left aligned accountInformation ui ${account.Balance[account.Balance.length - 1] >= 0 ? "green" : "red"} `}>
+						<Segment className={`left aligned ui ${account.Balance[account.Balance.length - 1] >= 0 ? "green" : "red"} `}>
 							<h3>{account.Name}</h3>
 							<Divider inverted />
 							<h4>Available Balance</h4>
