@@ -33,7 +33,9 @@ export const TransactionTable: React.FC<{ transactions: Transaction[], month: nu
 					</tr>
 				</thead>
 				<tbody>
-					{FilterTransactionsMonth(transactions, month).map((row, index) => {
+					{/* First Call FilterTransactionsMonth and than sort it based on Date and than map it */}
+					{/* {FilterTransactionsMonth(transactions, month).sort().map((row, index) => { */}
+					{FilterTransactionsMonth(transactions, month).sort((a, b) => (a.Date < b.Date) ? 1 : -1).map((row, index) => {
 						return (
 							<tr className={GetTransactionColor(row.Type)} key={`homeTable${index}`}>
 								<td>
