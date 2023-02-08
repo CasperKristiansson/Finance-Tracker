@@ -46,7 +46,7 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 			console.log(response);
 		});
     
-	}, [period.year]);
+	}, [period.year, userID]);
 
 	useEffect(() => {
 		var params = new URLSearchParams();
