@@ -1,12 +1,18 @@
 import axios from 'axios';
 import { Message } from "semantic-ui-react";
 
+import * as FileSaver from "file-saver";
+import * as XLSX from "xlsx";
+
 export interface ExcelUploadData {
 	success: boolean;
 	errorMessage: string;
 	messageElement: JSX.Element | null;
 }
 
+/**
+ * Uploads an excel file in the form as a json object
+ */
 export function ExcelUpload(userID: string): Promise<ExcelUploadData> {
 	return new Promise((resolve, reject) => {
 	  var result: ExcelUploadData = {
@@ -81,8 +87,6 @@ export function ExcelUpload(userID: string): Promise<ExcelUploadData> {
 		  const excelData = XLSX.utils.sheet_to_json(sheet);
   
 		  const validatedData: DataValidation = validateData(excelData);
-
-		  console.log(validatedData)
   
 		  if (validatedData.errorMessage || !data) {
 				result.messageElement = (
@@ -166,6 +170,9 @@ interface DataValidation {
 	errorMessage: string;
 }
 
+/**
+ * Validates the data from the excel file
+ */
 function validateData(data: any[]): DataValidation {
 	if (data.length === 1) {
 		if (data[0].Date === "" && data[0].Description === "" && data[0].Amount === "" && data[0].Type === "" && data[0].Category === "") {
@@ -211,4 +218,40 @@ function validateData(data: any[]): DataValidation {
 	}
 
 	return {"data": data, "errorMessage": ""};
+}
+
+/**
+ * Downloads a template for the transaction excel file
+ */
+export function DownloadTransactionTemplate(): void {
+	const jsonFormat: any[] = [
+		{
+			"Date": "",
+			"Description": "",
+			"Category": "",
+			"Type": "",
+			"Amount": "",
+			"Account": "",
+		}
+	];
+
+	const ws: XLSX.WorkSheet = XLSX.utils.json_to_sheet(jsonFormat);
+	const wb: XLSX.WorkBook = { Sheets: { data: ws }, SheetNames: ["data"] };
+	const excelBuffer: any = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+	const data: Blob = new Blob([excelBuffer], { type: 'xlsx' });
+
+	var date: Date = new Date();
+	var fileName: string = "Transactions_" + date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate() + ".xlsx";
+	FileSaver.saveAs(data, fileName);
+}
+
+/**
+ * This function downloads the transactions to an excel file
+ */
+export function DownloadTransactions(transactions: any, fileName: string): void {
+	const ws = XLSX.utils.json_to_sheet(transactions);
+	const wb: XLSX.WorkBook = { Sheets: { data: ws }, SheetNames: ["data"] };
+	const excelBuffer: any = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+	const data: Blob = new Blob([excelBuffer], { type: 'xlsx' });
+	FileSaver.saveAs(data, fileName);
 }
