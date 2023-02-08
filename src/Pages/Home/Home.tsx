@@ -12,11 +12,6 @@ import { TransactionTable } from "./ChildComponents/TransactionTable";
 import { ExcelUploadData } from "../../Utils/Excel";
 
 const useStyles = createUseStyles({
-	mainSection: {
-		paddingTop: 1,
-		marginLeft: 270,
-		padding: "100px 25px",
-	},
 	messageSticky: {
 		position: "fixed",
 		top: 25,
@@ -39,9 +34,9 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 	const [message, setMessage] = useState({message: null, show: false} as Message);
 
 	useEffect(() => {
-    var params = new URLSearchParams();
-    params.append('year', period.year.toString());
-	  params.append('userID', userID);
+    	var params = new URLSearchParams();
+    	params.append('year', period.year.toString());
+	  	params.append('userID', userID);
       
 		axios.post('https://pktraffic.com/api/transactions.php', params).then(response => {
 			console.log(response.data);
@@ -84,29 +79,27 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 		<div className={classes.messageSticky}>
 			{message.show ? message.message : null}
 		</div>
-		<div className={classes.mainSection}>
-			<Header
-				handleYearChange={(e: { target: { value: string; }; }) => {
-					setPeriod({ year: parseInt(e.target.value), month: 0 });
-				}}
-				currentMonth={period.month}
-				handleMonthChange={handleMonthChange}	
-			/>
-			<Overview
-				userID={userID}
-				transactions={transactions}
-				period={period}
-				handleMessage={handleMessage}
-			/>
-			<Banner
-				transactions={transactions}
-				month={period.month}
-			/>
-			<TransactionTable
-				transactions={transactions}
-				month={period.month}
-			/>
-		</div>
+		<Header
+			handleYearChange={(e: { target: { value: string; }; }) => {
+				setPeriod({ year: parseInt(e.target.value), month: 0 });
+			}}
+			currentMonth={period.month}
+			handleMonthChange={handleMonthChange}	
+		/>
+		<Overview
+			userID={userID}
+			transactions={transactions}
+			period={period}
+			handleMessage={handleMessage}
+		/>
+		<Banner
+			transactions={transactions}
+			month={period.month}
+		/>
+		<TransactionTable
+			transactions={transactions}
+			month={period.month}
+		/>
 		</>
 	);
 }

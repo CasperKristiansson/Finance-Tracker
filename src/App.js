@@ -4,7 +4,7 @@ import Sidebar from './sidebar/sidebar';
 import { Home } from './Pages/Home/Home';
 import YearlyReport from './yearlyReport/yearlyReport';
 import TotalReport from './totalReport/totalReport';
-import Accounts from './accounts/accounts';
+import { Accounts } from './Pages/Accounts/Accounts';
 import AccountsReport from './accounts/accountsReport';
 import AddTransaction from './transactions/addTransaction';
 import EditTransaction from './transactions/editTransaction';
@@ -23,13 +23,23 @@ import './firebase.ts';
 import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
 import TransactionsView from './transactionsView/transactionsView';
 
+import { createUseStyles } from "react-jss";
+
+const useStyles = createUseStyles({
+  mainSection: {
+		paddingTop: 20,
+		marginLeft: 270,
+		padding: "100px 25px",
+	},
+});
 
 function App() {
+  const classes = useStyles();
+
   const [loggedIn, setLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [auth, setAuth] = useState(null);
-
 
   useEffect(() => {
     var authVar = getAuth()
@@ -74,7 +84,7 @@ function App() {
         ) : (
           <></>
         )}
-        <div>
+        <div className={classes.mainSection}>
           <Routes>
             {loggedIn && !loading ? (
               <>

@@ -158,3 +158,44 @@ export function GetMonthOfYearAmount(transactions: Transaction[], type: string, 
 
 	return result;
 }
+
+
+/**
+ * ? Accounts
+ */
+
+export interface Account {
+    Name: string;
+    Balance: number;
+}
+
+export function GetAccountsBalance(transactions: Transaction[]): Account[] {
+	let accounts: { [account: string]: number } = {};
+
+	transactions.forEach(transaction => {
+		if (transaction.Type === "Transfer-Out") {
+			if (!accounts[transaction.Account]) accounts[transaction.Account] = -transaction.Amount;
+			else accounts[transaction.Account] -= transaction.Amount;
+
+            if (!accounts[transaction.Category]) accounts[transaction.Category] = transaction.Amount;
+            else accounts[transaction.Category] += transaction.Amount;
+		}
+		else {
+			if (transaction.Type === "Expense") transaction.Amount = -transaction.Amount;
+
+            if (!accounts[transaction.Account]) accounts[transaction.Account] = transaction.Amount;
+            else accounts[transaction.Account] += transaction.Amount;
+		}
+	});
+
+	let result: Account[] = [];
+
+    for (let i in accounts) {
+        result.push({
+            Name: i,
+            Balance: accounts[i]
+        });
+    }
+
+    return result;
+}

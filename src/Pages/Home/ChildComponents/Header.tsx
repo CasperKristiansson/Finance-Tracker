@@ -24,6 +24,7 @@ const useStyles = createUseStyles({
 	},
 	header: {
 		fontSize: 35,
+		marginTop: 0,
 	},
 });
 
