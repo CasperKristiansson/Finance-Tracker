@@ -42,6 +42,11 @@ export function StringifyTime(date: Date): string {
 };
 
 export function stringifyTimeShort(date: Date): string {
-	return (date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate()
-	);
+	let month: string = (date.getMonth() + 1).toString();
+	if (month.length < 2) month = "0" + month;
+
+	let day: string = date.getDate().toString();
+	if (day.length < 2) day = "0" + day;
+
+	return (date.getFullYear() + "-" + month + "-" + day);
 };
