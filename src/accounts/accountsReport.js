@@ -3,8 +3,6 @@ import { Grid, Segment, Divider } from "semantic-ui-react";
 import LineChart from "../graphs/linechart";
 import axios from "axios";
 
-import "./accounts.css";
-
 const AccountsReport = (props) => {
 	const [transactions, setTransactions] = useState([]);
 	const [accounts, setAccounts] = useState([{Title: "Loading...", Balance: "Loading..."}]);
