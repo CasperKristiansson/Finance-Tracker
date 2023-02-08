@@ -9,6 +9,7 @@ import { Banner } from "./ChildComponents/Banner";
 import { GetStartPeriod } from '../../Utils/Date';
 import { ConvertTransactions, Transaction } from '../../Utils/Transactions';
 import { TransactionTable } from "./ChildComponents/TransactionTable";
+import { ExcelUploadData } from "../../Utils/Excel";
 
 const useStyles = createUseStyles({
 	mainSection: {
@@ -25,21 +26,17 @@ const useStyles = createUseStyles({
 	},
 });
 
+interface Message {
+	message: JSX.Element | null;
+	show: boolean;
+}
+
 export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 	const classes = useStyles();
 
 	const [period, setPeriod] = useState(GetStartPeriod());
-
 	const [transactions, setTransactions] = useState([] as Transaction[]);
-
-	const [yearIncome, setYearIncome] = useState([]);
-	const [yearExpense, setYearExpense] = useState([]);
-	const [oldYear, setOldYear] = useState(null);
-	const [categories, setCategories] = useState([]);
-	const [categoriesAmount, setCategoriesAmount] = useState([]);
-	const [pieChartType, setPieChartType] = useState("Income");
-	const [showMessage, setShowMessage] = useState(false);
-	const [message, setMessage] = useState("");
+	const [message, setMessage] = useState({message: null, show: false} as Message);
 
 	useEffect(() => {
     var params = new URLSearchParams();
@@ -73,10 +70,18 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 		}
 	};
 
+	const handleMessage = (uploadInformation: ExcelUploadData) => {
+		setMessage({message: uploadInformation.messageElement, show: true});
+
+			setTimeout(() => {
+				setMessage({message: null, show: false});
+			}, 5000);
+	};
+
 	return (
 		<>
 		<div className={classes.messageSticky}>
-			{showMessage ? message : null}
+			{message.show ? message.message : null}
 		</div>
 		<div className={classes.mainSection}>
 			<Header
@@ -90,6 +95,7 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 				userID={userID}
 				transactions={transactions}
 				period={period}
+				handleMessage={handleMessage}
 			/>
 			<Banner
 				transactions={transactions}

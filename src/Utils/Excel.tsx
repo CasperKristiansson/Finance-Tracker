@@ -4,7 +4,7 @@ import { Message } from "semantic-ui-react";
 export interface ExcelUploadData {
 	success: boolean;
 	errorMessage: string;
-	errorElement: JSX.Element | null;
+	messageElement: JSX.Element | null;
 }
 
 export function ExcelUpload(userID: string): Promise<ExcelUploadData> {
@@ -12,7 +12,7 @@ export function ExcelUpload(userID: string): Promise<ExcelUploadData> {
 	  var result: ExcelUploadData = {
 		success: true,
 		errorMessage: "",
-		errorElement: null
+		messageElement: null
 	  };
   
 	  var XLSX = require("xlsx");
@@ -25,13 +25,31 @@ export function ExcelUpload(userID: string): Promise<ExcelUploadData> {
 		var input = e.target as HTMLInputElement;
   
 		if (!input || !input.files) {
-		  reject({ success: false, errorMessage: "No file selected" });
-		  return null;
+			result.messageElement = (
+				<Message negative>
+					<Message.Header>Invalid File (1)</Message.Header>
+					<p>No file selected</p>
+				</Message>
+			);
+		  result.success = false;
+			result.errorMessage = "No file selected";
+
+			reject(result);
+			return result;
 		}
 
 		if (!input.files) {
-			reject({ success: false, errorMessage: "No file selected" });
-			return null;
+			result.messageElement = (
+				<Message negative>
+					<Message.Header>Invalid File (2)</Message.Header>
+					<p>No file selected</p>
+				</Message>
+		  );
+		  result.success = false;
+		  result.errorMessage = "No file selected";
+
+		  reject(result);
+			return result;
 		}
 		
 		var file: File = input.files[0];
@@ -41,9 +59,18 @@ export function ExcelUpload(userID: string): Promise<ExcelUploadData> {
   
 		reader.onload = function (e) {
 		  if (!e.target) {
-			reject({ success: false, errorMessage: "No file selected" });
-			return null;
-		  }
+				result.messageElement = (
+					<Message negative>
+						<Message.Header>Invalid File (3)</Message.Header>
+						<p>No file selected</p>
+					</Message>
+				);
+				result.success = false;
+				result.errorMessage = "No file selected";
+
+				reject(result);
+				return result;
+			}
   
 		  var data = e.target.result;
 		  var workbook = XLSX.read(data, {
@@ -56,8 +83,17 @@ export function ExcelUpload(userID: string): Promise<ExcelUploadData> {
 		  const validatedData: DataValidation = validateData(excelData);
   
 		  if (!validatedData.errorMessage || !data) {
-			reject({ success: false, errorMessage: validatedData.errorMessage });
-			return null;
+				result.messageElement = (
+					<Message negative>
+					<Message.Header>Invalid File (4)</Message.Header>
+					<p>{validatedData.errorMessage}</p>
+					</Message>
+				);
+				result.success = false;
+				result.errorMessage = validatedData.errorMessage;
+
+				reject(result);
+				return result;
 		  };
   
 		  var params = new URLSearchParams();
@@ -68,34 +104,53 @@ export function ExcelUpload(userID: string): Promise<ExcelUploadData> {
 			.then(response => {
 			  console.log(response.data);
 			  if (response.data.success) {
-				result.errorElement = (
-				  <>
-				  <Message positive>
-					<Message.Header>Upload Complete</Message.Header>
-					<p>
-					  The excel document was <b>successfully</b> uploaded!
-					</p>
-				  </Message>
-				  </>
-				);
-				resolve(result);
+					result.messageElement = (
+						<>
+							<Message positive>
+								<Message.Header>Upload Complete</Message.Header>
+								<p>
+									The excel document was <b>successfully</b> uploaded!
+								</p>
+							</Message>
+						</>
+					);
+					resolve(result);
+					return result;
 			  } else {
-				result.errorElement = (
-				  <>
-				  <Message negative>
-					<Message.Header>Upload Failed</Message.Header>
-					<p>
-					  There was a database error. Please try again later.
-					</p>
-				  </Message>
-				  </>
-				);
-				resolve(result);
+					result.messageElement = (
+						<>
+						<Message negative>
+							<Message.Header>Upload Failed</Message.Header>
+							<p>
+								There was a database error. Please try again later.
+							</p>
+							</Message>
+						</>
+					);
+					result.success = false;
+					result.errorMessage = "Database Error";
+
+					resolve(result);
+					return result;
 			  }
 			})
 			.catch(response => {
 			  console.log(response);
-			  reject({ success: false, errorMessage: response });
+			  result.messageElement = (
+				<>
+					<Message negative>
+						<Message.Header>Upload Failed</Message.Header>
+						<p>
+							There was a database error. Please try again later. {response}
+						</p>
+					</Message>
+				</>
+				);
+				result.success = false;
+				result.errorMessage = response;
+
+				resolve(result);
+				return result;
 			});
 		  }        
 		}

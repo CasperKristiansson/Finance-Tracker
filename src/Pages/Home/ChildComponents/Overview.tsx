@@ -23,7 +23,7 @@ const useStyles = createUseStyles({
 	},
 });
 
-export const Overview: React.FC<{ userID: string, period: MonthYear, transactions: Transaction[] }> = ({ userID, period, transactions }): JSX.Element => {
+export const Overview: React.FC<{ userID: string, period: MonthYear, transactions: Transaction[], handleMessage: any }> = ({ userID, period, transactions, handleMessage }): JSX.Element => {
 	const classes = useStyles();
 	let navigate = useNavigate();
 
@@ -31,7 +31,9 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 
 	const handleExcelSubmit = () => {
 		ExcelUpload(userID).then((data: ExcelUploadData) => {
-			console.log(data);
+			handleMessage(data)
+		}).catch((data: ExcelUploadData) => {
+			handleMessage(data)
 		});
 	};
 
