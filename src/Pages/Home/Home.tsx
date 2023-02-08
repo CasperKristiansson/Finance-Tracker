@@ -73,9 +73,10 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 	const handleMessage = (uploadInformation: ExcelUploadData) => {
 		setMessage({message: uploadInformation.messageElement, show: true});
 
-			setTimeout(() => {
-				setMessage({message: null, show: false});
-			}, 5000);
+		setTimeout(() => {
+			setMessage({message: null, show: false});
+			window.location.reload();
+		}, 5000);
 	};
 
 	return (
