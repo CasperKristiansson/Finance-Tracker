@@ -10,7 +10,7 @@ import AddTransaction from './transactions/addTransaction';
 import EditTransaction from './transactions/editTransaction';
 import EditAccount from './transactions/editAccount';
 import Milestones from './milestones/milestones';
-import FloatingButton from './floatingButton/floatingButton';
+import { FloatingButton } from'./Pages/FloatingButton/FloatingButton';
 import { Download } from './Pages/Download/Download';
 import Login from './login/login';
 import Logout from './login/logout';
