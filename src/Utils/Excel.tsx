@@ -81,12 +81,14 @@ export function ExcelUpload(userID: string): Promise<ExcelUploadData> {
 		  const excelData = XLSX.utils.sheet_to_json(sheet);
   
 		  const validatedData: DataValidation = validateData(excelData);
+
+		  console.log(validatedData)
   
-		  if (!validatedData.errorMessage || !data) {
+		  if (validatedData.errorMessage || !data) {
 				result.messageElement = (
 					<Message negative>
-					<Message.Header>Invalid File (4)</Message.Header>
-					<p>{validatedData.errorMessage}</p>
+						<Message.Header>Invalid File (4)</Message.Header>
+							<p>{validatedData.errorMessage}</p>
 					</Message>
 				);
 				result.success = false;

@@ -2,7 +2,7 @@ import React from "react";
 import { createUseStyles } from "react-jss";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "semantic-ui-react";
-import { stringifyTimeShort } from "../../../Utils/Date";
+import { StringifyTimeShort } from "../../../Utils/Date";
 import { GetTransactionColor } from "../../../Utils/Miscellaneous";
 import { FilterTransactionsMonth, Transaction } from "../../../Utils/Transactions";
 
@@ -33,17 +33,15 @@ export const TransactionTable: React.FC<{ transactions: Transaction[], month: nu
 					</tr>
 				</thead>
 				<tbody>
-					{/* First Call FilterTransactionsMonth and than sort it based on Date and than map it */}
-					{/* {FilterTransactionsMonth(transactions, month).sort().map((row, index) => { */}
 					{FilterTransactionsMonth(transactions, month).sort((a, b) => (a.Date < b.Date) ? 1 : -1).map((row, index) => {
 						return (
-							<tr className={GetTransactionColor(row.Type)} key={`homeTable${index}`}>
+							<tr className={GetTransactionColor(row.Type)} key={index}>
 								<td>
 									<button onClick={() => navigate(`/editTransaction/${row.ID}`)} className={classes.pointerOnHover}>
 										<Icon name="edit" color={"grey"} />
 									</button>
 								</td>
-								<td>{stringifyTimeShort(row.Date)}</td>
+								<td>{StringifyTimeShort(row.Date)}</td>
 								<td>{row.Category}</td>
 								<td>{row.Amount}</td>
 								<td>{row.Account}</td>
