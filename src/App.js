@@ -12,7 +12,7 @@ import EditAccount from './transactions/editAccount';
 import Milestones from './milestones/milestones';
 import { FloatingButton } from'./Pages/FloatingButton/FloatingButton';
 import { Download } from './Pages/Download/Download';
-import Login from './login/login';
+import { Login } from './Pages/Login/Login';
 import Logout from './login/logout';
 
 import { Route, Routes, BrowserRouter } from 'react-router-dom';
