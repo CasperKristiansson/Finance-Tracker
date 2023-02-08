@@ -13,7 +13,7 @@ import Milestones from './milestones/milestones';
 import { FloatingButton } from'./Pages/FloatingButton/FloatingButton';
 import { Download } from './Pages/Download/Download';
 import { Login } from './Pages/Login/Login';
-import Logout from './login/logout';
+import { Logout } from './Pages/Logout/Logout';
 
 import { Route, Routes, BrowserRouter } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -99,7 +99,7 @@ function App() {
               <Route path="/milestones" element={<Milestones userID={user.uid} />} />
               <Route path="/download" element={<Download userID={user.uid} />} />
               <Route path="/transactionsView" element={<TransactionsView userID={user.uid} />} />
-              <Route path="/logout" element={<Logout signOut={handleLogOut} />} />
+              <Route path="/logout" element={<Logout logout={handleLogOut} />} />
 
               <Route path="/login" element={<></>} />
               </>
