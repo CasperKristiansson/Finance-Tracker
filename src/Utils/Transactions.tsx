@@ -75,11 +75,11 @@ export function FilterTransactionsMonth(transactions: Transaction[], month: numb
  * This function returns the categories of the transactions based on the month and type
  * @Returns an array of strings [category (percentage), category (percentage), ...]
  */
-export function GetCategoriesLabels(transactions: Transaction[], month: number, type: string): string[] {
+export function GetCategoriesLabels(transactions: Transaction[], type: string): string[] {
 	let categories: { [category: string]: number } = {};
 
 	for (let i = 0; i < transactions.length; i++) {           
-        if (transactions[i].Date.getMonth() === month && transactions[i].Type === type) {
+        if (transactions[i].Type === type) {
             if (!categories[transactions[i].Category]) {
                 categories[transactions[i].Category] = transactions[i].Amount;
             } else {
@@ -104,11 +104,11 @@ export function GetCategoriesLabels(transactions: Transaction[], month: number, 
 	return categoriesName;
 }
 
-export function GetCategoriesAmount(transactions: Transaction[], month: number, type: string): number[] {
+export function GetCategoriesAmount(transactions: Transaction[], type: string): number[] {
     let categories: { [category: string]: number } = {};
 
 	for (let i = 0; i < transactions.length; i++) {
-        if (transactions[i].Date.getMonth() === month && transactions[i].Type === type) {
+        if (transactions[i].Type === type) {
             if (!categories[transactions[i].Category]) {
                 categories[transactions[i].Category] = transactions[i].Amount;
             } else {
