@@ -9,7 +9,7 @@ import { AccountsReport } from './Pages/AccountsReport/AccountsReport';
 import AddTransaction from './transactions/addTransaction';
 import EditTransaction from './transactions/editTransaction';
 import EditAccount from './transactions/editAccount';
-import Milestones from './milestones/milestones';
+import { Milestones } from './Pages/Milestones/Milestones';
 import { FloatingButton } from'./Pages/FloatingButton/FloatingButton';
 import { Download } from './Pages/Download/Download';
 import { Login } from './Pages/Login/Login';
