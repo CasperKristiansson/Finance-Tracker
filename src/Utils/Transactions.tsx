@@ -1,3 +1,4 @@
+import { Milestone, milestones } from "./Data/Milestones";
 import { StringifyTimeShort } from "./Date";
 
 export interface Transaction {
@@ -65,6 +66,47 @@ export function FilterTransactionsMonth(transactions: Transaction[], month: numb
     });
 
     return filteredTransactions;
+}
+
+export interface Loan {
+    Amount: number;
+    Date: Date;
+    Type: string;
+    ID: number; 
+}
+
+export function ConvertLoans(data: any[]): Loan[] {
+    let loans: Loan[] = [];
+
+    if (data.length === 1) {
+        if (data[0].Date === "" && data[0].Type === "" && data[0].Amount === "") {
+            return [];
+        }
+    }
+
+    for (var i = 0; i < data.length; i++) {
+        if (!data[i].hasOwnProperty("date")) {
+            return [];
+        }
+        if (!data[i].hasOwnProperty("type")) {
+            return [];
+        }
+        if (!data[i].hasOwnProperty("amount")) {
+            return [];
+        }
+        if (!data[i].hasOwnProperty("id_incr")) {
+            return [];
+        }
+
+        loans.push({
+            Amount: parseFloat(data[i].amount),
+            Date: new Date(data[i].date),
+            Type: data[i].type,
+            ID: data[i].id_incr,
+        });
+    }
+
+    return loans;
 }
 
 /**
@@ -290,4 +332,42 @@ export function GetAccountsBalanceGraph(transactions: Transaction[]): AccountGra
     }
 
 	return result;
+}
+
+/**
+ * ? Milestones
+ */
+
+
+
+export function GetMilestones(transactions: Transaction[]): Milestone[] {
+    transactions.sort((a, b) => {
+		return a.Date.getTime() - b.Date.getTime();
+	});
+
+    let milestonesResult: Milestone[] = milestones;
+
+    let total: number = 0;
+	let date: Date = transactions[0].Date;
+	for (var i = 0; i < transactions.length; i++) {
+		if (transactions[i].Type === "Income") {
+			total += transactions[i].Amount;
+		} else if (transactions[i].Type === "Expense") {
+			total -= transactions[i].Amount;
+		} else {
+			continue;
+		}
+		
+        for (var j = 0; j < milestonesResult.length; j++) {
+            if (total >= milestonesResult[j].Amount && !milestonesResult[j].Achieved) {
+                milestonesResult[j].Achieved = true;
+                milestonesResult[j].AchievedDate = transactions[i].Date;
+                milestonesResult[j].TimeToAchieve  = Math.floor((transactions[i].Date.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+                date = transactions[i].Date;
+            }
+        }
+	}
+
+    return milestonesResult;
 }
