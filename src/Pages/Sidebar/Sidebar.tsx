@@ -67,14 +67,14 @@ const useStyles = createUseStyles({
 	},
 });
 
-export const Sidebar: React.FC<null> = (): JSX.Element => {
+export const Sidebar: React.FC<{}> = (): JSX.Element => {
 	const classes = useStyles();
 
 	return(
 		<ProSidebar breakPoint="md" className={classes.sidebar}>
 			<SidebarHeader className={classes.sidebarHeader}>
 				<div className={classes.sidebarLogo}>
-					<h1 className={classes.sidebarLogoH1}>Finance Tracker</h1>
+					<h1 className={classes.sidebarLogoH1}>FinanceTracker</h1>
 				</div>
 			</SidebarHeader>
 

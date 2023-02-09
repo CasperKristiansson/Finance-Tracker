@@ -3,7 +3,7 @@ import './App.css';
 import { Sidebar } from './Pages/Sidebar/Sidebar';
 import { Home } from './Pages/Home/Home';
 import YearlyReport from './yearlyReport/yearlyReport';
-import TotalReport from './totalReport/totalReport';
+import { TotalReport } from './Pages/TotalReport/TotalReport';
 import { Accounts } from './Pages/Accounts/Accounts';
 import { AccountsReport } from './Pages/AccountsReport/AccountsReport';
 import AddTransaction from './transactions/addTransaction';
