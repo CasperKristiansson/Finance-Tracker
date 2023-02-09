@@ -14,7 +14,7 @@ const useStyles = createUseStyles({
 	},
 });
 
-export const FloatingButton: React.FC<null> = (): JSX.Element => {
+export const FloatingButton: React.FC<{}> = (): JSX.Element => {
 	const classes = useStyles();
   const navigate = useNavigate();
 

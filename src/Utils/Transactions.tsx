@@ -109,6 +109,34 @@ export function ConvertLoans(data: any[]): Loan[] {
     return loans;
 }
 
+export function TotalAssets(transactions: Transaction[]): number {
+    let total: number = 0;
+
+    for (let i = 0; i < transactions.length; i++) {
+        if (transactions[i].Type === "Income") {
+            total += transactions[i].Amount;
+        } else if (transactions[i].Type === "Expense") {
+            total -= transactions[i].Amount;
+        }
+    }
+
+    return total;
+}
+
+export function TotalLiabilities(loans: Loan[]): number {
+    let total: number = 0;
+
+    for (let i = 0; i < loans.length; i++) {
+        total += loans[i].Amount;
+    }
+
+    return total;
+}
+
+export function TotalNetWorth(transactions: Transaction[], loans: Loan[]): number {
+    return TotalAssets(transactions) - TotalLiabilities(loans);
+}
+
 /**
  * ? Pie Chart Calculations
  */
