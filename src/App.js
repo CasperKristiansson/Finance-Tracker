@@ -1,6 +1,6 @@
 import './App.css';
 
-import Sidebar from './sidebar/sidebar';
+import { Sidebar } from './Pages/Sidebar/Sidebar';
 import { Home } from './Pages/Home/Home';
 import YearlyReport from './yearlyReport/yearlyReport';
 import TotalReport from './totalReport/totalReport';

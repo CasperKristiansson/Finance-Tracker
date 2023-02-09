@@ -1,6 +1,5 @@
 import axios from "axios";
 import React, { useEffect, useState } from "react";
-import { createUseStyles } from "react-jss";
 import { Divider, Grid, Header, Segment } from "semantic-ui-react";
 import { Milestone } from "../../Utils/Data/Milestones";
 import { StringifyTimeShort } from "../../Utils/Date";
