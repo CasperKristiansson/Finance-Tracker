@@ -14,6 +14,7 @@ import { FloatingButton } from'./Pages/FloatingButton/FloatingButton';
 import { Download } from './Pages/Download/Download';
 import { Login } from './Pages/Login/Login';
 import { Logout } from './Pages/Logout/Logout';
+import { TransactionView } from './Pages/TransactionView/TransactionView';
 
 import { Route, Routes, BrowserRouter } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -21,7 +22,6 @@ import { useEffect, useState } from 'react';
 import './firebase.ts';
 
 import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
-import TransactionsView from './transactionsView/transactionsView';
 
 import { createUseStyles } from "react-jss";
 
@@ -98,7 +98,7 @@ function App() {
               <Route path="/editAccount/*" element={<EditAccount userID={user.uid} />} />
               <Route path="/milestones" element={<Milestones userID={user.uid} />} />
               <Route path="/download" element={<Download userID={user.uid} />} />
-              <Route path="/transactionsView" element={<TransactionsView userID={user.uid} />} />
+              <Route path="/transactionsView" element={<TransactionView userID={user.uid} />} />
               <Route path="/logout" element={<Logout logout={handleLogOut} />} />
 
               <Route path="/login" element={<></>} />

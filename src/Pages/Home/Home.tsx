@@ -7,8 +7,8 @@ import { Overview } from "./ChildComponents/Overview";
 import { Banner } from "./ChildComponents/Banner";
 
 import { GetStartPeriod } from '../../Utils/Date';
-import { ConvertTransactions, Transaction } from '../../Utils/Transactions';
-import { TransactionTable } from "./ChildComponents/TransactionTable";
+import { ConvertTransactions, FilterTransactionsMonth, Transaction } from '../../Utils/Transactions';
+import { TransactionTable } from "../../Component/TransactionTable";
 import { ExcelUploadData } from "../../Utils/Excel";
 
 const useStyles = createUseStyles({
@@ -97,8 +97,7 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 			month={period.month}
 		/>
 		<TransactionTable
-			transactions={transactions}
-			month={period.month}
+			transactions={FilterTransactionsMonth(transactions, period.month)}
 		/>
 		</>
 	);
