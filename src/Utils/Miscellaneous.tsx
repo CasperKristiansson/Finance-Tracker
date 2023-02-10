@@ -17,8 +17,8 @@ export interface TransactionTableOptions {
 	sort: string;
 	transactionType: string;
 	transactionCategory: string;
-	startDate: Date | null;
-	endDate: Date | null;
+	startDate: string;
+	endDate: string;
 }
 
 export interface PaginationState {
@@ -28,4 +28,26 @@ export interface PaginationState {
 	totalItems: number;
 	showingItems: number;
 	itemsPerPage: number;
+}
+
+export interface TransactionCategory {
+	category: string;
+	type: string;
+}
+
+export function ConvertTransactionCategory(transactionCategory: any[]): TransactionCategory[] {
+	var result: TransactionCategory[] = [];
+	for(var i=0; i<transactionCategory.length; i++) {
+		result.push({
+			category: transactionCategory[i].Category,
+			type: transactionCategory[i].Type
+		});
+	}
+	return result;
+}
+
+export interface dropDownStruct {
+	key: string,
+	text: string,
+	value: string
 }
