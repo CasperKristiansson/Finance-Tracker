@@ -2,9 +2,9 @@ import React from "react";
 import { createUseStyles } from "react-jss";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "semantic-ui-react";
-import { StringifyTimeShort } from "../../../Utils/Date";
-import { GetTransactionColor } from "../../../Utils/Miscellaneous";
-import { FilterTransactionsMonth, Transaction } from "../../../Utils/Transactions";
+import { StringifyTimeShort } from "../Utils/Date";
+import { GetTransactionColor } from "../Utils/Miscellaneous";
+import { Transaction } from "../Utils/Transactions";
 
 const useStyles = createUseStyles({
 	pointerOnHover: {
@@ -14,7 +14,7 @@ const useStyles = createUseStyles({
 	},
 });
 
-export const TransactionTable: React.FC<{ transactions: Transaction[], month: number }> = ({ transactions, month }): JSX.Element => {
+export const TransactionTable: React.FC<{ transactions: Transaction[] }> = ({ transactions }): JSX.Element => {
 	let navigate = useNavigate();
 	const classes = useStyles();
 	
@@ -33,7 +33,7 @@ export const TransactionTable: React.FC<{ transactions: Transaction[], month: nu
 					</tr>
 				</thead>
 				<tbody>
-					{FilterTransactionsMonth(transactions, month).sort((a, b) => (a.Date < b.Date) ? 1 : -1).map((row, index) => {
+					{transactions.sort((a, b) => (a.Date < b.Date) ? 1 : -1).map((row, index) => {
 						return (
 							<tr className={GetTransactionColor(row.Type)} key={index}>
 								<td>
