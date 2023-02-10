@@ -1,5 +1,5 @@
 import { StringifyTimeShort } from "../../Utils/Date";
-import { PaginationState, TransactionTableOptions } from "../../Utils/Miscellaneous";
+import { ConvertTransactionCategory, PaginationState, TransactionCategory, TransactionTableOptions } from "../../Utils/Miscellaneous";
 import { ConvertTransactions, Transaction } from "../../Utils/Transactions";
 import { Options } from "./ChildComponents/Options";
 import { Pagination } from "./ChildComponents/Pagination";
@@ -13,13 +13,12 @@ import { TransactionTable } from "../../Component/TransactionTable";;
 export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
   const [currentItems, setCurrentItems] = useState([] as Transaction[]);
   const [newSearch, setNewSearch] = useState(false);
-	const [transactionCategories, setTransactionCategories] = useState([]);
+	const [transactionCategories, setTransactionCategories] = useState([] as TransactionCategory[]);
 	const [options, setOptions] = useState({
 		sort: "date",
 		transactionType: "",
-		transactionCategory: "",
-		startDate: null,
-		endDate: null,
+		startDate: "",
+		endDate: "",
 	} as TransactionTableOptions);
 	const [paginationState, setPaginationState] = useState({
 		pageCount: 0,
@@ -39,8 +38,8 @@ export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.E
 		params.append('sort', options.sort);
 		params.append('transactionType', options.transactionType);
 		params.append('transactionCategory', options.transactionCategory);
-		params.append('startDate', options.startDate ? StringifyTimeShort(options.startDate) : '');
-		params.append('endDate', options.endDate ? StringifyTimeShort(options.endDate) : '');
+		params.append('startDate', options.startDate);
+		params.append('endDate', options.endDate);
 
 		axios.post("https://pktraffic.com/api/transactionsView.php", params).then(response => {
 			setPaginationState({...paginationState,
@@ -75,7 +74,8 @@ export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.E
 		params.append('userID', userID);
 	
 		axios.post("https://pktraffic.com/api/transactionsViewType.php", params).then(response => {
-			setTransactionCategories(response.data.types);
+			console.log(response.data)
+			setTransactionCategories(ConvertTransactionCategory(response.data.types));
 		}).catch(response => {
 			console.log(response);
 		})
