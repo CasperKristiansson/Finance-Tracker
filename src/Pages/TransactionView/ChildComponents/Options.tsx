@@ -1,3 +1,4 @@
+import React from 'react';
 import { useEffect, useState } from 'react';
 import { Form, Select, Container } from 'semantic-ui-react'
 import { sortOptions, transactionTypes } from '../../../Utils/Data/Table';

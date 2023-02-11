@@ -3,6 +3,7 @@ import { Message } from "semantic-ui-react";
 
 import * as FileSaver from "file-saver";
 import * as XLSX from "xlsx";
+import React from 'react';
 
 export interface ExcelUploadData {
 	success: boolean;

@@ -1,3 +1,4 @@
+import React from "react";
 import { Grid, Segment } from "semantic-ui-react";
 import LineChart from "../../../graphs/linechart";
 import { LoansLineChart, NetWorthLineChart } from "../../../Utils/Data/Linechart";
