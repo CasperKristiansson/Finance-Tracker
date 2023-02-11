@@ -1,5 +1,5 @@
 import { Milestone, milestones } from "./Data/Milestones";
-import { StringifyTimeShort, StringifyTimeShortest } from "./Date";
+import { MonthsLong, StringifyTimeShort, StringifyTimeShortest } from "./Date";
 
 export interface Transaction {
     Account: string;
@@ -68,13 +68,13 @@ export function FilterTransactionsMonth(transactions: Transaction[], month: numb
     return filteredTransactions;
 }
 
-export function TransactionsSortMonth(transactions: Transaction[]): Transaction[] {
+export function TransactionsSort(transactions: Transaction[]): Transaction[] {
     return transactions.sort((a, b) => {
         return a.Date.getTime() - b.Date.getTime();
     });
 }
 
-export function TransactionsLoansSortMonth(amounts: Transaction[] | Loan[]): Transaction[] | Loan[] {
+export function TransactionsLoansSort(amounts: Transaction[] | Loan[]): Transaction[] | Loan[] {
     return amounts.sort((a, b) => {
         return a.Date.getTime() - b.Date.getTime();
     });
@@ -187,7 +187,7 @@ export function FilterTransactionsType(transactions: Transaction[], type: string
 function groupValuesMonth(amounts: Transaction[] | Loan[]): { [date: string]: number } {
     let groupedValues: { [date: string]: number } = {};
 
-    amounts = TransactionsLoansSortMonth(amounts);
+    amounts = TransactionsLoansSort(amounts);
 
     let firstDate: Date = amounts[0].Date;
     let lastDate: Date = amounts[amounts.length - 1].Date;
@@ -438,7 +438,7 @@ export interface AccountGraph {
 export function GetAccountsBalanceGraph(transactions: Transaction[]): AccountGraph[] {
     let accounts: { [account: string]: AccountGraph } = {};
 
-	transactions = TransactionsSortMonth(transactions);
+	transactions = TransactionsSort(transactions);
 
 	transactions.forEach(transaction => {
 		if (transaction.Type === "Transfer-Out") {
@@ -514,7 +514,7 @@ export function GetAccountsBalanceGraph(transactions: Transaction[]): AccountGra
  */
 
 export function GetMilestones(transactions: Transaction[]): Milestone[] {
-    transactions = TransactionsSortMonth(transactions);
+    transactions = TransactionsSort(transactions);
 
     let milestonesResult: Milestone[] = milestones;
 
@@ -541,4 +541,60 @@ export function GetMilestones(transactions: Transaction[]): Milestone[] {
 	}
 
     return milestonesResult;
+}
+
+
+
+/**
+ * ? Heatmap
+ */
+
+export interface HeatMapStruct {
+    name: string;
+    data: HeatMapData[];
+}
+
+interface HeatMapData {
+    x: string;
+    y: number;
+}
+
+export function GetHeatmap(transactions: Transaction[], type: string): HeatMapStruct[] {
+    transactions = TransactionsSort(transactions);
+
+    let heatmap: HeatMapStruct[] = [];
+    
+    for (let j = 0; j < 12; j++) {
+        heatmap.push({
+            name: MonthsLong[j],
+            data: []
+        });
+    }
+
+    let startYear: number = transactions[0].Date.getFullYear();
+    let endYear: number = new Date().getFullYear();
+
+    for (let i = startYear; i <= endYear; i++) {
+        for (let j = 0; j < 12; j++) {
+            let month: number = j + 1;
+
+            let transactionsInMonth: Transaction[] = transactions.filter(transaction => {
+                return transaction.Date.getFullYear() === i && transaction.Date.getMonth() + 1 === month;
+            });
+
+            let total: number = 0;
+            for (let k = 0; k < transactionsInMonth.length; k++) {
+                if (transactionsInMonth[k].Type === type) {
+                    total += transactionsInMonth[k].Amount;
+                }
+            }
+
+            heatmap[j].data.push({
+                x: String(i),
+                y: parseInt(total.toFixed(0))
+            });
+        }
+    }
+
+    return heatmap.reverse();
 }
