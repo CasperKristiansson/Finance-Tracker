@@ -4,6 +4,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { ConvertLoans, ConvertTransactions, Loan, Transaction } from "../../Utils/Transactions";
 import { BalanceOverview } from "./ChildComponents/BalanceOverview";
+import { GraphOverview } from "./ChildComponents/GraphOverview";
 
 export const TotalReport: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 	const [transactions, setTransactions] = useState([] as Transaction[]);
@@ -29,8 +30,8 @@ export const TotalReport: React.FC<{ userID: string }> = ({ userID }): JSX.Eleme
 	return(
 		<>
 		<h1>TotalReport</h1>
-		<BalanceOverview transactions={transactions} loans={loans}
-		/>
+		<BalanceOverview transactions={transactions} loans={loans} />
+		<GraphOverview transactions={transactions} loans={loans} />
 		</>
 	);
 }
