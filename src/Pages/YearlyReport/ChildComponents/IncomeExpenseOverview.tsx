@@ -1,7 +1,6 @@
 import { Grid, Segment } from "semantic-ui-react";
-import BarChart from "../../../graphs/barchart";
 import PieChart from "../../../graphs/piechart";
-import { ExpenseIncomeBarChart, FilterTransactionsType, GetCategoriesAmount, GetCategoriesAmountIncomeExpense, GetCategoriesLabels, GetCategoriesLabelsIncomeExpense, Loan, Transaction } from "../../../Utils/Transactions";
+import { FilterTransactionsType, GetCategoriesAmount, GetCategoriesAmountIncomeExpense, GetCategoriesLabels, GetCategoriesLabelsIncomeExpense, Transaction } from "../../../Utils/Transactions";
 
 
 export const IncomeExpenseOverview: React.FC<{transactions: Transaction[] }> = ({ transactions }): JSX.Element => {

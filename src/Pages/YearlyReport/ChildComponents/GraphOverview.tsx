@@ -1,9 +1,8 @@
 import { Grid, Segment } from "semantic-ui-react";
 import BarChart from "../../../graphs/barchart";
 import LineChart from "../../../graphs/linechart";
-import { LoansLineChart, NetWorthLineChart } from "../../../Utils/Data/Linechart";
-import { MonthsLong, MonthsShort } from "../../../Utils/Date";
-import { ConvertLoansToTransactions, GetLineChartValues, GetMonthOfYearAmount, Loan, Transaction } from "../../../Utils/Transactions";
+import { MonthsLong } from "../../../Utils/Date";
+import { GetLineChartValues, GetMonthOfYearAmount, Transaction } from "../../../Utils/Transactions";
 
 export const GraphOverview: React.FC<{transactions: Transaction[], currentYear: number }> = ({ transactions, currentYear }): JSX.Element => {
 	return(
