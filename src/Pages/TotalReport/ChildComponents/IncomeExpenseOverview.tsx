@@ -1,6 +1,6 @@
 import React from "react";
 import { Grid, Segment } from "semantic-ui-react";
-import BarChart from "../../../graphs/barchart";
+import { BarChart } from "../../../Component/Barchart";
 import PieChart from "../../../graphs/piechart";
 import { ExpenseIncomeBarChart, FilterTransactionsType, GetCategoriesAmount, GetCategoriesAmountIncomeExpense, GetCategoriesLabels, GetCategoriesLabelsIncomeExpense, Loan, Transaction } from "../../../Utils/Transactions";
 
@@ -13,7 +13,7 @@ export const IncomeExpenseOverview: React.FC<{transactions: Transaction[], loans
 				<Segment>
 					<BarChart
 						title={`Income vs Expenses`}
-						data={ExpenseIncomeBarChart(transactions)}
+						barChart={ExpenseIncomeBarChart(transactions)}
 						height={80}
 					/>
 				</Segment>
