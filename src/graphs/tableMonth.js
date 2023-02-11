@@ -25,7 +25,7 @@ const TableMonth = (props) => {
 			<tbody>
         {props.data.map((item, index) => {
             return (
-              <tr key={index}>
+              <tr key={index} className={props.type}>
                 <td>{item.row}</td>
                 {item.data.map((data, index) => {
                     return (

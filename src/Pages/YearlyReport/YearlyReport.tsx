@@ -5,6 +5,7 @@ import { BalanceOverview } from "./ChildComponents/BalanceOverview";
 import { GraphOverview } from "./ChildComponents/GraphOverview";
 import { Header } from "./ChildComponents/Header";
 import { IncomeExpenseOverview } from "./ChildComponents/IncomeExpenseOverview";
+import { TableOverview } from "./ChildComponents/TableOverview";
 
 export const YearlyReport: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 	const [transactions, setTransactions] = useState([] as Transaction[]);
@@ -29,6 +30,7 @@ export const YearlyReport: React.FC<{ userID: string }> = ({ userID }): JSX.Elem
 		<BalanceOverview transactions={transactions} />
 		<GraphOverview transactions={transactions} currentYear={year} />
 		<IncomeExpenseOverview transactions={transactions} />
+		<TableOverview transactions={transactions} />
 		</>
 	);
 }
