@@ -1,5 +1,3 @@
-import './App.css';
-
 import { Sidebar } from './Pages/Sidebar/Sidebar';
 import { Home } from './Pages/Home/Home';
 import { YearlyReport } from './Pages/YearlyReport/YearlyReport';
@@ -31,6 +29,9 @@ const useStyles = createUseStyles({
 		marginLeft: 270,
     padding: "20px 25px 25px 25px",
 	},
+  app: {
+    textAlign: 'center',
+  },
 });
 
 export const App: React.FC<{ }> = ({ }): JSX.Element => {
@@ -74,7 +75,7 @@ export const App: React.FC<{ }> = ({ }): JSX.Element => {
   }
 
   return (
-    <div className="App">
+    <div className={classes.app} >
       <BrowserRouter>
         {loggedIn && !loading ? (
           <>
