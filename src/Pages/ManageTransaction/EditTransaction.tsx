@@ -7,8 +7,22 @@ import { Button, Form, Segment, Input, Radio, TextArea, Dropdown, Message } from
 import { StringifyTime, StringifyTimeShort } from "../../Utils/Date";
 import { useNavigate } from "react-router-dom";
 
+
+const useStyles = createUseStyles({
+	wrapper: {
+		width: "50%",
+		margin: "auto",
+	},
+	datePicker: {
+		width: 200.,
+		margin: "auto",
+	}
+});
+
 export const EditTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
     const navigate = useNavigate();
+    const classes = useStyles();
+
 	const [transaction, setTransaction] = useState({Type: "Income", Date: new Date()} as Transaction);
 
 	const [incomeCategories, setIncomeCategories] = useState([] as DropDown[]);
@@ -94,109 +108,109 @@ export const EditTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.E
 	return (
 		<>
 		<h1>Add New Transaction</h1>
-		<div className="transaction-form">
-		<Segment className={`ui ${GetTransactionColors(transaction.Type)}`}>
-			<Form className={GetSuccessCode(successSubmitting, isSubmitting)}>
-				<Form.Field>
-					<label>Transaction Type</label>
-				</Form.Field>
-				<Form.Group widths='equal'>
-					<Form.Field
-						control={Radio}
-						label='Income'
-						name='radioGroup'
-						value='Income'
-						onChange={(_e: any, {value}: any) => setTransaction({...transaction, Type: value})}
-						checked={transaction.Type === 'Income'}
-					/>
-					<Form.Field
-						control={Radio}
-						label='Expense'
-						name='radioGroup'
-						value='Expense'
-						onChange={(_e: any, {value}: any) => setTransaction({...transaction, Type: value})}
-						checked={transaction.Type === 'Expense'}
-					/>
-					<Form.Field
-						control={Radio}
-						label='Transfer'
-						name='radioGroup'
-						value='Transfer-Out'
-						onChange={(_e: any, {value}: any) => setTransaction({...transaction, Type: value})}
-						checked={transaction.Type === 'Transfer-Out'}
-					/>
-				</Form.Group>
+		<div className={classes.wrapper} >
+            <Segment className={`ui ${GetTransactionColors(transaction.Type)}`}>
+                <Form className={GetSuccessCode(successSubmitting, isSubmitting)}>
+                    <Form.Field>
+                        <label>Transaction Type</label>
+                    </Form.Field>
+                    <Form.Group widths='equal'>
+                        <Form.Field
+                            control={Radio}
+                            label='Income'
+                            name='radioGroup'
+                            value='Income'
+                            onChange={(_e: any, {value}: any) => setTransaction({...transaction, Type: value})}
+                            checked={transaction.Type === 'Income'}
+                        />
+                        <Form.Field
+                            control={Radio}
+                            label='Expense'
+                            name='radioGroup'
+                            value='Expense'
+                            onChange={(_e: any, {value}: any) => setTransaction({...transaction, Type: value})}
+                            checked={transaction.Type === 'Expense'}
+                        />
+                        <Form.Field
+                            control={Radio}
+                            label='Transfer'
+                            name='radioGroup'
+                            value='Transfer-Out'
+                            onChange={(_e: any, {value}: any) => setTransaction({...transaction, Type: value})}
+                            checked={transaction.Type === 'Transfer-Out'}
+                        />
+                    </Form.Group>
 
-				<Form.Field>
-					<label>Date</label>
-					<div  className="date-picker-form">
-						<input
-							type="date" 
-							value={transaction.Date ? StringifyTimeShort(transaction.Date): new Date().toISOString().slice(0, 10)}
-							onChange={(e) => {
-								console.log(e.target.value)
-								setTransaction({...transaction, Date: new Date(e.target.value)});
-							}}
-							name="date"
-						/>
-					</div>
-				</Form.Field>
-				<Form.Field>
-					<label>{transaction.Type === "Transfer-Out" ? "From": "Account"}</label>
-					<Dropdown
-						options={accounts}
-						placeholder={transaction.Type === "Transfer-Out" ? "Send From Account": "Choose Account"}
-						search
-						selection
-						fluid
-						allowAdditions
-						value={transaction.Account}
-						onChange={(e: any, {value}: any) => setTransaction({...transaction, Account: value})}
-					/>
-				</Form.Field>
-				<Form.Field>
-					<label>{transaction.Type === "Transfer-Out" ? "To" : "Category"}</label>
-					<Dropdown
-						options={transaction.Type === "Transfer-Out" ? accounts : transaction.Type === "Income" ? incomeCategories : expenseCategories}
-						placeholder={transaction.Type === "Transfer-Out" ? "Send To Account": "Choose Category"}
-						search
-						selection
-						fluid
-						allowAdditions
-						value={transaction.Category}
-						onChange={(e: any, {value}: any) => setTransaction({...transaction, Category: value})}
-					/>
-				</Form.Field>
-				<Form.Field>
-					<label>Amount</label>
-					<Input
-						placeholder='Amount'
-						type="number"
-						value={transaction.Amount ? transaction.Amount : ""}
-						onChange={(e: any, {value}: any) => setTransaction({...transaction, Amount: value})}
-					/>
-				</Form.Field>
-				<Form.Field>
-					<label>Note</label>
-					<TextArea
-						placeholder='Note'
-						onChange={(e: any, {value}: any) => setTransaction({...transaction, Note: value})}
-						value={transaction.Note} />
-				</Form.Field>
-			<Message
-				success
-				header='Form Completed'
-				content="Transaction has been added"
-			/>
-			<Message
-				error
-				header='Form Error'
-				content="Please fill out all fields"
-			/>
-			<Button type='submit' color={GetTransactionColors(transaction.Type)} onClick={handleSubmit}>Submit</Button>
-			<Button type='submit' color="grey" onClick={handleDelete}>Delete</Button>
-			</Form>
-			</Segment>
+                    <Form.Field>
+                        <label>Date</label>
+                        <div className={classes.datePicker} >
+                            <input
+                                type="date" 
+                                value={transaction.Date ? StringifyTimeShort(transaction.Date): new Date().toISOString().slice(0, 10)}
+                                onChange={(e) => {
+                                    console.log(e.target.value)
+                                    setTransaction({...transaction, Date: new Date(e.target.value)});
+                                }}
+                                name="date"
+                            />
+                        </div>
+                    </Form.Field>
+                    <Form.Field>
+                        <label>{transaction.Type === "Transfer-Out" ? "From": "Account"}</label>
+                        <Dropdown
+                            options={accounts}
+                            placeholder={transaction.Type === "Transfer-Out" ? "Send From Account": "Choose Account"}
+                            search
+                            selection
+                            fluid
+                            allowAdditions
+                            value={transaction.Account}
+                            onChange={(e: any, {value}: any) => setTransaction({...transaction, Account: value})}
+                        />
+                    </Form.Field>
+                    <Form.Field>
+                        <label>{transaction.Type === "Transfer-Out" ? "To" : "Category"}</label>
+                        <Dropdown
+                            options={transaction.Type === "Transfer-Out" ? accounts : transaction.Type === "Income" ? incomeCategories : expenseCategories}
+                            placeholder={transaction.Type === "Transfer-Out" ? "Send To Account": "Choose Category"}
+                            search
+                            selection
+                            fluid
+                            allowAdditions
+                            value={transaction.Category}
+                            onChange={(e: any, {value}: any) => setTransaction({...transaction, Category: value})}
+                        />
+                    </Form.Field>
+                    <Form.Field>
+                        <label>Amount</label>
+                        <Input
+                            placeholder='Amount'
+                            type="number"
+                            value={transaction.Amount ? transaction.Amount : ""}
+                            onChange={(e: any, {value}: any) => setTransaction({...transaction, Amount: value})}
+                        />
+                    </Form.Field>
+                    <Form.Field>
+                        <label>Note</label>
+                        <TextArea
+                            placeholder='Note'
+                            onChange={(e: any, {value}: any) => setTransaction({...transaction, Note: value})}
+                            value={transaction.Note} />
+                    </Form.Field>
+                <Message
+                    success
+                    header='Form Completed'
+                    content="Transaction has been added"
+                />
+                <Message
+                    error
+                    header='Form Error'
+                    content="Please fill out all fields"
+                />
+                <Button type='submit' color={GetTransactionColors(transaction.Type)} onClick={handleSubmit}>Submit</Button>
+                <Button type='submit' color="grey" onClick={handleDelete}>Delete</Button>
+                </Form>
+            </Segment>
 		</div>
 	</>
 	);
