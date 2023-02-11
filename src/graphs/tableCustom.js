@@ -3,28 +3,23 @@ import React from "react";
 const TableCustom = (props) => {
 	return (
 		<table className={`ui ${props.color} celled selectable table`}>
-			<thead>
-				<tr>
-          <th>Type</th>
-          {props.data.Total ? Object.keys(props.data.Total).map((key, index) => (
-            <th key={index}>{key}</th>
-          )) : null}
-				</tr>
-			</thead>
-			<tbody>
-        {
-          Object.entries(props.data).map(([key, value]) => {
-            return (
-              <tr className={`${props.type} ${["Total", "Average"].includes(key) ? "netTotal" : ""}`}>
-                <td className="netTitle">{key}</td>
-                {Object.values(value).map((val, index) => (
-                  <td key={index}>{val}</td>
-                ))}
-              </tr>
-            );
-          })
-        }        
-			</tbody>
+      <thead>
+        <tr>
+          {props.data.columns.map((col, i) => (
+            <th key={i}>{col}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {props.data.rows.map((row, i) => (
+          <tr key={i}>
+            <td>{row.row}</td>
+            {row.data.map((data, j) => (
+              <td key={j}>{parseInt(data.toFixed(0))}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
 		</table>
 	);
 }
