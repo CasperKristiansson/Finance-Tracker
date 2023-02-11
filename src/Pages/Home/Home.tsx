@@ -97,7 +97,7 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 			month={period.month}
 		/>
 		<TransactionTable
-			transactions={TransactionsSort(FilterTransactionsMonth(transactions, period.month))}
+			transactions={TransactionsSort(FilterTransactionsMonth(transactions, period.month)).reverse()}
 		/>
 		</>
 	);
