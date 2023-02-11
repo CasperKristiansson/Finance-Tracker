@@ -1,3 +1,4 @@
+import React from "react";
 import { Grid, Segment } from "semantic-ui-react";
 import BarChart from "../../../graphs/barchart";
 import PieChart from "../../../graphs/piechart";

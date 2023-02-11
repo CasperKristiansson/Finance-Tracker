@@ -1,3 +1,4 @@
+import React from "react";
 import { Grid, Segment } from "semantic-ui-react";
 import PieChart from "../../../graphs/piechart";
 import { FilterTransactionsType, GetCategoriesAmount, GetCategoriesAmountIncomeExpense, GetCategoriesLabels, GetCategoriesLabelsIncomeExpense, Transaction } from "../../../Utils/Transactions";
