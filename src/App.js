@@ -1,35 +1,44 @@
 import './App.css';
 
-import Sidebar from './sidebar/sidebar';
-import Home from './home/home';
-import YearlyReport from './yearlyReport/yearlyReport';
-import TotalReport from './totalReport/totalReport';
-import Accounts from './accounts/accounts';
-import AccountsReport from './accounts/accountsReport';
-import AddTransaction from './transactions/addTransaction';
-import EditTransaction from './transactions/editTransaction';
-import EditAccount from './transactions/editAccount';
-import Milestones from './milestones/milestones';
-import FloatingButton from './floatingButton/floatingButton';
-import Download from './download/download';
-import Login from './login/login';
-import Logout from './login/logout';
+import { Sidebar } from './Pages/Sidebar/Sidebar';
+import { Home } from './Pages/Home/Home';
+import { YearlyReport } from './Pages/YearlyReport/YearlyReport';
+import { TotalReport } from './Pages/TotalReport/TotalReport';
+import { Accounts } from './Pages/Accounts/Accounts';
+import { AccountsReport } from './Pages/AccountsReport/AccountsReport';
+import { AddTransaction } from './Pages/ManageTransaction/AddTransaction';
+import { EditTransaction } from './Pages/ManageTransaction/EditTransaction';
+import { EditAccount } from './Pages/ManageTransaction/EditAccount';
+import { Milestones } from './Pages/Milestones/Milestones';
+import { FloatingButton } from'./Pages/FloatingButton/FloatingButton';
+import { Download } from './Pages/Download/Download';
+import { Login } from './Pages/Login/Login';
+import { Logout } from './Pages/Logout/Logout';
+import { TransactionView } from './Pages/TransactionView/TransactionView';
 
 import { Route, Routes, BrowserRouter } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 
-import { } from './firebase.js';
+import './firebase.ts';
 
 import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
-import TransactionsView from './transactionsView/transactionsView';
 
+import { createUseStyles } from "react-jss";
+
+const useStyles = createUseStyles({
+  mainSection: {
+		marginLeft: 270,
+    padding: "20px 25px 25px 25px",
+	},
+});
 
 function App() {
+  const classes = useStyles();
+
   const [loggedIn, setLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [auth, setAuth] = useState(null);
-
 
   useEffect(() => {
     var authVar = getAuth()
@@ -74,7 +83,7 @@ function App() {
         ) : (
           <></>
         )}
-        <div>
+        <div className={classes.mainSection}>
           <Routes>
             {loggedIn && !loading ? (
               <>
@@ -88,8 +97,8 @@ function App() {
               <Route path="/editAccount/*" element={<EditAccount userID={user.uid} />} />
               <Route path="/milestones" element={<Milestones userID={user.uid} />} />
               <Route path="/download" element={<Download userID={user.uid} />} />
-              <Route path="/transactionsView" element={<TransactionsView userID={user.uid} />} />
-              <Route path="/logout" element={<Logout signOut={handleLogOut} />} />
+              <Route path="/transactionsView" element={<TransactionView userID={user.uid} />} />
+              <Route path="/logout" element={<Logout logout={handleLogOut} />} />
 
               <Route path="/login" element={<></>} />
               </>
@@ -113,9 +122,6 @@ function App() {
             )}
           </Routes>
         </div>
-        <br />
-        <br />
-        <br />
       </BrowserRouter>
     </div>
   );
