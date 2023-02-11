@@ -2,7 +2,7 @@ import axios from "axios";
 import { useState } from "react";
 import { createUseStyles } from "react-jss";
 import { useNavigate } from "react-router-dom";
-import { Button, Form, Input, Message, Segment, TextArea } from "semantic-ui-react";
+import { Button, Form, Input, Message, Segment } from "semantic-ui-react";
 import { GetSuccessCode, GetTransactionColors } from "../../Utils/Miscellaneous";
 
 

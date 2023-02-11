@@ -1,6 +1,6 @@
 import axios from "axios";
 import { useEffect, useState } from "react";
-import { ConvertLoans, ConvertTransactions, Loan, Transaction } from "../../Utils/Transactions";
+import { ConvertTransactions, Transaction } from "../../Utils/Transactions";
 import { BalanceOverview } from "./ChildComponents/BalanceOverview";
 import { GraphOverview } from "./ChildComponents/GraphOverview";
 import { Header } from "./ChildComponents/Header";

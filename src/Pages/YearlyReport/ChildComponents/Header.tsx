@@ -1,5 +1,4 @@
 import { createUseStyles } from "react-jss"
-import { Button } from "semantic-ui-react";
 
 const useStyles = createUseStyles({
 	datePicker: {
