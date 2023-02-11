@@ -113,7 +113,6 @@ export const AddTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.El
 							type="date" 
 							value={transaction.Date ? StringifyTimeShort(transaction.Date): new Date().toISOString().slice(0, 10)}
 							onChange={(e) => {
-								console.log(e.target.value)
 								setTransaction({...transaction, Date: new Date(e.target.value)});
 							}}
 							name="date"

@@ -97,8 +97,6 @@ export const EditTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.E
                 const date = new Date();
                 navigate(`/?year=${date.getFullYear()}&month=${date.getMonth()}`);
 			}, 2000);
-
-			console.log(response);
 		}).catch(response => {
 			console.log(response);
 			setIsSubmitting(false);
@@ -148,7 +146,6 @@ export const EditTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.E
                                 type="date" 
                                 value={transaction.Date ? StringifyTimeShort(transaction.Date): new Date().toISOString().slice(0, 10)}
                                 onChange={(e) => {
-                                    console.log(e.target.value)
                                     setTransaction({...transaction, Date: new Date(e.target.value)});
                                 }}
                                 name="date"
