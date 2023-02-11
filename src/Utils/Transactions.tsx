@@ -1,5 +1,5 @@
 import { Milestone, milestones } from "./Data/Milestones";
-import { StringifyTimeShort } from "./Date";
+import { StringifyTimeShort, StringifyTimeShortest } from "./Date";
 
 export interface Transaction {
     Account: string;
@@ -74,6 +74,12 @@ export function TransactionsSortMonth(transactions: Transaction[]): Transaction[
     });
 }
 
+export function TransactionsLoansSortMonth(amounts: Transaction[] | Loan[]): Transaction[] | Loan[] {
+    return amounts.sort((a, b) => {
+        return a.Date.getTime() - b.Date.getTime();
+    });
+}
+
 export interface Loan {
     Amount: number;
     Date: Date;
@@ -141,6 +147,86 @@ export function TotalLiabilities(loans: Loan[]): number {
 
 export function TotalNetWorth(transactions: Transaction[], loans: Loan[]): number {
     return TotalAssets(transactions) - TotalLiabilities(loans);
+}
+
+// Convert Loans to Transactions
+export function ConvertLoansToTransactions(loans: Loan[]): Transaction[] {
+    let transactions: Transaction[] = [];
+
+    for (let i = 0; i < loans.length; i++) {
+        transactions.push({
+            Account: "Loan",
+            Amount: loans[i].Amount,
+            Category: "Loan",
+            Date: loans[i].Date,
+            Note: "",
+            Type: "Expense",
+            ID: loans[i].ID,
+        });
+    }
+
+    return transactions;
+}
+
+
+/**
+ * ? Line Chart Calculations
+ */
+
+function groupValuesMonth(amounts: Transaction[] | Loan[]): { [date: string]: number } {
+    let groupedValues: { [date: string]: number } = {};
+
+    amounts = TransactionsLoansSortMonth(amounts);
+
+    let firstDate: Date = amounts[0].Date;
+    let lastDate: Date = amounts[amounts.length - 1].Date;
+
+    let currentDate: Date = new Date(firstDate.getFullYear(), firstDate.getMonth(), 1);
+
+    while (currentDate.getTime() <= lastDate.getTime()) {
+        groupedValues[StringifyTimeShortest(currentDate)] = 0;
+        currentDate.setMonth(currentDate.getMonth() + 1);
+    }
+
+    if (amounts[0].hasOwnProperty("Account")) {
+        for (let i = 0; i < amounts.length; i++) {
+            if (amounts[i].Type === "Income") groupedValues[StringifyTimeShortest(amounts[i].Date)] += amounts[i].Amount;
+            else if (amounts[i].Type === "Expense") groupedValues[StringifyTimeShortest(amounts[i].Date)] -= amounts[i].Amount;
+        }
+    } else {
+        for (let i = 0; i < amounts.length; i++) {
+            groupedValues[StringifyTimeShortest(amounts[i].Date)] += amounts[i].Amount;
+        }
+    }
+
+    return groupedValues;
+}
+
+function groupValuesMonthIterative(amounts: Transaction[] | Loan[]): { [date: string]: number } {
+    let groupedValues: { [date: string]: number } = groupValuesMonth(amounts);
+
+    let previousValue: number = 0;
+    for (let date in groupedValues) {
+        groupedValues[date] += previousValue;
+        previousValue = groupedValues[date];
+    }
+
+    return groupedValues;
+}
+
+export function GetLineChartValues(amounts: Transaction[] | Loan[]): [string[], number[]] {
+    let groupedValues: { [date: string]: number } = groupValuesMonthIterative(amounts);
+
+    let dates: string[] = [];
+    let values: number[] = [];
+
+    for (let date in groupedValues) {
+        dates.push(date);
+        values.push(groupedValues[date]);
+    }
+
+    return [dates, values];
+    
 }
 
 /**
@@ -369,8 +455,6 @@ export function GetAccountsBalanceGraph(transactions: Transaction[]): AccountGra
 /**
  * ? Milestones
  */
-
-
 
 export function GetMilestones(transactions: Transaction[]): Milestone[] {
     transactions = TransactionsSortMonth(transactions);

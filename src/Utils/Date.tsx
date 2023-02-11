@@ -50,3 +50,10 @@ export function StringifyTimeShort(date: Date): string {
 
 	return (date.getFullYear() + "-" + month + "-" + day);
 };
+
+export function StringifyTimeShortest(date: Date): string {
+	let month: string = (date.getMonth() + 1).toString();
+	if (month.length < 2) month = "0" + month;
+	
+	return (date.getFullYear() + "-" + month);
+};
