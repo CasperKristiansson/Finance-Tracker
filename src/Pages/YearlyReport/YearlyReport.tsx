@@ -17,7 +17,6 @@ export const YearlyReport: React.FC<{ userID: string }> = ({ userID }): JSX.Elem
 		params.append('userID', userID);
 		  
 		axios.post('https://pktraffic.com/api/transactions.php', params).then(response => {
-			console.log(response.data);
 			setTransactions(ConvertTransactions(response.data.transactions));
 		}).catch(response => {
 			console.log(response);

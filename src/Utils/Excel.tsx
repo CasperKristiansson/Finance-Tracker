@@ -108,7 +108,6 @@ export function ExcelUpload(userID: string): Promise<ExcelUploadData> {
   
 		  axios.post('https://pktraffic.com/api/addTransactions.php', params)
 			.then(response => {
-			  console.log(response.data);
 			  if (response.data.success) {
 					result.messageElement = (
 						<>

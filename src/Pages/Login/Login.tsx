@@ -32,7 +32,7 @@ export const Login: React.FC<{ auth: Auth, setUser: any }> = ({ auth, setUser })
 			navigate('/')
 		})
 		.catch((error) => {
-				console.log(error);
+			console.log(error);
 		});
   };
 
