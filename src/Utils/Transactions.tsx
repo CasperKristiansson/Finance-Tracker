@@ -320,6 +320,33 @@ export function GetMonthOfYearAmount(transactions: Transaction[], type: string, 
 	return result;
 }
 
+export function ExpenseIncomeBarChart(transactions: Transaction[]): [string[], number[], number[]] {
+    let years: number[] = [];
+    let income: number[] = [];
+    let expenses: number[] = [];
+
+    for (let i = 0; i < transactions.length; i++) {
+        let year: number = transactions[i].Date.getFullYear();
+        if (!years.includes(year)) years.push(year);
+    }
+
+    years.sort((a, b) => a - b);
+
+    for (let i = 0; i < years.length; i++) {
+        income.push(0);
+        expenses.push(0);
+    }
+
+    for (let i = 0; i < transactions.length; i++) {
+        let year: number = transactions[i].Date.getFullYear();
+        if (transactions[i].Type === "Income") income[years.indexOf(year)] += transactions[i].Amount;
+        else if (transactions[i].Type === "Expense") expenses[years.indexOf(year)] += transactions[i].Amount;
+    }
+
+
+    return [years.map(year => year.toString()), income, expenses];
+}
+
 
 /**
  * ? Accounts
