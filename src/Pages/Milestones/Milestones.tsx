@@ -4,7 +4,7 @@ import { Divider, Grid, Header, Segment } from "semantic-ui-react";
 import { Milestone } from "../../Utils/Data/Milestones";
 import { StringifyTimeShort } from "../../Utils/Date";
 import { FormatNumber } from "../../Utils/Miscellaneous";
-import { ConvertLoans, ConvertTransactions, GetMilestones, Loan, Transaction } from "../../Utils/Transactions";
+import { ConvertLoans, ConvertLoansToTransactions, ConvertTransactions, GetMilestones, Loan, Transaction } from "../../Utils/Transactions";
 
 
 export const Milestones: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
@@ -31,19 +31,8 @@ export const Milestones: React.FC<{ userID: string }> = ({ userID }): JSX.Elemen
 
 	useEffect(() => {
 		if (transactions.length > 0 && loans.length > 0) {
-			loans.forEach((loan) => {
-				transactions.push({
-					Account: "Loan",
-					Amount: loan.Amount,
-					Category: "Loan",
-					Date: loan.Date,
-					Note: "Loan",
-					Type: "Expense",
-					ID: loan.ID
-				})
-			});
-
-			setMilestones(GetMilestones(transactions))
+			const loanTransactions: Transaction[] = ConvertLoansToTransactions(loans);
+			setMilestones(GetMilestones(transactions.concat(loanTransactions)))
 		}
 	}, [transactions, loans]);
 
