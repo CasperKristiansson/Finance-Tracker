@@ -3,7 +3,7 @@ import { createUseStyles } from "react-jss";
 import { useNavigate } from "react-router-dom";
 import { Icon } from "semantic-ui-react";
 import { StringifyTimeShort } from "../Utils/Date";
-import { GetTransactionColor } from "../Utils/Miscellaneous";
+import { GetTransactionColorType } from "../Utils/Miscellaneous";
 import { Transaction } from "../Utils/Transactions";
 
 const useStyles = createUseStyles({
@@ -35,7 +35,7 @@ export const TransactionTable: React.FC<{ transactions: Transaction[] }> = ({ tr
 				<tbody>
 					{transactions.map((row, index) => {
 						return (
-							<tr className={GetTransactionColor(row.Type)} key={index}>
+							<tr className={GetTransactionColorType(row.Type)} key={index}>
 								<td>
 									<button onClick={() => navigate(`/editTransaction/${row.ID}`)} className={classes.pointerOnHover}>
 										<Icon name="edit" color={"grey"} />

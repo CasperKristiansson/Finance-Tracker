@@ -1,5 +1,5 @@
-export const MonthsShort: string[] = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-export const MonthsLong: string[] = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"];
+export const MonthsShort: string[] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export const MonthsLong: string[] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 export interface MonthYear {
 	month: number;

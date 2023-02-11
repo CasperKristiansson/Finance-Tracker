@@ -6,7 +6,7 @@ import { YearlyReport } from './Pages/YearlyReport/YearlyReport';
 import { TotalReport } from './Pages/TotalReport/TotalReport';
 import { Accounts } from './Pages/Accounts/Accounts';
 import { AccountsReport } from './Pages/AccountsReport/AccountsReport';
-import AddTransaction from './transactions/addTransaction';
+import { AddTransaction } from './Pages/ManageTransaction/AddTransaction';
 import EditTransaction from './transactions/editTransaction';
 import EditAccount from './transactions/editAccount';
 import { Milestones } from './Pages/Milestones/Milestones';

@@ -3,7 +3,7 @@ import { createUseStyles } from "react-jss";
 import { Grid, Segment, Button } from "semantic-ui-react";
 import { useNavigate } from "react-router-dom";
 
-import { MonthsShort, MonthYear } from "../../../Utils/Date";
+import { MonthsLong, MonthsShort, MonthYear } from "../../../Utils/Date";
 import { ExcelUpload, ExcelUploadData } from "../../../Utils/Excel";
 import PieChart from "../../../graphs/piechart";
 import BarChart from "../../../graphs/barchart";
@@ -74,7 +74,7 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 									<BarChart
 										title={period.year}
 										data={[
-											MonthsShort,
+											MonthsLong,
 											transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Income") : [],
 											transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Expense") : [],
 										]}

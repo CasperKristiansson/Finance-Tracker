@@ -184,6 +184,34 @@ export function FilterTransactionsType(transactions: Transaction[], type: string
     return filteredTransactions;
 }
 
+export interface DropDown {
+    key: string;
+    text: string;
+    value: string;
+}
+
+export function GetCategoriesMapping(categories: any, type: string): DropDown[] {
+	return categories
+		.filter((category: { Type: string; }) => category.Type === type)
+		.map((category: { Category: any; }) => {
+			return {
+				key: category.Category,
+				text: category.Category,
+				value: category.Category,
+			};
+		});
+}
+
+export function GetAccountsMapping(accounts: any): DropDown[] {
+	return accounts.map((account: { Account: any; }) => {
+		return {
+			key: account.Account,
+			text: account.Account,
+			value: account.Account,
+		};
+	});
+}
+
 
 /**
  * ? Line Chart Calculations
