@@ -168,6 +168,17 @@ export function ConvertLoansToTransactions(loans: Loan[]): Transaction[] {
     return transactions;
 }
 
+// Create a function that returns the transactions types specified
+export function FilterTransactionsType(transactions: Transaction[], type: string): Transaction[] {
+    let filteredTransactions: Transaction[] = [];
+
+    filteredTransactions = transactions.filter((transaction) => {
+        return transaction.Type === type;
+    });
+
+    return filteredTransactions;
+}
+
 
 /**
  * ? Line Chart Calculations
@@ -237,16 +248,14 @@ export function GetLineChartValues(amounts: Transaction[] | Loan[]): [string[], 
  * This function returns the categories of the transactions based on the month and type
  * @Returns an array of strings [category (percentage), category (percentage), ...]
  */
-export function GetCategoriesLabels(transactions: Transaction[], type: string): string[] {
+export function GetCategoriesLabels(transactions: Transaction[]): string[] {
 	let categories: { [category: string]: number } = {};
 
 	for (let i = 0; i < transactions.length; i++) {           
-        if (transactions[i].Type === type) {
-            if (!categories[transactions[i].Category]) {
-                categories[transactions[i].Category] = transactions[i].Amount;
-            } else {
-                categories[transactions[i].Category] += transactions[i].Amount;
-            }
+        if (!categories[transactions[i].Category]) {
+            categories[transactions[i].Category] = transactions[i].Amount;
+        } else {
+            categories[transactions[i].Category] += transactions[i].Amount;
         }
 	}
 
@@ -266,16 +275,14 @@ export function GetCategoriesLabels(transactions: Transaction[], type: string): 
 	return categoriesName;
 }
 
-export function GetCategoriesAmount(transactions: Transaction[], type: string): number[] {
+export function GetCategoriesAmount(transactions: Transaction[]): number[] {
     let categories: { [category: string]: number } = {};
 
 	for (let i = 0; i < transactions.length; i++) {
-        if (transactions[i].Type === type) {
-            if (!categories[transactions[i].Category]) {
-                categories[transactions[i].Category] = transactions[i].Amount;
-            } else {
-                categories[transactions[i].Category] += transactions[i].Amount;
-            }
+        if (!categories[transactions[i].Category]) {
+            categories[transactions[i].Category] = transactions[i].Amount;
+        } else {
+            categories[transactions[i].Category] += transactions[i].Amount;
         }
 	}
 
@@ -288,6 +295,29 @@ export function GetCategoriesAmount(transactions: Transaction[], type: string): 
     if (result.length === 0) result.push(1);
 
 	return result;
+}
+
+export function GetCategoriesAmountIncomeExpense(transactions: Transaction[]): [number, number] {
+    let income: number = 0;
+    let expense: number = 0;
+
+    for (let i = 0; i < transactions.length; i++) {
+        if (transactions[i].Type === "Income") income += transactions[i].Amount;
+        else if (transactions[i].Type === "Expense") expense += transactions[i].Amount;
+    }
+
+    return [income, expense];
+}
+
+export function GetCategoriesLabelsIncomeExpense(transactions: Transaction[]): [string, string] {
+    let incomeExpense: [number, number] = GetCategoriesAmountIncomeExpense(transactions);
+
+    let total: number = incomeExpense[0] + incomeExpense[1];
+
+    let incomeLabel: string = "Income (" + ( incomeExpense[0] / total * 100).toFixed(2) + "%)";
+    let expenseLabel: string = "Expense (" + (incomeExpense[1] / total * 100).toFixed(2) + "%)";
+
+    return [incomeLabel, expenseLabel];
 }
 
 

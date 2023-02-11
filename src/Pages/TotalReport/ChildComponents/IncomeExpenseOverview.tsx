@@ -1,6 +1,7 @@
 import { Grid, Segment } from "semantic-ui-react";
 import BarChart from "../../../graphs/barchart";
-import { ExpenseIncomeBarChart, Loan, Transaction } from "../../../Utils/Transactions";
+import PieChart from "../../../graphs/piechart";
+import { ExpenseIncomeBarChart, FilterTransactionsType, GetCategoriesAmount, GetCategoriesAmountIncomeExpense, GetCategoriesLabels, GetCategoriesLabelsIncomeExpense, Loan, Transaction } from "../../../Utils/Transactions";
 
 
 export const IncomeExpenseOverview: React.FC<{transactions: Transaction[], loans: Loan[]}> = ({ transactions, loans }): JSX.Element => {
@@ -17,14 +18,14 @@ export const IncomeExpenseOverview: React.FC<{transactions: Transaction[], loans
 				</Segment>
 			</Grid.Column>
 		</Grid>
-		{/* <Grid columns={3}>
+		<Grid columns={3}>
 			<Grid.Row stretched>
 				<Grid.Column>
 					<Segment>
 						<PieChart
 							title={`Income`}
-							labels={getCategories(transactions, "Income")}
-							data={getTransactionAmounts(transactions, "Income")}
+							labels={GetCategoriesLabels(FilterTransactionsType(transactions, "Income"))}
+							data={GetCategoriesAmount(FilterTransactionsType(transactions, "Income"))}
 						/>
 					</Segment>
 				</Grid.Column>
@@ -32,13 +33,8 @@ export const IncomeExpenseOverview: React.FC<{transactions: Transaction[], loans
 					<Segment>
 						<PieChart
 							title={`Income / Expense`}
-							labels={[`Income ${getPercent(transactions, "Income")}`,
-								`Expense ${getPercent(transactions, "Expense")}`
-							]}
-							data={[
-								getTotal(transactions, "Income"),
-								getTotal(transactions, "Expense")
-							]}
+							labels={GetCategoriesLabelsIncomeExpense(transactions)}
+							data={GetCategoriesAmountIncomeExpense(transactions)}
 						/>
 					</Segment>
 				</Grid.Column>
@@ -46,13 +42,13 @@ export const IncomeExpenseOverview: React.FC<{transactions: Transaction[], loans
 					<Segment>
 						<PieChart
 							title={`Expense`}
-							labels={getCategories(transactions, "Expense")}
-							data={getTransactionAmounts(transactions, "Expense")}
+							labels={GetCategoriesLabels(FilterTransactionsType(transactions, "Expense"))}
+							data={GetCategoriesAmount(FilterTransactionsType(transactions, "Expense"))}
 						/>
 					</Segment>
 				</Grid.Column>
 			</Grid.Row>
-		</Grid> */}
+		</Grid>
 		</>
 	);
 }
