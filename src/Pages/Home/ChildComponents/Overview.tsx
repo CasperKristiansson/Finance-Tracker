@@ -73,9 +73,11 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 								<Segment>
 									<BarChart
 										title={period.year}
-										dataIncome={GetMonthOfYearAmount(transactions, "Income")}
-										dataExpense={GetMonthOfYearAmount(transactions, "Expense")}	
-										labels={MonthsShort}
+										data={[
+											MonthsShort,
+											transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Income") : [],
+											transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Expense") : [],
+										]}
 									/>
 								</Segment>
 							</Grid.Column>
