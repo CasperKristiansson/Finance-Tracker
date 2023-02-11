@@ -3,12 +3,12 @@ import { Form, Select, Container } from 'semantic-ui-react'
 import { sortOptions, transactionTypes } from '../../../Utils/Data/Table';
 import { TransactionCategory, TransactionTableOptions } from '../../../Utils/Miscellaneous';
 
-export const Options: React.FC<{ options: TransactionTableOptions, setOptions: any, handleNewSearch: any, transactionCategories: TransactionCategory[] }> = ({ options, setOptions, handleNewSearch, transactionCategories }): JSX.Element => {
+export const Options: React.FC<{ options: TransactionTableOptions, handleOptionsChange: any, transactionCategories: TransactionCategory[] }> = ({ options, handleOptionsChange, transactionCategories }): JSX.Element => {
 	const [disTransactionCategories, setDisTransactionCategories] = useState([{ key: '', text: 'All', value: '' }]);
 
 	const handleChange = (_event: any, { name, value }: any) => {
-		if (name === 'transactionType') setOptions({ ...options, transactionCategory: '', [name]: value });
-		else setOptions({ ...options, [name]: value });
+		if (name === 'transactionType') handleOptionsChange({ ...options, transactionCategory: '', [name]: value });
+		else handleOptionsChange({ ...options, [name]: value });
 	}
 
 	useEffect(() => {	

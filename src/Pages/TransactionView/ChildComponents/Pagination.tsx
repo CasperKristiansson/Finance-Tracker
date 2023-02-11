@@ -1,7 +1,6 @@
 import React from "react";
 import ReactPaginate from 'react-paginate';
 import { PaginationState } from "../../../Utils/Miscellaneous";
-// import jss
 import { createUseStyles } from "react-jss";
 
 const useStyles = createUseStyles({
@@ -30,6 +29,9 @@ const useStyles = createUseStyles({
 		'& li': {
 			display: "inline-block",
 		},
+		'& li:hover': {
+			cursor: "pointer",
+		},
 		'& li:first-child': {
 			position: "absolute",
 			left: "295px",
@@ -41,6 +43,10 @@ const useStyles = createUseStyles({
 		'& li.selected': {
 			backgroundColor: "#64C3FE",
 			borderRadius: "5px",
+		},
+		'& li.disabled': {
+			backgroundColor: "#ddd !important",
+			pointerEvents: "none",
 		},
 		'& li.selected a': {
 			color: "white",
@@ -61,7 +67,6 @@ const useStyles = createUseStyles({
 		fontSize: 16,	
 	},
 });
-
 
 export const Pagination: React.FC<{state: PaginationState, handlePageClick: any}> = ({state, handlePageClick}): JSX.Element => {
 	const classes = useStyles();
