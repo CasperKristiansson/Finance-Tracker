@@ -14,7 +14,7 @@ export function FormatNumber(number: number, decimal: number=0): string {
 }
 
 export interface TransactionTableOptions {
-	sort: string;
+	transactionSort: string;
 	transactionType: string;
 	transactionCategory: string;
 	startDate: string;
@@ -44,10 +44,4 @@ export function ConvertTransactionCategory(transactionCategory: any[]): Transact
 		});
 	}
 	return result;
-}
-
-export interface dropDownStruct {
-	key: string,
-	text: string,
-	value: string
 }

@@ -15,8 +15,9 @@ export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.E
   const [newSearch, setNewSearch] = useState(false);
 	const [transactionCategories, setTransactionCategories] = useState([] as TransactionCategory[]);
 	const [options, setOptions] = useState({
-		sort: "date",
+		transactionSort: "date",
 		transactionType: "",
+		transactionCategory: "",
 		startDate: "",
 		endDate: "",
 	} as TransactionTableOptions);
@@ -35,7 +36,7 @@ export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.E
 		params.append('userID', userID)
 		params.append('offset', paginationState.itemOffset.toString());
 		params.append('limit', paginationState.itemsPerPage.toString());
-		params.append('sort', options.sort);
+		params.append('sort', options.transactionSort);
 		params.append('transactionType', options.transactionType);
 		params.append('transactionCategory', options.transactionCategory);
 		params.append('startDate', options.startDate);
