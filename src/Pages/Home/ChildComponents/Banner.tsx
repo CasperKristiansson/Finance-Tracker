@@ -119,13 +119,13 @@ export const Banner: React.FC<{ transactions: Transaction[], month: number }> = 
 			<Segment style={{height: "200px"}}>
 				<div className={`${classes.waveWrapper} ${classes.waveAnimation}`}>
 					<div className={`${classes.waveWrapperInner} ${classes.bgTop}`}>
-						<div className={`${classes.wave} ${classes.waveTop}`} style={{backgroundImage: "url('http://front-end-noobs.com/jecko/img/wave-top.png')"}}></div>
+						<div className={`${classes.wave} ${classes.waveTop}`} style={{backgroundImage: "url('https://front-end-noobs.com/jecko/img/wave-top.png')"}}></div>
 					</div>
 					<div className={`${classes.waveWrapperInner} ${classes.bgMiddle}`}>
-						<div className={`${classes.wave} ${classes.waveMiddle}`} style={{backgroundImage: "url('http://front-end-noobs.com/jecko/img/wave-mid.png')"}}></div>
+						<div className={`${classes.wave} ${classes.waveMiddle}`} style={{backgroundImage: "url('https://front-end-noobs.com/jecko/img/wave-mid.png')"}}></div>
 					</div>
 					<div className={`${classes.waveWrapperInner} ${classes.bgBottom}`}>
-						<div className={`${classes.wave} ${classes.waveBottom}`} style={{backgroundImage: "url('http://front-end-noobs.com/jecko/img/wave-bot.png')"}}></div>
+						<div className={`${classes.wave} ${classes.waveBottom}`} style={{backgroundImage: "url('https://front-end-noobs.com/jecko/img/wave-bot.png')"}}></div>
 					</div>
 				</div>
 				<div className={classes.homeIncomeLabel}>
