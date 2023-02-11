@@ -6,7 +6,21 @@ import { ConvertTransactions, DropDown, GetAccountsMapping, GetCategoriesMapping
 import { Button, Form, Segment, Input, Radio, TextArea, Dropdown, Message } from 'semantic-ui-react'
 import { StringifyTime, StringifyTimeShort } from "../../Utils/Date";
 
+
+const useStyles = createUseStyles({
+	wrapper: {
+		width: "50%",
+		margin: "auto",
+	},
+	datePicker: {
+		width: 200.,
+		margin: "auto",
+	}
+});
+
 export const AddTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
+	const classes = useStyles();
+
 	const [transaction, setTransaction] = useState({Type: "Income", Date: new Date()} as Transaction);
 
 	const [incomeCategories, setIncomeCategories] = useState([] as DropDown[]);
@@ -59,7 +73,7 @@ export const AddTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.El
 	return (
 		<>
 		<h1>Add New Transaction</h1>
-		<div className="transaction-form">
+		<div className={classes.wrapper} >
 		<Segment className={`ui ${GetTransactionColors(transaction.Type)}`}>
 			<Form className={GetSuccessCode(successSubmitting, isSubmitting)}>
 				<Form.Field>
@@ -94,7 +108,7 @@ export const AddTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.El
 
 				<Form.Field>
 					<label>Date</label>
-					<div  className="date-picker-form">
+					<div  className={classes.datePicker}>
 						<input
 							type="date" 
 							value={transaction.Date ? StringifyTimeShort(transaction.Date): new Date().toISOString().slice(0, 10)}

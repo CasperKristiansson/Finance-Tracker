@@ -2,8 +2,6 @@ import React, {useEffect, useState} from "react";
 import { Button, Form, Input, Segment, TextArea, Message } from 'semantic-ui-react'
 import { useNavigate } from "react-router-dom";
 import axios from 'axios';
-import './transaction.css'
-
 
 const EditAccount = (props) => {
 	const [transactionType, setTransactionType] = useState("Income");
