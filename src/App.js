@@ -27,9 +27,8 @@ import { createUseStyles } from "react-jss";
 
 const useStyles = createUseStyles({
   mainSection: {
-		paddingTop: 20,
 		marginLeft: 270,
-		padding: "100px 25px",
+    padding: "20px 25px 25px 25px",
 	},
 });
 
@@ -123,9 +122,6 @@ function App() {
             )}
           </Routes>
         </div>
-        <br />
-        <br />
-        <br />
       </BrowserRouter>
     </div>
   );
