@@ -8,7 +8,7 @@ import { Accounts } from './Pages/Accounts/Accounts';
 import { AccountsReport } from './Pages/AccountsReport/AccountsReport';
 import { AddTransaction } from './Pages/ManageTransaction/AddTransaction';
 import { EditTransaction } from './Pages/ManageTransaction/EditTransaction';
-import EditAccount from './transactions/editAccount';
+import { EditAccount } from './Pages/ManageTransaction/EditAccount';
 import { Milestones } from './Pages/Milestones/Milestones';
 import { FloatingButton } from'./Pages/FloatingButton/FloatingButton';
 import { Download } from './Pages/Download/Download';
