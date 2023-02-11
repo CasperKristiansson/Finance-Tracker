@@ -1,3 +1,4 @@
+import { BarChartProps } from "../Component/Barchart";
 import { Milestone, milestones } from "./Data/Milestones";
 import { MonthsLong, MonthsShort, StringifyTimeShort, StringifyTimeShortest } from "./Date";
 
@@ -382,7 +383,7 @@ export function GetMonthOfYearAmount(transactions: Transaction[], type: string, 
 	return result;
 }
 
-export function ExpenseIncomeBarChart(transactions: Transaction[]): [string[], number[], number[]] {
+export function ExpenseIncomeBarChart(transactions: Transaction[]): BarChartProps {
     let years: number[] = [];
     let income: number[] = [];
     let expenses: number[] = [];
@@ -405,8 +406,11 @@ export function ExpenseIncomeBarChart(transactions: Transaction[]): [string[], n
         else if (transactions[i].Type === "Expense") expenses[years.indexOf(year)] += transactions[i].Amount;
     }
 
-
-    return [years.map(year => year.toString()), income, expenses];
+    return {
+        labels: years.map(year => year.toString()),
+        incomeData: income,
+        expenseData: expenses
+    }
 }
 
 
