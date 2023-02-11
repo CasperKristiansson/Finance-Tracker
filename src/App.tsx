@@ -34,7 +34,7 @@ const useStyles = createUseStyles({
   },
 });
 
-export const App: React.FC<{ }> = ({ }): JSX.Element => {
+export const App: React.FC<{}> = (): JSX.Element => {
   const classes = useStyles();
 
   const [loggedIn, setLoggedIn] = useState(false);
