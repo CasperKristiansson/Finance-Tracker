@@ -233,8 +233,8 @@ function groupValuesMonthIterative(amounts: Transaction[] | Loan[]): { [date: st
 export function GetLineChartValues(amounts: Transaction[] | Loan[]): [string[], number[]] {
     let groupedValues: { [date: string]: number } = groupValuesMonthIterative(amounts);
 
-    let dates: string[] = [];
-    let values: number[] = [];
+    let dates: string[] = [""];
+    let values: number[] = [0];
 
     for (let date in groupedValues) {
         dates.push(date);
@@ -242,7 +242,6 @@ export function GetLineChartValues(amounts: Transaction[] | Loan[]): [string[], 
     }
 
     return [dates, values];
-    
 }
 
 /**

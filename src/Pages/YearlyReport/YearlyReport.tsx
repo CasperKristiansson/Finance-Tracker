@@ -2,6 +2,7 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { ConvertLoans, ConvertTransactions, Loan, Transaction } from "../../Utils/Transactions";
 import { BalanceOverview } from "./ChildComponents/BalanceOverview";
+import { GraphOverview } from "./ChildComponents/GraphOverview";
 import { Header } from "./ChildComponents/Header";
 
 export const YearlyReport: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
@@ -25,6 +26,7 @@ export const YearlyReport: React.FC<{ userID: string }> = ({ userID }): JSX.Elem
 		<>
 		<Header handleYearChange={(e: any) => setYear(e.target.value)} />
 		<BalanceOverview transactions={transactions} />
+		<GraphOverview transactions={transactions} currentYear={year} />
 		</>
 	);
 }
