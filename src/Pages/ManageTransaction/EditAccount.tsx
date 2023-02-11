@@ -1,11 +1,24 @@
 import axios from "axios";
 import { useState } from "react";
+import { createUseStyles } from "react-jss";
 import { useNavigate } from "react-router-dom";
 import { Button, Form, Input, Message, Segment, TextArea } from "semantic-ui-react";
 import { GetSuccessCode, GetTransactionColors } from "../../Utils/Miscellaneous";
 
 
+const useStyles = createUseStyles({
+	wrapper: {
+		width: "50%",
+		margin: "auto",
+	},
+	datePicker: {
+		width: 200.,
+		margin: "auto",
+	}
+});
+
 export const EditAccount: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
+	const classes = useStyles();
 	let navigate = useNavigate();
 
 	const [transactionDate, setTransactionDate] = useState(new Date().toISOString().slice(0, 10));
@@ -77,12 +90,12 @@ export const EditAccount: React.FC<{ userID: string }> = ({ userID }): JSX.Eleme
 	return (
 		<>
 		<h1>Add New Transaction</h1>
-		<div className="transaction-form">
+		<div className={classes.wrapper}>
 		<Segment className={`ui ${GetTransactionColors(transactionType)}`}>
 			<Form className={GetSuccessCode(successSubmitting, isSubmitting)}>
 				<Form.Field>
 					<label>Date</label>
-					<div  className="date-picker-form">
+					<div className={classes.datePicker} >
 						<input
 							type="date" 
 							value={transactionDate}
