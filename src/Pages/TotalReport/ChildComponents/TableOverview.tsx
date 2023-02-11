@@ -18,7 +18,7 @@ export const TableOverview: React.FC<{transactions: Transaction[]}> = ({ transac
 			<TableMonth 
 				data={transactions.length > 1 ? GetTableYears(transactions, "Income") : [] }
 				color={"green"}
-				type={""}
+				type={"positive"}
 			/>
 		</Segment>
 		<Segment>
@@ -26,7 +26,7 @@ export const TableOverview: React.FC<{transactions: Transaction[]}> = ({ transac
 			<TableMonth
 				data={transactions.length > 1 ? GetTableYears(transactions, "Expense") : []}
 				color={"red"}
-				type={""}
+				type={"negative"}
 			/>
 		</Segment>
 		<Segment>
@@ -34,7 +34,7 @@ export const TableOverview: React.FC<{transactions: Transaction[]}> = ({ transac
 			<TableCustom
 				data={transactions.length > 1 ? GetTableCategories(transactions, "Income") : {columns: [], rows: []}}
 				color={"green"}
-				type={""}
+				type={"positive"}
 			/>
 		</Segment>
 		<Segment>
@@ -42,7 +42,7 @@ export const TableOverview: React.FC<{transactions: Transaction[]}> = ({ transac
 			<TableCustom
 				data={transactions.length > 1 ? GetTableCategories(transactions, "Expense") : {columns: [], rows: []}}
 				color={"red"}
-				type={""}
+				type={"negative"}
 			/>
 		</Segment>
 		</>
