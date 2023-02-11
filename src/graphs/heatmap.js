@@ -1,7 +1,11 @@
-import React from "react";
+import React, {useEffect} from "react";
 import Chart from 'react-apexcharts'
 
 const Heatmap = (props) => {
+  useEffect(() => {
+    console.log(props.data)
+  }, [props.data])
+
 	var options = {
 		chart: {
 			height: 350,
@@ -39,7 +43,7 @@ const Heatmap = (props) => {
     <>
 		<div id="chart">
       <h2>{props.title}</h2>
-      <Chart series={props.data} type="heatmap" options={options} height={350} />
+      <Chart type="heatmap" series={props.data} options={options} height={350} />
 		</div>
     </>
   );

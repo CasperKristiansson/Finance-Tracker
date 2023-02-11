@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { ConvertLoans, ConvertTransactions, Loan, Transaction } from "../../Utils/Transactions";
 import { BalanceOverview } from "./ChildComponents/BalanceOverview";
 import { GraphOverview } from "./ChildComponents/GraphOverview";
+import { HeatMapOverview } from "./ChildComponents/HeatMapOverview";
 import { IncomeExpenseOverview } from "./ChildComponents/IncomeExpenseOverview";
 
 export const TotalReport: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
@@ -34,6 +35,7 @@ export const TotalReport: React.FC<{ userID: string }> = ({ userID }): JSX.Eleme
 		<BalanceOverview transactions={transactions} loans={loans} />
 		<GraphOverview transactions={transactions} loans={loans} />
 		<IncomeExpenseOverview transactions={transactions} loans={loans} />
+		<HeatMapOverview transactions={transactions} />
 		</>
 	);
 }
