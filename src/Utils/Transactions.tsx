@@ -68,6 +68,12 @@ export function FilterTransactionsMonth(transactions: Transaction[], month: numb
     return filteredTransactions;
 }
 
+export function TransactionsSortMonth(transactions: Transaction[]): Transaction[] {
+    return transactions.sort((a, b) => {
+        return a.Date.getTime() - b.Date.getTime();
+    });
+}
+
 export interface Loan {
     Amount: number;
     Date: Date;
@@ -289,9 +295,7 @@ export interface AccountGraph {
 export function GetAccountsBalanceGraph(transactions: Transaction[]): AccountGraph[] {
     let accounts: { [account: string]: AccountGraph } = {};
 
-	transactions.sort((a, b) => {
-		return a.Date.getTime() - b.Date.getTime();
-	});
+	transactions = TransactionsSortMonth(transactions);
 
 	transactions.forEach(transaction => {
 		if (transaction.Type === "Transfer-Out") {
@@ -369,9 +373,7 @@ export function GetAccountsBalanceGraph(transactions: Transaction[]): AccountGra
 
 
 export function GetMilestones(transactions: Transaction[]): Milestone[] {
-    transactions.sort((a, b) => {
-		return a.Date.getTime() - b.Date.getTime();
-	});
+    transactions = TransactionsSortMonth(transactions);
 
     let milestonesResult: Milestone[] = milestones;
 

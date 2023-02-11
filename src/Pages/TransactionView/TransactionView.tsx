@@ -11,8 +11,7 @@ import { TransactionTable } from "../../Component/TransactionTable";;
 
 
 export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
-  const [currentItems, setCurrentItems] = useState([] as Transaction[]);
-  const [newSearch, setNewSearch] = useState(false);
+  	const [currentItems, setCurrentItems] = useState([] as Transaction[]);
 	const [transactionCategories, setTransactionCategories] = useState([] as TransactionCategory[]);
 	const [options, setOptions] = useState({
 		transactionSort: "date",
@@ -30,8 +29,8 @@ export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.E
 		showingItems: 0,
 	} as PaginationState);
 
-	useEffect(() => {    
-    var params = new URLSearchParams();
+	useEffect(() => {
+    	var params = new URLSearchParams();
 
 		params.append('userID', userID)
 		params.append('offset', paginationState.itemOffset.toString());
@@ -43,6 +42,7 @@ export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.E
 		params.append('endDate', options.endDate);
 
 		axios.post("https://pktraffic.com/api/transactionsView.php", params).then(response => {
+			console.log(response.data)
 			setPaginationState({...paginationState,
 				pageCount: Math.ceil(response.data.count / paginationState.itemsPerPage),
 				totalItems: response.data.count,
@@ -53,22 +53,19 @@ export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.E
 			console.log(response);
 		})
     
-  }, [newSearch, options, userID]);
+  	}, [options, userID, paginationState.itemOffset, paginationState.currPage]);
 
 	const handlePageClick = (event: { selected: number; }) => {
 		setPaginationState({...paginationState,
 			currPage: event.selected,
 			itemOffset: (event.selected * paginationState.itemsPerPage) % paginationState.totalItems
 		});
-  };
+  	};
 
-  const handleNewSearch = () => {
-		setNewSearch(!newSearch);
-		setPaginationState({...paginationState,
-			currPage: 0,
-			itemOffset: 0
-		});
-  }
+	const handleOptionsChange = (newOptions: TransactionTableOptions) => {
+		setOptions(newOptions);
+		setPaginationState({...paginationState, currPage: 0, itemOffset: 0});
+	};
 
 	useEffect(() => {
 		var params = new URLSearchParams();
@@ -86,8 +83,7 @@ export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.E
 		<>
 		<Options
 			options={options}
-			setOptions={setOptions}
-			handleNewSearch={handleNewSearch}
+			handleOptionsChange={handleOptionsChange}
 			transactionCategories={transactionCategories}
 		/>
 		<TransactionTable

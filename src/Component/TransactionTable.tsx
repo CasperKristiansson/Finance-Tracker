@@ -33,7 +33,7 @@ export const TransactionTable: React.FC<{ transactions: Transaction[] }> = ({ tr
 					</tr>
 				</thead>
 				<tbody>
-					{transactions.sort((a, b) => (a.Date < b.Date) ? 1 : -1).map((row, index) => {
+					{transactions.map((row, index) => {
 						return (
 							<tr className={GetTransactionColor(row.Type)} key={index}>
 								<td>
