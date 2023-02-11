@@ -7,7 +7,7 @@ import { MonthsShort, MonthYear } from "../../../Utils/Date";
 import { ExcelUpload, ExcelUploadData } from "../../../Utils/Excel";
 import PieChart from "../../../graphs/piechart";
 import BarChart from "../../../graphs/barchart";
-import { GetMonthOfYearAmount, Transaction, GetCategoriesLabels, GetCategoriesAmount, FilterTransactionsMonth } from "../../../Utils/Transactions";
+import { GetMonthOfYearAmount, Transaction, GetCategoriesLabels, GetCategoriesAmount, FilterTransactionsMonth, FilterTransactionsType } from "../../../Utils/Transactions";
 
 const useStyles = createUseStyles({
 	transactionButton: {
@@ -92,8 +92,8 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 							<div className={classes.mainSectionPie}>
 								<PieChart 
 									title={pieChartType}
-									labels={GetCategoriesLabels(FilterTransactionsMonth(transactions, period.month), pieChartType)}
-									data={GetCategoriesAmount(FilterTransactionsMonth(transactions, period.month), pieChartType)}
+									labels={GetCategoriesLabels(FilterTransactionsType(FilterTransactionsMonth(transactions, period.month), pieChartType))}
+									data={GetCategoriesAmount(FilterTransactionsType(FilterTransactionsMonth(transactions, period.month), pieChartType))}
 								/>
 							</div>
 						</Segment>
