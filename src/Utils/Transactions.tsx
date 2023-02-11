@@ -649,3 +649,71 @@ export function GetTableYears(transactions: Transaction[], type: string): TableM
 
     return table;
 }
+
+export interface TableCategoryStruct {
+    columns: string[];
+    rows: TableCategoryRow[];
+}
+
+interface TableCategoryRow {
+    row: string;
+    data: number[];
+}
+
+export function GetTableCategories(transactions: Transaction[], type: string): TableCategoryStruct {
+    transactions = FilterTransactionsType(transactions, type);
+    // Get all unique categories from transactions
+    const categories: string[] = Array.from(new Set(transactions.map(t => t.Category)));
+
+    // Get all unique years from transactions
+    const years: string[] = Array.from(new Set(transactions.map(t => t.Date.getFullYear().toString())));
+
+    // Create table categories struct with columns
+    const tableCategories: TableCategoryStruct = {
+        columns: ['Type', ...years, 'Total', 'Average'],
+        rows: []
+    };
+
+    // For each category, calculate total and average amount for each year
+    categories.forEach(category => {
+        const categoryData: number[] = [];
+        let categoryTotal: number = 0;
+
+        years.forEach(year => {
+            const yearTransactions = transactions.filter(t => t.Category === category && t.Date.getFullYear() === parseInt(year));
+            const yearAmount = yearTransactions.reduce((sum: number, t: Transaction) => sum + t.Amount, 0);
+            categoryData.push(yearAmount);
+            categoryTotal += yearAmount;
+        });
+
+        tableCategories.rows.push({
+            row: category,
+            data: [...categoryData, categoryTotal, categoryTotal / years.length]
+        });
+    });
+
+    // Add total and average rows
+    const totalData: number[] = [];
+    let total: number = 0;
+
+    years.forEach(year => {
+        const yearTransactions = transactions.filter(t => t.Date.getFullYear() === parseInt(year));
+        const yearAmount = yearTransactions.reduce((sum: number, t: Transaction) => sum + t.Amount, 0);
+        totalData.push(yearAmount);
+        total += yearAmount;
+    });
+
+    tableCategories.rows.push({
+        row: 'Total',
+        data: [...totalData, total, total / years.length]
+    });
+
+    tableCategories.rows.push({
+        row: 'Average',
+        data: [...totalData.map(t => t / categories.length), total / categories.length, total / (categories.length * years.length)]
+    });
+
+    console.log(tableCategories)
+
+    return tableCategories;
+}

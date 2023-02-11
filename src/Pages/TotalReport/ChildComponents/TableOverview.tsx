@@ -1,7 +1,8 @@
 import React, { useEffect } from "react";
 import { Segment } from "semantic-ui-react";
+import TableCustom from "../../../graphs/tableCustom";
 import TableMonth from "../../../graphs/tableMonth";
-import { Transaction, GetTableYears } from "../../../Utils/Transactions";
+import { Transaction, GetTableYears, GetTableCategories } from "../../../Utils/Transactions";
 
 export const TableOverview: React.FC<{transactions: Transaction[]}> = ({ transactions }): JSX.Element => {
 	useEffect(() => {
@@ -28,10 +29,10 @@ export const TableOverview: React.FC<{transactions: Transaction[]}> = ({ transac
 				type={""}
 			/>
 		</Segment>
-		{/* <Segment>
+		<Segment>
 			<h1>Income Categories</h1>
 			<TableCustom
-				data={tableCategoriesIncome}
+				data={transactions.length > 1 ? GetTableCategories(transactions, "Income") : {columns: [], rows: []}}
 				color={"green"}
 				type={""}
 			/>
@@ -39,11 +40,11 @@ export const TableOverview: React.FC<{transactions: Transaction[]}> = ({ transac
 		<Segment>
 			<h1>Expense Categories</h1>
 			<TableCustom
-				data={tableCategoriesExpense}
+				data={transactions.length > 1 ? GetTableCategories(transactions, "Expense") : {columns: [], rows: []}}
 				color={"red"}
 				type={""}
 			/>
-		</Segment> */}
+		</Segment>
 		</>
 	);
 }
