@@ -19,14 +19,14 @@ const LineChart = (props) => {
     var borderColorExpense = !props.colors ? "rgba(54, 162, 235, 1)" : props.colors.borderColorExpense;
     var hoverBackgroundColorExpense = !props.colors ? "rgba(54, 162, 235, 1)" : props.colors.hoverBackgroundColorExpense;
     var hoverBorderColorExpense = !props.colors ? "rgba(54, 162, 235, 1)" : props.colors.hoverBorderColorExpense;
-    var borderWidth = !props.colors ? 2 : props.colors.borderWidth;  
+    var borderWidth = !props.colors ? 2 : props.colors.borderWidth;
 
     setData({
-      labels: props.labels,
+      labels: props.data[0],
       datasets: [
         {
           label: props.title,
-          data: props.data,
+          data: props.data[1],
           backgroundColor: backgroundColorExpense,
           borderColor: borderColorExpense,
           hoverBackgroundColor: hoverBackgroundColorExpense,
@@ -35,7 +35,7 @@ const LineChart = (props) => {
         },
       ],
     });
-  }, [props.data, props.colors, props.labels, props.title]);
+  }, [props.data, props.colors, props.title]);
 
   var options = {
     title: {
