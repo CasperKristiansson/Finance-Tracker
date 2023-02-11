@@ -27,11 +27,11 @@ const BarChart = (props) => {
     var borderWidth = 1
 
     setData({
-      labels: props.labels,
+      labels: props.data[0],
       datasets: [
         {
           label: "Expense",
-          data: props.dataExpense,
+          data: props.data[2],
           backgroundColor: backgroundColorIncome,
           borderColor: borderColorIncome,
           hoverBackgroundColor: hoverBackgroundColorIncome,
@@ -40,7 +40,7 @@ const BarChart = (props) => {
         },
         {
           label: "Income",
-          data: props.dataIncome,
+          data: props.data[1],
           backgroundColor: backgroundColorExpense,
           borderColor: borderColorExpense,
           hoverBackgroundColor: hoverBackgroundColorExpense,
