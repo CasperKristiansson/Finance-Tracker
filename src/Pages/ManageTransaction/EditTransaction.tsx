@@ -107,7 +107,7 @@ export const EditTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.E
 
 	return (
 		<>
-		<h1>Add New Transaction</h1>
+		<h1>Edit Transaction</h1>
 		<div className={classes.wrapper} >
             <Segment className={`ui ${GetTransactionColors(transaction.Type)}`}>
                 <Form className={GetSuccessCode(successSubmitting, isSubmitting)}>
