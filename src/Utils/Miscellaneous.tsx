@@ -1,13 +1,43 @@
-export function GetTransactionColor(transactionType: string): string {
+export function GetTransactionColorType(transactionType: string): string {
 	switch(transactionType) {
 		case "Income":
 			return "positive"
 		case "Expense":
 			return "negative"
 		default:
-			return ""
+			return "positive"
 	}
 }
+
+export function GetSuccessCode(successSubmitting: boolean | null, isSubmitting: boolean) {
+	if (isSubmitting) {
+		return "ui loading form";
+	}
+
+	if (successSubmitting) {
+		return "ui success form";
+	}
+
+	if (successSubmitting === false) {
+		return "ui error form";
+	}
+
+	return "";
+}
+
+export function GetTransactionColors(transactionType: string) {
+	switch (transactionType) {
+		case "Income":
+			return "green";
+		case "Expense":
+			return "red";
+		case "Transfer-Out":
+			return "blue";
+		default:
+			return "grey";
+	}
+}
+
 
 export function FormatNumber(number: number, decimal: number=0): string {
 	return number.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: decimal});

@@ -15,7 +15,7 @@ export const GraphOverview: React.FC<{transactions: Transaction[], currentYear: 
 						<BarChart
 							title={`Income / Expense for ${currentYear}`}
 							data={[
-								MonthsShort,
+								MonthsLong,
 								transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Income") : [],
 								transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Expense") : [],
 							]}
