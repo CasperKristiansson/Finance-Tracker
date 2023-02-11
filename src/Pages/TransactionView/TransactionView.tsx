@@ -1,4 +1,3 @@
-import { StringifyTimeShort } from "../../Utils/Date";
 import { ConvertTransactionCategory, PaginationState, TransactionCategory, TransactionTableOptions } from "../../Utils/Miscellaneous";
 import { ConvertTransactions, Transaction } from "../../Utils/Transactions";
 import { Options } from "./ChildComponents/Options";
@@ -42,18 +41,17 @@ export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.E
 		params.append('endDate', options.endDate);
 
 		axios.post("https://pktraffic.com/api/transactionsView.php", params).then(response => {
-			console.log(response.data)
-			setPaginationState({...paginationState,
+			setPaginationState(pagination => ({...pagination,
 				pageCount: Math.ceil(response.data.count / paginationState.itemsPerPage),
 				totalItems: response.data.count,
 				showingItems: response.data.transactions.length
-			});
+			}));
 			setCurrentItems(ConvertTransactions(response.data.transactions));
 		}).catch(response => {
 			console.log(response);
 		})
     
-  	}, [options, userID, paginationState.itemOffset, paginationState.currPage]);
+  	}, [options, userID, paginationState.itemOffset, paginationState.itemsPerPage]);
 
 	const handlePageClick = (event: { selected: number; }) => {
 		setPaginationState({...paginationState,
@@ -72,7 +70,6 @@ export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.E
 		params.append('userID', userID);
 	
 		axios.post("https://pktraffic.com/api/transactionsViewType.php", params).then(response => {
-			console.log(response.data)
 			setTransactionCategories(ConvertTransactionCategory(response.data.types));
 		}).catch(response => {
 			console.log(response);
