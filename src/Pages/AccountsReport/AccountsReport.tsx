@@ -32,8 +32,7 @@ export const AccountsReport: React.FC<{ userID: string }> = ({ userID }): JSX.El
 							<h2>{account.Balance[account.Balance.length - 1].toLocaleString()}</h2>
 							<LineChart
 								title={"Balance"}
-								labels={account.Labels}
-								data={account.Balance}
+								data={[account.Labels, account.Balance]}
 							/>
 						</Segment>
 					</Grid.Column>
