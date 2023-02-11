@@ -4,6 +4,7 @@ import { ConvertLoans, ConvertTransactions, Loan, Transaction } from "../../Util
 import { BalanceOverview } from "./ChildComponents/BalanceOverview";
 import { GraphOverview } from "./ChildComponents/GraphOverview";
 import { Header } from "./ChildComponents/Header";
+import { IncomeExpenseOverview } from "./ChildComponents/IncomeExpenseOverview";
 
 export const YearlyReport: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 	const [transactions, setTransactions] = useState([] as Transaction[]);
@@ -27,6 +28,7 @@ export const YearlyReport: React.FC<{ userID: string }> = ({ userID }): JSX.Elem
 		<Header handleYearChange={(e: any) => setYear(e.target.value)} />
 		<BalanceOverview transactions={transactions} />
 		<GraphOverview transactions={transactions} currentYear={year} />
+		<IncomeExpenseOverview transactions={transactions} />
 		</>
 	);
 }
