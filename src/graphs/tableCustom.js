@@ -1,4 +1,5 @@
 import React from "react";
+import { FormatNumber } from "../Utils/Miscellaneous";
 
 const TableCustom = (props) => {
 	return (
@@ -15,7 +16,7 @@ const TableCustom = (props) => {
           <tr key={i} className={props.type}>
             <td>{row.row}</td>
             {row.data.map((data, j) => (
-              <td key={j}>{parseInt(data.toFixed(0))}</td>
+              <td key={j}>{FormatNumber(data, 1)}</td>
             ))}
           </tr>
         ))}
