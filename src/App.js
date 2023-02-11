@@ -2,7 +2,7 @@ import './App.css';
 
 import { Sidebar } from './Pages/Sidebar/Sidebar';
 import { Home } from './Pages/Home/Home';
-import YearlyReport from './yearlyReport/yearlyReport';
+import { YearlyReport } from './Pages/YearlyReport/YearlyReport';
 import { TotalReport } from './Pages/TotalReport/TotalReport';
 import { Accounts } from './Pages/Accounts/Accounts';
 import { AccountsReport } from './Pages/AccountsReport/AccountsReport';

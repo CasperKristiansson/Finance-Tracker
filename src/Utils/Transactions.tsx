@@ -122,13 +122,18 @@ export function ConvertLoans(data: any[]): Loan[] {
 }
 
 export function TotalAssets(transactions: Transaction[]): number {
+    const income: number = TotalTransactionType(transactions, "Income");
+    const expenses: number = TotalTransactionType(transactions, "Expense");
+
+    return income - expenses;
+}
+
+export function TotalTransactionType(transactions: Transaction[], type: string): number {
     let total: number = 0;
 
     for (let i = 0; i < transactions.length; i++) {
-        if (transactions[i].Type === "Income") {
+        if (transactions[i].Type === type) {
             total += transactions[i].Amount;
-        } else if (transactions[i].Type === "Expense") {
-            total -= transactions[i].Amount;
         }
     }
 
