@@ -1,5 +1,5 @@
 import { Milestone, milestones } from "./Data/Milestones";
-import { MonthsLong, StringifyTimeShort, StringifyTimeShortest } from "./Date";
+import { MonthsLong, MonthsShort, StringifyTimeShort, StringifyTimeShortest } from "./Date";
 
 export interface Transaction {
     Account: string;
@@ -717,7 +717,122 @@ export function GetTableCategories(transactions: Transaction[], type: string): T
         data: [...totalData.map(t => t / categories.length), total / categories.length, total / (categories.length * years.length)]
     });
 
-    console.log(tableCategories)
+    return tableCategories;
+}
+
+interface TableData {
+    Income: number[];
+    Expense: number[];
+    NET: number[];
+    EndBalance: number[];
+}
+
+export function NetChange(transactions: Transaction[]): TableCategoryStruct {
+    const tableData: TableData = {
+        Income: new Array(14).fill(0),
+        Expense: new Array(14).fill(0),
+        NET: new Array(14).fill(0),
+        EndBalance: new Array(14).fill(0)
+    };
+  
+    transactions.forEach(transaction => {  
+        if (transaction.Type === "Income") {
+            tableData.Income[transaction.Date.getMonth()] += transaction.Amount;
+        } else if (transaction.Type === "Expense") {
+            tableData.Expense[transaction.Date.getMonth()] += transaction.Amount;
+        }
+    });
+  
+    for (let i = 0; i < 14; i++) tableData.NET[i] = tableData.Income[i] - tableData.Expense[i];
+  
+    let endBalance = 0;
+    for (let i = 0; i < 12; i++) {
+        endBalance += tableData.NET[i];
+        tableData.EndBalance[i] = endBalance;
+    }
+  
+    let totalIncome = 0;
+    let totalExpense = 0;
+    let totalNet = 0;
+    for (let i = 0; i < 12; i++) {
+        totalIncome += tableData.Income[i];
+        totalExpense += tableData.Expense[i];
+        totalNet += tableData.NET[i];
+    }
+  
+    tableData.Income[12] = totalIncome;
+    tableData.Expense[12] = totalExpense;
+    tableData.NET[12] = totalNet;
+    tableData.Income[13] = totalIncome / 12;
+    tableData.Expense[13] = totalExpense / 12;
+    tableData.NET[13] = totalNet / 12;
+  
+    const tableCategories: TableCategoryStruct = {
+        columns: ['Type', ...MonthsShort, 'Total', 'Average'],
+        rows: []
+    };
+
+    for (const [key, value] of Object.entries(tableData)) {
+        tableCategories.rows.push({
+            row: key,
+            data: value
+        });
+    }
+
+    return tableCategories;
+}
+
+
+export function GetTableMonths(transactions: Transaction[], type: string): TableCategoryStruct {
+    transactions = FilterTransactionsType(transactions, type);
+
+    // Get all unique categories from transactions
+    const categories: string[] = Array.from(new Set(transactions.map(t => t.Category)));
+
+    // Create table categories struct with columns
+    const tableCategories: TableCategoryStruct = {
+        columns: ['Type', ...MonthsShort, 'Total', 'Average'],
+        rows: []
+    };
+
+    // For each category, calculate total and average amount for each month
+    categories.forEach(category => {
+        const categoryData: number[] = [];
+        let categoryTotal: number = 0;
+
+        MonthsShort.forEach(month => {
+            const monthTransactions = transactions.filter(t => t.Category === category && MonthsShort[t.Date.getMonth()] === month);
+            const monthAmount = monthTransactions.reduce((sum: number, t: Transaction) => sum + t.Amount, 0);
+            categoryData.push(monthAmount);
+            categoryTotal += monthAmount;
+        });
+
+        tableCategories.rows.push({
+            row: category,
+            data: [...categoryData, categoryTotal, categoryTotal / MonthsShort.length]
+        });
+    });
+
+    // Add total and average rows
+    const totalData: number[] = [];
+    let total: number = 0;
+
+    MonthsShort.forEach(month => {
+        const monthTransactions = transactions.filter(t => t.Date.toLocaleString("default", {month: "short"}) === month);
+        const monthAmount = monthTransactions.reduce((sum: number, t: Transaction) => sum + t.Amount, 0);
+        totalData.push(monthAmount);
+        total += monthAmount;
+    });
+
+    tableCategories.rows.push({
+        row: 'Total',
+        data: [...totalData, total, total / MonthsShort.length]
+    });
+
+    tableCategories.rows.push({
+        row: 'Average',
+        data: [...totalData.map(t => t / categories.length), total / categories.length, total / (categories.length * MonthsShort.length)]
+    });
 
     return tableCategories;
 }

@@ -12,7 +12,7 @@ const TableCustom = (props) => {
       </thead>
       <tbody>
         {props.data.rows.map((row, i) => (
-          <tr key={i}>
+          <tr key={i} className={props.type}>
             <td>{row.row}</td>
             {row.data.map((data, j) => (
               <td key={j}>{parseInt(data.toFixed(0))}</td>
