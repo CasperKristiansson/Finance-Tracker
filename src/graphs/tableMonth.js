@@ -23,29 +23,18 @@ const TableMonth = (props) => {
 				</tr>
 			</thead>
 			<tbody>
-        {
-          Object.entries(props.data).map(([key, value]) => {
+        {props.data.map((item, index) => {
             return (
-              <tr className={`${props.type} ${["Total", "Average"].includes(key) ? "netTotal" : ""}`}>
-                <td className="netTitle">{key}</td>
-                <td>{value[0].toFixed(1)}</td>
-                <td>{value[1].toFixed(1)}</td>
-                <td>{value[2].toFixed(1)}</td>
-                <td>{value[3].toFixed(1)}</td>
-                <td>{value[4].toFixed(1)}</td>
-                <td>{value[5].toFixed(1)}</td>
-                <td>{value[6].toFixed(1)}</td>
-                <td>{value[7].toFixed(1)}</td>
-                <td>{value[8].toFixed(1)}</td>
-                <td>{value[9].toFixed(1)}</td>
-                <td>{value[10].toFixed(1)}</td>
-                <td>{value[11].toFixed(1)}</td>
-                <td>{value[12].toFixed(1)}</td>
-                <td>{value[13].toFixed(1)}</td>
+              <tr key={index}>
+                <td>{item.row}</td>
+                {item.data.map((data, index) => {
+                    return (
+                      <td key={index}>{data}</td>
+                    );
+                  })}
               </tr>
             );
-          })
-        }        
+        })}       
 			</tbody>
 		</table>
 	);

@@ -598,3 +598,54 @@ export function GetHeatmap(transactions: Transaction[], type: string): HeatMapSt
 
     return heatmap.reverse();
 }
+
+/**
+ * ? Table
+ */
+
+export interface TableMonthStruct {
+    row: string;
+    data: number[];
+}
+
+export function GetTableYears(transactions: Transaction[], type: string): TableMonthStruct[] {
+    let table: TableMonthStruct[] = [];
+    transactions = TransactionsSort(transactions);
+
+    let startYear: number = transactions[0].Date.getFullYear();
+    let endYear: number = new Date().getFullYear();
+
+    for (let i = startYear; i <= endYear; i++) {
+        table.push({ row: String(i), data: [] as number[] });
+
+        for (let j = 0; j < 12; j++) {
+            let month: number = j + 1;
+            let transactionsInMonth: Transaction[] = transactions.filter(transaction => {
+                return transaction.Date.getFullYear() === i && transaction.Date.getMonth() + 1 === month;
+            });
+
+            let total: number = 0;
+            for (let k = 0; k < transactionsInMonth.length; k++) {
+                if (transactionsInMonth[k].Type === type) total += transactionsInMonth[k].Amount;
+            }
+
+            table[i - startYear].data.push(parseInt(total.toFixed(0)));
+        }
+
+        table[i - startYear].data.push(parseInt(table[i - startYear].data.reduce((a, b) => a + b, 0).toFixed(0)));
+        table[i - startYear].data.push(parseInt((table[i - startYear].data.reduce((a, b) => a + b, 0) / 12).toFixed(0)));
+    }
+
+    table.push({ row: "Total", data: [] as number[] });
+    table.push({ row: "Average", data: [] as number[] });
+
+    for (let i = 0; i < 14; i++) {
+        let total: number = 0;
+        for (let j = 0; j < table.length - 2; j++) total += table[j].data[i];
+
+        table[table.length - 2].data.push(parseInt(total.toFixed(0)));
+        table[table.length - 1].data.push(parseInt((total / (endYear - startYear + 1)).toFixed(0)));
+    }
+
+    return table;
+}
