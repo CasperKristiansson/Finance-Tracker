@@ -3,7 +3,6 @@ import App from './App';
 import { JssProvider } from 'react-jss';
 
 import {Chart, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title, PointElement, LineElement} from 'chart.js'
-import React from 'react';
 
 Chart.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title, PointElement, LineElement);
 

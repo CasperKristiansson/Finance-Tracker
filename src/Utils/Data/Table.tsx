@@ -8,4 +8,3 @@ export const transactionTypes = [
     { key: 'i', text: 'Income', value: 'income' },
     { key: 'e', text: 'Expense', value: 'expense' },
 ]
-
