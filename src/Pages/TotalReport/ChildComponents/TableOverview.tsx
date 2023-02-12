@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { Segment } from "semantic-ui-react";
-import TableCustom from "../../../graphs/tableCustom";
+import TableCustom from "../../../Component/TableCustom";
 import TableMonth from "../../../graphs/tableMonth";
 import { Transaction, GetTableYears, GetTableCategories } from "../../../Utils/Transactions";
 
