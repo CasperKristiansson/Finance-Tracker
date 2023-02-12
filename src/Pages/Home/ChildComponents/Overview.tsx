@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 import { MonthsLong, MonthYear } from "../../../Utils/Date";
 import { ExcelUpload, ExcelUploadData } from "../../../Utils/Excel";
-import PieChart from "../../../graphs/piechart";
+import PieChart from "../../../Component/PieChart";
 import { BarChart } from "../../../Component/BarChart";
 import { GetMonthOfYearAmount, Transaction, GetCategoriesLabels, GetCategoriesAmount, FilterTransactionsMonth, FilterTransactionsType } from "../../../Utils/Transactions";
 
@@ -95,8 +95,10 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 							<div className={classes.mainSectionPie}>
 								<PieChart 
 									title={pieChartType}
-									labels={GetCategoriesLabels(FilterTransactionsType(FilterTransactionsMonth(transactions, period.month), pieChartType))}
-									data={GetCategoriesAmount(FilterTransactionsType(FilterTransactionsMonth(transactions, period.month), pieChartType))}
+									data={{
+										labels: GetCategoriesLabels(FilterTransactionsType(FilterTransactionsMonth(transactions, period.month), pieChartType)),
+										data: GetCategoriesAmount(FilterTransactionsType(FilterTransactionsMonth(transactions, period.month), pieChartType)),
+									}}
 								/>
 							</div>
 						</Segment>

@@ -1,4 +1,4 @@
-import { BarChartProps } from "../Component/BarChart";
+import { BarChartStruct } from "../Component/BarChart";
 import { HeatMapStruct } from "../Component/HeatMap";
 import { LineChartStruct } from "../Component/LineChart";
 import { Milestone, milestones } from "./Data/Milestones";
@@ -388,7 +388,7 @@ export function GetMonthOfYearAmount(transactions: Transaction[], type: string, 
 	return result;
 }
 
-export function ExpenseIncomeBarChart(transactions: Transaction[]): BarChartProps {
+export function ExpenseIncomeBarChart(transactions: Transaction[]): BarChartStruct {
     let years: number[] = [];
     let income: number[] = [];
     let expenses: number[] = [];

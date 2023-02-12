@@ -1,6 +1,6 @@
 import React from "react";
 import { Grid, Segment } from "semantic-ui-react";
-import { BarChart, BarChartProps } from "../../../Component/BarChart";
+import { BarChart, BarChartStruct } from "../../../Component/BarChart";
 import { LineChart, LineChartColor } from "../../../Component/LineChart";
 import { MonthsLong } from "../../../Utils/Date";
 import { GetLineChartValues, GetMonthOfYearAmount, Transaction } from "../../../Utils/Transactions";
@@ -19,7 +19,7 @@ export const GraphOverview: React.FC<{transactions: Transaction[], currentYear: 
 								labels: MonthsLong,
 								incomeData: transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Income") : [],
 								expenseData: transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Expense") : [],
-							} as BarChartProps}
+							} as BarChartStruct}
 						/>
 					</Segment>
 				</Grid.Column>
