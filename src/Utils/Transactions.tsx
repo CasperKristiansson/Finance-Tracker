@@ -1,4 +1,5 @@
 import { BarChartProps } from "../Component/Barchart";
+import { HeatmapStruct } from "../Component/Heatmap";
 import { Milestone, milestones } from "./Data/Milestones";
 import { MonthsLong, MonthsShort, StringifyTimeShort, StringifyTimeShortest } from "./Date";
 
@@ -585,20 +586,10 @@ export function GetMilestones(transactions: Transaction[]): Milestone[] {
  * ? Heatmap
  */
 
-export interface HeatMapStruct {
-    name: string;
-    data: HeatMapData[];
-}
-
-interface HeatMapData {
-    x: string;
-    y: number;
-}
-
-export function GetHeatmap(transactions: Transaction[], type: string): HeatMapStruct[] {
+export function GetHeatmap(transactions: Transaction[], type: string): HeatmapStruct[] {
     transactions = TransactionsSort(transactions);
 
-    let heatmap: HeatMapStruct[] = [];
+    let heatmap: HeatmapStruct[] = [];
     
     for (let j = 0; j < 12; j++) {
         heatmap.push({
