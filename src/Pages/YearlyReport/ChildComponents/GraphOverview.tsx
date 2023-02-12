@@ -1,6 +1,6 @@
 import React from "react";
 import { Grid, Segment } from "semantic-ui-react";
-import { BarChart, BarChartStruct } from "../../../Component/BarChart";
+import { BarChart, BarChartStruct } from "../../BarChart";
 import { LineChart, LineChartColor } from "../../../Component/LineChart";
 import { MonthsLong } from "../../../Utils/Date";
 import { GetLineChartValues, GetMonthOfYearAmount, Transaction } from "../../../Utils/Transactions";

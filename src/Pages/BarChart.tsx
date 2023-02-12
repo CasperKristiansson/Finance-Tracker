@@ -105,4 +105,3 @@ export const BarChart: React.FC<{ data: BarChartStruct, title: string, height: n
     </>
   );
 };
-
