@@ -1,7 +1,8 @@
+import React from "react";
 import axios from "axios";
 import { useEffect, useState } from "react";
 import { Divider, Grid, Segment } from "semantic-ui-react";
-import LineChart from "../../graphs/linechart";
+import { LineChart, LineChartColor } from "../../Component/LineChart";
 import { AccountGraph, ConvertTransactions, GetAccountsBalanceGraph } from "../../Utils/Transactions";
 
 export const AccountsReport: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
@@ -32,7 +33,12 @@ export const AccountsReport: React.FC<{ userID: string }> = ({ userID }): JSX.El
 							<h2>{account.Balance[account.Balance.length - 1].toLocaleString()}</h2>
 							<LineChart
 								title={"Balance"}
-								data={[account.Labels, account.Balance]}
+								data={{
+										labels: account.Labels,
+										data: account.Balance,
+								}}
+								height={undefined}
+								color={{} as LineChartColor}
 							/>
 						</Segment>
 					</Grid.Column>

@@ -1,8 +1,23 @@
-import React, {useEffect} from "react";
+import React from "react";
 import Chart from 'react-apexcharts'
 
-const Heatmap = (props) => {
-	var options = {
+export interface HeatMapStruct {
+  name: string;
+  data: {
+    x: string;
+    y: number;
+  }[]
+}
+
+export interface HeatMapColor {
+  from: number;
+  to: number;
+  color: string;
+  name: string;
+}
+
+export const HeatMap: React.FC<{ data: HeatMapStruct[], title: string, color: HeatMapColor[] }> = ({ data, title, color }): JSX.Element => {
+	var options: any = {
 		chart: {
 			height: 350,
 			type: 'heatmap',
@@ -17,7 +32,7 @@ const Heatmap = (props) => {
           zoomin: false,
           zoomout: false,
           pan: false,
-          reset: false | '<img src="/static/icons/reset.png" width="20">',
+          reset: false,
           customIcons: []
         },
 			},
@@ -26,7 +41,7 @@ const Heatmap = (props) => {
 		plotOptions: {
       heatmap: {
         colorScale: {
-          ranges: props.color
+          ranges: color
       	}
     	}
 		},
@@ -38,11 +53,9 @@ const Heatmap = (props) => {
   return (
     <>
 		<div id="chart">
-      <h2>{props.title}</h2>
-      <Chart type="heatmap" series={props.data} options={options} height={350} />
+      <h2>{title}</h2>
+      <Chart type="heatmap" series={data as any} options={options} height={350} />
 		</div>
     </>
   );
 };
-
-export default Heatmap;

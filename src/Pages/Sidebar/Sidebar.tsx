@@ -1,3 +1,4 @@
+import React from "react";
 import 'react-pro-sidebar/dist/css/styles.css';
 import { ProSidebar, Menu, MenuItem, SidebarHeader, SidebarFooter, SidebarContent, } from 'react-pro-sidebar';
 import { FiSettings } from 'react-icons/fi';

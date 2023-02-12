@@ -5,8 +5,8 @@ import { useNavigate } from "react-router-dom";
 
 import { MonthsLong, MonthYear } from "../../../Utils/Date";
 import { ExcelUpload, ExcelUploadData } from "../../../Utils/Excel";
-import PieChart from "../../../graphs/piechart";
-import BarChart from "../../../graphs/barchart";
+import PieChart from "../../../Component/PieChart";
+import { BarChart } from "../../../Component/BarChart";
 import { GetMonthOfYearAmount, Transaction, GetCategoriesLabels, GetCategoriesAmount, FilterTransactionsMonth, FilterTransactionsType } from "../../../Utils/Transactions";
 
 const useStyles = createUseStyles({
@@ -72,12 +72,13 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 							<Grid.Column>
 								<Segment>
 									<BarChart
-										title={period.year}
-										data={[
-											MonthsLong,
-											transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Income") : [],
-											transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Expense") : [],
-										]}
+										title={period.year.toString()}
+										data={{
+											labels: MonthsLong,
+											incomeData: transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Income") : [],
+											expenseData: transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Expense") : [],
+										}}
+										height={undefined}
 									/>
 								</Segment>
 							</Grid.Column>
@@ -94,8 +95,10 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 							<div className={classes.mainSectionPie}>
 								<PieChart 
 									title={pieChartType}
-									labels={GetCategoriesLabels(FilterTransactionsType(FilterTransactionsMonth(transactions, period.month), pieChartType))}
-									data={GetCategoriesAmount(FilterTransactionsType(FilterTransactionsMonth(transactions, period.month), pieChartType))}
+									data={{
+										labels: GetCategoriesLabels(FilterTransactionsType(FilterTransactionsMonth(transactions, period.month), pieChartType)),
+										data: GetCategoriesAmount(FilterTransactionsType(FilterTransactionsMonth(transactions, period.month), pieChartType)),
+									}}
 								/>
 							</div>
 						</Segment>

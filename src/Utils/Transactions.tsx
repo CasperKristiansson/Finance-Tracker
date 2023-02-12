@@ -1,3 +1,7 @@
+import { BarChartStruct } from "../Component/BarChart";
+import { HeatMapStruct } from "../Component/HeatMap";
+import { LineChartStruct } from "../Component/LineChart";
+import { TableStruct } from "../Component/TableCustom";
 import { Milestone, milestones } from "./Data/Milestones";
 import { MonthsLong, MonthsShort, StringifyTimeShort, StringifyTimeShortest } from "./Date";
 
@@ -11,6 +15,16 @@ export interface Transaction {
     ID: number;
 }
 
+export interface Loan {
+    Amount: number;
+    Date: Date;
+    Type: string;
+    ID: number; 
+}
+
+/**
+ * Converts the endPoint transaction data into a Transaction array.
+ */
 export function ConvertTransactions(data: any[]): Transaction[] {
     let transactions: Transaction[] = [];
 
@@ -54,39 +68,9 @@ export function ConvertTransactions(data: any[]): Transaction[] {
     return transactions;
 }
 
-
-// This function filters the transactions based on the month provided.
-// It iterates through the transactions and checks the month of the date of each one. If the month matches the month provided it adds the transaction to the filteredTransactions array.
-// It returns the filteredTransactions array.
-export function FilterTransactionsMonth(transactions: Transaction[], month: number): Transaction[] {
-    let filteredTransactions: Transaction[] = [];
-
-    filteredTransactions = transactions.filter((transaction) => {
-        return transaction.Date.getMonth() === month;
-    });
-
-    return filteredTransactions;
-}
-
-export function TransactionsSort(transactions: Transaction[]): Transaction[] {
-    return transactions.sort((a, b) => {
-        return a.Date.getTime() - b.Date.getTime();
-    });
-}
-
-export function TransactionsLoansSort(amounts: Transaction[] | Loan[]): Transaction[] | Loan[] {
-    return amounts.sort((a, b) => {
-        return a.Date.getTime() - b.Date.getTime();
-    });
-}
-
-export interface Loan {
-    Amount: number;
-    Date: Date;
-    Type: string;
-    ID: number; 
-}
-
+/**
+ * Converts the endPoint loan data into a Loan array.
+ */
 export function ConvertLoans(data: any[]): Loan[] {
     let loans: Loan[] = [];
 
@@ -121,40 +105,9 @@ export function ConvertLoans(data: any[]): Loan[] {
     return loans;
 }
 
-export function TotalAssets(transactions: Transaction[]): number {
-    const income: number = TotalTransactionType(transactions, "Income");
-    const expenses: number = TotalTransactionType(transactions, "Expense");
-
-    return income - expenses;
-}
-
-export function TotalTransactionType(transactions: Transaction[], type: string): number {
-    let total: number = 0;
-
-    for (let i = 0; i < transactions.length; i++) {
-        if (transactions[i].Type === type) {
-            total += transactions[i].Amount;
-        }
-    }
-
-    return total;
-}
-
-export function TotalLiabilities(loans: Loan[]): number {
-    let total: number = 0;
-
-    for (let i = 0; i < loans.length; i++) {
-        total += loans[i].Amount;
-    }
-
-    return total;
-}
-
-export function TotalNetWorth(transactions: Transaction[], loans: Loan[]): number {
-    return TotalAssets(transactions) - TotalLiabilities(loans);
-}
-
-// Convert Loans to Transactions
+/**
+ * Converts the loans into transactions.
+ */
 export function ConvertLoansToTransactions(loans: Loan[]): Transaction[] {
     let transactions: Transaction[] = [];
 
@@ -173,7 +126,40 @@ export function ConvertLoansToTransactions(loans: Loan[]): Transaction[] {
     return transactions;
 }
 
-// Create a function that returns the transactions types specified
+/**
+ * Filters transactions by the given month.
+ */
+export function FilterTransactionsMonth(transactions: Transaction[], month: number): Transaction[] {
+    let filteredTransactions: Transaction[] = [];
+
+    filteredTransactions = transactions.filter((transaction) => {
+        return transaction.Date.getMonth() === month;
+    });
+
+    return filteredTransactions;
+}
+
+/**
+ * Sorts the transactions by date
+ */
+export function TransactionsSort(transactions: Transaction[]): Transaction[] {
+    return transactions.sort((a, b) => {
+        return a.Date.getTime() - b.Date.getTime();
+    });
+}
+
+/**
+ * Sorts the transactions | loans by date
+ */
+export function TransactionsLoansSort(amounts: Transaction[] | Loan[]): Transaction[] | Loan[] {
+    return amounts.sort((a, b) => {
+        return a.Date.getTime() - b.Date.getTime();
+    });
+}
+
+/**
+ * Filters transactions by the type
+ */
 export function FilterTransactionsType(transactions: Transaction[], type: string): Transaction[] {
     let filteredTransactions: Transaction[] = [];
 
@@ -184,12 +170,69 @@ export function FilterTransactionsType(transactions: Transaction[], type: string
     return filteredTransactions;
 }
 
+
+/**
+ * ? Numbers
+ */
+
+/**
+ * Calculates the totalAssets based on the transactions.
+ */
+export function TotalAssets(transactions: Transaction[]): number {
+    const income: number = TotalTransactionType(transactions, "Income");
+    const expenses: number = TotalTransactionType(transactions, "Expense");
+
+    return income - expenses;
+}
+
+/**
+ * Calculates the total based on the transaction type
+ */
+export function TotalTransactionType(transactions: Transaction[], type: string): number {
+    let total: number = 0;
+
+    for (let i = 0; i < transactions.length; i++) {
+        if (transactions[i].Type === type) {
+            total += transactions[i].Amount;
+        }
+    }
+
+    return total;
+}
+
+/**
+ * Calculates total Liability based on the loans.
+ */
+export function TotalLiabilities(loans: Loan[]): number {
+    let total: number = 0;
+
+    for (let i = 0; i < loans.length; i++) {
+        total += loans[i].Amount;
+    }
+
+    return total;
+}
+
+/**
+ * Total Net Worth based on the transactions and loans.
+ */
+export function TotalNetWorth(transactions: Transaction[], loans: Loan[]): number {
+    return TotalAssets(transactions) - TotalLiabilities(loans);
+}
+
+/**
+ * ? Categories & Dropdown Mappings
+ */
+
 export interface DropDown {
     key: string;
     text: string;
     value: string;
 }
 
+/**
+ * By given categories and type, returns a DropDown array.
+ */
 export function GetCategoriesMapping(categories: any, type: string): DropDown[] {
 	return categories
 		.filter((category: { Type: string; }) => category.Type === type)
@@ -202,6 +245,9 @@ export function GetCategoriesMapping(categories: any, type: string): DropDown[] 
 		});
 }
 
+/**
+ * By given accounts, returns a DropDown array.
+ */
 export function GetAccountsMapping(accounts: any): DropDown[] {
 	return accounts.map((account: { Account: any; }) => {
 		return {
@@ -258,7 +304,7 @@ function groupValuesMonthIterative(amounts: Transaction[] | Loan[]): { [date: st
     return groupedValues;
 }
 
-export function GetLineChartValues(amounts: Transaction[] | Loan[]): [string[], number[]] {
+export function GetLineChartValues(amounts: Transaction[] | Loan[]): LineChartStruct {
     let groupedValues: { [date: string]: number } = groupValuesMonthIterative(amounts);
 
     let dates: string[] = [""];
@@ -269,7 +315,10 @@ export function GetLineChartValues(amounts: Transaction[] | Loan[]): [string[], 
         values.push(groupedValues[date]);
     }
 
-    return [dates, values];
+    return {
+        labels: dates,
+        data: values
+    };
 }
 
 /**
@@ -382,7 +431,7 @@ export function GetMonthOfYearAmount(transactions: Transaction[], type: string, 
 	return result;
 }
 
-export function ExpenseIncomeBarChart(transactions: Transaction[]): [string[], number[], number[]] {
+export function ExpenseIncomeBarChart(transactions: Transaction[]): BarChartStruct {
     let years: number[] = [];
     let income: number[] = [];
     let expenses: number[] = [];
@@ -405,8 +454,11 @@ export function ExpenseIncomeBarChart(transactions: Transaction[]): [string[], n
         else if (transactions[i].Type === "Expense") expenses[years.indexOf(year)] += transactions[i].Amount;
     }
 
-
-    return [years.map(year => year.toString()), income, expenses];
+    return {
+        labels: years.map(year => year.toString()),
+        incomeData: income,
+        expenseData: expenses
+    }
 }
 
 
@@ -581,16 +633,6 @@ export function GetMilestones(transactions: Transaction[]): Milestone[] {
  * ? Heatmap
  */
 
-export interface HeatMapStruct {
-    name: string;
-    data: HeatMapData[];
-}
-
-interface HeatMapData {
-    x: string;
-    y: number;
-}
-
 export function GetHeatmap(transactions: Transaction[], type: string): HeatMapStruct[] {
     transactions = TransactionsSort(transactions);
 
@@ -635,20 +677,19 @@ export function GetHeatmap(transactions: Transaction[], type: string): HeatMapSt
  * ? Table
  */
 
-export interface TableMonthStruct {
-    row: string;
-    data: number[];
-}
+export function GetTableYears(transactions: Transaction[], type: string): TableStruct {
+    let table: TableStruct = {
+        columns: ['Type', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Total', 'Average'],
+        rows: []
+    };
 
-export function GetTableYears(transactions: Transaction[], type: string): TableMonthStruct[] {
-    let table: TableMonthStruct[] = [];
     transactions = TransactionsSort(transactions);
 
     let startYear: number = transactions[0].Date.getFullYear();
     let endYear: number = new Date().getFullYear();
 
     for (let i = startYear; i <= endYear; i++) {
-        table.push({ row: String(i), data: [] as number[] });
+        table.rows.push({ row: String(i), data: [] as number[] });
 
         for (let j = 0; j < 12; j++) {
             let month: number = j + 1;
@@ -661,38 +702,28 @@ export function GetTableYears(transactions: Transaction[], type: string): TableM
                 if (transactionsInMonth[k].Type === type) total += transactionsInMonth[k].Amount;
             }
 
-            table[i - startYear].data.push(parseInt(total.toFixed(0)));
+            table.rows[i - startYear].data.push(parseInt(total.toFixed(0)));
         }
 
-        table[i - startYear].data.push(parseInt(table[i - startYear].data.reduce((a, b) => a + b, 0).toFixed(0)));
-        table[i - startYear].data.push(parseInt((table[i - startYear].data.reduce((a, b) => a + b, 0) / 12).toFixed(0)));
+        table.rows[i - startYear].data.push(parseInt(table.rows[i - startYear].data.reduce((a, b) => a + b, 0).toFixed(0)));
+        table.rows[i - startYear].data.push(parseInt((table.rows[i - startYear].data.reduce((a, b) => a + b, 0) / 12).toFixed(0)));
     }
 
-    table.push({ row: "Total", data: [] as number[] });
-    table.push({ row: "Average", data: [] as number[] });
+    table.rows.push({ row: "Total", data: [] as number[] });
+    table.rows.push({ row: "Average", data: [] as number[] });
 
     for (let i = 0; i < 14; i++) {
         let total: number = 0;
-        for (let j = 0; j < table.length - 2; j++) total += table[j].data[i];
+        for (let j = 0; j < table.rows.length - 2; j++) total += table.rows[j].data[i];
 
-        table[table.length - 2].data.push(parseInt(total.toFixed(0)));
-        table[table.length - 1].data.push(parseInt((total / (endYear - startYear + 1)).toFixed(0)));
+        table.rows[table.rows.length - 2].data.push(parseInt(total.toFixed(0)));
+        table.rows[table.rows.length - 1].data.push(parseInt((total / (endYear - startYear + 1)).toFixed(0)));
     }
 
     return table;
 }
 
-export interface TableCategoryStruct {
-    columns: string[];
-    rows: TableCategoryRow[];
-}
-
-interface TableCategoryRow {
-    row: string;
-    data: number[];
-}
-
-export function GetTableCategories(transactions: Transaction[], type: string): TableCategoryStruct {
+export function GetTableCategories(transactions: Transaction[], type: string): TableStruct {
     transactions = FilterTransactionsType(transactions, type);
     // Get all unique categories from transactions
     const categories: string[] = Array.from(new Set(transactions.map(t => t.Category)));
@@ -701,7 +732,7 @@ export function GetTableCategories(transactions: Transaction[], type: string): T
     const years: string[] = Array.from(new Set(transactions.map(t => t.Date.getFullYear().toString())));
 
     // Create table categories struct with columns
-    const tableCategories: TableCategoryStruct = {
+    const tableCategories: TableStruct = {
         columns: ['Type', ...years, 'Total', 'Average'],
         rows: []
     };
@@ -755,7 +786,7 @@ interface TableData {
     EndBalance: number[];
 }
 
-export function NetChange(transactions: Transaction[]): TableCategoryStruct {
+export function NetChange(transactions: Transaction[]): TableStruct {
     const tableData: TableData = {
         Income: new Array(14).fill(0),
         Expense: new Array(14).fill(0),
@@ -795,7 +826,7 @@ export function NetChange(transactions: Transaction[]): TableCategoryStruct {
     tableData.Expense[13] = totalExpense / 12;
     tableData.NET[13] = totalNet / 12;
   
-    const tableCategories: TableCategoryStruct = {
+    const tableCategories: TableStruct = {
         columns: ['Type', ...MonthsShort, 'Total', 'Average'],
         rows: []
     };
@@ -811,14 +842,14 @@ export function NetChange(transactions: Transaction[]): TableCategoryStruct {
 }
 
 
-export function GetTableMonths(transactions: Transaction[], type: string): TableCategoryStruct {
+export function GetTableMonths(transactions: Transaction[], type: string): TableStruct {
     transactions = FilterTransactionsType(transactions, type);
 
     // Get all unique categories from transactions
     const categories: string[] = Array.from(new Set(transactions.map(t => t.Category)));
 
     // Create table categories struct with columns
-    const tableCategories: TableCategoryStruct = {
+    const tableCategories: TableStruct = {
         columns: ['Type', ...MonthsShort, 'Total', 'Average'],
         rows: []
     };

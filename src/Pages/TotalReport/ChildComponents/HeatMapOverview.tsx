@@ -1,7 +1,7 @@
+import React from "react";
 import { Grid, Segment } from "semantic-ui-react";
 import { GetHeatmap, Transaction } from "../../../Utils/Transactions";
-import HeatMap from "../../../graphs/heatmap";
-import { useEffect } from "react";
+import { HeatMap, HeatMapStruct } from "../../../Component/HeatMap";
 import { HeatMapExpenseColors, HeatMapIncomeColors } from "../../../Utils/Data/HeatMap";
 
 export const HeatMapOverview: React.FC<{transactions: Transaction[]}> = ({ transactions }): JSX.Element => {
@@ -13,7 +13,7 @@ export const HeatMapOverview: React.FC<{transactions: Transaction[]}> = ({ trans
 					<Segment>
 						<HeatMap
 							title={`Income`}
-							data={transactions.length > 1 ? GetHeatmap(transactions, "Income") : [ {name: "loading...", data: [0]} ]}
+							data={transactions.length > 1 ? GetHeatmap(transactions, "Income") : [ {name: "loading...", data: [{x: "Loading...", y: 0}]} ] as HeatMapStruct[]}
 							color={HeatMapIncomeColors}
 						/>
 					</Segment>
@@ -22,7 +22,7 @@ export const HeatMapOverview: React.FC<{transactions: Transaction[]}> = ({ trans
 					<Segment>
 						<HeatMap
 							title={`Expense`}
-							data={transactions.length > 1 ? GetHeatmap(transactions, "Expense") : [ {name: "loading...", data: [0]} ]}
+							data={transactions.length > 1 ? GetHeatmap(transactions, "Expense") : [ {name: "loading...", data: [{x: "Loading...", y: 0}]} ] as HeatMapStruct[] }
 							color={HeatMapExpenseColors}
 						/>
 					</Segment>

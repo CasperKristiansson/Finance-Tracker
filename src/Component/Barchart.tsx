@@ -1,18 +1,40 @@
-import React, {useEffect} from "react";
+import React from "react";
 import { Bar } from "react-chartjs-2";
 
-const BarChart = (props) => {
-  const [data, setData] = React.useState({
+export interface BarChartStruct {
+  labels: string[];
+  incomeData: number[];
+  expenseData: number[];
+}
+
+interface BarChartState {
+  labels: string[];
+  datasets: {
+    label: string;
+    data: number[];
+    backgroundColor: string;
+    borderColor: string;
+    hoverBackgroundColor: string;
+    hoverBorderColor: string;
+    borderWidth: number;
+  }[];
+}
+
+export const BarChart: React.FC<{ data: BarChartStruct, title: string, height: number | undefined }> = ({ data, title, height }): JSX.Element => {
+  const [dataset, setDataset] = React.useState({
     labels: [],
     datasets: [
       {
+        label: "Loading...",
         data: [],
-        backgroundColor: [],
-        borderColor: [],
+        backgroundColor: "",
+        borderColor: "",
+        hoverBackgroundColor: "",
+        hoverBorderColor: "",
         borderWidth: 0,
       },
     ],
-  });
+  } as BarChartState);
 
   React.useEffect(() => {
     var backgroundColorIncome = "rgba(255, 99, 132, 0.2)";
@@ -26,12 +48,12 @@ const BarChart = (props) => {
     var hoverBorderColorExpense = "rgba(54, 162, 235, 1)";
     var borderWidth = 1
 
-    setData({
-      labels: props.data[0],
+    setDataset({
+      labels: data.labels,
       datasets: [
         {
           label: "Expense",
-          data: props.data[2],
+          data: data.expenseData,
           backgroundColor: backgroundColorIncome,
           borderColor: borderColorIncome,
           hoverBackgroundColor: hoverBackgroundColorIncome,
@@ -40,7 +62,7 @@ const BarChart = (props) => {
         },
         {
           label: "Income",
-          data: props.data[1],
+          data: data.incomeData,
           backgroundColor: backgroundColorExpense,
           borderColor: borderColorExpense,
           hoverBackgroundColor: hoverBackgroundColorExpense,
@@ -50,12 +72,12 @@ const BarChart = (props) => {
       ],
     });
 
-  }, [props]);
+  }, [data]);
 
   var options = {
     title: {
       display: true,
-      text: "Income and Expenses",
+      text: title,
       fontSize: 25
     },
     legend: {
@@ -78,10 +100,9 @@ const BarChart = (props) => {
 
   return (
     <>
-      <h2>{props.title}</h2>
-      <Bar data={data} options={options} height={props.height}/>
+      <h2>{title}</h2>
+      <Bar data={dataset} options={options} height={height}/>
     </>
   );
 };
 
-export default BarChart;
