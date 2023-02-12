@@ -1,5 +1,12 @@
 import React from "react";
 import { FormatNumber } from "../Utils/Miscellaneous";
+import { createUseStyles } from 'react-jss';
+
+const useStyles = createUseStyles({
+  bold: {
+    fontWeight: 'bold',
+  }
+});
 
 export interface TableStruct {
   columns: string[];
@@ -10,7 +17,9 @@ export interface TableStruct {
 }
 
 export const TableCustom: React.FC<{ data: TableStruct, color: string, type: string }> = ({ data, color, type }): JSX.Element => {
-	return (
+	const classes = useStyles();
+  
+  return (
 		<table className={`ui ${color} celled selectable table`}>
       <thead>
         <tr>
@@ -21,10 +30,10 @@ export const TableCustom: React.FC<{ data: TableStruct, color: string, type: str
       </thead>
       <tbody>
         {data.rows.map((row, i) => (
-          <tr key={i} className={type}>
-            <td>{row.row}</td>
+          <tr key={i} className={row.row === 'Total' || row.row === 'Average' ? `${classes.bold} ${type}` : type}>
+            <td className={classes.bold}>{row.row}</td>
             {row.data.map((data, j) => (
-              <td key={j}>{FormatNumber(data, 1)}</td>
+              <td key={j} className={j >= row.data.length - 2 ? classes.bold : ""} >{FormatNumber(data, 1)}</td>
             ))}
           </tr>
         ))}
