@@ -3,7 +3,7 @@ import { ConvertTransactions, Transaction } from "../../Utils/Transactions";
 import { Options } from "./ChildComponents/Options";
 import { Pagination } from "./ChildComponents/Pagination";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 
 import { TransactionTable } from "../../Component/TransactionTable";;
@@ -78,6 +78,7 @@ export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.E
 
   return (
 		<>
+		<h1>Transactions View</h1>
 		<Options
 			options={options}
 			handleOptionsChange={handleOptionsChange}

@@ -2,7 +2,7 @@ import React, {useEffect, useState} from "react";
 import { createUseStyles } from "react-jss";
 import axios from 'axios';
 import { Button, Divider, Grid, Header, Icon, Segment } from "semantic-ui-react";
-import { Account, ConvertTransactions, GetAccountsBalance, Transaction } from "../../Utils/Transactions";
+import { Account, ConvertTransactions, GetAccountsBalance } from "../../Utils/Transactions";
 import { useNavigate } from "react-router-dom";
 import { FormatNumber } from "../../Utils/Miscellaneous";
 
@@ -12,7 +12,7 @@ const useStyles = createUseStyles({
 	},
 });
 
-export const Accounts: React.FC<{ userID: string, transactions: Transaction }> = ({ userID, transactions }): JSX.Element => {
+export const Accounts: React.FC<{ userID: string, }> = ({ userID }): JSX.Element => {
 	const classes = useStyles();
 	const navigate = useNavigate();
 

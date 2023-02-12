@@ -1,5 +1,3 @@
-import './App.css';
-
 import { Sidebar } from './Pages/Sidebar/Sidebar';
 import { Home } from './Pages/Home/Home';
 import { YearlyReport } from './Pages/YearlyReport/YearlyReport';
@@ -24,24 +22,28 @@ import './firebase.ts';
 import { getAuth, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
 
 import { createUseStyles } from "react-jss";
+import React from 'react';
 
 const useStyles = createUseStyles({
   mainSection: {
 		marginLeft: 270,
     padding: "20px 25px 25px 25px",
 	},
+  app: {
+    textAlign: 'center',
+  },
 });
 
-function App() {
+export const App: React.FC<{}> = (): JSX.Element => {
   const classes = useStyles();
 
   const [loggedIn, setLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
-  const [auth, setAuth] = useState(null);
+  const [user, setUser] = useState(null as any);
+  const [auth, setAuth] = useState(null as any);
 
   useEffect(() => {
-    var authVar = getAuth()
+    const authVar: any = getAuth()
     setAuth(authVar);
 
     setPersistence(authVar, browserLocalPersistence).then(() => {
@@ -73,7 +75,7 @@ function App() {
   }
 
   return (
-    <div className="App">
+    <div className={classes.app} >
       <BrowserRouter>
         {loggedIn && !loading ? (
           <>
@@ -104,7 +106,7 @@ function App() {
               </>
             ) : (
               <>
-              <Route path="/login" element={<Login auth={auth} setUser={(user) => setUser(user)} />} />
+              <Route path="/login" element={<Login auth={auth} setUser={(user: any) => setUser(user)} />} />
 
               <Route path="/" element={<></>} />
               <Route path="/yearlyReport" element={<></>} />

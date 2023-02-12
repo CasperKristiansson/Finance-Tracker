@@ -1,30 +1,23 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { Segment } from "semantic-ui-react";
-import TableCustom from "../../../graphs/tableCustom";
-import TableMonth from "../../../graphs/tableMonth";
+import { TableCustom } from "../../../Component/TableCustom";
 import { Transaction, GetTableYears, GetTableCategories } from "../../../Utils/Transactions";
 
 export const TableOverview: React.FC<{transactions: Transaction[]}> = ({ transactions }): JSX.Element => {
-	useEffect(() => {
-		if (transactions.length > 1) {
-			GetTableYears(transactions, "Income");
-		}
-	}, [transactions]);
-
   return(
 		<>
 		<Segment>
 			<h1>Income</h1>
-			<TableMonth 
-				data={transactions.length > 1 ? GetTableYears(transactions, "Income") : [] }
+			<TableCustom 
+				data={transactions.length > 1 ? GetTableYears(transactions, "Income") : {columns: [], rows: []} }
 				color={"green"}
 				type={"positive"}
 			/>
 		</Segment>
 		<Segment>
 			<h1>Expenses</h1>
-			<TableMonth
-				data={transactions.length > 1 ? GetTableYears(transactions, "Expense") : []}
+			<TableCustom
+				data={transactions.length > 1 ? GetTableYears(transactions, "Expense") : {columns: [], rows: []} }
 				color={"red"}
 				type={"negative"}
 			/>
@@ -32,7 +25,7 @@ export const TableOverview: React.FC<{transactions: Transaction[]}> = ({ transac
 		<Segment>
 			<h1>Income Categories</h1>
 			<TableCustom
-				data={transactions.length > 1 ? GetTableCategories(transactions, "Income") : {columns: [], rows: []}}
+				data={transactions.length > 1 ? GetTableCategories(transactions, "Income") : {columns: [], rows: []} }
 				color={"green"}
 				type={"positive"}
 			/>
@@ -40,7 +33,7 @@ export const TableOverview: React.FC<{transactions: Transaction[]}> = ({ transac
 		<Segment>
 			<h1>Expense Categories</h1>
 			<TableCustom
-				data={transactions.length > 1 ? GetTableCategories(transactions, "Expense") : {columns: [], rows: []}}
+				data={transactions.length > 1 ? GetTableCategories(transactions, "Expense") : {columns: [], rows: []} }
 				color={"red"}
 				type={"negative"}
 			/>

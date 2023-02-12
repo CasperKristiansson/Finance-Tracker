@@ -1,3 +1,4 @@
+import React from "react";
 import { Grid, Segment } from "semantic-ui-react";
 import { FormatNumber } from "../../../Utils/Miscellaneous";
 import { TotalTransactionType, Transaction } from "../../../Utils/Transactions";
