@@ -15,6 +15,16 @@ export interface Transaction {
     ID: number;
 }
 
+export interface Loan {
+    Amount: number;
+    Date: Date;
+    Type: string;
+    ID: number; 
+}
+
+/**
+ * Converts the endPoint transaction data into a Transaction array.
+ */
 export function ConvertTransactions(data: any[]): Transaction[] {
     let transactions: Transaction[] = [];
 
@@ -58,39 +68,9 @@ export function ConvertTransactions(data: any[]): Transaction[] {
     return transactions;
 }
 
-
-// This function filters the transactions based on the month provided.
-// It iterates through the transactions and checks the month of the date of each one. If the month matches the month provided it adds the transaction to the filteredTransactions array.
-// It returns the filteredTransactions array.
-export function FilterTransactionsMonth(transactions: Transaction[], month: number): Transaction[] {
-    let filteredTransactions: Transaction[] = [];
-
-    filteredTransactions = transactions.filter((transaction) => {
-        return transaction.Date.getMonth() === month;
-    });
-
-    return filteredTransactions;
-}
-
-export function TransactionsSort(transactions: Transaction[]): Transaction[] {
-    return transactions.sort((a, b) => {
-        return a.Date.getTime() - b.Date.getTime();
-    });
-}
-
-export function TransactionsLoansSort(amounts: Transaction[] | Loan[]): Transaction[] | Loan[] {
-    return amounts.sort((a, b) => {
-        return a.Date.getTime() - b.Date.getTime();
-    });
-}
-
-export interface Loan {
-    Amount: number;
-    Date: Date;
-    Type: string;
-    ID: number; 
-}
-
+/**
+ * Converts the endPoint loan data into a Loan array.
+ */
 export function ConvertLoans(data: any[]): Loan[] {
     let loans: Loan[] = [];
 
@@ -125,40 +105,9 @@ export function ConvertLoans(data: any[]): Loan[] {
     return loans;
 }
 
-export function TotalAssets(transactions: Transaction[]): number {
-    const income: number = TotalTransactionType(transactions, "Income");
-    const expenses: number = TotalTransactionType(transactions, "Expense");
-
-    return income - expenses;
-}
-
-export function TotalTransactionType(transactions: Transaction[], type: string): number {
-    let total: number = 0;
-
-    for (let i = 0; i < transactions.length; i++) {
-        if (transactions[i].Type === type) {
-            total += transactions[i].Amount;
-        }
-    }
-
-    return total;
-}
-
-export function TotalLiabilities(loans: Loan[]): number {
-    let total: number = 0;
-
-    for (let i = 0; i < loans.length; i++) {
-        total += loans[i].Amount;
-    }
-
-    return total;
-}
-
-export function TotalNetWorth(transactions: Transaction[], loans: Loan[]): number {
-    return TotalAssets(transactions) - TotalLiabilities(loans);
-}
-
-// Convert Loans to Transactions
+/**
+ * Converts the loans into transactions.
+ */
 export function ConvertLoansToTransactions(loans: Loan[]): Transaction[] {
     let transactions: Transaction[] = [];
 
@@ -177,7 +126,40 @@ export function ConvertLoansToTransactions(loans: Loan[]): Transaction[] {
     return transactions;
 }
 
-// Create a function that returns the transactions types specified
+/**
+ * Filters transactions by the given month.
+ */
+export function FilterTransactionsMonth(transactions: Transaction[], month: number): Transaction[] {
+    let filteredTransactions: Transaction[] = [];
+
+    filteredTransactions = transactions.filter((transaction) => {
+        return transaction.Date.getMonth() === month;
+    });
+
+    return filteredTransactions;
+}
+
+/**
+ * Sorts the transactions by date
+ */
+export function TransactionsSort(transactions: Transaction[]): Transaction[] {
+    return transactions.sort((a, b) => {
+        return a.Date.getTime() - b.Date.getTime();
+    });
+}
+
+/**
+ * Sorts the transactions | loans by date
+ */
+export function TransactionsLoansSort(amounts: Transaction[] | Loan[]): Transaction[] | Loan[] {
+    return amounts.sort((a, b) => {
+        return a.Date.getTime() - b.Date.getTime();
+    });
+}
+
+/**
+ * Filters transactions by the type
+ */
 export function FilterTransactionsType(transactions: Transaction[], type: string): Transaction[] {
     let filteredTransactions: Transaction[] = [];
 
@@ -188,12 +170,69 @@ export function FilterTransactionsType(transactions: Transaction[], type: string
     return filteredTransactions;
 }
 
+
+/**
+ * ? Numbers
+ */
+
+/**
+ * Calculates the totalAssets based on the transactions.
+ */
+export function TotalAssets(transactions: Transaction[]): number {
+    const income: number = TotalTransactionType(transactions, "Income");
+    const expenses: number = TotalTransactionType(transactions, "Expense");
+
+    return income - expenses;
+}
+
+/**
+ * Calculates the total based on the transaction type
+ */
+export function TotalTransactionType(transactions: Transaction[], type: string): number {
+    let total: number = 0;
+
+    for (let i = 0; i < transactions.length; i++) {
+        if (transactions[i].Type === type) {
+            total += transactions[i].Amount;
+        }
+    }
+
+    return total;
+}
+
+/**
+ * Calculates total Liability based on the loans.
+ */
+export function TotalLiabilities(loans: Loan[]): number {
+    let total: number = 0;
+
+    for (let i = 0; i < loans.length; i++) {
+        total += loans[i].Amount;
+    }
+
+    return total;
+}
+
+/**
+ * Total Net Worth based on the transactions and loans.
+ */
+export function TotalNetWorth(transactions: Transaction[], loans: Loan[]): number {
+    return TotalAssets(transactions) - TotalLiabilities(loans);
+}
+
+/**
+ * ? Categories & Dropdown Mappings
+ */
+
 export interface DropDown {
     key: string;
     text: string;
     value: string;
 }
 
+/**
+ * By given categories and type, returns a DropDown array.
+ */
 export function GetCategoriesMapping(categories: any, type: string): DropDown[] {
 	return categories
 		.filter((category: { Type: string; }) => category.Type === type)
@@ -206,6 +245,9 @@ export function GetCategoriesMapping(categories: any, type: string): DropDown[] 
 		});
 }
 
+/**
+ * By given accounts, returns a DropDown array.
+ */
 export function GetAccountsMapping(accounts: any): DropDown[] {
 	return accounts.map((account: { Account: any; }) => {
 		return {
