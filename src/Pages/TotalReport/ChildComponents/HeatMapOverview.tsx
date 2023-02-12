@@ -1,7 +1,7 @@
 import React from "react";
 import { Grid, Segment } from "semantic-ui-react";
 import { GetHeatmap, Transaction } from "../../../Utils/Transactions";
-import { HeatMap, HeatMapStruct } from "../../../Component/HeatMap";
+import { HeatMap, HeatMapStruct } from "../../Heatmap";
 import { HeatMapExpenseColors, HeatMapIncomeColors } from "../../../Utils/Data/HeatMap";
 
 export const HeatMapOverview: React.FC<{transactions: Transaction[]}> = ({ transactions }): JSX.Element => {
