@@ -1,4 +1,4 @@
-import { BarChartStruct } from "../Pages/BarChart";
+import { BarChartStruct } from "../Component/BarChart";
 import { HeatMapStruct } from "../Component/HeatMap";
 import { LineChartStruct } from "../Component/LineChart";
 import { TableStruct } from "../Component/TableCustom";
