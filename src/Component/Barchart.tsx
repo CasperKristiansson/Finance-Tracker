@@ -1,7 +1,7 @@
 import React from "react";
 import { Bar } from "react-chartjs-2";
 
-export interface BarChartProps {
+export interface BarChartStruct {
   labels: string[];
   incomeData: number[];
   expenseData: number[];
@@ -20,7 +20,7 @@ interface BarChartState {
   }[];
 }
 
-export const BarChart: React.FC<{ data: BarChartProps, title: string, height: number | undefined }> = ({ data, title, height }): JSX.Element => {
+export const BarChart: React.FC<{ data: BarChartStruct, title: string, height: number | undefined }> = ({ data, title, height }): JSX.Element => {
   const [dataset, setDataset] = React.useState({
     labels: [],
     datasets: [
