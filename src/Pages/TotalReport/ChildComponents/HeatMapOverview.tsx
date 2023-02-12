@@ -13,7 +13,7 @@ export const HeatMapOverview: React.FC<{transactions: Transaction[]}> = ({ trans
 					<Segment>
 						<HeatMap
 							title={`Income`}
-							data={transactions.length > 1 ? GetHeatmap(transactions, "Income") : [ {name: "loading...", data: [{}]} as HeatMapStruct ]}
+							data={transactions.length > 1 ? GetHeatmap(transactions, "Income") : [ {name: "loading...", data: [{x: "Loading...", y: 0}]} ] as HeatMapStruct[]}
 							color={HeatMapIncomeColors}
 						/>
 					</Segment>
@@ -22,7 +22,7 @@ export const HeatMapOverview: React.FC<{transactions: Transaction[]}> = ({ trans
 					<Segment>
 						<HeatMap
 							title={`Expense`}
-							data={transactions.length > 1 ? GetHeatmap(transactions, "Expense") : [ {name: "loading...", data: [{}]} as HeatMapStruct ]}
+							data={transactions.length > 1 ? GetHeatmap(transactions, "Expense") : [ {name: "loading...", data: [{x: "Loading...", y: 0}]} ] as HeatMapStruct[] }
 							color={HeatMapExpenseColors}
 						/>
 					</Segment>
