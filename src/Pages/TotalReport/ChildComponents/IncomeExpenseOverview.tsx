@@ -1,6 +1,6 @@
 import React from "react";
 import { Grid, Segment } from "semantic-ui-react";
-import { BarChart } from "../../BarChart";
+import { BarChart } from "../../../Component/BarChart";
 import PieChart from "../../../Component/PieChart";
 import { ExpenseIncomeBarChart, FilterTransactionsType, GetCategoriesAmount, GetCategoriesAmountIncomeExpense, GetCategoriesLabels, GetCategoriesLabelsIncomeExpense, Loan, Transaction } from "../../../Utils/Transactions";
 
