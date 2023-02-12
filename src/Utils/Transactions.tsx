@@ -1,5 +1,5 @@
 import { BarChartStruct } from "../Component/BarChart";
-import { HeatMapStruct } from "../Pages/Heatmap";
+import { HeatMapStruct } from "../Component/Heatmap";
 import { LineChartStruct } from "../Component/LineChart";
 import { TableStruct } from "../Component/TableCustom";
 import { Milestone, milestones } from "./Data/Milestones";
