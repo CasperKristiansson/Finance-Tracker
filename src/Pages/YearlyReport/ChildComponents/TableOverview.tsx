@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { Segment } from "semantic-ui-react";
-import TableCustom from "../../../graphs/tableCustom";
+import TableCustom from "../../../Component/TableCustom";
 import { Transaction, GetTableYears, NetChange, GetTableMonths } from "../../../Utils/Transactions";
 
 export const TableOverview: React.FC<{transactions: Transaction[]}> = ({ transactions }): JSX.Element => {

@@ -1,6 +1,7 @@
 import { BarChartStruct } from "../Component/BarChart";
 import { HeatMapStruct } from "../Component/HeatMap";
 import { LineChartStruct } from "../Component/LineChart";
+import { TableStruct } from "../Component/TableCustom";
 import { Milestone, milestones } from "./Data/Milestones";
 import { MonthsLong, MonthsShort, StringifyTimeShort, StringifyTimeShortest } from "./Date";
 
@@ -681,17 +682,7 @@ export function GetTableYears(transactions: Transaction[], type: string): TableM
     return table;
 }
 
-export interface TableCategoryStruct {
-    columns: string[];
-    rows: TableCategoryRow[];
-}
-
-interface TableCategoryRow {
-    row: string;
-    data: number[];
-}
-
-export function GetTableCategories(transactions: Transaction[], type: string): TableCategoryStruct {
+export function GetTableCategories(transactions: Transaction[], type: string): TableStruct {
     transactions = FilterTransactionsType(transactions, type);
     // Get all unique categories from transactions
     const categories: string[] = Array.from(new Set(transactions.map(t => t.Category)));
@@ -700,7 +691,7 @@ export function GetTableCategories(transactions: Transaction[], type: string): T
     const years: string[] = Array.from(new Set(transactions.map(t => t.Date.getFullYear().toString())));
 
     // Create table categories struct with columns
-    const tableCategories: TableCategoryStruct = {
+    const tableCategories: TableStruct = {
         columns: ['Type', ...years, 'Total', 'Average'],
         rows: []
     };
@@ -754,7 +745,7 @@ interface TableData {
     EndBalance: number[];
 }
 
-export function NetChange(transactions: Transaction[]): TableCategoryStruct {
+export function NetChange(transactions: Transaction[]): TableStruct {
     const tableData: TableData = {
         Income: new Array(14).fill(0),
         Expense: new Array(14).fill(0),
@@ -794,7 +785,7 @@ export function NetChange(transactions: Transaction[]): TableCategoryStruct {
     tableData.Expense[13] = totalExpense / 12;
     tableData.NET[13] = totalNet / 12;
   
-    const tableCategories: TableCategoryStruct = {
+    const tableCategories: TableStruct = {
         columns: ['Type', ...MonthsShort, 'Total', 'Average'],
         rows: []
     };
@@ -810,14 +801,14 @@ export function NetChange(transactions: Transaction[]): TableCategoryStruct {
 }
 
 
-export function GetTableMonths(transactions: Transaction[], type: string): TableCategoryStruct {
+export function GetTableMonths(transactions: Transaction[], type: string): TableStruct {
     transactions = FilterTransactionsType(transactions, type);
 
     // Get all unique categories from transactions
     const categories: string[] = Array.from(new Set(transactions.map(t => t.Category)));
 
     // Create table categories struct with columns
-    const tableCategories: TableCategoryStruct = {
+    const tableCategories: TableStruct = {
         columns: ['Type', ...MonthsShort, 'Total', 'Average'],
         rows: []
     };
