@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { MonthsLong, MonthYear } from "../../../Utils/Date";
 import { ExcelUpload, ExcelUploadData } from "../../../Utils/Excel";
 import PieChart from "../../../graphs/piechart";
-import { BarChart } from "../../../Component/Barchart";
+import { BarChart } from "../../../Component/BarChart";
 import { GetMonthOfYearAmount, Transaction, GetCategoriesLabels, GetCategoriesAmount, FilterTransactionsMonth, FilterTransactionsType } from "../../../Utils/Transactions";
 
 const useStyles = createUseStyles({
@@ -73,7 +73,7 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 								<Segment>
 									<BarChart
 										title={period.year.toString()}
-										barChart={{
+										data={{
 											labels: MonthsLong,
 											incomeData: transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Income") : [],
 											expenseData: transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Expense") : [],

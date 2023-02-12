@@ -1,7 +1,7 @@
 import React from "react";
 import { Grid, Segment } from "semantic-ui-react";
-import { BarChart, BarChartProps } from "../../../Component/Barchart";
-import LineChart from "../../../graphs/linechart";
+import { BarChart, BarChartProps } from "../../../Component/BarChart";
+import { LineChart, LineChartColor } from "../../../Component/LineChart";
 import { MonthsLong } from "../../../Utils/Date";
 import { GetLineChartValues, GetMonthOfYearAmount, Transaction } from "../../../Utils/Transactions";
 
@@ -15,7 +15,7 @@ export const GraphOverview: React.FC<{transactions: Transaction[], currentYear: 
 						<BarChart
 							title={`Income / Expense for ${currentYear}`}
 							height={undefined}
-							barChart={{
+							data={{
 								labels: MonthsLong,
 								incomeData: transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Income") : [],
 								expenseData: transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Expense") : [],
@@ -27,10 +27,12 @@ export const GraphOverview: React.FC<{transactions: Transaction[], currentYear: 
 					<Segment>
 						<LineChart
 							title={`Wealth Growth for ${currentYear}`}
-							data={[
-								["", ...MonthsLong],
-								transactions.length > 1 ? GetLineChartValues(transactions)[1] : [],
-							]}
+							data={{
+								labels: MonthsLong,
+								data: transactions.length > 1 ? GetLineChartValues(transactions).data : [],
+							}}
+							height={undefined}
+							color={{} as LineChartColor}
 						/>
 					</Segment>
 				</Grid.Column>

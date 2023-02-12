@@ -20,8 +20,8 @@ interface BarChartState {
   }[];
 }
 
-export const BarChart: React.FC<{ barChart: BarChartProps, title: string, height: number | undefined }> = ({ barChart, title, height }): JSX.Element => {
-  const [data, setData] = React.useState({
+export const BarChart: React.FC<{ data: BarChartProps, title: string, height: number | undefined }> = ({ data, title, height }): JSX.Element => {
+  const [dataset, setDataset] = React.useState({
     labels: [],
     datasets: [
       {
@@ -48,14 +48,12 @@ export const BarChart: React.FC<{ barChart: BarChartProps, title: string, height
     var hoverBorderColorExpense = "rgba(54, 162, 235, 1)";
     var borderWidth = 1
 
-    console.log(barChart)
-
-    setData({
-      labels: barChart.labels,
+    setDataset({
+      labels: data.labels,
       datasets: [
         {
           label: "Expense",
-          data: barChart.expenseData,
+          data: data.expenseData,
           backgroundColor: backgroundColorIncome,
           borderColor: borderColorIncome,
           hoverBackgroundColor: hoverBackgroundColorIncome,
@@ -64,7 +62,7 @@ export const BarChart: React.FC<{ barChart: BarChartProps, title: string, height
         },
         {
           label: "Income",
-          data: barChart.incomeData,
+          data: data.incomeData,
           backgroundColor: backgroundColorExpense,
           borderColor: borderColorExpense,
           hoverBackgroundColor: hoverBackgroundColorExpense,
@@ -74,7 +72,7 @@ export const BarChart: React.FC<{ barChart: BarChartProps, title: string, height
       ],
     });
 
-  }, [barChart]);
+  }, [data]);
 
   var options = {
     title: {
@@ -103,7 +101,7 @@ export const BarChart: React.FC<{ barChart: BarChartProps, title: string, height
   return (
     <>
       <h2>{title}</h2>
-      <Bar data={data} options={options} height={height}/>
+      <Bar data={dataset} options={options} height={height}/>
     </>
   );
 };
