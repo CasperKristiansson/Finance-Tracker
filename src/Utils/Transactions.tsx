@@ -1,5 +1,6 @@
-import { BarChartProps } from "../Component/Barchart";
-import { HeatmapStruct } from "../Component/Heatmap";
+import { BarChartProps } from "../Component/BarChart";
+import { HeatMapStruct } from "../Component/HeatMap";
+import { LineChartStruct } from "../Component/LineChart";
 import { Milestone, milestones } from "./Data/Milestones";
 import { MonthsLong, MonthsShort, StringifyTimeShort, StringifyTimeShortest } from "./Date";
 
@@ -260,7 +261,7 @@ function groupValuesMonthIterative(amounts: Transaction[] | Loan[]): { [date: st
     return groupedValues;
 }
 
-export function GetLineChartValues(amounts: Transaction[] | Loan[]): [string[], number[]] {
+export function GetLineChartValues(amounts: Transaction[] | Loan[]): LineChartStruct {
     let groupedValues: { [date: string]: number } = groupValuesMonthIterative(amounts);
 
     let dates: string[] = [""];
@@ -271,7 +272,10 @@ export function GetLineChartValues(amounts: Transaction[] | Loan[]): [string[], 
         values.push(groupedValues[date]);
     }
 
-    return [dates, values];
+    return {
+        labels: dates,
+        data: values
+    };
 }
 
 /**
@@ -586,10 +590,10 @@ export function GetMilestones(transactions: Transaction[]): Milestone[] {
  * ? Heatmap
  */
 
-export function GetHeatmap(transactions: Transaction[], type: string): HeatmapStruct[] {
+export function GetHeatmap(transactions: Transaction[], type: string): HeatMapStruct[] {
     transactions = TransactionsSort(transactions);
 
-    let heatmap: HeatmapStruct[] = [];
+    let heatmap: HeatMapStruct[] = [];
     
     for (let j = 0; j < 12; j++) {
         heatmap.push({

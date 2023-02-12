@@ -1,7 +1,7 @@
 import React from "react";
 import Chart from 'react-apexcharts'
 
-export interface HeatmapStruct {
+export interface HeatMapStruct {
   name: string;
   data: {
     x: string;
@@ -9,14 +9,14 @@ export interface HeatmapStruct {
   }[]
 }
 
-export interface HeatmapColor {
+export interface HeatMapColor {
   from: number;
   to: number;
   color: string;
   name: string;
 }
 
-export const Heatmap: React.FC<{ data: HeatmapStruct[], title: string, color: HeatmapColor[] }> = ({ data, title, color }): JSX.Element => {
+export const HeatMap: React.FC<{ data: HeatMapStruct[], title: string, color: HeatMapColor[] }> = ({ data, title, color }): JSX.Element => {
 	var options: any = {
 		chart: {
 			height: 350,
