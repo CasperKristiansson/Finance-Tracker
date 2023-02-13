@@ -19,7 +19,7 @@ const useStyles = createUseStyles({
 	}
 });
 
-export const AddTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
+export const AddTransaction: React.FC<{ userID: string, setApiLoading: any }> = ({ userID, setApiLoading }): JSX.Element => {
 	const classes = useStyles();
 
 	const [transaction, setTransaction] = useState({Type: "Income", Date: new Date()} as Transaction);
@@ -31,6 +31,7 @@ export const AddTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.El
 	const [successSubmitting, setSuccessSubmitting] = useState(null as boolean | null);
 
 	useEffect(() => {
+		setApiLoading(true);
 		var params = new URLSearchParams();
 		params.append('userID', userID);
 
@@ -38,12 +39,15 @@ export const AddTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.El
 			setIncomeCategories(GetCategoriesMapping(response.data.categories, "Income"));
 			setExpenseCategories(GetCategoriesMapping(response.data.categories, "Expense"));
 			setAccounts(GetAccountsMapping(response.data.accounts));
+			setApiLoading(false);
 		}).catch(response => {
 			console.log(response);
+			setApiLoading(false);
 		});
 	}, [userID]);
 
 	const handleSubmit = () => {
+		setApiLoading(true);
 		setIsSubmitting(true);
 		var params = new URLSearchParams();
 		params.append('type', transaction.Type);
@@ -65,9 +69,11 @@ export const AddTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.El
 				Note: "",
 				Account: "",
 			} as Transaction);
+			setApiLoading(false);
 		}).catch(response => {
 			console.log(response);
 			setIsSubmitting(false);
+			setSuccessSubmitting(false);
 		});
 	}
 

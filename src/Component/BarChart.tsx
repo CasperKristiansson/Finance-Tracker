@@ -1,6 +1,14 @@
-import React, { useRef } from "react";
+import React from "react";
 import { Bar } from "react-chartjs-2";
-import { Chart } from 'chart.js';
+import { createUseStyles } from "react-jss";
+
+const useStyles = createUseStyles({
+  hoverPointer: {
+    "&:hover": {
+      cursor: "pointer",
+    },
+  },
+});
 
 export interface BarChartStruct {
   labels: string[];
@@ -22,8 +30,8 @@ interface BarChartState {
 }
 
 export const BarChart: React.FC<{ data: BarChartStruct, title: string, height: number | undefined, customClickEvent?: any }> = ({ data, title, height, customClickEvent }): JSX.Element => {
-  const chartRef = useRef<HTMLCanvasElement>(null)
-  
+  const classes = useStyles();
+
   const [dataset, setDataset] = React.useState({
     labels: [],
     datasets: [
@@ -99,14 +107,17 @@ export const BarChart: React.FC<{ data: BarChartStruct, title: string, height: n
         }
       }
     },
-    onClick: customClickEvent? customClickEvent : undefined
+    onClick: (event: any, element: any) => {
+      if (element.length > 0 && customClickEvent) {
+        customClickEvent(event, element);
+      }
+    }
   }
 
   return (
     <>
       <h2>{title}</h2>
-      <Bar data={dataset} options={options} height={height} ref={chartRef as any}
-      />
+      <Bar data={dataset} options={options} height={height} className={customClickEvent ? classes.hoverPointer: ""} />
     </>
   );
 };

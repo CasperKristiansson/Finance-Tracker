@@ -83,11 +83,11 @@ export const Sidebar: React.FC<{}> = (): JSX.Element => {
 				<Menu iconShape="circle" className={classes.iconWrapper}>
 					<MenuItem icon={<FontAwesomeIcon icon={faMoneyBillWave} />}>
 						Overview
-						<Link to="/" />
+						<Link to={`/?year=${new Date().getFullYear()}&month=${new Date().getMonth() - 1}&type=Income`} />
 					</MenuItem>
 					<MenuItem icon={<FontAwesomeIcon icon={faFileCircleCheck} />}>
 						Yearly Report
-						<Link to="/yearlyReport" />
+						<Link to={`/yearlyReport?year=${new Date().getFullYear()}`} />
 					</MenuItem>
 					<MenuItem icon={<FontAwesomeIcon icon={faFileCircleCheck} />}>
 						Total Report

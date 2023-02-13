@@ -6,7 +6,7 @@ import { Header } from './ChildComponents/Header';
 import { Overview } from "./ChildComponents/Overview";
 import { Banner } from "./ChildComponents/Banner";
 
-import { GetStartPeriod } from '../../Utils/Date';
+import { GetStartPeriod, GetStartType, MonthsLong } from '../../Utils/Date';
 import { ConvertTransactions, FilterTransactionsMonth, Transaction, TransactionsSort } from '../../Utils/Transactions';
 import { TransactionTable } from "../../Component/TransactionTable";
 import { ExcelUploadData } from "../../Utils/Excel";
@@ -26,32 +26,43 @@ interface Message {
 	show: boolean;
 }
 
-export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
+export const Home: React.FC<{ userID: string, setApiLoading: any }> = ({ userID, setApiLoading }): JSX.Element => {
 	const classes = useStyles();
 
 	const [period, setPeriod] = useState(GetStartPeriod());
+	const [pieChartType, setPieChartType] = React.useState(GetStartType());
 	const [transactions, setTransactions] = useState([] as Transaction[]);
 	const [message, setMessage] = useState({message: null, show: false} as Message);
+	const [didMount, setDidMount] = useState(false);
 
 	useEffect(() => {
+		setApiLoading(true);
     	var params = new URLSearchParams();
     	params.append('year', period.year.toString());
 	  	params.append('userID', userID);
       
 		axios.post('https://pktraffic.com/api/transactions.php', params).then(response => {
 			setTransactions(ConvertTransactions(response.data.transactions));
+			setApiLoading(false);
 		}).catch(response => {
 			console.log(response);
+			setApiLoading(false);
 		});
     
 	}, [period.year, userID]);
 
 	useEffect(() => {
+		if (!didMount) {
+			setDidMount(true);
+    		return;
+		}
+
 		var params = new URLSearchParams();
 		params.append("year", period.year.toString());
 		params.append("month", period.month.toString());
+		params.append("type", pieChartType)
 		window.history.pushState({}, "", "?" + params.toString());
-	}, [period]);
+	}, [period, pieChartType]);
 
 	const handleMonthChange = (month: number) => {
 		if (month < 0) {
@@ -89,10 +100,14 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 			transactions={transactions}
 			period={period}
 			handleMessage={handleMessage}
+			pieChartType={pieChartType}
+			setPieChartType={setPieChartType}
+			setPeriod={setPeriod}
 		/>
 		<Banner
 			transactions={transactions}
 			month={period.month}
+			title={`${MonthsLong[period.month]} ${period.year}`}
 		/>
 		<TransactionTable
 			transactions={TransactionsSort(FilterTransactionsMonth(transactions, period.month)).reverse()}

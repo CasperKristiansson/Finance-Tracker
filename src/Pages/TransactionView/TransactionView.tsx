@@ -9,7 +9,7 @@ import axios from "axios";
 import { TransactionTable } from "../../Component/TransactionTable";;
 
 
-export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
+export const TransactionView: React.FC<{ userID: string, setApiLoading: any }> = ({ userID, setApiLoading }): JSX.Element => {
   	const [currentItems, setCurrentItems] = useState([] as Transaction[]);
 	const [transactionCategories, setTransactionCategories] = useState([] as TransactionCategory[]);
 	const [options, setOptions] = useState({
@@ -29,6 +29,8 @@ export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.E
 	} as PaginationState);
 
 	useEffect(() => {
+		setApiLoading(true);
+
     	var params = new URLSearchParams();
 
 		params.append('userID', userID)
@@ -47,8 +49,10 @@ export const TransactionView: React.FC<{ userID: string }> = ({ userID }): JSX.E
 				showingItems: response.data.transactions.length
 			}));
 			setCurrentItems(ConvertTransactions(response.data.transactions));
+			setApiLoading(false);
 		}).catch(response => {
 			console.log(response);
+			setApiLoading(false);
 		})
     
   	}, [options, userID, paginationState.itemOffset, paginationState.itemsPerPage]);

@@ -23,11 +23,9 @@ const useStyles = createUseStyles({
 	},
 });
 
-export const Overview: React.FC<{ userID: string, period: MonthYear, transactions: Transaction[], handleMessage: any }> = ({ userID, period, transactions, handleMessage }): JSX.Element => {
+export const Overview: React.FC<{ userID: string, period: MonthYear, transactions: Transaction[], handleMessage: any, pieChartType: string, setPieChartType: any, setPeriod: any }> = ({ userID, period, transactions, handleMessage, pieChartType, setPieChartType, setPeriod }): JSX.Element => {
 	const classes = useStyles();
 	let navigate = useNavigate();
-
-	const [pieChartType, setPieChartType] = React.useState("Income");
 
 	const handleExcelSubmit = () => {
 		ExcelUpload(userID).then((data: ExcelUploadData) => {
@@ -80,8 +78,8 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 										}}
 										height={undefined}
 										customClickEvent={(_event: any, element: any) => {
-											navigate(`/?year=${period.year}&month=${element[0].index}`);
-											window.location.reload();
+											setPieChartType(element[0].datasetIndex === 1 ? "Income" : "Expense");
+											setPeriod({ year: period.year, month: element[0].index });
 										}}
 									/>
 								</Segment>
