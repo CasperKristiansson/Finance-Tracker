@@ -12,6 +12,7 @@ import { TableOverview } from "./ChildComponents/TableOverview";
 export const YearlyReport: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 	const [transactions, setTransactions] = useState([] as Transaction[]);
 	const [year, setYear] = useState(GetStartYear());
+	const [didMount, setDidMount] = useState(false);
 
 	useEffect(() => {
 		var params = new URLSearchParams();
@@ -26,6 +27,11 @@ export const YearlyReport: React.FC<{ userID: string }> = ({ userID }): JSX.Elem
 	}, [year, userID]);
 
 	useEffect(() => {
+		if (!didMount) {
+			setDidMount(true);
+    		return;
+		}
+
 		var params = new URLSearchParams();
 		params.append("year", year.toString());
 		window.history.pushState({}, "", "?" + params.toString());
