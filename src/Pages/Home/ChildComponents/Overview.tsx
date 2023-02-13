@@ -23,11 +23,9 @@ const useStyles = createUseStyles({
 	},
 });
 
-export const Overview: React.FC<{ userID: string, period: MonthYear, transactions: Transaction[], handleMessage: any }> = ({ userID, period, transactions, handleMessage }): JSX.Element => {
+export const Overview: React.FC<{ userID: string, period: MonthYear, transactions: Transaction[], handleMessage: any, pieChartType: string, setPieChartType: any }> = ({ userID, period, transactions, handleMessage, pieChartType, setPieChartType }): JSX.Element => {
 	const classes = useStyles();
 	let navigate = useNavigate();
-
-	const [pieChartType, setPieChartType] = React.useState("Income");
 
 	const handleExcelSubmit = () => {
 		ExcelUpload(userID).then((data: ExcelUploadData) => {

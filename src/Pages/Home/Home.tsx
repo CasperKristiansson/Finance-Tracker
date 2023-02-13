@@ -6,7 +6,7 @@ import { Header } from './ChildComponents/Header';
 import { Overview } from "./ChildComponents/Overview";
 import { Banner } from "./ChildComponents/Banner";
 
-import { GetStartPeriod, MonthsLong } from '../../Utils/Date';
+import { GetStartPeriod, GetStartType, MonthsLong } from '../../Utils/Date';
 import { ConvertTransactions, FilterTransactionsMonth, Transaction, TransactionsSort } from '../../Utils/Transactions';
 import { TransactionTable } from "../../Component/TransactionTable";
 import { ExcelUploadData } from "../../Utils/Excel";
@@ -30,6 +30,7 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 	const classes = useStyles();
 
 	const [period, setPeriod] = useState(GetStartPeriod());
+	const [pieChartType, setPieChartType] = React.useState(GetStartType());
 	const [transactions, setTransactions] = useState([] as Transaction[]);
 	const [message, setMessage] = useState({message: null, show: false} as Message);
 
@@ -50,8 +51,9 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 		var params = new URLSearchParams();
 		params.append("year", period.year.toString());
 		params.append("month", period.month.toString());
+		params.append("type", pieChartType)
 		window.history.pushState({}, "", "?" + params.toString());
-	}, [period]);
+	}, [period, pieChartType]);
 
 	const handleMonthChange = (month: number) => {
 		if (month < 0) {
@@ -89,6 +91,8 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 			transactions={transactions}
 			period={period}
 			handleMessage={handleMessage}
+			pieChartType={pieChartType}
+			setPieChartType={setPieChartType}
 		/>
 		<Banner
 			transactions={transactions}
