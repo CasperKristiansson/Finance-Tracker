@@ -58,7 +58,6 @@ export const LineChart: React.FC<{ data: LineChartStruct | LineChartStruct[], he
         }),
       });
     } else {
-      console.log(data)
       setDataSet({
         labels: data.labels,
         datasets: [

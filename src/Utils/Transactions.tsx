@@ -2,6 +2,7 @@ import { BarChartStruct } from "../Component/BarChart";
 import { HeatMapStruct } from "../Component/Heatmap";
 import { LineChartColor, LineChartColorS, LineChartStruct } from "../Component/LineChart";
 import { TableStruct } from "../Component/TableCustom";
+import { LinearRegressionLineChart } from "./Data/Linechart";
 import { Milestone, milestones } from "./Data/Milestones";
 import { MonthsLong, MonthsShort, StringifyTimeShort, StringifyTimeShortest } from "./Date";
 import { DataPoint, LinearRegression } from "./LinearRegression";
@@ -324,40 +325,65 @@ export function GetLineChartValues(amounts: Transaction[] | Loan[], title: strin
     };
 }
 
-export function GetPredictionLineChart(amounts: Transaction[]): LineChartStruct {
-    let LineChartStruct: LineChartStruct = GetLineChartValues(amounts, "Predictions");
-
+function linearRegression(lineChartStruct: LineChartStruct, length: number): LineChartStruct {
     let data: DataPoint[] = [];
-    for (let i = 0; i < LineChartStruct.labels.length; i++) {
+    for (let i = 0; i < lineChartStruct.labels.length; i++) {
         data.push({
-            x: LineChartStruct.labels[i],
-            y: LineChartStruct.data[i]
+            x: lineChartStruct.labels[i],
+            y: lineChartStruct.data[i]
         });
     }
 
     data.shift();
 
+    console.log(data)
+
     let regression = new LinearRegression(data);
-		
     let months = Array.from({ length: 3 * 12 }, (_, i) => i + data.length);
     let predictions = regression.predictMultiple(months);
 
-    let lastLabel: string = LineChartStruct.labels[LineChartStruct.labels.length - 1];
-    let lastLabelDate: Date = new Date(lastLabel);
-    let lastLabelMonth: number = lastLabelDate.getMonth();
-    let lastLabelYear: number = lastLabelDate.getFullYear();
+    let predictionLineChartStruct: LineChartStruct = {
+        labels: lineChartStruct.labels,
+        data: Array(length).fill(undefined),
+        title: "Linear Regression",
+        color: LinearRegressionLineChart,
+    };
 
     for (let i = 0; i < predictions.length; i++) {
-        if (lastLabelMonth === 11) {
-            lastLabelYear++;
-            lastLabelMonth = 0;
-        } else lastLabelMonth++;
-
-        LineChartStruct.labels.push(StringifyTimeShortest(new Date(lastLabelYear, lastLabelMonth, 1)));
-        LineChartStruct.data.push(predictions[i]);
+        predictionLineChartStruct.data[i + data.length] = predictions[i];
     }
 
-    return LineChartStruct;
+    predictionLineChartStruct.data[data.length] = data[data.length - 1].y;
+
+    console.log(predictionLineChartStruct)
+
+    return predictionLineChartStruct;
+}
+
+export function GetPredictionLineChart(amounts: Transaction[]): LineChartStruct[] {
+    let lineChartStruct: LineChartStruct = GetLineChartValues(amounts, "Base Data");
+
+    let result: LineChartStruct[] = [];
+
+    let predictionLineChartStruct: LineChartStruct = linearRegression(lineChartStruct, lineChartStruct.data.length);
+    result.push(predictionLineChartStruct);
+
+
+    for (let i = 0; i < 3 * 12; i++) {
+        let lastLabel: string = lineChartStruct.labels[lineChartStruct.labels.length - 1];
+        let lastLabelDate: Date = new Date(lastLabel);
+        let lastLabelMonth: number = lastLabelDate.getMonth();
+        let lastLabelYear: number = lastLabelDate.getFullYear();
+
+        let newLabelDate: Date = new Date(lastLabelYear, lastLabelMonth + 1, 1);
+        lineChartStruct.labels.push(StringifyTimeShortest(newLabelDate));
+    }
+
+    result.push(lineChartStruct);
+
+    console.log(result)
+
+    return result;
 }
 
 

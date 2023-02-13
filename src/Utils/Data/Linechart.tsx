@@ -15,3 +15,11 @@ export const NetWorthLineChart = {
 	hoverBorderColor: "rgba(50, 155, 0, 1)",
 	borderWidth: 2
 } as LineChartColor
+
+export const LinearRegressionLineChart = {
+	backgroundColor: "rgb(234,182,118)",
+	borderColor: "rgb(234,182,118)",
+	hoverBackgroundColor: "rgb(234,182,118)",
+	hoverBorderColor: "rgb(234,182,118)",
+	borderWidth: 2
+} as LineChartColor
