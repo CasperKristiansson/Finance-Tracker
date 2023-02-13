@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useRef } from "react";
 import { Bar } from "react-chartjs-2";
+import { Chart } from 'chart.js';
 
 export interface BarChartStruct {
   labels: string[];
@@ -20,7 +21,9 @@ interface BarChartState {
   }[];
 }
 
-export const BarChart: React.FC<{ data: BarChartStruct, title: string, height: number | undefined }> = ({ data, title, height }): JSX.Element => {
+export const BarChart: React.FC<{ data: BarChartStruct, title: string, height: number | undefined, customClickEvent?: any }> = ({ data, title, height, customClickEvent }): JSX.Element => {
+  const chartRef = useRef<HTMLCanvasElement>(null)
+  
   const [dataset, setDataset] = React.useState({
     labels: [],
     datasets: [
@@ -95,13 +98,15 @@ export const BarChart: React.FC<{ data: BarChartStruct, title: string, height: n
           display: false
         }
       }
-    }
+    },
+    onClick: customClickEvent? customClickEvent : undefined
   }
 
   return (
     <>
       <h2>{title}</h2>
-      <Bar data={dataset} options={options} height={height}/>
+      <Bar data={dataset} options={options} height={height} ref={chartRef as any}
+      />
     </>
   );
 };
