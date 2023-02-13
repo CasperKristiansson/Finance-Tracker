@@ -12,20 +12,23 @@ const useStyles = createUseStyles({
 	},
 });
 
-export const Accounts: React.FC<{ userID: string, }> = ({ userID }): JSX.Element => {
+export const Accounts: React.FC<{ userID: string, setApiLoading: any }> = ({ userID, setApiLoading }): JSX.Element => {
 	const classes = useStyles();
 	const navigate = useNavigate();
 
 	const [accounts, setAccounts] = useState([{Name: "Loading...", Balance: 0}] as Account[]);
 
 	useEffect(() => {
+		setApiLoading(true);
 		var params = new URLSearchParams();
 		params.append('userID', userID);
 
 		axios.post('https://pktraffic.com/api/transactionsTotal.php', params).then(response => {
 			setAccounts(GetAccountsBalance(ConvertTransactions(response.data.transactions)))
+			setApiLoading(false);
 		}).catch(response => {
 			console.log(response);
+			setApiLoading(false);
 		});
 	}, [userID]);
 	

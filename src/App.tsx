@@ -13,6 +13,7 @@ import { Download } from './Pages/Download/Download';
 import { Login } from './Pages/Login/Login';
 import { Logout } from './Pages/Logout/Logout';
 import { TransactionView } from './Pages/TransactionView/TransactionView';
+import { Loader } from './Pages/Loader/Loader';
 
 import { Route, Routes, BrowserRouter } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -41,6 +42,7 @@ export const App: React.FC<{}> = (): JSX.Element => {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null as any);
   const [auth, setAuth] = useState(null as any);
+  const [apiLoading, setApiLoading] = useState(true);
 
   useEffect(() => {
     const authVar: any = getAuth()
@@ -86,20 +88,21 @@ export const App: React.FC<{}> = (): JSX.Element => {
           <></>
         )}
         <div className={classes.mainSection}>
+          <Loader loading={apiLoading || loading} />
           <Routes>
             {loggedIn && !loading ? (
               <>
-              <Route path="/" element={<Home userID={user.uid} />} />
-              <Route path="/yearlyReport" element={<YearlyReport userID={user.uid} />} />
-              <Route path="/totalReport" element={<TotalReport userID={user.uid} />} />
-              <Route path="/accounts" element={<Accounts userID={user.uid} />} />
-              <Route path="/accountsReport" element={<AccountsReport userID={user.uid} />} />
-              <Route path="/addTransaction" element={<AddTransaction userID={user.uid} />} />
-              <Route path="/editTransaction/*" element={<EditTransaction userID={user.uid} />} />
-              <Route path="/editAccount/*" element={<EditAccount userID={user.uid} />} />
-              <Route path="/milestones" element={<Milestones userID={user.uid} />} />
-              <Route path="/download" element={<Download userID={user.uid} />} />
-              <Route path="/transactionsView" element={<TransactionView userID={user.uid} />} />
+              <Route path="/" element={<Home userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/yearlyReport" element={<YearlyReport userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/totalReport" element={<TotalReport userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/accounts" element={<Accounts userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/accountsReport" element={<AccountsReport userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/addTransaction" element={<AddTransaction userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/editTransaction/*" element={<EditTransaction userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/editAccount/*" element={<EditAccount userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/milestones" element={<Milestones userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/download" element={<Download userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/transactionsView" element={<TransactionView userID={user.uid} setApiLoading={setApiLoading} />} />
               <Route path="/logout" element={<Logout logout={handleLogOut} />} />
 
               <Route path="/login" element={<></>} />

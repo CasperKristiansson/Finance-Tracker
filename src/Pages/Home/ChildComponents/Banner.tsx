@@ -102,7 +102,7 @@ const useStyles = createUseStyles({
 	},
 });
 
-export const Banner: React.FC<{ transactions: Transaction[], month: number }> = ({ transactions, month }): JSX.Element => {
+export const Banner: React.FC<{ transactions: Transaction[], month: number, title: string }> = ({ transactions, month, title }): JSX.Element => {
 	const classes = useStyles();
 
 	const [income, setIncome] = React.useState([] as number[]);
@@ -129,7 +129,7 @@ export const Banner: React.FC<{ transactions: Transaction[], month: number }> = 
 					</div>
 				</div>
 				<div className={classes.homeIncomeLabel}>
-					<h2>This Month</h2>
+					<h2>{title}</h2>
 				</div>
 				<div className={`${classes.homeIncomeLabelLeft} ui statistic green`}>
 					<div className="value">
