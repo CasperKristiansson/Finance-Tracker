@@ -79,6 +79,10 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 											expenseData: transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Expense") : [],
 										}}
 										height={undefined}
+										customClickEvent={(_event: any, element: any) => {
+											navigate(`/?year=${period.year}&month=${element[0].index}`);
+											window.location.reload();
+										}}
 									/>
 								</Segment>
 							</Grid.Column>
