@@ -3,7 +3,7 @@
 import axios from "axios";
 import React from "react";
 import { useEffect, useState } from "react";
-import { DataPoint, LinearRegression } from "../../Utils/LinearRegression";
+import { DataPoint, LinearRegression } from "../../Utils/Predictions/LinearRegression";
 import { ConvertLoans, ConvertTransactions, Loan, Transaction } from "../../Utils/Transactions";
 import { BalanceOverview } from "./ChildComponents/BalanceOverview";
 import { GraphOverview } from "./ChildComponents/GraphOverview";
