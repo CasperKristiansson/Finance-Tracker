@@ -35,6 +35,18 @@ export function GetStartPeriod(): MonthYear {
 	return monthYear;
 }
 
+export function GetStartType(): string {
+	var url: string = window.location.href;
+	var params: URLSearchParams = new URLSearchParams(url.split("?")[1]);
+	// Check for a params called "type"
+	var type: string | null = params.get("type");
+	if (type !== null) {
+		return type;
+	}
+
+	return "Income";
+}
+
 export function StringifyTime(date: Date): string {
 	return (date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate() +
         " " + date.getHours() + ":" + date.getMinutes() + ":" + date.getSeconds()
