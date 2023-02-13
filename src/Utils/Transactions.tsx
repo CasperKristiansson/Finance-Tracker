@@ -5,7 +5,7 @@ import { TableStruct } from "../Component/TableCustom";
 import { LinearRegressionLineChart } from "./Data/Linechart";
 import { Milestone, milestones } from "./Data/Milestones";
 import { MonthsLong, MonthsShort, StringifyTimeShort, StringifyTimeShortest } from "./Date";
-import { DataPoint, LinearRegression } from "./LinearRegression";
+import { LinearRegression } from "./Predictions/LinearRegression";
 
 export interface Transaction {
     Account: string;
@@ -323,6 +323,11 @@ export function GetLineChartValues(amounts: Transaction[] | Loan[], title: strin
         title: title,
         color: color ? color : new LineChartColorS(),
     };
+}
+
+export interface DataPoint {
+    x: string;
+    y: number;
 }
 
 function linearRegression(lineChartStruct: LineChartStruct, length: number): LineChartStruct {

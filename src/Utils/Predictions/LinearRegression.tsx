@@ -1,8 +1,5 @@
-export interface DataPoint {
-    x: string;
-    y: number;
-}
-  
+import { DataPoint } from "../Transactions";
+
 export class LinearRegression {
     private data: DataPoint[];
     private a: number;
