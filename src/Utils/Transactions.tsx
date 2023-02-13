@@ -4,6 +4,7 @@ import { LineChartStruct } from "../Component/LineChart";
 import { TableStruct } from "../Component/TableCustom";
 import { Milestone, milestones } from "./Data/Milestones";
 import { MonthsLong, MonthsShort, StringifyTimeShort, StringifyTimeShortest } from "./Date";
+import { DataPoint, LinearRegression } from "./LinearRegression";
 
 export interface Transaction {
     Account: string;
@@ -320,6 +321,43 @@ export function GetLineChartValues(amounts: Transaction[] | Loan[]): LineChartSt
         data: values
     };
 }
+
+export function GetPredictionLineChart(amounts: Transaction[]): LineChartStruct {
+    let LineChartStruct: LineChartStruct = GetLineChartValues(amounts);
+
+    let data: DataPoint[] = [];
+    for (let i = 0; i < LineChartStruct.labels.length; i++) {
+        data.push({
+            x: LineChartStruct.labels[i],
+            y: LineChartStruct.data[i]
+        });
+    }
+
+    data.shift();
+
+    let regression = new LinearRegression(data);
+		
+    let months = Array.from({ length: 3 * 12 }, (_, i) => i + data.length);
+    let predictions = regression.predictMultiple(months);
+
+    let lastLabel: string = LineChartStruct.labels[LineChartStruct.labels.length - 1];
+    let lastLabelDate: Date = new Date(lastLabel);
+    let lastLabelMonth: number = lastLabelDate.getMonth();
+    let lastLabelYear: number = lastLabelDate.getFullYear();
+
+    for (let i = 0; i < predictions.length; i++) {
+        if (lastLabelMonth === 11) {
+            lastLabelYear++;
+            lastLabelMonth = 0;
+        } else lastLabelMonth++;
+
+        LineChartStruct.labels.push(StringifyTimeShortest(new Date(lastLabelYear, lastLabelMonth, 1)));
+        LineChartStruct.data.push(predictions[i]);
+    }
+
+    return LineChartStruct;
+}
+
 
 /**
  * ? Pie Chart Calculations
