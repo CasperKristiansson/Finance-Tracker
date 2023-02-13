@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { Grid, Segment } from "semantic-ui-react";
 import { BarChart } from "../../../Component/BarChart";
 import PieChart from "../../../Component/PieChart";
@@ -6,6 +7,8 @@ import { ExpenseIncomeBarChart, FilterTransactionsType, GetCategoriesAmount, Get
 
 
 export const IncomeExpenseOverview: React.FC<{transactions: Transaction[], loans: Loan[]}> = ({ transactions, loans }): JSX.Element => {
+	let navigate = useNavigate();
+	
 	return(
 		<>
 		<Grid columns={1}>
@@ -15,6 +18,9 @@ export const IncomeExpenseOverview: React.FC<{transactions: Transaction[], loans
 						title={`Income vs Expenses`}
 						data={ExpenseIncomeBarChart(transactions)}
 						height={80}
+						customClickEvent={(_event: any, element: any) => {
+							navigate(`/yearlyReport?year=${element[0].index + 2018}`);
+						}}
 					/>
 				</Segment>
 			</Grid.Column>
