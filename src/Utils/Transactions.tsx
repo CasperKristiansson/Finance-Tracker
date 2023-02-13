@@ -2,7 +2,7 @@ import { BarChartStruct } from "../Component/BarChart";
 import { HeatMapStruct } from "../Component/Heatmap";
 import { LineChartColor, LineChartColorS, LineChartStruct } from "../Component/LineChart";
 import { TableStruct } from "../Component/TableCustom";
-import { ExponentialSmoothingLineChart, LinearRegressionLineChart } from "./Data/Linechart";
+import { ExponentialSmoothingLineChart, LinearRegressionLineChart, MovingAverageLineChart } from "./Data/Linechart";
 import { Milestone, milestones } from "./Data/Milestones";
 import { MonthsLong, MonthsShort, StringifyTimeShort, StringifyTimeShortest } from "./Date";
 import { LinearRegression } from "./Predictions/LinearRegression";
@@ -396,6 +396,38 @@ function exponentialSmoothing(lineChartStruct: LineChartStruct, length: number):
     return predictionLineChartStruct;
 }
 
+function movingAverage(lineChartStruct: LineChartStruct, length: number): LineChartStruct {
+    let data: DataPoint[] = [];
+    for (let i = 0; i < lineChartStruct.labels.length; i++) {
+        data.push({
+            x: lineChartStruct.labels[i],
+            y: lineChartStruct.data[i]
+        });
+    }
+
+    data.shift();
+
+
+    let forecast = new TimeSeriesForecasting(data);
+    let predictions = forecast.forecast(36, "movingAverage", 12, undefined);
+
+    let predictionLineChartStruct: LineChartStruct = {
+        labels: lineChartStruct.labels,
+        data: Array(length).fill(undefined),
+        title: "Moving Average",
+        color: MovingAverageLineChart,
+    };
+
+    for (let i = 0; i < predictions.length; i++) {
+        predictionLineChartStruct.data[i + data.length] = predictions[i];
+    }
+
+    predictionLineChartStruct.data[data.length] = data[data.length - 1].y;
+
+
+    return predictionLineChartStruct;
+}
+
 export function GetPredictionLineChart(amounts: Transaction[]): LineChartStruct[] {
     let lineChartStruct: LineChartStruct = GetLineChartValues(amounts, "Base Data");
 
@@ -405,6 +437,9 @@ export function GetPredictionLineChart(amounts: Transaction[]): LineChartStruct[
     result.push(predictionLineChartStruct);
 
     predictionLineChartStruct = exponentialSmoothing(lineChartStruct, lineChartStruct.data.length);
+    result.push(predictionLineChartStruct);
+
+    predictionLineChartStruct = movingAverage(lineChartStruct, lineChartStruct.data.length);
     result.push(predictionLineChartStruct);
 
 
