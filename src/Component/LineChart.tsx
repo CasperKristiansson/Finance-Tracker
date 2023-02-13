@@ -1,5 +1,14 @@
 import React from "react";
 import { Line } from "react-chartjs-2";
+import { createUseStyles } from "react-jss";
+
+const useStyles = createUseStyles({
+  hoverPointer: {
+    "&:hover": {
+      cursor: "pointer",
+    },
+  },
+});
 
 export interface LineChartStruct {
   labels: string[];
@@ -14,7 +23,9 @@ export interface LineChartColor {
   borderWidth: number;
 }
 
-export const LineChart: React.FC<{ data: LineChartStruct, title: string, height: number | undefined, color: LineChartColor }> = ({ data, title, height, color }): JSX.Element => {
+export const LineChart: React.FC<{ data: LineChartStruct, title: string, height: number | undefined, color: LineChartColor, customClickEvent?: any }> = ({ data, title, height, color, customClickEvent }): JSX.Element => {
+  const classes = useStyles();
+  
   const [dataSet, setDataSet] = React.useState({
     labels: [] as string[],
     datasets: [] as {}[],
@@ -59,13 +70,18 @@ export const LineChart: React.FC<{ data: LineChartStruct, title: string, height:
           display: false
         }
       }
+    },
+    onClick: (event: any, element: any) => {
+      if (element.length > 0 && customClickEvent) {
+        customClickEvent(event, element);
+      }
     }
   }
 
   return (
     <>
       <h2>{title}</h2>
-      <Line data={dataSet as any} options={options} height={height}/>
+      <Line data={dataSet as any} options={options} height={height} className={customClickEvent ? classes.hoverPointer : ""}/>
     </>
   );
 };
