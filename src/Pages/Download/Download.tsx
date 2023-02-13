@@ -10,7 +10,7 @@ const useStyles = createUseStyles({
 	},
 });
 
-export const Download: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
+export const Download: React.FC<{ userID: string, setApiLoading: any }> = ({ userID, setApiLoading }): JSX.Element => {
 	const classes = useStyles();
 	
 	var handleTransactionTemplate = () => {
@@ -18,20 +18,26 @@ export const Download: React.FC<{ userID: string }> = ({ userID }): JSX.Element 
 	};
 
 	var handleTransactionDownload = (type: string) => {
+		setApiLoading(true);
+
 		var params: URLSearchParams = new URLSearchParams();
 		params.append('userID', userID);
 	
 		if (type === "loan") {
 			axios.post('https://pktraffic.com/api/loans.php', params).then(response => {
 				DownloadTransactions(response.data.transactions, "Loans Export.xlsx");
+				setApiLoading(false);
 			}).catch(response => {
 				console.log(response);
+				setApiLoading(false);
 			});
 		} else if (type === "transaction") {
 			axios.post('https://pktraffic.com/api/transactionsTotal.php', params).then(response => {
 				DownloadTransactions(response.data.transactions, "Transactions Export.xlsx");
+				setApiLoading(false);
 			}).catch(response => {
 				console.log(response);
+				setApiLoading(false);
 			});
 		}
 	};

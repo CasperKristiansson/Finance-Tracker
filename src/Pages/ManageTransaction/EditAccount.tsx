@@ -18,7 +18,7 @@ const useStyles = createUseStyles({
 	}
 });
 
-export const EditAccount: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
+export const EditAccount: React.FC<{ userID: string, setApiLoading: any }> = ({ userID, setApiLoading }): JSX.Element => {
 	const classes = useStyles();
 	let navigate = useNavigate();
 
@@ -32,6 +32,8 @@ export const EditAccount: React.FC<{ userID: string }> = ({ userID }): JSX.Eleme
 
 	const handleSubmit = () => {
 		setIsSubmitting(true);
+		setApiLoading(true);
+	
 		var params = new URLSearchParams();
 
 		const urlParams = new URLSearchParams(window.location.search);
@@ -66,6 +68,7 @@ export const EditAccount: React.FC<{ userID: string }> = ({ userID }): JSX.Eleme
 
 		axios.post('https://pktraffic.com/api/addTransaction.php', params).then(response => {
 			setIsSubmitting(false);
+			setApiLoading(false);
 			setSuccessSubmitting(response.data.success);
 
 			setTimeout(() => {
@@ -74,6 +77,7 @@ export const EditAccount: React.FC<{ userID: string }> = ({ userID }): JSX.Eleme
 		}).catch(response => {
 			console.log(response);
 			setIsSubmitting(false);
+			setApiLoading(false);
 		});
 	}
 

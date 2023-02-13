@@ -20,7 +20,7 @@ const useStyles = createUseStyles({
 	}
 });
 
-export const EditTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
+export const EditTransaction: React.FC<{ userID: string, setApiLoading: any }> = ({ userID,setApiLoading }): JSX.Element => {
     const navigate = useNavigate();
     const classes = useStyles();
 
@@ -34,6 +34,7 @@ export const EditTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.E
 
 	useEffect(() => {
         setIsSubmitting(true);
+        setApiLoading(true);
 
 		var params = new URLSearchParams();
 		params.append("id", window.location.pathname.split("/").pop() as string);
@@ -47,21 +48,28 @@ export const EditTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.E
 			}
 
 			setIsSubmitting(false);
+            setApiLoading(false);
 		}).catch(response => {
 			console.log(response);
+            setIsSubmitting(false);
+            setApiLoading(false);
 		});
 
 		axios.post('https://pktraffic.com/api/transactionInformation.php', params).then(response => {
 			setIncomeCategories(GetCategoriesMapping(response.data.categories, "Income"));
 			setExpenseCategories(GetCategoriesMapping(response.data.categories, "Expense"));
 			setAccounts(GetAccountsMapping(response.data.accounts));
+            setApiLoading(false);
 		}).catch(response => {
 			console.log(response);
+            setApiLoading(false);
 		});
 	}, [userID]);
 
 	const handleSubmit = () => {
 		setIsSubmitting(true);
+        setApiLoading(true);
+
 		var params = new URLSearchParams();
 		params.append('type', transaction.Type);
 		params.append('amount', transaction.Amount.toString());
@@ -74,7 +82,9 @@ export const EditTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.E
 
 		axios.post('https://pktraffic.com/api/editTransaction.php', params).then(response => {
 			setIsSubmitting(false);
+            setApiLoading(false);
 			setSuccessSubmitting(response.data.success);
+
 			setTimeout(() => {
 				const date = new Date();
                 navigate(`/?year=${date.getFullYear()}&month=${date.getMonth()}`);
@@ -82,17 +92,21 @@ export const EditTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.E
 		}).catch(response => {
 			console.log(response);
 			setIsSubmitting(false);
+            setApiLoading(false);
 		});
 	}
 
     const handleDelete = () => {
 		setIsSubmitting(true);
+        setApiLoading(true);
+
 		var params = new URLSearchParams();
 		params.append('id', window.location.pathname.split("/").pop() as string);
 		params.append('userID', userID);
 
 		axios.post('https://pktraffic.com/api/deleteTransaction.php', params).then(response => {
 			setIsSubmitting(false);
+            setApiLoading(false);
 			setSuccessSubmitting(response.data.success);
 			setTimeout(() => {
                 const date = new Date();
@@ -101,6 +115,7 @@ export const EditTransaction: React.FC<{ userID: string }> = ({ userID }): JSX.E
 		}).catch(response => {
 			console.log(response);
 			setIsSubmitting(false);
+            setApiLoading(false);
 		});
 	}
 

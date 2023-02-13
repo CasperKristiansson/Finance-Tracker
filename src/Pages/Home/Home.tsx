@@ -26,7 +26,7 @@ interface Message {
 	show: boolean;
 }
 
-export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
+export const Home: React.FC<{ userID: string, setApiLoading: any }> = ({ userID, setApiLoading }): JSX.Element => {
 	const classes = useStyles();
 
 	const [period, setPeriod] = useState(GetStartPeriod());
@@ -36,14 +36,17 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 	const [didMount, setDidMount] = useState(false);
 
 	useEffect(() => {
+		setApiLoading(true);
     	var params = new URLSearchParams();
     	params.append('year', period.year.toString());
 	  	params.append('userID', userID);
       
 		axios.post('https://pktraffic.com/api/transactions.php', params).then(response => {
 			setTransactions(ConvertTransactions(response.data.transactions));
+			setApiLoading(false);
 		}).catch(response => {
 			console.log(response);
+			setApiLoading(false);
 		});
     
 	}, [period.year, userID]);
