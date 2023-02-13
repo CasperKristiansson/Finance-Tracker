@@ -6,7 +6,7 @@ import { Header } from './ChildComponents/Header';
 import { Overview } from "./ChildComponents/Overview";
 import { Banner } from "./ChildComponents/Banner";
 
-import { GetStartPeriod } from '../../Utils/Date';
+import { GetStartPeriod, MonthsLong } from '../../Utils/Date';
 import { ConvertTransactions, FilterTransactionsMonth, Transaction, TransactionsSort } from '../../Utils/Transactions';
 import { TransactionTable } from "../../Component/TransactionTable";
 import { ExcelUploadData } from "../../Utils/Excel";
@@ -93,6 +93,7 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 		<Banner
 			transactions={transactions}
 			month={period.month}
+			title={`${MonthsLong[period.month]} ${period.year}`}
 		/>
 		<TransactionTable
 			transactions={TransactionsSort(FilterTransactionsMonth(transactions, period.month)).reverse()}
