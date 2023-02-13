@@ -2,7 +2,7 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Grid, Segment } from "semantic-ui-react";
 import { BarChart, BarChartStruct } from "../../../Component/BarChart";
-import { LineChart, LineChartColor } from "../../../Component/LineChart";
+import { LineChart, LineChartColor, LineChartColorS } from "../../../Component/LineChart";
 import { MonthsLong } from "../../../Utils/Date";
 import { GetLineChartValues, GetMonthOfYearAmount, Transaction } from "../../../Utils/Transactions";
 
@@ -35,10 +35,11 @@ export const GraphOverview: React.FC<{transactions: Transaction[], currentYear: 
 							title={`Wealth Growth for ${currentYear}`}
 							data={{
 								labels: MonthsLong,
-								data: transactions.length > 1 ? GetLineChartValues(transactions).data : [],
+								data: transactions.length > 1 ? GetLineChartValues(transactions, "Wealth Growth").data : [],
+								title: "Wealth Growth",
+								color: new LineChartColorS(),
 							}}
 							height={undefined}
-							color={{} as LineChartColor}
 							customClickEvent={(_event: any, element: any) => {
 								navigate(`/?year=${currentYear}&month=${element[0].index}&type=Income}`);
 							}}

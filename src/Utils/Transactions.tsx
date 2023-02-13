@@ -1,6 +1,6 @@
 import { BarChartStruct } from "../Component/BarChart";
 import { HeatMapStruct } from "../Component/Heatmap";
-import { LineChartStruct } from "../Component/LineChart";
+import { LineChartColor, LineChartColorS, LineChartStruct } from "../Component/LineChart";
 import { TableStruct } from "../Component/TableCustom";
 import { Milestone, milestones } from "./Data/Milestones";
 import { MonthsLong, MonthsShort, StringifyTimeShort, StringifyTimeShortest } from "./Date";
@@ -305,7 +305,7 @@ function groupValuesMonthIterative(amounts: Transaction[] | Loan[]): { [date: st
     return groupedValues;
 }
 
-export function GetLineChartValues(amounts: Transaction[] | Loan[]): LineChartStruct {
+export function GetLineChartValues(amounts: Transaction[] | Loan[], title: string, color?: LineChartColor): LineChartStruct {
     let groupedValues: { [date: string]: number } = groupValuesMonthIterative(amounts);
 
     let dates: string[] = [""];
@@ -318,12 +318,14 @@ export function GetLineChartValues(amounts: Transaction[] | Loan[]): LineChartSt
 
     return {
         labels: dates,
-        data: values
+        data: values,
+        title: title,
+        color: color ? color : new LineChartColorS(),
     };
 }
 
 export function GetPredictionLineChart(amounts: Transaction[]): LineChartStruct {
-    let LineChartStruct: LineChartStruct = GetLineChartValues(amounts);
+    let LineChartStruct: LineChartStruct = GetLineChartValues(amounts, "Predictions");
 
     let data: DataPoint[] = [];
     for (let i = 0; i < LineChartStruct.labels.length; i++) {
