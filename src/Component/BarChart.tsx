@@ -1,5 +1,14 @@
 import React from "react";
 import { Bar } from "react-chartjs-2";
+import { createUseStyles } from "react-jss";
+
+const useStyles = createUseStyles({
+  hoverPointer: {
+    "&:hover": {
+      cursor: "pointer",
+    },
+  },
+});
 
 export interface BarChartStruct {
   labels: string[];
@@ -21,7 +30,8 @@ interface BarChartState {
 }
 
 export const BarChart: React.FC<{ data: BarChartStruct, title: string, height: number | undefined, customClickEvent?: any }> = ({ data, title, height, customClickEvent }): JSX.Element => {
- 
+  const classes = useStyles();
+
   const [dataset, setDataset] = React.useState({
     labels: [],
     datasets: [
@@ -107,7 +117,7 @@ export const BarChart: React.FC<{ data: BarChartStruct, title: string, height: n
   return (
     <>
       <h2>{title}</h2>
-      <Bar data={dataset} options={options} height={height} />
+      <Bar data={dataset} options={options} height={height} className={classes.hoverPointer} />
     </>
   );
 };
