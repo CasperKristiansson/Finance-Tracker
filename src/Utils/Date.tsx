@@ -47,6 +47,17 @@ export function GetStartType(): string {
 	return "Income";
 }
 
+export function GetStartYear(): number {
+	var url: string = window.location.href;
+	var params: URLSearchParams = new URLSearchParams(url.split("?")[1]);
+	var year: string | null = params.get("year");
+	if (year !== null) {
+		return parseInt(year);
+	}
+
+	return new Date().getFullYear();
+}
+
 export function StringifyTime(date: Date): string {
 	return (date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate() +
         " " + date.getHours() + ":" + date.getMinutes() + ":" + date.getSeconds()
