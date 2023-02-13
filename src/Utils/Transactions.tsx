@@ -2,10 +2,11 @@ import { BarChartStruct } from "../Component/BarChart";
 import { HeatMapStruct } from "../Component/Heatmap";
 import { LineChartColor, LineChartColorS, LineChartStruct } from "../Component/LineChart";
 import { TableStruct } from "../Component/TableCustom";
-import { LinearRegressionLineChart } from "./Data/Linechart";
+import { ExponentialSmoothingLineChart, LinearRegressionLineChart } from "./Data/Linechart";
 import { Milestone, milestones } from "./Data/Milestones";
 import { MonthsLong, MonthsShort, StringifyTimeShort, StringifyTimeShortest } from "./Date";
 import { LinearRegression } from "./Predictions/LinearRegression";
+import { TimeSeriesForecasting } from "./Predictions/TimeSeriesForecasting";
 
 export interface Transaction {
     Account: string;
@@ -341,8 +342,6 @@ function linearRegression(lineChartStruct: LineChartStruct, length: number): Lin
 
     data.shift();
 
-    console.log(data)
-
     let regression = new LinearRegression(data);
     let months = Array.from({ length: 3 * 12 }, (_, i) => i + data.length);
     let predictions = regression.predictMultiple(months);
@@ -365,12 +364,47 @@ function linearRegression(lineChartStruct: LineChartStruct, length: number): Lin
     return predictionLineChartStruct;
 }
 
+function exponentialSmoothing(lineChartStruct: LineChartStruct, length: number): LineChartStruct {
+    let data: DataPoint[] = [];
+    for (let i = 0; i < lineChartStruct.labels.length; i++) {
+        data.push({
+            x: lineChartStruct.labels[i],
+            y: lineChartStruct.data[i]
+        });
+    }
+
+    data.shift();
+
+
+    let forecast = new TimeSeriesForecasting(data);
+    let predictions = forecast.forecast(36, "exponentialSmoothing", undefined, 0.5);
+
+    let predictionLineChartStruct: LineChartStruct = {
+        labels: lineChartStruct.labels,
+        data: Array(length).fill(undefined),
+        title: "Exponential Smoothing",
+        color: ExponentialSmoothingLineChart,
+    };
+
+    for (let i = 0; i < predictions.length; i++) {
+        predictionLineChartStruct.data[i + data.length] = predictions[i];
+    }
+
+    predictionLineChartStruct.data[data.length] = data[data.length - 1].y;
+
+
+    return predictionLineChartStruct;
+}
+
 export function GetPredictionLineChart(amounts: Transaction[]): LineChartStruct[] {
     let lineChartStruct: LineChartStruct = GetLineChartValues(amounts, "Base Data");
 
     let result: LineChartStruct[] = [];
 
     let predictionLineChartStruct: LineChartStruct = linearRegression(lineChartStruct, lineChartStruct.data.length);
+    result.push(predictionLineChartStruct);
+
+    predictionLineChartStruct = exponentialSmoothing(lineChartStruct, lineChartStruct.data.length);
     result.push(predictionLineChartStruct);
 
 
