@@ -1,6 +1,7 @@
 import axios from "axios";
 import React from "react";
 import { useEffect, useState } from "react";
+import { GetStartYear } from "../../Utils/Date";
 import { ConvertTransactions, Transaction } from "../../Utils/Transactions";
 import { BalanceOverview } from "./ChildComponents/BalanceOverview";
 import { GraphOverview } from "./ChildComponents/GraphOverview";
@@ -10,7 +11,7 @@ import { TableOverview } from "./ChildComponents/TableOverview";
 
 export const YearlyReport: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 	const [transactions, setTransactions] = useState([] as Transaction[]);
-	const [year, setYear] = useState(new Date().getFullYear());
+	const [year, setYear] = useState(GetStartYear());
 
 	useEffect(() => {
 		var params = new URLSearchParams();
@@ -23,6 +24,12 @@ export const YearlyReport: React.FC<{ userID: string }> = ({ userID }): JSX.Elem
 			console.log(response);
 		});		
 	}, [year, userID]);
+
+	useEffect(() => {
+		var params = new URLSearchParams();
+		params.append("year", year.toString());
+		window.history.pushState({}, "", "?" + params.toString());
+	}, [year]);
 
 	return(
 		<>
