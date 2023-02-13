@@ -9,7 +9,7 @@ const useStyles = createUseStyles({
         width: "100%",
         marginLeft: 270,
         height: "100%",
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        backgroundColor: "rgba(0, 0, 0, 0.4)",
         zIndex: 9999999999,
     },
     loader: {

@@ -88,21 +88,21 @@ export const App: React.FC<{}> = (): JSX.Element => {
           <></>
         )}
         <div className={classes.mainSection}>
-          <Loader loading={apiLoading} />
+          <Loader loading={apiLoading || loading} />
           <Routes>
             {loggedIn && !loading ? (
               <>
-              <Route path="/" element={<Home userID={user.uid} />} />
-              <Route path="/yearlyReport" element={<YearlyReport userID={user.uid} />} />
-              <Route path="/totalReport" element={<TotalReport userID={user.uid} />} />
-              <Route path="/accounts" element={<Accounts userID={user.uid} />} />
-              <Route path="/accountsReport" element={<AccountsReport userID={user.uid} />} />
-              <Route path="/addTransaction" element={<AddTransaction userID={user.uid} />} />
-              <Route path="/editTransaction/*" element={<EditTransaction userID={user.uid} />} />
-              <Route path="/editAccount/*" element={<EditAccount userID={user.uid} />} />
-              <Route path="/milestones" element={<Milestones userID={user.uid} />} />
-              <Route path="/download" element={<Download userID={user.uid} />} />
-              <Route path="/transactionsView" element={<TransactionView userID={user.uid} />} />
+              <Route path="/" element={<Home userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/yearlyReport" element={<YearlyReport userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/totalReport" element={<TotalReport userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/accounts" element={<Accounts userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/accountsReport" element={<AccountsReport userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/addTransaction" element={<AddTransaction userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/editTransaction/*" element={<EditTransaction userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/editAccount/*" element={<EditAccount userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/milestones" element={<Milestones userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/download" element={<Download userID={user.uid} setApiLoading={setApiLoading} />} />
+              <Route path="/transactionsView" element={<TransactionView userID={user.uid} setApiLoading={setApiLoading} />} />
               <Route path="/logout" element={<Logout logout={handleLogOut} />} />
 
               <Route path="/login" element={<></>} />

@@ -9,20 +9,23 @@ import { Header } from "./ChildComponents/Header";
 import { IncomeExpenseOverview } from "./ChildComponents/IncomeExpenseOverview";
 import { TableOverview } from "./ChildComponents/TableOverview";
 
-export const YearlyReport: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
+export const YearlyReport: React.FC<{ userID: string, setApiLoading: any }> = ({ userID, setApiLoading }): JSX.Element => {
 	const [transactions, setTransactions] = useState([] as Transaction[]);
 	const [year, setYear] = useState(GetStartYear());
 	const [didMount, setDidMount] = useState(false);
 
 	useEffect(() => {
+		setApiLoading(true);
 		var params = new URLSearchParams();
 		params.append('year', year.toString());
 		params.append('userID', userID);
 		  
 		axios.post('https://pktraffic.com/api/transactions.php', params).then(response => {
 			setTransactions(ConvertTransactions(response.data.transactions));
+			setApiLoading(false);
 		}).catch(response => {
 			console.log(response);
+			setApiLoading(false);
 		});		
 	}, [year, userID]);
 

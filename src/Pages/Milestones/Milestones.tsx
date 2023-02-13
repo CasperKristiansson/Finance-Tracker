@@ -7,25 +7,30 @@ import { FormatNumber } from "../../Utils/Miscellaneous";
 import { ConvertLoans, ConvertLoansToTransactions, ConvertTransactions, GetMilestones, Loan, Transaction } from "../../Utils/Transactions";
 
 
-export const Milestones: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
+export const Milestones: React.FC<{ userID: string, setApiLoading: any }> = ({ userID, setApiLoading }): JSX.Element => {
 	const [transactions, setTransactions] = useState([] as Transaction[]);
 	const [loans, setLoans] = useState([] as Loan[]);
 	const [milestones, setMilestones] = useState([] as Milestone[]);
 
 	useEffect(() => {
+		setApiLoading(true);
 		var params = new URLSearchParams();
 		params.append('userID', userID);
 
 		axios.post('https://pktraffic.com/api/transactionsTotal.php', params).then(response => {
 			setTransactions(ConvertTransactions(response.data.transactions));
+			setApiLoading(false);
 		}).catch(response => {
 			console.log(response);
+			setApiLoading(false);
 		});
 
 		axios.post('https://pktraffic.com/api/loans.php', params).then(response => {
 			setLoans(ConvertLoans(response.data.transactions));
+			setApiLoading(false);
 		}).catch(response => {
 			console.log(response);
+			setApiLoading(false);
 		});
 	}, [userID]);
 
