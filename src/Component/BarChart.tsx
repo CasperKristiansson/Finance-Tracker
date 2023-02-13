@@ -117,7 +117,7 @@ export const BarChart: React.FC<{ data: BarChartStruct, title: string, height: n
   return (
     <>
       <h2>{title}</h2>
-      <Bar data={dataset} options={options} height={height} className={classes.hoverPointer} />
+      <Bar data={dataset} options={options} height={height} className={customClickEvent ? classes.hoverPointer: ""} />
     </>
   );
 };

@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { Grid, Segment } from "semantic-ui-react";
 import { BarChart, BarChartStruct } from "../../../Component/BarChart";
 import { LineChart, LineChartColor } from "../../../Component/LineChart";
@@ -6,6 +7,8 @@ import { MonthsLong } from "../../../Utils/Date";
 import { GetLineChartValues, GetMonthOfYearAmount, Transaction } from "../../../Utils/Transactions";
 
 export const GraphOverview: React.FC<{transactions: Transaction[], currentYear: number }> = ({ transactions, currentYear }): JSX.Element => {
+	let navigate = useNavigate();
+
 	return(
 		<>
 		<Grid columns={2}>
@@ -20,6 +23,10 @@ export const GraphOverview: React.FC<{transactions: Transaction[], currentYear: 
 								incomeData: transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Income") : [],
 								expenseData: transactions.length > 1 ? GetMonthOfYearAmount(transactions, "Expense") : [],
 							} as BarChartStruct}
+							customClickEvent={(_event: any, element: any) => {
+								navigate(`/?year=${currentYear}&month=${element[0].index}&type=${element[0].datasetIndex === 1 ? "Income" : "Expense"}`);
+								window.location.reload();
+							}}
 						/>
 					</Segment>
 				</Grid.Column>

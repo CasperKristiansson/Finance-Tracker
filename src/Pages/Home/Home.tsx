@@ -33,6 +33,7 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 	const [pieChartType, setPieChartType] = React.useState(GetStartType());
 	const [transactions, setTransactions] = useState([] as Transaction[]);
 	const [message, setMessage] = useState({message: null, show: false} as Message);
+	const [didMount, setDidMount] = useState(false);
 
 	useEffect(() => {
     	var params = new URLSearchParams();
@@ -48,11 +49,18 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 	}, [period.year, userID]);
 
 	useEffect(() => {
+		if (!didMount) {
+			setDidMount(true);
+    		return;
+		}
+
 		var params = new URLSearchParams();
 		params.append("year", period.year.toString());
 		params.append("month", period.month.toString());
 		params.append("type", pieChartType)
 		window.history.pushState({}, "", "?" + params.toString());
+
+		console.log("useEffect")
 	}, [period, pieChartType]);
 
 	const handleMonthChange = (month: number) => {
