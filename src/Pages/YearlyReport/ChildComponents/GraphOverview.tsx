@@ -25,7 +25,6 @@ export const GraphOverview: React.FC<{transactions: Transaction[], currentYear: 
 							} as BarChartStruct}
 							customClickEvent={(_event: any, element: any) => {
 								navigate(`/?year=${currentYear}&month=${element[0].index}&type=${element[0].datasetIndex === 1 ? "Income" : "Expense"}`);
-								window.location.reload();
 							}}
 						/>
 					</Segment>
