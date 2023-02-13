@@ -23,3 +23,11 @@ export const LinearRegressionLineChart = {
 	hoverBorderColor: "rgb(234,182,118)",
 	borderWidth: 2
 } as LineChartColor
+
+export const ExponentialSmoothingLineChart = {
+	backgroundColor: "rgba(50, 155, 0, 0.2)",
+	borderColor: "rgba(50, 155, 0, 1)",
+	hoverBackgroundColor: "rgba(50, 155, 0, 0.4)",
+	hoverBorderColor: "rgba(50, 155, 0, 1)",
+	borderWidth: 2
+} as LineChartColor

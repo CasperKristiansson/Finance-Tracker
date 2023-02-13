@@ -33,17 +33,18 @@ export class TimeSeriesForecasting {
 
 	forecast(forecastLength: number, method: string, windowSize?: number, alpha?: number) {
 		let forecastedValues: number[] = [];
+		let lastValue: number = this.data[this.data.length - 1].y;
 		switch (method) {
 			case "movingAverage":
 				let movingAverageData = this.movingAverage(windowSize!);
 				for (let i = 0; i < forecastLength; i++) {
-					forecastedValues.push(movingAverageData[movingAverageData.length - 1]);
+					forecastedValues.push(movingAverageData[i] + lastValue);
 				}
 				break;
 			case "exponentialSmoothing":
 				let exponentialSmoothingData = this.exponentialSmoothing(alpha!);
 				for (let i = 0; i < forecastLength; i++) {
-					forecastedValues.push(exponentialSmoothingData[exponentialSmoothingData.length - 1]);
+					forecastedValues.push(exponentialSmoothingData[i] + lastValue);
 				}
 				break;
 			default:
