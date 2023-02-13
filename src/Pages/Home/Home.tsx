@@ -101,6 +101,7 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 			handleMessage={handleMessage}
 			pieChartType={pieChartType}
 			setPieChartType={setPieChartType}
+			setPeriod={setPeriod}
 		/>
 		<Banner
 			transactions={transactions}
