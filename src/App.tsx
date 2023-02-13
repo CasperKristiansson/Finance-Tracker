@@ -13,6 +13,7 @@ import { Download } from './Pages/Download/Download';
 import { Login } from './Pages/Login/Login';
 import { Logout } from './Pages/Logout/Logout';
 import { TransactionView } from './Pages/TransactionView/TransactionView';
+import { Loader } from './Pages/Loader/Loader';
 
 import { Route, Routes, BrowserRouter } from 'react-router-dom';
 import { useEffect, useState } from 'react';
@@ -41,6 +42,7 @@ export const App: React.FC<{}> = (): JSX.Element => {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null as any);
   const [auth, setAuth] = useState(null as any);
+  const [apiLoading, setApiLoading] = useState(true);
 
   useEffect(() => {
     const authVar: any = getAuth()
@@ -86,6 +88,7 @@ export const App: React.FC<{}> = (): JSX.Element => {
           <></>
         )}
         <div className={classes.mainSection}>
+          <Loader loading={apiLoading} />
           <Routes>
             {loggedIn && !loading ? (
               <>
