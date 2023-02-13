@@ -78,7 +78,7 @@ export const Overview: React.FC<{ userID: string, period: MonthYear, transaction
 										}}
 										height={undefined}
 										customClickEvent={(_event: any, element: any) => {
-											navigate(`/?year=${period.year}&month=${element[0].index}`);
+											navigate(`/?year=${period.year}&month=${element[0].index}&type=${element[0].datasetIndex === 1 ? "Income" : "Expense"}`);
 											window.location.reload();
 										}}
 									/>
