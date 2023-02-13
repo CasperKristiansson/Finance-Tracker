@@ -39,6 +39,9 @@ export const GraphOverview: React.FC<{transactions: Transaction[], currentYear: 
 							}}
 							height={undefined}
 							color={{} as LineChartColor}
+							customClickEvent={(_event: any, element: any) => {
+								navigate(`/?year=${currentYear}&month=${element[0].index}&type=Income}`);
+							}}
 						/>
 					</Segment>
 				</Grid.Column>

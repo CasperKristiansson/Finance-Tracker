@@ -59,8 +59,6 @@ export const Home: React.FC<{ userID: string }> = ({ userID }): JSX.Element => {
 		params.append("month", period.month.toString());
 		params.append("type", pieChartType)
 		window.history.pushState({}, "", "?" + params.toString());
-
-		console.log("useEffect")
 	}, [period, pieChartType]);
 
 	const handleMonthChange = (month: number) => {
