@@ -1,9 +1,12 @@
 import { BarChartStruct } from "../Component/BarChart";
 import { HeatMapStruct } from "../Component/Heatmap";
-import { LineChartStruct } from "../Component/LineChart";
+import { LineChartColor, LineChartColorS, LineChartStruct } from "../Component/LineChart";
 import { TableStruct } from "../Component/TableCustom";
+import { ExponentialSmoothingLineChart, LinearRegressionLineChart, MovingAverageLineChart } from "./Data/Linechart";
 import { Milestone, milestones } from "./Data/Milestones";
 import { MonthsLong, MonthsShort, StringifyTimeShort, StringifyTimeShortest } from "./Date";
+import { LinearRegression } from "./Predictions/LinearRegression";
+import { TimeSeriesForecasting } from "./Predictions/TimeSeriesForecasting";
 
 export interface Transaction {
     Account: string;
@@ -304,7 +307,7 @@ function groupValuesMonthIterative(amounts: Transaction[] | Loan[]): { [date: st
     return groupedValues;
 }
 
-export function GetLineChartValues(amounts: Transaction[] | Loan[]): LineChartStruct {
+export function GetLineChartValues(amounts: Transaction[] | Loan[], title: string, color?: LineChartColor): LineChartStruct {
     let groupedValues: { [date: string]: number } = groupValuesMonthIterative(amounts);
 
     let dates: string[] = [""];
@@ -317,9 +320,146 @@ export function GetLineChartValues(amounts: Transaction[] | Loan[]): LineChartSt
 
     return {
         labels: dates,
-        data: values
+        data: values,
+        title: title,
+        color: color ? color : new LineChartColorS(),
     };
 }
+
+export interface DataPoint {
+    x: string;
+    y: number;
+}
+
+function linearRegression(lineChartStruct: LineChartStruct, length: number): LineChartStruct {
+    let data: DataPoint[] = [];
+    for (let i = 0; i < lineChartStruct.labels.length; i++) {
+        data.push({
+            x: lineChartStruct.labels[i],
+            y: lineChartStruct.data[i]
+        });
+    }
+
+    data.shift();
+
+    let regression = new LinearRegression(data);
+    let months = Array.from({ length: 3 * 12 }, (_, i) => i + data.length);
+    let predictions = regression.predictMultiple(months);
+
+    let predictionLineChartStruct: LineChartStruct = {
+        labels: lineChartStruct.labels,
+        data: Array(length).fill(undefined),
+        title: "Linear Regression",
+        color: LinearRegressionLineChart,
+    };
+
+    for (let i = 0; i < predictions.length; i++) {
+        predictionLineChartStruct.data[i + data.length] = predictions[i];
+    }
+
+    predictionLineChartStruct.data[data.length] = data[data.length - 1].y;
+
+    console.log(predictionLineChartStruct)
+
+    return predictionLineChartStruct;
+}
+
+function exponentialSmoothing(lineChartStruct: LineChartStruct, length: number): LineChartStruct {
+    let data: DataPoint[] = [];
+    for (let i = 0; i < lineChartStruct.labels.length; i++) {
+        data.push({
+            x: lineChartStruct.labels[i],
+            y: lineChartStruct.data[i]
+        });
+    }
+
+    data.shift();
+
+
+    let forecast = new TimeSeriesForecasting(data);
+    let predictions = forecast.forecast(36, "exponentialSmoothing", undefined, 0.5);
+
+    let predictionLineChartStruct: LineChartStruct = {
+        labels: lineChartStruct.labels,
+        data: Array(length).fill(undefined),
+        title: "Exponential Smoothing",
+        color: ExponentialSmoothingLineChart,
+    };
+
+    for (let i = 0; i < predictions.length; i++) {
+        predictionLineChartStruct.data[i + data.length] = predictions[i];
+    }
+
+    predictionLineChartStruct.data[data.length] = data[data.length - 1].y;
+
+
+    return predictionLineChartStruct;
+}
+
+function movingAverage(lineChartStruct: LineChartStruct, length: number): LineChartStruct {
+    let data: DataPoint[] = [];
+    for (let i = 0; i < lineChartStruct.labels.length; i++) {
+        data.push({
+            x: lineChartStruct.labels[i],
+            y: lineChartStruct.data[i]
+        });
+    }
+
+    data.shift();
+
+
+    let forecast = new TimeSeriesForecasting(data);
+    let predictions = forecast.forecast(36, "movingAverage", 12, undefined);
+
+    let predictionLineChartStruct: LineChartStruct = {
+        labels: lineChartStruct.labels,
+        data: Array(length).fill(undefined),
+        title: "Moving Average",
+        color: MovingAverageLineChart,
+    };
+
+    for (let i = 0; i < predictions.length; i++) {
+        predictionLineChartStruct.data[i + data.length] = predictions[i];
+    }
+
+    predictionLineChartStruct.data[data.length] = data[data.length - 1].y;
+
+
+    return predictionLineChartStruct;
+}
+
+export function GetPredictionLineChart(amounts: Transaction[]): LineChartStruct[] {
+    let lineChartStruct: LineChartStruct = GetLineChartValues(amounts, "Base Data");
+
+    let result: LineChartStruct[] = [];
+
+    let predictionLineChartStruct: LineChartStruct = linearRegression(lineChartStruct, lineChartStruct.data.length);
+    result.push(predictionLineChartStruct);
+
+    predictionLineChartStruct = exponentialSmoothing(lineChartStruct, lineChartStruct.data.length);
+    result.push(predictionLineChartStruct);
+
+    predictionLineChartStruct = movingAverage(lineChartStruct, lineChartStruct.data.length);
+    result.push(predictionLineChartStruct);
+
+
+    for (let i = 0; i < 3 * 12; i++) {
+        let lastLabel: string = lineChartStruct.labels[lineChartStruct.labels.length - 1];
+        let lastLabelDate: Date = new Date(lastLabel);
+        let lastLabelMonth: number = lastLabelDate.getMonth();
+        let lastLabelYear: number = lastLabelDate.getFullYear();
+
+        let newLabelDate: Date = new Date(lastLabelYear, lastLabelMonth + 1, 1);
+        lineChartStruct.labels.push(StringifyTimeShortest(newLabelDate));
+    }
+
+    result.push(lineChartStruct);
+
+    console.log(result)
+
+    return result;
+}
+
 
 /**
  * ? Pie Chart Calculations

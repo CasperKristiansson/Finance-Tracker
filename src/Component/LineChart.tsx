@@ -13,6 +13,8 @@ const useStyles = createUseStyles({
 export interface LineChartStruct {
   labels: string[];
   data: number[];
+  title: string;
+  color: LineChartColor;
 }
 
 export interface LineChartColor {
@@ -23,7 +25,15 @@ export interface LineChartColor {
   borderWidth: number;
 }
 
-export const LineChart: React.FC<{ data: LineChartStruct, title: string, height: number | undefined, color: LineChartColor, customClickEvent?: any }> = ({ data, title, height, color, customClickEvent }): JSX.Element => {
+export class LineChartColorS implements LineChartColor {
+  backgroundColor: string = "rgb(33,133,208)";
+  borderColor: string = "rgb(33,133,208)";
+  hoverBackgroundColor: string = "rgb(33,133,208)";
+  hoverBorderColor: string = "rgb(33,133,208)";
+  borderWidth: number = 2;
+}
+
+export const LineChart: React.FC<{ data: LineChartStruct | LineChartStruct[], height: number | undefined, customClickEvent?: any, showRadius?: boolean, title: string }> = ({ data, height, customClickEvent, showRadius, title }): JSX.Element => {
   const classes = useStyles();
   
   const [dataSet, setDataSet] = React.useState({
@@ -32,22 +42,38 @@ export const LineChart: React.FC<{ data: LineChartStruct, title: string, height:
   });
 
   React.useEffect(() => {
-    setDataSet({
-      labels: data.labels,
-      datasets: [
-        {
-          label: title,
-          data: data.data,
-          backgroundColor: color.backgroundColor ? color.backgroundColor : "rgba(54, 162, 235, 0.2)",
-          borderColor: color.borderColor ? color.borderColor : "rgba(54, 162, 235, 1)",
-          hoverBackgroundColor: color.hoverBackgroundColor ? color.hoverBackgroundColor : "gba(54, 162, 235, 1)",
-          hoverBorderColor: color.hoverBorderColor ? color.hoverBorderColor : "rgba(54, 162, 235, 1)",
-          borderWidth: color.borderWidth ? color.borderWidth : 2,
-        },
-      ],
-    });
-
-  }, [data, color, title]);
+    if (Array.isArray(data)) {
+      setDataSet({
+        labels: data[0].labels,
+        datasets: data.map((item, index) => {
+          return {
+            label: item.title,
+            data: item.data,
+            backgroundColor: item.color.backgroundColor,
+            borderColor: item.color.borderColor,
+            hoverBackgroundColor: item.color.hoverBackgroundColor,
+            hoverBorderColor: item.color.hoverBorderColor,
+            borderWidth: item.color.borderWidth,
+          };
+        }),
+      });
+    } else {
+      setDataSet({
+        labels: data.labels,
+        datasets: [
+          {
+            label: data.title,
+            data: data.data,
+            backgroundColor: data.color.backgroundColor,
+            borderColor: data.color.borderColor,
+            hoverBackgroundColor: data.color.hoverBackgroundColor,
+            hoverBorderColor: data.color.hoverBorderColor,
+            borderWidth: data.color.borderWidth,
+          },
+        ],
+      });
+    }
+  }, [data]);
 
   var options = {
     title: {
@@ -70,6 +96,11 @@ export const LineChart: React.FC<{ data: LineChartStruct, title: string, height:
           display: false
         }
       }
+    },
+    elements: {
+      point: {
+        radius: showRadius ? 0 : 3,
+      },
     },
     onClick: (event: any, element: any) => {
       if (element.length > 0 && customClickEvent) {
