@@ -2,7 +2,7 @@ import React from "react";
 import axios from "axios";
 import { useEffect, useState } from "react";
 import { Divider, Grid, Segment } from "semantic-ui-react";
-import { LineChart, LineChartColor } from "../../Component/LineChart";
+import { LineChart, LineChartColor, LineChartColorS } from "../../Component/LineChart";
 import { AccountGraph, ConvertTransactions, GetAccountsBalanceGraph } from "../../Utils/Transactions";
 
 export const AccountsReport: React.FC<{ userID: string,setApiLoading: any }> = ({ userID, setApiLoading }): JSX.Element => {
@@ -39,9 +39,10 @@ export const AccountsReport: React.FC<{ userID: string,setApiLoading: any }> = (
 								data={{
 										labels: account.Labels,
 										data: account.Balance,
+										title: "Balance",
+										color: new LineChartColorS(),
 								}}
 								height={undefined}
-								color={{} as LineChartColor}
 							/>
 						</Segment>
 					</Grid.Column>

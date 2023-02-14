@@ -9,6 +9,7 @@ import { GraphOverview } from "./ChildComponents/GraphOverview";
 import { HeatMapOverview } from "./ChildComponents/HeatMapOverview";
 import { IncomeExpenseOverview } from "./ChildComponents/IncomeExpenseOverview";
 import { TableOverview } from "./ChildComponents/TableOverview";
+import { Predictions } from "./ChildComponents/Predictions";
 
 export const TotalReport: React.FC<{ userID: string, setApiLoading: any }> = ({ userID, setApiLoading }): JSX.Element => {
 	const [transactions, setTransactions] = useState([] as Transaction[]);
@@ -41,6 +42,7 @@ export const TotalReport: React.FC<{ userID: string, setApiLoading: any }> = ({ 
 		<h1>TotalReport</h1>
 		<BalanceOverview transactions={transactions} loans={loans} />
 		<GraphOverview transactions={transactions} loans={loans} />
+		<Predictions transactions={transactions} loans={loans} />
 		<IncomeExpenseOverview transactions={transactions} loans={loans} />
 		<HeatMapOverview transactions={transactions} />
 		<TableOverview transactions={transactions} />
