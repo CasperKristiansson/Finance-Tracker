@@ -1,7 +1,7 @@
 import React from "react";
 import { NetWorthPerformanceCard } from "./children/netWorth";
 import { AccountsCard } from "./children/accountCard";
-import { SummaryCard } from "./children/summaryCard";
+import { Summary } from "./children/summary";
 
 export const Accounts: React.FC = () => {
   return (
@@ -12,7 +12,7 @@ export const Accounts: React.FC = () => {
           <AccountsCard />
         </div>
         <div className="col-span-1">
-          <SummaryCard assets={929038.67} liabilities={242000.88} />
+          <Summary />
         </div>
       </div>
     </div>
