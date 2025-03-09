@@ -1,28 +1,20 @@
 import React from "react";
 import { NetWorthPerformanceCard } from "./children/netWorth";
-
-const data = {
-  netWorth: 100000,
-  monthlyChange: 1000,
-  data: [
-    { date: "2021-01-01", netWorth: 100000 },
-    { date: "2021-02-01", netWorth: 101000 },
-    { date: "2021-03-01", netWorth: 110000 },
-    { date: "2021-04-01", netWorth: 113000 },
-    { date: "2021-05-01", netWorth: 123000 },
-    { date: "2021-06-01", netWorth: 129000 },
-    { date: "2021-07-01", netWorth: 132000 },
-  ],
-};
+import { AccountsCard } from "./children/accountCard";
+import { SummaryCard } from "./children/summaryCard";
 
 export const Accounts: React.FC = () => {
   return (
     <div className="">
-      <NetWorthPerformanceCard
-        netWorth={data.netWorth}
-        monthlyChange={data.monthlyChange}
-        data={data.data}
-      />
+      <NetWorthPerformanceCard />
+      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="col-span-2">
+          <AccountsCard />
+        </div>
+        <div className="col-span-1">
+          <SummaryCard assets={929038.67} liabilities={242000.88} />
+        </div>
+      </div>
     </div>
   );
 };
