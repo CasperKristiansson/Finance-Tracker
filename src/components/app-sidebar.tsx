@@ -15,7 +15,6 @@ import {
 import { NavMain } from "@/components/nav-main";
 import { NavProjects } from "@/components/nav-projects";
 import { NavUser } from "@/components/nav-user";
-import { TeamSwitcher } from "@/components/team-switcher";
 import {
   Sidebar,
   SidebarContent,
@@ -23,6 +22,8 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import LogoLarge from "@/assets/LogoLarge.png";
+import LogoSmall from "@/assets/LogoSmall.png";
 
 // This is sample data.
 const data = {
@@ -158,7 +159,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <TeamSwitcher teams={data.teams} />
+        <img src={LogoLarge} alt="Logo" className="mt-2 h-6 px-2" />
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />

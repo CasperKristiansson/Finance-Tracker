@@ -17,10 +17,10 @@ import { RoutesNoNavigation } from "@/data/routes";
 import { useLocation } from "react-router";
 
 export const Navigation: React.FC = () => {
-  // const location = useLocation();
-  // if (RoutesNoNavigation.includes(location.pathname)) {
-  //   return <></>;
-  // }
+  const location = useLocation();
+  if (RoutesNoNavigation.includes(location.pathname)) {
+    return <></>;
+  }
 
   return (
     <SidebarProvider>
