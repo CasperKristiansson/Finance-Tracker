@@ -23,6 +23,7 @@ import {
 import LogoLarge from "@/assets/LogoLarge.png";
 import LogoSmall from "@/assets/LogoSmall.png";
 import clsx from "clsx";
+import { PageRoutes } from "@/data/routes";
 
 const data = {
   user: {
@@ -32,49 +33,49 @@ const data = {
   navMain: [
     {
       title: "Dashboard",
-      url: "#",
+      url: PageRoutes.home,
       icon: Home,
     },
     {
       title: "Accounts",
-      url: "#",
+      url: PageRoutes.accounts,
       icon: Banknote,
     },
     {
       title: "Transactions",
-      url: "#",
+      url: PageRoutes.transactions,
       icon: BookOpen,
     },
   ],
   navExtra: [
     {
       title: "Reports",
-      url: "#",
+      url: PageRoutes.reports,
       icon: BarChart2,
     },
     {
       title: "Cash Flow",
-      url: "#",
+      url: PageRoutes.cashFlow,
       icon: TrendingUp,
     },
     {
       title: "Loans",
-      url: "#",
+      url: PageRoutes.loans,
       icon: CreditCard,
     },
     {
       title: "Investments",
-      url: "#",
+      url: PageRoutes.investments,
       icon: PieChart,
     },
     {
       title: "Goals",
-      url: "#",
+      url: PageRoutes.goals,
       icon: Target,
     },
     {
       title: "Settings",
-      url: "#",
+      url: PageRoutes.settings,
       icon: Settings2,
     },
   ],

@@ -1,6 +1,6 @@
 import React from "react";
 
-export const Home: React.FC = () => {
+export const Dashboard: React.FC = () => {
   return (
     <div className="mx-auto flex size-full max-w-3xl flex-col">
       <header className="z-50 mb-auto flex w-full justify-center py-4">

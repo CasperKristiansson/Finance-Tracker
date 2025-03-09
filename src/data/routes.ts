@@ -3,10 +3,12 @@ export const PageRoutes = {
   login: "/login",
   notFound: "*",
   home: "/",
+  accounts: "/accounts",
+  transactions: "/transactions",
+  reports: "/reports",
+  cashFlow: "/cash-flow",
+  loans: "/loans",
+  investments: "/investments",
+  goals: "/goals",
+  settings: "/settings",
 };
-
-export const RoutesNoNavigation = [
-  PageRoutes.cover,
-  PageRoutes.login,
-  PageRoutes.notFound,
-];
