@@ -1,6 +1,15 @@
 import * as React from "react";
-import { BookOpen, Bot, Settings2, SquareTerminal } from "lucide-react";
-
+import {
+  BookOpen,
+  Settings2,
+  BarChart2,
+  TrendingUp,
+  CreditCard,
+  PieChart,
+  Target,
+  Home,
+  Banknote,
+} from "lucide-react";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
 import {
@@ -22,19 +31,46 @@ const data = {
   },
   navMain: [
     {
-      title: "Playground",
+      title: "Dashboard",
       url: "#",
-      icon: SquareTerminal,
+      icon: Home,
     },
     {
-      title: "Models",
+      title: "Accounts",
       url: "#",
-      icon: Bot,
+      icon: Banknote,
     },
     {
-      title: "Documentation",
+      title: "Transactions",
       url: "#",
       icon: BookOpen,
+    },
+  ],
+  navExtra: [
+    {
+      title: "Reports",
+      url: "#",
+      icon: BarChart2,
+    },
+    {
+      title: "Cash Flow",
+      url: "#",
+      icon: TrendingUp,
+    },
+    {
+      title: "Loans",
+      url: "#",
+      icon: CreditCard,
+    },
+    {
+      title: "Investments",
+      url: "#",
+      icon: PieChart,
+    },
+    {
+      title: "Goals",
+      url: "#",
+      icon: Target,
     },
     {
       title: "Settings",
@@ -60,7 +96,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
+        <NavMain items={data.navMain} title="Core" />
+        <NavMain items={data.navExtra} title="Features" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={data.user} />
