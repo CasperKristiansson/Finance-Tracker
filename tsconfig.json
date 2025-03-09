@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
     /* Language and Environment */
-    "target": "ES2023" /* Set a more recent JavaScript version that supports modern features. */,
+    "target": "ES2021" /* Set a more recent JavaScript version that supports modern features. */,
     "lib": [
-      "ES2023",
+      "ES2021",
       "DOM",
       "DOM.Iterable"
     ] /* Include relevant library files for React and modern JavaScript features. */,
