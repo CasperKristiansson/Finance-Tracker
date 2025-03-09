@@ -59,7 +59,7 @@ export const NetWorthPerformanceCard: React.FC = () => {
     <Card>
       <CardHeader className="flex w-full">
         <CardDescription>Net Worth</CardDescription>
-        <div className="space-between flex w-full flex-row justify-between">
+        <div className="space-between flex w-full flex-col justify-between gap-4 md:flex-row md:gap-0">
           <div className="flex items-center">
             <CardTitle className="text-2xl font-bold">
               {data.netWorth.toLocaleString("en-US", {
@@ -107,7 +107,7 @@ export const NetWorthPerformanceCard: React.FC = () => {
           </DropdownMenu>
         </div>
       </CardHeader>
-      <CardContent className="h-64">
+      <CardContent className="h-64 px-4 md:px-6">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
             data={data.data}
