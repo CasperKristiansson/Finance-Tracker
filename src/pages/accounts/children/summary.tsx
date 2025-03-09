@@ -33,7 +33,7 @@ export const Summary: React.FC = () => {
   }
 
   return (
-    <Card className="flex h-full flex-col pt-4 pr-2 pl-2">
+    <Card className="flex h-full w-full flex-col pt-4 pr-2 pl-2">
       <Tabs defaultValue="totals" className="flex w-full flex-1 flex-col">
         <div className="flex w-full items-center justify-between">
           <h2 className="text-xl font-semibold">Summary</h2>

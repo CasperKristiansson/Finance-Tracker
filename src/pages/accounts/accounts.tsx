@@ -18,7 +18,7 @@ export const Accounts: React.FC = () => {
         <div className="col-span-2">
           <AccountsCard />
         </div>
-        <div className="col-span-1">
+        <div className="col-span-2 md:col-span-1">
           <Summary />
         </div>
       </div>
