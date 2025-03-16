@@ -7,11 +7,14 @@ import { PageRoutes } from "./data/routes.ts";
 import { Navigation } from "./pages/navigation/navigation.tsx";
 import { Dashboard } from "./pages/dashboard/dashboard.tsx";
 import { Accounts } from "./pages/accounts/accounts.tsx";
-import { useAppDispatch } from "./app/hooks.ts";
+import { useAppDispatch, useAppSelector } from "./app/hooks.ts";
 import { AuthInitialize } from "./features/auth/authSaga.ts";
+import { selectInitialLoaded } from "./features/auth/authSlice.ts";
+import { Spinner } from "./components/spinner.tsx";
 
 export const App: React.FC = () => {
   const dispatch = useAppDispatch();
+  const initialLoaded = useAppSelector(selectInitialLoaded);
 
   const NavigationWrapper = ({
     children,
@@ -26,6 +29,18 @@ export const App: React.FC = () => {
   useEffect(() => {
     dispatch(AuthInitialize());
   }, [dispatch]);
+
+  if (!initialLoaded) {
+    return (
+      <div
+        className={
+          "fixed inset-0 z-50 flex items-center justify-center opacity-80 transition-opacity duration-200 ease-in-out"
+        }
+      >
+        <Spinner height={100} width={100} />
+      </div>
+    );
+  }
 
   return (
     <Routes>

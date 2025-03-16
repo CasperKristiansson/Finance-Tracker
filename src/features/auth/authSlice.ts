@@ -2,6 +2,7 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 
 export interface AuthState {
   isAuthenticated: boolean;
+  isInitialLoaded: boolean;
   user: {
     email: string;
     accessToken: string;
@@ -12,6 +13,7 @@ export interface AuthState {
 
 export const initialState: AuthState = {
   isAuthenticated: false,
+  isInitialLoaded: false,
   user: {
     email: "",
     accessToken: "",
@@ -32,15 +34,24 @@ const authSlice = createSlice({
       state.isAuthenticated = false;
       state.user = initialState.user;
     },
+    setInitialLoaded: (state) => {
+      state.isInitialLoaded = true;
+    },
   },
   selectors: {
     selectIsAuthenticated: (state) => state.isAuthenticated,
     selectUser: (state) => state.user,
     selectToken: (state) => state.user.accessToken,
+    selectInitialLoaded: (state) => state.isInitialLoaded,
   },
 });
 
-export const { loginSuccess, logoutSuccess } = authSlice.actions;
-export const { selectIsAuthenticated, selectUser, selectToken } =
-  authSlice.selectors;
+export const { loginSuccess, logoutSuccess, setInitialLoaded } =
+  authSlice.actions;
+export const {
+  selectIsAuthenticated,
+  selectUser,
+  selectToken,
+  selectInitialLoaded,
+} = authSlice.selectors;
 export const AuthReducer = authSlice.reducer;
