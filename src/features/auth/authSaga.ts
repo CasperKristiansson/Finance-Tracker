@@ -1,5 +1,6 @@
 import { createAction } from "@reduxjs/toolkit";
 import { all, call, put, takeLatest } from "redux-saga/effects";
+import { toast } from "sonner";
 import { TypedSelect } from "@/app/rootSaga";
 import {
   cognitoLogin,
@@ -29,7 +30,15 @@ function* handleLogin(action: ReturnType<typeof AuthLogin>) {
       action.payload.password,
     );
     yield put(loginSuccess({ email: action.payload.username, ...tokens }));
-  } catch {}
+  } catch (error) {
+    if (error instanceof Error) {
+      toast("Failed to Login", {
+        description: error.message,
+      });
+    } else {
+      toast("Failed to Login");
+    }
+  }
 }
 
 function* handleLogout() {
@@ -40,7 +49,15 @@ function* handleLogout() {
       yield call(cognitoLogout, accessToken);
       yield put(logoutSuccess());
     }
-  } catch {}
+  } catch (error) {
+    if (error instanceof Error) {
+      toast("Failed to Logout", {
+        description: error.message,
+      });
+    } else {
+      toast("Failed to Logout");
+    }
+  }
 }
 
 function* initializeAuth() {
@@ -60,7 +77,15 @@ function* initializeAuth() {
           email: storedEmail,
         }),
       );
-    } catch {}
+    } catch (error) {
+      if (error instanceof Error) {
+        toast("Failed to Refresh Token", {
+          description: error.message,
+        });
+      } else {
+        toast("Failed to Refresh Token");
+      }
+    }
   }
   yield put(setInitialLoaded());
 }
