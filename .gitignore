@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 Makefile
 data
+api/transactions.json
+api/transactions_transformed.json
