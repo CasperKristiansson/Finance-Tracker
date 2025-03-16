@@ -1,9 +1,12 @@
 import React from "react";
-import { useAppDispatch } from "@/app/hooks";
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
+import { Spinner } from "@/components/spinner";
+import { selectLoading } from "@/features/app/appSlice";
 import { AuthLogin } from "@/features/auth/authSaga";
 
 export const Login: React.FC = () => {
   const dispatch = useAppDispatch();
+  const loadingLogIn = useAppSelector(selectLoading)["login"];
 
   const [userInformation, setUserInformation] = React.useState({
     username: "",
@@ -150,7 +153,11 @@ export const Login: React.FC = () => {
                     setUserInformation({ username: "", password: "" });
                   }}
                 >
-                  Sign in
+                  {loadingLogIn ? (
+                    <Spinner height={20} width={20} color="white" />
+                  ) : (
+                    "Sign in"
+                  )}
                 </button>
               </div>
             </form>
