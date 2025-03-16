@@ -1,9 +1,9 @@
-import React from "react";
-import { NetWorthPerformanceCard } from "./children/netWorth";
-import { AccountsCard } from "./children/accountCard";
-import { Summary } from "./children/summary";
-import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import React from "react";
+import { Button } from "@/components/ui/button";
+import { AccountsCard } from "./children/accountCard";
+import { NetWorthPerformanceCard } from "./children/netWorth";
+import { Summary } from "./children/summary";
 
 export const Accounts: React.FC = () => {
   return (

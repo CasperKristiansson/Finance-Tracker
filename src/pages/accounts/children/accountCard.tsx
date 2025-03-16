@@ -1,8 +1,9 @@
-import SwedBank from "@/assets/banks/swedbank.png";
-import Seb from "@/assets/banks/seb.png";
-import Nordnet from "@/assets/banks/nordnet.jpg";
-import DanskeBank from "@/assets/banks/danskebank.png";
+import React from "react";
 import CircleK from "@/assets/banks/circlek.png";
+import DanskeBank from "@/assets/banks/danskebank.png";
+import Nordnet from "@/assets/banks/nordnet.jpg";
+import Seb from "@/assets/banks/seb.png";
+import SwedBank from "@/assets/banks/swedbank.png";
 import { AccountItem, type Account } from "./accountItem";
 
 const accountsChecking: Account[] = [

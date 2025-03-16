@@ -1,5 +1,6 @@
-import { all, call, put, takeLatest } from "redux-saga/effects";
 import { createAction } from "@reduxjs/toolkit";
+import { all, call, put, takeLatest } from "redux-saga/effects";
+import { TypedSelect } from "@/app/rootSaga";
 import {
   cognitoLogin,
   cognitoLogout,
@@ -7,7 +8,6 @@ import {
   type AuthResponse,
   type RefreshTokenResponse,
 } from "./authHelpers";
-import { TypedSelect } from "@/app/rootSaga";
 import {
   loginSuccess,
   logoutSuccess,
