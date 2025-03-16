@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Route, Routes } from "react-router";
 import { Cover } from "./pages/cover/cover.tsx";
 import { Login } from "./pages/login/login.tsx";
@@ -7,8 +7,12 @@ import { PageRoutes } from "./data/routes.ts";
 import { Navigation } from "./pages/navigation/navigation.tsx";
 import { Dashboard } from "./pages/dashboard/dashboard.tsx";
 import { Accounts } from "./pages/accounts/accounts.tsx";
+import { useAppDispatch } from "./app/hooks.ts";
+import { AuthInitialize } from "./features/auth/authSaga.ts";
 
 export const App: React.FC = () => {
+  const dispatch = useAppDispatch();
+
   const NavigationWrapper = ({
     children,
     title,
@@ -18,6 +22,10 @@ export const App: React.FC = () => {
   }) => {
     return <Navigation title={title}>{children}</Navigation>;
   };
+
+  useEffect(() => {
+    dispatch(AuthInitialize());
+  }, [dispatch]);
 
   return (
     <Routes>
