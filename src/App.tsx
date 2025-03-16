@@ -1,16 +1,16 @@
 import React, { useEffect } from "react";
 import { Route, Routes } from "react-router";
-import { Cover } from "./pages/cover/cover.tsx";
-import { Login } from "./pages/login/login.tsx";
-import { NotFound } from "./pages/notFound/notFound.tsx";
-import { PageRoutes } from "./data/routes.ts";
-import { Navigation } from "./pages/navigation/navigation.tsx";
-import { Dashboard } from "./pages/dashboard/dashboard.tsx";
-import { Accounts } from "./pages/accounts/accounts.tsx";
 import { useAppDispatch, useAppSelector } from "./app/hooks.ts";
+import { Spinner } from "./components/spinner.tsx";
+import { PageRoutes } from "./data/routes.ts";
 import { AuthInitialize } from "./features/auth/authSaga.ts";
 import { selectInitialLoaded } from "./features/auth/authSlice.ts";
-import { Spinner } from "./components/spinner.tsx";
+import { Accounts } from "./pages/accounts/accounts.tsx";
+import { Cover } from "./pages/cover/cover.tsx";
+import { Dashboard } from "./pages/dashboard/dashboard.tsx";
+import { Login } from "./pages/login/login.tsx";
+import { Navigation } from "./pages/navigation/navigation.tsx";
+import { NotFound } from "./pages/notFound/notFound.tsx";
 
 export const App: React.FC = () => {
   const dispatch = useAppDispatch();

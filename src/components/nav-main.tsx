@@ -1,4 +1,5 @@
 import { type LucideIcon } from "lucide-react";
+import { Link, useLocation } from "react-router";
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -6,7 +7,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
-import { Link, useLocation } from "react-router";
 import { cn } from "@/lib/utils";
 
 export function NavMain({

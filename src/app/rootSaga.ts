@@ -1,6 +1,6 @@
 import { all, fork, select } from "redux-saga/effects";
-import type { RootState } from "./store";
 import { AuthSaga } from "@/features/auth/authSaga";
+import type { RootState } from "./store";
 
 type Selector<T> = (state: RootState) => T;
 

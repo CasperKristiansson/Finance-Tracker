@@ -1,4 +1,4 @@
-import * as React from "react";
+import clsx from "clsx";
 import {
   BookOpen,
   Settings2,
@@ -10,6 +10,10 @@ import {
   Home,
   Banknote,
 } from "lucide-react";
+import * as React from "react";
+import { useAppSelector } from "@/app/hooks";
+import LogoLarge from "@/assets/LogoLarge.png";
+import LogoSmall from "@/assets/LogoSmall.png";
 import { NavMain } from "@/components/nav-main";
 import { NavUser } from "@/components/nav-user";
 import {
@@ -20,11 +24,7 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
-import LogoLarge from "@/assets/LogoLarge.png";
-import LogoSmall from "@/assets/LogoSmall.png";
-import clsx from "clsx";
 import { PageRoutes } from "@/data/routes";
-import { useAppSelector } from "@/app/hooks";
 import { selectUser } from "@/features/auth/authSlice";
 
 const data = {

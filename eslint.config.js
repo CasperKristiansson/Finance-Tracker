@@ -5,6 +5,8 @@ import importPlugin from "eslint-plugin-import";
 import prettierPlugin from "eslint-plugin-prettier";
 import tsParser from "@typescript-eslint/parser";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
+import reactHooks from "eslint-plugin-react-hooks";
+import reactRefresh from "eslint-plugin-react-refresh";
 
 export default [
   js.configs.recommended,
@@ -74,6 +76,7 @@ export default [
           alphabetize: { order: "asc", caseInsensitive: true },
         },
       ],
+      "react/react-in-jsx-scope": "off",
     },
     settings: {
       react: { version: "detect" },
