@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router";
 import { useAppDispatch, useAppSelector } from "./app/hooks.ts";
 import { Spinner } from "./components/spinner.tsx";
 import { PageRoutes } from "./data/routes.ts";
+import { selectLoading } from "./features/app/appSlice.tsx";
 import { AuthInitialize } from "./features/auth/authSaga.ts";
 import { selectInitialLoaded } from "./features/auth/authSlice.ts";
 import { Accounts } from "./pages/accounts/accounts.tsx";
@@ -16,6 +17,7 @@ import { Redirect } from "./pages/redirect/redirect.tsx";
 export const App: React.FC = () => {
   const dispatch = useAppDispatch();
   const initialLoaded = useAppSelector(selectInitialLoaded);
+  const loadingLogout = useAppSelector(selectLoading)["logout"];
 
   const NavigationWrapper = ({
     children,
@@ -31,7 +33,7 @@ export const App: React.FC = () => {
     dispatch(AuthInitialize());
   }, [dispatch]);
 
-  if (!initialLoaded) {
+  if (!initialLoaded || loadingLogout) {
     return (
       <div
         className={

@@ -2,6 +2,7 @@ import { createAction } from "@reduxjs/toolkit";
 import { all, call, put, takeLatest } from "redux-saga/effects";
 import { toast } from "sonner";
 import { TypedSelect } from "@/app/rootSaga";
+import { setLoading } from "../app/appSlice";
 import {
   cognitoLogin,
   cognitoLogout,
@@ -23,6 +24,7 @@ export const AuthLogout = createAction("auth/logout");
 export const AuthInitialize = createAction("auth/initialize");
 
 function* handleLogin(action: ReturnType<typeof AuthLogin>) {
+  yield put(setLoading({ key: "login", isLoading: true }));
   try {
     const tokens: AuthResponse = yield call(
       cognitoLogin,
@@ -40,9 +42,11 @@ function* handleLogin(action: ReturnType<typeof AuthLogin>) {
       toast.error("Failed to Login");
     }
   }
+  yield put(setLoading({ key: "login", isLoading: false }));
 }
 
 function* handleLogout() {
+  yield put(setLoading({ key: "logout", isLoading: true }));
   try {
     const accessToken = yield* TypedSelect(selectToken);
 
@@ -64,6 +68,7 @@ function* handleLogout() {
       toast.error("Failed to Logout");
     }
   }
+  yield put(setLoading({ key: "logout", isLoading: false }));
 }
 
 function* initializeAuth() {
