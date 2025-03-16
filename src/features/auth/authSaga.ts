@@ -30,13 +30,14 @@ function* handleLogin(action: ReturnType<typeof AuthLogin>) {
       action.payload.password,
     );
     yield put(loginSuccess({ email: action.payload.username, ...tokens }));
+    toast.success("Login Successful");
   } catch (error) {
     if (error instanceof Error) {
-      toast("Failed to Login", {
+      toast.error("Failed to Login", {
         description: error.message,
       });
     } else {
-      toast("Failed to Login");
+      toast.error("Failed to Login");
     }
   }
 }
@@ -48,14 +49,19 @@ function* handleLogout() {
     if (accessToken) {
       yield call(cognitoLogout, accessToken);
       yield put(logoutSuccess());
+      toast.success("Logout Successful");
+    } else {
+      toast.error("Failed to Logout", {
+        description: "No Access Token Found",
+      });
     }
   } catch (error) {
     if (error instanceof Error) {
-      toast("Failed to Logout", {
+      toast.error("Failed to Logout", {
         description: error.message,
       });
     } else {
-      toast("Failed to Logout");
+      toast.error("Failed to Logout");
     }
   }
 }
@@ -79,11 +85,11 @@ function* initializeAuth() {
       );
     } catch (error) {
       if (error instanceof Error) {
-        toast("Failed to Refresh Token", {
+        toast.error("Failed to Refresh Token", {
           description: error.message,
         });
       } else {
-        toast("Failed to Refresh Token");
+        toast.error("Failed to Refresh Token");
       }
     }
   }
