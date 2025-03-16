@@ -24,12 +24,10 @@ import LogoLarge from "@/assets/LogoLarge.png";
 import LogoSmall from "@/assets/LogoSmall.png";
 import clsx from "clsx";
 import { PageRoutes } from "@/data/routes";
+import { useAppSelector } from "@/app/hooks";
+import { selectUser } from "@/features/auth/authSlice";
 
 const data = {
-  user: {
-    name: "Casper Kristiansson",
-    email: "casper.kristiansson@yahoo.se",
-  },
   navMain: [
     {
       title: "Dashboard",
@@ -83,6 +81,7 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { state } = useSidebar();
+  const select = useAppSelector(selectUser);
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -101,7 +100,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavMain items={data.navExtra} title="Features" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={select} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
