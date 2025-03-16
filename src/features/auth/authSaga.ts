@@ -8,7 +8,12 @@ import {
   type RefreshTokenResponse,
 } from "./authHelpers";
 import { TypedSelect } from "@/app/rootSaga";
-import { loginSuccess, logoutSuccess, selectToken } from "./authSlice";
+import {
+  loginSuccess,
+  logoutSuccess,
+  selectToken,
+  setInitialLoaded,
+} from "./authSlice";
 
 export const AuthLogin = createAction<{ username: string; password: string }>(
   "auth/login",
@@ -55,10 +60,9 @@ function* initializeAuth() {
           email: storedEmail,
         }),
       );
-    } catch (error) {
-      console.error("Token refresh failed:", error);
-    }
+    } catch {}
   }
+  yield put(setInitialLoaded());
 }
 
 export function* AuthSaga() {
