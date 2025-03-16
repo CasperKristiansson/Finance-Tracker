@@ -1,6 +1,15 @@
 import React from "react";
+import { useAppDispatch } from "@/app/hooks";
+import { AuthLogin } from "@/features/auth/authSaga";
 
 export const Login: React.FC = () => {
+  const dispatch = useAppDispatch();
+
+  const [userInformation, setUserInformation] = React.useState({
+    username: "",
+    password: "",
+  });
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
       <div className="h-100v mx-auto mt-7 w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-2xs">
@@ -42,6 +51,12 @@ export const Login: React.FC = () => {
                       className="block w-full rounded-lg border-1 border-gray-200 px-4 py-2.5 focus:border-blue-500 focus:ring-blue-500 disabled:pointer-events-none disabled:opacity-50 sm:py-3 sm:text-sm"
                       required
                       aria-describedby="email-error"
+                      onChange={(e) =>
+                        setUserInformation({
+                          ...userInformation,
+                          username: e.target.value,
+                        })
+                      }
                     />
                     <div className="pointer-events-none absolute inset-y-0 end-0 hidden pe-3">
                       <svg
@@ -84,6 +99,12 @@ export const Login: React.FC = () => {
                       className="block w-full rounded-lg border-1 border-gray-200 px-4 py-2.5 focus:border-blue-500 focus:ring-blue-500 disabled:pointer-events-none disabled:opacity-50 sm:py-3 sm:text-sm"
                       required
                       aria-describedby="password-error"
+                      onChange={(e) =>
+                        setUserInformation({
+                          ...userInformation,
+                          password: e.target.value,
+                        })
+                      }
                     />
                     <div className="pointer-events-none absolute inset-y-0 end-0 hidden pe-3">
                       <svg
@@ -123,6 +144,11 @@ export const Login: React.FC = () => {
                 <button
                   type="submit"
                   className="inline-flex w-full items-center justify-center gap-x-2 rounded-lg border border-transparent bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 focus:bg-blue-700 focus:outline-hidden disabled:pointer-events-none disabled:opacity-50"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    dispatch(AuthLogin(userInformation));
+                    setUserInformation({ username: "", password: "" });
+                  }}
                 >
                   Sign in
                 </button>
