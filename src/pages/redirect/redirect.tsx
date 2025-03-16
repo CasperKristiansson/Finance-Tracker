@@ -8,7 +8,7 @@ import {
   selectIsAuthenticated,
 } from "@/features/auth/authSlice";
 
-export const Base = (): JSX.Element => {
+export const Redirect = (): JSX.Element => {
   const location = useLocation();
   const navigate = useNavigate();
 

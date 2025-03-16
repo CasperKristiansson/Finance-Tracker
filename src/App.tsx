@@ -11,6 +11,7 @@ import { Dashboard } from "./pages/dashboard/dashboard.tsx";
 import { Login } from "./pages/login/login.tsx";
 import { Navigation } from "./pages/navigation/navigation.tsx";
 import { NotFound } from "./pages/notFound/notFound.tsx";
+import { Redirect } from "./pages/redirect/redirect.tsx";
 
 export const App: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -43,27 +44,30 @@ export const App: React.FC = () => {
   }
 
   return (
-    <Routes>
-      <Route path={PageRoutes.login} element={<Login />} />
-      <Route path={PageRoutes.cover} element={<Cover />} />
-      <Route path={PageRoutes.notFound} element={<NotFound />} />
+    <>
+      <Redirect />
+      <Routes>
+        <Route path={PageRoutes.login} element={<Login />} />
+        <Route path={PageRoutes.cover} element={<Cover />} />
+        <Route path={PageRoutes.notFound} element={<NotFound />} />
 
-      <Route
-        path={PageRoutes.home}
-        element={
-          <NavigationWrapper title="Dashboard">
-            <Dashboard />
-          </NavigationWrapper>
-        }
-      />
-      <Route
-        path={PageRoutes.accounts}
-        element={
-          <NavigationWrapper title="Accounts">
-            <Accounts />
-          </NavigationWrapper>
-        }
-      />
-    </Routes>
+        <Route
+          path={PageRoutes.home}
+          element={
+            <NavigationWrapper title="Dashboard">
+              <Dashboard />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.accounts}
+          element={
+            <NavigationWrapper title="Accounts">
+              <Accounts />
+            </NavigationWrapper>
+          }
+        />
+      </Routes>
+    </>
   );
 };

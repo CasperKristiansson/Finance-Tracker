@@ -1,4 +1,5 @@
 import { ChevronsUpDown, LogOut } from "lucide-react";
+import { useAppDispatch } from "@/app/hooks";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -14,6 +15,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { AuthLogout } from "@/features/auth/authSaga";
 import type { AuthState } from "@/features/auth/authSlice";
 
 function getNameFromEmail(email: string): string {
@@ -37,6 +39,7 @@ function getNameFromEmail(email: string): string {
 
 export function NavUser({ user }: { user: AuthState["user"] }) {
   const { isMobile } = useSidebar();
+  const dispatch = useAppDispatch();
 
   return (
     <SidebarMenu>
@@ -85,7 +88,7 @@ export function NavUser({ user }: { user: AuthState["user"] }) {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => dispatch(AuthLogout())}>
               <LogOut />
               Log out
             </DropdownMenuItem>
