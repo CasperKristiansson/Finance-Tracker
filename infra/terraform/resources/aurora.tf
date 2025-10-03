@@ -8,6 +8,12 @@ variable "environment" {
   type        = string
 }
 
+variable "enable_public_access" {
+  description = "Set to true for temporary public access to the Aurora instance."
+  type        = bool
+  default     = false
+}
+
 locals {
   project_name = "finance-tracker"
   name_prefix  = "${local.project_name}-${var.environment}"
@@ -163,10 +169,11 @@ resource "aws_rds_cluster" "finance_tracker" {
 }
 
 resource "aws_rds_cluster_instance" "finance_tracker_primary" {
-  identifier         = "${local.name_prefix}-aurora-1"
-  cluster_identifier = aws_rds_cluster.finance_tracker.id
-  instance_class     = "db.serverless"
-  engine             = aws_rds_cluster.finance_tracker.engine
+  identifier          = "${local.name_prefix}-aurora-1"
+  cluster_identifier  = aws_rds_cluster.finance_tracker.id
+  instance_class      = "db.serverless"
+  engine              = aws_rds_cluster.finance_tracker.engine
+  publicly_accessible = var.enable_public_access
 
   tags = merge(
     local.common_tags,
