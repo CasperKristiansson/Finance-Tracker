@@ -1,0 +1,38 @@
+service: finance-tracker-api
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: python3.12
+  region: eu-north-1
+  stage: prod
+  vpc:
+    securityGroupIds:
+      - ${env:LAMBDA_SG}
+    subnetIds:
+      - ${env:SUBNET_A}
+      - ${env:SUBNET_B}
+  environment:
+    DB_ENDPOINT: ${ssm:/personal/db/endpoint}
+    DB_NAME: ${ssm:/personal/db/name}
+    DB_USER: ${ssm:/personal/db/user}
+    DB_PASSWORD: ${ssm-secure:/personal/db/password}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+            - ssm:GetParameters
+          Resource: arn:aws:ssm:eu-north-1:#{AWS::AccountId}:parameter/personal/db/*
+
+functions:
+  api:
+    handler: handler.handler
+    timeout: 30
+    memorySize: 512
+    events:
+      - httpApi:
+          path: /stats/monthly
+          method: GET
