@@ -8,6 +8,12 @@ variable "environment" {
   type        = string
 }
 
+variable "enable_bastion" {
+  description = "When true a bastion EC2 host is provisioned for direct database access."
+  type        = bool
+  default     = false
+}
+
 locals {
   project_name = "finance-tracker"
   name_prefix  = "${local.project_name}-${var.environment}"

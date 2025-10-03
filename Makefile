@@ -1,4 +1,4 @@
-.PHONY: tf-init tf-plan tf-apply tf-destroy tf-fmt tf-validate
+.PHONY: tf-init tf-plan tf-apply tf-destroy tf-fmt tf-validate tf-enable-bastion tf-disable-bastion
 
 TF_DIR ?= infra/terraform
 TF_CMD = terraform -chdir=$(TF_DIR)
@@ -24,3 +24,11 @@ tf-fmt:
 
 tf-validate:
 	$(TF_CMD) validate
+
+# Toggle bastion host provisioning
+
+tf-enable-bastion:
+	$(TF_CMD) apply -var 'enable_bastion=true'
+
+tf-disable-bastion:
+	$(TF_CMD) apply -var 'enable_bastion=false'
