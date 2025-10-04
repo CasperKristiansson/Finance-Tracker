@@ -27,7 +27,7 @@ provider:
           Resource: arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/finance-tracker/${self:provider.stage}/db/*
   domain:
     name: api.finance-tracker.casperkristiansson.com
-    apiType: httpApi
+    apiType: HTTP
     endpointType: regional
     certificateArn: ${aws:ssm:/finance-tracker/${self:provider.stage}/api/custom_domain/certificate_arn}
     createRoute53Record: true
