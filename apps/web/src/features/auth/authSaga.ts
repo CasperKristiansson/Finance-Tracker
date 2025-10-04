@@ -1,21 +1,9 @@
 import { createAction } from "@reduxjs/toolkit";
 import { all, call, put, takeLatest } from "redux-saga/effects";
 import { toast } from "sonner";
-import { TypedSelect } from "@/app/rootSaga";
 import { setLoading } from "../app/appSlice";
-import {
-  cognitoLogin,
-  cognitoLogout,
-  refreshToken,
-  type AuthResponse,
-  type RefreshTokenResponse,
-} from "./authHelpers";
-import {
-  loginSuccess,
-  logoutSuccess,
-  selectToken,
-  setInitialLoaded,
-} from "./authSlice";
+import authService, { type AuthenticatedUser } from "./authHelpers";
+import { loginSuccess, logoutSuccess, setInitialLoaded } from "./authSlice";
 
 export const AuthLogin = createAction<{ username: string; password: string }>(
   "auth/login",
@@ -26,12 +14,10 @@ export const AuthInitialize = createAction("auth/initialize");
 function* handleLogin(action: ReturnType<typeof AuthLogin>) {
   yield put(setLoading({ key: "login", isLoading: true }));
   try {
-    const tokens: AuthResponse = yield call(
-      cognitoLogin,
-      action.payload.username,
-      action.payload.password,
+    const session: AuthenticatedUser = yield call(() =>
+      authService.signIn(action.payload.username, action.payload.password),
     );
-    yield put(loginSuccess({ email: action.payload.username, ...tokens }));
+    yield put(loginSuccess(session));
     toast.success("Login Successful");
   } catch (error) {
     if (error instanceof Error) {
@@ -48,17 +34,9 @@ function* handleLogin(action: ReturnType<typeof AuthLogin>) {
 function* handleLogout() {
   yield put(setLoading({ key: "logout", isLoading: true }));
   try {
-    const accessToken = yield* TypedSelect(selectToken);
-
-    if (accessToken) {
-      yield call(cognitoLogout, accessToken);
-      yield put(logoutSuccess());
-      toast.success("Logout Successful");
-    } else {
-      toast.error("Failed to Logout", {
-        description: "No Access Token Found",
-      });
-    }
+    yield call(() => authService.signOut());
+    yield put(logoutSuccess());
+    toast.success("Logout Successful");
   } catch (error) {
     if (error instanceof Error) {
       toast.error("Failed to Logout", {
@@ -72,30 +50,21 @@ function* handleLogout() {
 }
 
 function* initializeAuth() {
-  const storedRefreshToken = localStorage.getItem("refreshToken");
-  const storedEmail = localStorage.getItem("email");
+  try {
+    const existingSession: AuthenticatedUser | null = yield call(() =>
+      authService.fetchAuthenticatedUser(),
+    );
 
-  if (storedRefreshToken && storedEmail) {
-    try {
-      const tokens: RefreshTokenResponse = yield call(
-        refreshToken,
-        storedRefreshToken,
-      );
-      yield put(
-        loginSuccess({
-          ...tokens,
-          refreshToken: storedRefreshToken,
-          email: storedEmail,
-        }),
-      );
-    } catch (error) {
-      if (error instanceof Error) {
-        toast.error("Failed to Refresh Token", {
-          description: error.message,
-        });
-      } else {
-        toast.error("Failed to Refresh Token");
-      }
+    if (existingSession) {
+      yield put(loginSuccess(existingSession));
+    }
+  } catch (error) {
+    if (error instanceof Error) {
+      toast.error("Failed to restore session", {
+        description: error.message,
+      });
+    } else {
+      toast.error("Failed to restore session");
     }
   }
   yield put(setInitialLoaded());

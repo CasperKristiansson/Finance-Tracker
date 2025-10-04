@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@aws-sdk/client-cognito-identity-provider": "^3.768.0",
     "@radix-ui/react-avatar": "^1.1.3",
     "@radix-ui/react-collapsible": "^1.1.3",
     "@radix-ui/react-dialog": "^1.1.6",
@@ -32,6 +31,7 @@
     "redux-saga": "^1.3.0",
     "sonner": "^2.0.1",
     "tailwind-merge": "^3.0.2",
+    "aws-amplify": "^6.0.0",
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
