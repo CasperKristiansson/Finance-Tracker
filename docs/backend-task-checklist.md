@@ -23,7 +23,7 @@ This checklist translates the data management specification into actionable step
 - [x] **Task 5 — Category & system account models**  
       Implement `Category` and `SystemAccount` tables with seed data hooks as described in spec §4.3 and §4.6.
 
-- [ ] **Task 6 — Transaction & support models**  
+- [x] **Task 6 — Transaction & support models**  
       Implement `Transaction`, `TransactionLeg`, `LoanEvent`, and `TransactionImportBatch` schemas with validators ensuring SEK-only amounts and double-entry balancing.
 
 - [ ] **Task 7 — Alembic & migrations setup**  
