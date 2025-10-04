@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Dict
-from uuid import UUID
 
 from pydantic import ValidationError
 
@@ -12,10 +11,10 @@ from ..schemas import (
     LoanCreateRequest,
     LoanEventListQuery,
     LoanEventRead,
+    LoanRead,
     LoanScheduleQuery,
     LoanScheduleRead,
     LoanUpdate,
-    LoanRead,
 )
 from ..services import LoanService
 from ..shared import session_scope

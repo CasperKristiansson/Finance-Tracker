@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Iterable, List, Optional, Sequence
+from typing import Any, Iterable, List, Optional, Sequence, cast
 from uuid import UUID
 
 from sqlmodel import Session, select
@@ -83,7 +83,9 @@ class TransactionService:
             raise LookupError("Transaction not found")
         return self.repository.add_leg(transaction, leg)
 
-    def calculate_account_balance(self, account_id: UUID, up_to: Optional[datetime] = None) -> Decimal:
+    def calculate_account_balance(
+        self, account_id: UUID, up_to: Optional[datetime] = None
+    ) -> Decimal:
         return self.repository.calculate_account_balance(account_id, up_to)
 
     def list_loan_events(self, loan_id: UUID) -> List[LoanEvent]:
@@ -169,9 +171,7 @@ class TransactionService:
         if transaction.id is None:
             return
 
-        statement = select(TransactionLeg).where(
-            TransactionLeg.transaction_id == transaction.id
-        )
+        statement = select(TransactionLeg).where(TransactionLeg.transaction_id == transaction.id)
         persisted_legs = list(self.session.exec(statement))
         if not persisted_legs:
             return
@@ -206,7 +206,8 @@ class TransactionService:
         unique_ids = {account_id for account_id in account_ids if account_id is not None}
         if not unique_ids:
             return {}
-        statement = select(Loan).where(Loan.account_id.in_(unique_ids))  # type: ignore[attr-defined]
+        condition = cast(Any, Loan.account_id).in_(list(unique_ids))
+        statement = select(Loan).where(condition)
         loans = self.session.exec(statement).all()
         return {loan.account_id: loan for loan in loans}
 
@@ -224,23 +225,13 @@ class TransactionService:
         if category is not None:
             if category.category_type == CategoryType.INTEREST:
                 return (
-                    LoanEventType.PAYMENT_INTEREST
-                    if amount < 0
-                    else LoanEventType.INTEREST_ACCRUAL
+                    LoanEventType.PAYMENT_INTEREST if amount < 0 else LoanEventType.INTEREST_ACCRUAL
                 )
             if category.category_type == CategoryType.LOAN:
-                return (
-                    LoanEventType.PAYMENT_PRINCIPAL
-                    if amount < 0
-                    else LoanEventType.DISBURSEMENT
-                )
+                return LoanEventType.PAYMENT_PRINCIPAL if amount < 0 else LoanEventType.DISBURSEMENT
 
         if transaction_type == TransactionType.TRANSFER:
-            return (
-                LoanEventType.PAYMENT_PRINCIPAL
-                if amount < 0
-                else LoanEventType.DISBURSEMENT
-            )
+            return LoanEventType.PAYMENT_PRINCIPAL if amount < 0 else LoanEventType.DISBURSEMENT
 
         return None
 

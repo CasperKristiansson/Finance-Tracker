@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, List, Optional, Sequence
+from typing import Any, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -76,6 +76,7 @@ class TransactionListQuery(BaseModel):
     account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
 
     @model_validator(mode="before")
+    @classmethod
     def split_account_ids(cls, values: Any) -> Any:
         if isinstance(values, dict) and "account_ids" in values:
             account_ids = values["account_ids"]

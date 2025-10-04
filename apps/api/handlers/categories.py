@@ -25,6 +25,7 @@ from .utils import (
     reset_engine_state,
 )
 
+
 def reset_handler_state() -> None:
     reset_engine_state()
 

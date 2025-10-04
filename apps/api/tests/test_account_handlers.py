@@ -99,7 +99,9 @@ def test_update_account_flow():
 
     list_response = list_accounts({"queryStringParameters": {"include_inactive": "true"}}, None)
     accounts = _json_body(list_response)["accounts"]
-    assert any(account["id"] == account_id and account["is_active"] is False for account in accounts)
+    assert any(
+        account["id"] == account_id and account["is_active"] is False for account in accounts
+    )
 
 
 def test_update_account_not_found():

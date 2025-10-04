@@ -42,6 +42,7 @@ class MonthlyReportQuery(_CsvUUIDMixin):
     category_ids: Optional[List[UUID]] = Field(default=None, alias="category_ids")
 
     @model_validator(mode="before")
+    @classmethod
     def _split_lists(cls, values: Any) -> Any:
         if isinstance(values, dict):
             if "account_ids" in values:
@@ -58,6 +59,7 @@ class YearlyReportQuery(_CsvUUIDMixin):
     category_ids: Optional[List[UUID]] = Field(default=None, alias="category_ids")
 
     @model_validator(mode="before")
+    @classmethod
     def _split_lists(cls, values: Any) -> Any:
         if isinstance(values, dict):
             if "account_ids" in values:

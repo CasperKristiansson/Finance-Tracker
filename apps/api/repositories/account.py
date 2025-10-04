@@ -25,9 +25,7 @@ class AccountRepository:
     def get(self, account_id: UUID, *, with_relationships: bool = False) -> Optional[Account]:
         if with_relationships:
             statement = (
-                select(Account)
-                .options(selectinload(Account.loan))
-                .where(Account.id == account_id)
+                select(Account).options(selectinload(Account.loan)).where(Account.id == account_id)
             )
             return self.session.exec(statement).scalars().one_or_none()
         return self.session.get(Account, account_id)

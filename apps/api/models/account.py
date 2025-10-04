@@ -10,8 +10,8 @@ from uuid import UUID
 
 from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Numeric, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.types import Enum as SAEnum
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import Enum as SAEnum
 from sqlmodel import Field, Relationship, SQLModel
 
 from ..shared import AccountType, InterestCompound, TimestampMixin, UUIDPrimaryKeyMixin
@@ -26,9 +26,7 @@ class Account(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
     __tablename__ = "accounts"
 
     display_order: int | None = Field(default=None)
-    account_type: AccountType = Field(
-        sa_column=Column(SAEnum(AccountType), nullable=False)
-    )
+    account_type: AccountType = Field(sa_column=Column(SAEnum(AccountType), nullable=False))
     is_active: bool = Field(
         default=True,
         sa_column=Column(Boolean, nullable=False, server_default="true"),
@@ -60,15 +58,9 @@ class Loan(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
             unique=True,
         )
     )
-    origin_principal: Decimal = Field(
-        sa_column=Column(Numeric(18, 2), nullable=False)
-    )
-    current_principal: Decimal = Field(
-        sa_column=Column(Numeric(18, 2), nullable=False)
-    )
-    interest_rate_annual: Decimal = Field(
-        sa_column=Column(Numeric(6, 4), nullable=False)
-    )
+    origin_principal: Decimal = Field(sa_column=Column(Numeric(18, 2), nullable=False))
+    current_principal: Decimal = Field(sa_column=Column(Numeric(18, 2), nullable=False))
+    interest_rate_annual: Decimal = Field(sa_column=Column(Numeric(6, 4), nullable=False))
     interest_compound: InterestCompound = Field(
         sa_column=Column(SAEnum(InterestCompound), nullable=False)
     )
@@ -86,9 +78,7 @@ class Loan(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
         loan_events: List["LoanEvent"]
         account: Account
 
-    account: Account = Relationship(
-        sa_relationship=relationship("Account", back_populates="loan")
-    )
+    account: Account = Relationship(sa_relationship=relationship("Account", back_populates="loan"))
     loan_events: List["LoanEvent"] = Relationship(
         sa_relationship=relationship(
             "LoanEvent",
@@ -129,17 +119,13 @@ class BalanceSnapshot(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True)
             nullable=False,
         )
     )
-    captured_at: datetime = Field(
-        sa_column=Column(DateTime(timezone=True), nullable=False)
-    )
+    captured_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     balance: Decimal = Field(sa_column=Column(Numeric(18, 2), nullable=False))
 
     if TYPE_CHECKING:  # pragma: no cover
         account: Account
 
-    __table_args__ = (
-        UniqueConstraint("account_id", "captured_at", name="uq_balance_snapshot"),
-    )
+    __table_args__ = (UniqueConstraint("account_id", "captured_at", name="uq_balance_snapshot"),)
 
 
 __all__ = [

@@ -8,6 +8,8 @@ from apps.api.repositories.category import CategoryRepository
 from apps.api.services.category import CategoryService
 from apps.api.shared import CategoryType
 
+# pylint: disable=redefined-outer-name,unused-argument
+
 
 @pytest.fixture()
 def repo(session: Session) -> CategoryRepository:
@@ -46,7 +48,9 @@ def test_update_and_archive(repo: CategoryRepository):
 def test_category_service_flow(session: Session):
     service = CategoryService(session)
 
-    created = service.create_category(Category(name="Utilities", category_type=CategoryType.EXPENSE))
+    created = service.create_category(
+        Category(name="Utilities", category_type=CategoryType.EXPENSE)
+    )
     fetched = service.get_category(created.id)
     assert fetched.name == "Utilities"
 

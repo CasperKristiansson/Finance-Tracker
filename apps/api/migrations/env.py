@@ -36,9 +36,7 @@ def _get_database_url() -> str:
     configured = config.get_main_option("sqlalchemy.url")
     if configured and configured != "%(database_url)s":
         return configured
-    raise RuntimeError(
-        "Database URL not provided. Set DATABASE_URL or pass --x db-url=<url>."
-    )
+    raise RuntimeError("Database URL not provided. Set DATABASE_URL or pass --x db-url=<url>.")
 
 
 target_metadata = SQLModel.metadata

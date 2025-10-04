@@ -8,7 +8,7 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel
+from sqlmodel import SQLModel
 
 from apps.api.handlers import (
     create_account,
@@ -93,7 +93,9 @@ def test_end_to_end_transaction_reporting_flow() -> None:
     # Ensure category listing works
     categories_response = list_categories({"queryStringParameters": None}, None)
     assert categories_response["statusCode"] == 200
-    assert any(item["name"] == "Transfers" for item in _json_body(categories_response)["categories"])
+    assert any(
+        item["name"] == "Transfers" for item in _json_body(categories_response)["categories"]
+    )
 
     occurred = datetime(2024, 3, 15, tzinfo=timezone.utc)
     transaction_event = _create_transaction_event(
@@ -140,7 +142,9 @@ def test_end_to_end_transaction_reporting_flow() -> None:
     assert Decimal(monthly_entry["expense"]) == Decimal("0")
 
     # Yearly report using the same filter should yield the same net amount
-    yearly_response = yearly_report({"queryStringParameters": {"account_ids": str(savings_id)}}, None)
+    yearly_response = yearly_report(
+        {"queryStringParameters": {"account_ids": str(savings_id)}}, None
+    )
     yearly_results = _json_body(yearly_response)["results"]
     assert len(yearly_results) == 1
     assert Decimal(yearly_results[0]["net"]) == Decimal("200.00")

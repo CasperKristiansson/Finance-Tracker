@@ -23,6 +23,7 @@ from .utils import (
     reset_engine_state,
 )
 
+
 def reset_handler_state() -> None:
     reset_engine_state()
 
@@ -71,10 +72,7 @@ def create_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         occurred_at=data.occurred_at,
         posted_at=data.posted_at or data.occurred_at,
     )
-    legs = [
-        TransactionLeg(account_id=leg.account_id, amount=leg.amount)
-        for leg in data.legs
-    ]
+    legs = [TransactionLeg(account_id=leg.account_id, amount=leg.amount) for leg in data.legs]
 
     with session_scope() as session:
         service = TransactionService(session)

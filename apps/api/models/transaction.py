@@ -10,8 +10,8 @@ from uuid import UUID
 
 from sqlalchemy import Column, DateTime, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.types import Enum as SAEnum
 from sqlalchemy.orm import relationship
+from sqlalchemy.types import Enum as SAEnum
 from sqlmodel import Field, Relationship, SQLModel
 
 from ..shared import (
@@ -79,12 +79,8 @@ class Transaction(
         default=None,
         sa_column=Column(String(180), unique=True, nullable=True),
     )
-    occurred_at: datetime = Field(
-        sa_column=Column(DateTime(timezone=True), nullable=False)
-    )
-    posted_at: datetime = Field(
-        sa_column=Column(DateTime(timezone=True), nullable=False)
-    )
+    occurred_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    posted_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     import_batch_id: Optional[UUID] = Field(
         default=None,
         sa_column=Column(
@@ -101,7 +97,9 @@ class Transaction(
         import_batch: Optional["TransactionImportBatch"]
 
     __table_args__ = (
-        UniqueConstraint("occurred_at", "description", "external_id", name="uq_transaction_identity"),
+        UniqueConstraint(
+            "occurred_at", "description", "external_id", name="uq_transaction_identity"
+        ),
     )
 
     legs: List["TransactionLeg"] = Relationship(
@@ -191,13 +189,9 @@ class LoanEvent(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
             nullable=True,
         ),
     )
-    event_type: LoanEventType = Field(
-        sa_column=Column(SAEnum(LoanEventType), nullable=False)
-    )
+    event_type: LoanEventType = Field(sa_column=Column(SAEnum(LoanEventType), nullable=False))
     amount: Decimal = Field(sa_column=Column(Numeric(18, 2), nullable=False))
-    occurred_at: datetime = Field(
-        sa_column=Column(DateTime(timezone=True), nullable=False)
-    )
+    occurred_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
 
     if TYPE_CHECKING:  # pragma: no cover
         transaction: Transaction

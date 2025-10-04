@@ -112,6 +112,7 @@ def test_accrue_interest_posts_transaction_and_updates_loan():
         assert len(events) == 1
         assert events[0].event_type == "interest_accrual"
 
+
 def test_accrue_interest_ignores_zero_rate_loans() -> None:
     engine = get_engine()
     with Session(engine) as session:
@@ -135,7 +136,7 @@ def test_accrue_interest_ignores_zero_rate_loans() -> None:
             interest_category_id=category_id,
             expense_account_id=expense_id,
         )
-        assert created == []
+        assert not created
 
         loan = session.exec(select(Loan).where(Loan.account_id == debt_id)).one()
         assert loan.current_principal == Decimal("5000.00")

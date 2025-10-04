@@ -46,10 +46,12 @@ def test_list_categories_empty():
 
 def test_create_category_and_list():
     event = {
-        "body": json.dumps({
-            "name": "Groceries",
-            "category_type": "expense",
-        }),
+        "body": json.dumps(
+            {
+                "name": "Groceries",
+                "category_type": "expense",
+            }
+        ),
         "isBase64Encoded": False,
     }
     create_response = create_category(event, None)

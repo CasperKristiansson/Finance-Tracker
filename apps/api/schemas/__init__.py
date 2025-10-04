@@ -19,14 +19,6 @@ from .category import (
     CategoryUpdate,
     ListCategoriesQuery,
 )
-from .transaction import (
-    TransactionCreate,
-    TransactionLegCreate,
-    TransactionLegRead,
-    TransactionListQuery,
-    TransactionListResponse,
-    TransactionRead,
-)
 from .loan import (
     LoanCreateRequest,
     LoanEventListQuery,
@@ -44,6 +36,14 @@ from .reporting import (
     YearlyReportEntry,
     YearlyReportQuery,
     YearlyReportResponse,
+)
+from .transaction import (
+    TransactionCreate,
+    TransactionLegCreate,
+    TransactionLegRead,
+    TransactionListQuery,
+    TransactionListResponse,
+    TransactionRead,
 )
 
 __all__ = [

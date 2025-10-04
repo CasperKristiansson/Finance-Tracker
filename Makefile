@@ -1,6 +1,6 @@
 .PHONY: tf-init tf-plan tf-apply tf-destroy tf-fmt tf-validate \
         tf-enable-bastion tf-disable-bastion bastion-copy bastion-shell \
-        type-check test deploy-layer deploy-api deploy
+        type-check format test deploy-layer deploy-api deploy
 
 TF_DIR ?= infra/terraform
 TF_CMD = terraform -chdir=$(TF_DIR)
@@ -48,8 +48,15 @@ bastion-shell:
 # Quality gates
 
 type-check:
+	black --check .
+	isort --check-only .
+	PYTHONPATH=. pylint apps/api
 	pyright
 	mypy apps/api
+
+format:
+	isort .
+	black .
 
 test:
 	pytest apps/api/tests

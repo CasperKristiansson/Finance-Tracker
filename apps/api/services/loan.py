@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
-from typing import List, Optional
+from decimal import ROUND_HALF_UP, Decimal
+from typing import List, Optional, cast
 from uuid import UUID
 
 from sqlmodel import Session
@@ -13,8 +13,8 @@ from ..models import Loan, LoanEvent
 from ..repositories.account import AccountRepository
 from ..repositories.loan import LoanRepository
 from ..repositories.transaction import TransactionRepository
-from ..shared import AccountType, InterestCompound
 from ..schemas.loan import LoanScheduleEntry
+from ..shared import AccountType, InterestCompound
 
 _CENT = Decimal("0.01")
 
@@ -48,7 +48,15 @@ class LoanService:
 
     def update_loan(self, account_id: UUID, fields: dict[str, object]) -> Loan:
         loan = self.get_loan(account_id)
-        updated = self.loan_repository.update_fields(loan, **fields)
+        updated = self.loan_repository.update_fields(
+            loan,
+            origin_principal=cast(Optional[Decimal], fields.get("origin_principal")),
+            current_principal=cast(Optional[Decimal], fields.get("current_principal")),
+            interest_rate_annual=cast(Optional[Decimal], fields.get("interest_rate_annual")),
+            interest_compound=cast(Optional[InterestCompound], fields.get("interest_compound")),
+            minimum_payment=cast(Optional[Decimal], fields.get("minimum_payment")),
+            expected_maturity_date=cast(Optional[date], fields.get("expected_maturity_date")),
+        )
         return updated
 
     def list_events(
@@ -83,9 +91,7 @@ class LoanService:
                 break
 
             interest = (principal * monthly_rate).quantize(_CENT, rounding=ROUND_HALF_UP)
-            principal_component = payment_amount - interest
-            if principal_component < Decimal("0"):
-                principal_component = Decimal("0")
+            principal_component = max(payment_amount - interest, Decimal("0"))
 
             if principal_component >= principal:
                 principal_component = principal

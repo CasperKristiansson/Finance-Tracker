@@ -34,7 +34,7 @@ class TransactionRepository:
     ) -> List[Transaction]:
         statement = (
             select(Transaction)
-            .options(selectinload(Transaction.legs))
+            .options(selectinload(Transaction.legs))  # type: ignore[arg-type]
             .order_by(desc(Transaction.occurred_at))  # type: ignore[arg-type]
         )
 
@@ -106,7 +106,9 @@ class TransactionRepository:
         )
         return list(self.session.exec(statement))
 
-    def calculate_account_balance(self, account_id: UUID, up_to: Optional[datetime] = None) -> Decimal:
+    def calculate_account_balance(
+        self, account_id: UUID, up_to: Optional[datetime] = None
+    ) -> Decimal:
         statement = select(TransactionLeg).where(TransactionLeg.account_id == account_id)
         if up_to is not None:
             statement = statement.join(Transaction).where(Transaction.occurred_at <= up_to)
