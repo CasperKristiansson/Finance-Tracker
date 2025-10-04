@@ -8,14 +8,19 @@ import pytest
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel
 
-from apps.api.handlers import create_account, list_accounts, reset_handler_state, update_account
+from apps.api.handlers import (
+    create_account,
+    list_accounts,
+    reset_account_handler_state,
+    update_account,
+)
 from apps.api.shared import configure_engine, get_engine
 
 
 @pytest.fixture(autouse=True)
 def configure_sqlite(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("DATABASE_URL", "sqlite://")
-    reset_handler_state()
+    reset_account_handler_state()
     configure_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},

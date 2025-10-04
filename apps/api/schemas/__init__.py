@@ -11,6 +11,14 @@ from .account import (
     LoanRead,
     UpdateAccountPath,
 )
+from .category import (
+    CategoryCreate,
+    CategoryListResponse,
+    CategoryPathParams,
+    CategoryRead,
+    CategoryUpdate,
+    ListCategoriesQuery,
+)
 
 __all__ = [
     "AccountCreate",
@@ -22,4 +30,10 @@ __all__ = [
     "LoanCreate",
     "LoanRead",
     "UpdateAccountPath",
+    "CategoryCreate",
+    "CategoryUpdate",
+    "CategoryRead",
+    "ListCategoriesQuery",
+    "CategoryPathParams",
+    "CategoryListResponse",
 ]

@@ -48,10 +48,10 @@ This checklist translates the data management specification into actionable step
 
 ## API Layer
 
-- [ ] **Task 13 — Account endpoints & tests**  
+- [x] **Task 13 — Account endpoints & tests**  
        Expose `/accounts` routes returning balances and supporting create/update operations. Include API and repository integration tests.
 
-- [ ] **Task 14 — Category endpoints & tests**  
+- [x] **Task 14 — Category endpoints & tests**  
        Implement `/categories` routes for list/create/update with accompanying tests.
 
 - [ ] **Task 15 — Transaction endpoints & tests**  
