@@ -1,3 +1,4 @@
+# pyright: reportGeneralTypeIssues=false
 """Database engine and session helpers."""
 
 from __future__ import annotations

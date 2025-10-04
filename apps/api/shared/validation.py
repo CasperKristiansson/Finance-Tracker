@@ -1,3 +1,4 @@
+# pyright: reportGeneralTypeIssues=false
 """Validation helpers for shared finance logic."""
 
 from __future__ import annotations

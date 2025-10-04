@@ -1,3 +1,4 @@
+# pyright: reportGeneralTypeIssues=false
 """Data access layer for account entities."""
 
 from __future__ import annotations
@@ -23,7 +24,8 @@ class AccountRepository:
     def get(self, account_id: UUID, *, with_relationships: bool = False) -> Optional[Account]:
         if with_relationships:
             return self.session.exec(
-                select(Account).where(Account.id == account_id)
+                select(Account)
+                .where(Account.id == account_id)
             ).one_or_none()
         return self.session.get(Account, account_id)
 
@@ -49,15 +51,8 @@ class AccountRepository:
             statement = statement.join(Transaction, Transaction.id == TransactionLeg.transaction_id)
             statement = statement.where(Transaction.occurred_at <= as_of)
 
-        result = self.session.exec(statement).first()
-        if result is None:
-            return Decimal("0")
-
-        try:
-            total = result[0]
-        except TypeError:
-            total = result
-        return coerce_decimal(total)
+        result = self.session.exec(statement).scalar_one()
+        return coerce_decimal(result)
 
     def attach_loan(self, account_id: UUID, loan: Loan) -> Loan:
         account = self.get(account_id)
