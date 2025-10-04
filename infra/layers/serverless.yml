@@ -1,0 +1,21 @@
+service: finance-tracker-layer-service
+
+frameworkVersion: "3"
+
+provider:
+  name: aws
+  runtime: python3.13
+  region: eu-north-1
+  stage: ${opt:stage, 'prod'}
+
+package:
+  individually: true
+
+layers:
+  backendDeps:
+    package:
+      artifact: layer-backend.zip
+    description: Finance Tracker backend dependencies
+    retain: false
+    compatibleRuntimes:
+      - python3.13

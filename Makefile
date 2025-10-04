@@ -1,12 +1,13 @@
 .PHONY: tf-init tf-plan tf-apply tf-destroy tf-fmt tf-validate \
         tf-enable-bastion tf-disable-bastion bastion-copy bastion-shell \
-        type-check test
+        type-check test deploy-layer deploy-api deploy
 
 TF_DIR ?= infra/terraform
 TF_CMD = terraform -chdir=$(TF_DIR)
 AWS_PROFILE ?= Personal
 AWS_REGION  ?= eu-north-1
 PYTHON ?= python3
+STAGE  ?= prod
 
 # Terraform helpers
 
@@ -52,3 +53,12 @@ type-check:
 
 test:
 	pytest apps/api/tests
+
+deploy-layer:
+	$(MAKE) -C infra/layers build
+	cd infra/layers && npx serverless deploy --stage $(STAGE)
+
+deploy-api:
+	cd infra/serverless && npx serverless deploy --stage $(STAGE)
+
+deploy: deploy-layer deploy-api

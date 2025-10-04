@@ -6,7 +6,7 @@ provider:
   name: aws
   runtime: python3.13
   region: eu-north-1
-  stage: prod
+  stage: ${opt:stage, 'prod'}
   vpc:
     securityGroupIds:
       - ${env:LAMBDA_SG}
@@ -27,11 +27,16 @@ provider:
             - ssm:GetParameters
           Resource: arn:aws:ssm:eu-north-1:#{AWS::AccountId}:parameter/finance-tracker/${self:provider.stage}/db/*
 
+custom:
+  backendLayerArn: ${cf:finance-tracker-layer-service-${self:provider.stage}.BackendDepsLambdaLayerQualifiedArn}
+
 functions:
   listAccounts:
     handler: apps/api/handlers/accounts.list_accounts
     timeout: 30
     memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
     events:
       - httpApi:
           path: /accounts
@@ -41,6 +46,8 @@ functions:
     handler: apps/api/handlers/accounts.create_account
     timeout: 30
     memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
     events:
       - httpApi:
           path: /accounts
@@ -50,6 +57,8 @@ functions:
     handler: apps/api/handlers/accounts.update_account
     timeout: 30
     memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
     events:
       - httpApi:
           path: /accounts/{accountId}
@@ -59,6 +68,8 @@ functions:
     handler: apps/api/handlers/categories.list_categories
     timeout: 30
     memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
     events:
       - httpApi:
           path: /categories
@@ -68,6 +79,8 @@ functions:
     handler: apps/api/handlers/categories.create_category
     timeout: 30
     memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
     events:
       - httpApi:
           path: /categories
@@ -77,6 +90,8 @@ functions:
     handler: apps/api/handlers/categories.update_category
     timeout: 30
     memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
     events:
       - httpApi:
           path: /categories/{categoryId}
@@ -86,6 +101,8 @@ functions:
     handler: apps/api/handlers/transactions.list_transactions
     timeout: 30
     memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
     events:
       - httpApi:
           path: /transactions
@@ -95,6 +112,8 @@ functions:
     handler: apps/api/handlers/transactions.create_transaction
     timeout: 30
     memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
     events:
       - httpApi:
           path: /transactions
@@ -104,6 +123,8 @@ functions:
     handler: apps/api/handlers/loans.create_loan
     timeout: 30
     memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
     events:
       - httpApi:
           path: /loans
@@ -113,6 +134,8 @@ functions:
     handler: apps/api/handlers/loans.update_loan
     timeout: 30
     memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
     events:
       - httpApi:
           path: /loans/{accountId}
@@ -122,6 +145,8 @@ functions:
     handler: apps/api/handlers/loans.list_loan_events
     timeout: 30
     memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
     events:
       - httpApi:
           path: /loans/{accountId}/events
@@ -131,6 +156,8 @@ functions:
     handler: apps/api/handlers/loans.get_loan_schedule
     timeout: 30
     memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
     events:
       - httpApi:
           path: /loans/{accountId}/schedule
@@ -140,6 +167,8 @@ functions:
     handler: apps/api/handlers/reporting.monthly_report
     timeout: 30
     memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
     events:
       - httpApi:
           path: /reports/monthly
@@ -149,6 +178,8 @@ functions:
     handler: apps/api/handlers/reporting.yearly_report
     timeout: 30
     memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
     events:
       - httpApi:
           path: /reports/yearly
@@ -158,6 +189,8 @@ functions:
     handler: apps/api/handlers/reporting.total_report
     timeout: 30
     memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
     events:
       - httpApi:
           path: /reports/total
