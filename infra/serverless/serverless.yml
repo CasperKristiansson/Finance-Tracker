@@ -54,3 +54,30 @@ functions:
       - httpApi:
           path: /accounts/{accountId}
           method: PATCH
+
+  listCategories:
+    handler: apps/api/handlers/categories.list_categories
+    timeout: 30
+    memorySize: 512
+    events:
+      - httpApi:
+          path: /categories
+          method: GET
+
+  createCategory:
+    handler: apps/api/handlers/categories.create_category
+    timeout: 30
+    memorySize: 512
+    events:
+      - httpApi:
+          path: /categories
+          method: POST
+
+  updateCategory:
+    handler: apps/api/handlers/categories.update_category
+    timeout: 30
+    memorySize: 512
+    events:
+      - httpApi:
+          path: /categories/{categoryId}
+          method: PATCH

@@ -5,7 +5,7 @@ from __future__ import annotations
 import base64
 import json
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Optional, Sequence
 from uuid import UUID
 
 
@@ -39,13 +39,18 @@ def get_query_params(event: Dict[str, Any]) -> Dict[str, Any]:
     return event.get("queryStringParameters") or {}
 
 
-def extract_account_id(event: Dict[str, Any]) -> Optional[UUID]:
+def extract_path_uuid(
+    event: Dict[str, Any],
+    *,
+    param_names: Sequence[str],
+) -> Optional[UUID]:
     path_parameters = event.get("pathParameters") or {}
-    raw_id = (
-        path_parameters.get("account_id")
-        or path_parameters.get("accountId")
-        or None
-    )
+    raw_id: Optional[str] = None
+    for key in param_names:
+        value = path_parameters.get(key)
+        if value:
+            raw_id = value
+            break
     if raw_id is None:
         raw_path = event.get("rawPath") or event.get("path") or ""
         segments = [segment for segment in raw_path.split("/") if segment]
@@ -71,5 +76,5 @@ __all__ = [
     "json_response",
     "parse_body",
     "get_query_params",
-    "extract_account_id",
+    "extract_path_uuid",
 ]

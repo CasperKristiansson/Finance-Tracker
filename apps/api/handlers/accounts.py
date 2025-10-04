@@ -27,7 +27,7 @@ from ..shared import (
     get_engine,
     session_scope,
 )
-from .utils import extract_account_id, get_query_params, json_response, parse_body
+from .utils import extract_path_uuid, get_query_params, json_response, parse_body
 
 
 _ENGINE_INITIALIZED = False
@@ -133,7 +133,7 @@ def update_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
     _ensure_engine()
     payload = parse_body(event)
-    account_id = extract_account_id(event)
+    account_id = extract_path_uuid(event, param_names=("account_id", "accountId"))
     if account_id is None:
         return json_response(400, {"error": "Account ID missing from path"})
 
