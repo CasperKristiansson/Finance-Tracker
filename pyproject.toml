@@ -36,3 +36,48 @@ ignored-modules = ["sqlalchemy", "sqlmodel", "pytest"]
 
 [tool.pylint.'FORMAT']
 max-line-length = 100
+
+[tool.pyright]
+include = ["apps/api"]
+exclude = ["apps/api/tests"]
+typeCheckingMode = "basic"
+reportMissingTypeStubs = false
+reportGeneralTypeIssues = "none"
+reportAssignmentType = "none"
+reportCallIssue = "none"
+reportArgumentType = "none"
+reportAttributeAccessIssue = "none"
+pythonVersion = "3.13"
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+explicit_package_bases = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = "apps.api.tests.*"
+disable_error_code = ["attr-defined"]
+
+[[tool.mypy.overrides]]
+module = "apps.api.models.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "apps.api.repositories.account"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "apps.api.repositories.category"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "apps.api.shared.session"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "apps.api.shared.validation"
+ignore_errors = true
