@@ -1,5 +1,6 @@
 .PHONY: tf-init tf-plan tf-apply tf-destroy tf-fmt tf-validate \
-        tf-enable-bastion tf-disable-bastion bastion-copy bastion-shell
+        tf-enable-bastion tf-disable-bastion bastion-copy bastion-shell \
+        type-check test
 
 TF_DIR ?= infra/terraform
 TF_CMD = terraform -chdir=$(TF_DIR)
@@ -42,3 +43,12 @@ bastion-copy:
 
 bastion-shell:
 	$(PYTHON) scripts/bastion_shell.py --tf-dir "$(TF_DIR)" --profile "$(AWS_PROFILE)" --region "$(AWS_REGION)"
+
+# Quality gates
+
+type-check:
+	pyright
+	mypy apps/api
+
+test:
+	pytest apps/api/tests

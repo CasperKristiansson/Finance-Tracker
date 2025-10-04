@@ -30,3 +30,8 @@ Application code can call `configure_engine_from_env()` (in `apps.api.shared`) t
 - `DB_PORT` (optional, defaults to 5432)
 
 These align with the Serverless Lambda configuration and the helper script `temp.py`.
+
+## Developer Commands
+
+- `make type-check` – runs Pyright followed by mypy to ensure static analysis passes.
+- `make test` – executes the API test suite (`pytest apps/api/tests`).
