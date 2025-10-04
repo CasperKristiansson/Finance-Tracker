@@ -231,7 +231,37 @@ output "subnet_ids" {
   ]
 }
 
+output "subnet_a_id" {
+  description = "Private subnet A identifier for Lambda configuration."
+  value       = aws_subnet.finance_tracker_private_a.id
+}
+
+output "subnet_b_id" {
+  description = "Private subnet B identifier for Lambda configuration."
+  value       = aws_subnet.finance_tracker_private_b.id
+}
+
 output "lambda_sg" {
   description = "Security group identifier for Lambda functions accessing Aurora."
   value       = aws_security_group.finance_tracker_lambda.id
+}
+
+output "db_endpoint_parameter_name" {
+  description = "SSM parameter storing the Aurora endpoint."
+  value       = aws_ssm_parameter.finance_tracker_db_endpoint.name
+}
+
+output "db_name_parameter_name" {
+  description = "SSM parameter storing the Aurora database name."
+  value       = aws_ssm_parameter.finance_tracker_db_name.name
+}
+
+output "db_user_parameter_name" {
+  description = "SSM parameter storing the Aurora database user."
+  value       = aws_ssm_parameter.finance_tracker_db_user.name
+}
+
+output "db_password_parameter_name" {
+  description = "SSM parameter storing the Aurora database password."
+  value       = aws_ssm_parameter.finance_tracker_db_password.name
 }
