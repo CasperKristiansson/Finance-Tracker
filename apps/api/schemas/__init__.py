@@ -27,6 +27,14 @@ from .transaction import (
     TransactionListResponse,
     TransactionRead,
 )
+from .loan import (
+    LoanCreateRequest,
+    LoanEventListQuery,
+    LoanEventRead,
+    LoanScheduleQuery,
+    LoanScheduleRead,
+    LoanUpdate,
+)
 
 __all__ = [
     "AccountCreate",
@@ -50,4 +58,10 @@ __all__ = [
     "TransactionLegRead",
     "TransactionListQuery",
     "TransactionListResponse",
+    "LoanCreateRequest",
+    "LoanUpdate",
+    "LoanScheduleQuery",
+    "LoanScheduleRead",
+    "LoanEventRead",
+    "LoanEventListQuery",
 ]

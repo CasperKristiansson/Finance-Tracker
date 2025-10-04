@@ -7,6 +7,13 @@ from .categories import (
     reset_handler_state as reset_category_handler_state,
     update_category,
 )
+from .loans import (
+    create_loan,
+    get_loan_schedule,
+    list_loan_events,
+    reset_handler_state as reset_loan_handler_state,
+    update_loan,
+)
 from .transactions import (
     create_transaction,
     list_transactions,
@@ -20,9 +27,14 @@ __all__ = [
     "create_category",
     "list_categories",
     "update_category",
+    "create_loan",
+    "update_loan",
+    "list_loan_events",
+    "get_loan_schedule",
     "create_transaction",
     "list_transactions",
     "reset_account_handler_state",
     "reset_category_handler_state",
+    "reset_loan_handler_state",
     "reset_transaction_handler_state",
 ]
