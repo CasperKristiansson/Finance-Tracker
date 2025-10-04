@@ -10,7 +10,7 @@ from uuid import UUID
 from sqlalchemy import Column, DateTime, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.types import Enum as SAEnum
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, SQLModel
 
 from ..shared import (
     AuditSourceMixin,
@@ -39,7 +39,8 @@ class TransactionImportBatch(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, tabl
         sa_column=Column(String(255), nullable=True),
     )
 
-    transactions: List["Transaction"] = Relationship(back_populates="import_batch")
+    if TYPE_CHECKING:  # pragma: no cover
+        transactions: List["Transaction"]
 
 
 class Transaction(
@@ -91,12 +92,11 @@ class Transaction(
         ),
     )
 
-    category: Optional["Category"] = Relationship(back_populates="transactions")
-    legs: List["TransactionLeg"] = Relationship(back_populates="transaction")
-    loan_events: List["LoanEvent"] = Relationship(back_populates="transaction")
-    import_batch: Optional["TransactionImportBatch"] = Relationship(
-        back_populates="transactions"
-    )
+    if TYPE_CHECKING:  # pragma: no cover
+        category: Optional["Category"]
+        legs: List["TransactionLeg"]
+        loan_events: List["LoanEvent"]
+        import_batch: Optional["TransactionImportBatch"]
 
     __table_args__ = (
         UniqueConstraint("occurred_at", "description", "external_id", name="uq_transaction_identity"),
@@ -128,9 +128,10 @@ class TransactionLeg(UUIDPrimaryKeyMixin, SQLModel, table=True):
         sa_column=Column(Numeric(18, 2), nullable=True),
     )
 
-    transaction: Transaction = Relationship(back_populates="legs")
-    account: "Account" = Relationship(back_populates="transaction_legs")
-    loan_event: Optional["LoanEvent"] = Relationship(back_populates="transaction_leg")
+    if TYPE_CHECKING:  # pragma: no cover
+        transaction: Transaction
+        account: "Account"
+        loan_event: Optional["LoanEvent"]
 
 
 class LoanEvent(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
@@ -168,11 +169,10 @@ class LoanEvent(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), nullable=False)
     )
 
-    transaction: Transaction = Relationship(back_populates="loan_events")
-    loan: "Loan" = Relationship(back_populates="loan_events")
-    transaction_leg: Optional["TransactionLeg"] = Relationship(
-        back_populates="loan_event"
-    )
+    if TYPE_CHECKING:  # pragma: no cover
+        transaction: Transaction
+        loan: "Loan"
+        transaction_leg: Optional["TransactionLeg"]
 
 
 __all__ = [
@@ -181,3 +181,9 @@ __all__ = [
     "LoanEvent",
     "TransactionImportBatch",
 ]
+
+
+Transaction.model_rebuild()
+TransactionLeg.model_rebuild()
+LoanEvent.model_rebuild()
+TransactionImportBatch.model_rebuild()

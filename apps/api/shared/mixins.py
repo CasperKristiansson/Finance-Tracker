@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import Column, DateTime, Enum as SAEnum, func
 from sqlmodel import Field
 
 from .enums import CreatedSource
@@ -16,20 +15,11 @@ class TimestampMixin:
 
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        sa_column=Column(
-            DateTime(timezone=True),
-            server_default=func.now(),
-            nullable=False,
-        ),
+        nullable=False,
     )
     updated_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        sa_column=Column(
-            DateTime(timezone=True),
-            server_default=func.now(),
-            onupdate=func.now(),
-            nullable=False,
-        ),
+        nullable=False,
     )
 
 
@@ -49,11 +39,7 @@ class AuditSourceMixin:
 
     created_source: CreatedSource = Field(
         default=CreatedSource.MANUAL,
-        sa_column=Column(
-            SAEnum(CreatedSource),
-            nullable=False,
-            server_default=CreatedSource.MANUAL.value,
-        ),
+        nullable=False,
     )
 
 
