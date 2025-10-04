@@ -18,3 +18,15 @@ Refer to `docs/backend-task-checklist.md` for the implementation roadmap and che
 ## Database Migrations
 
 Alembic is configured at the repository root (`alembic.ini`) with scripts in `apps/api/migrations/`. Set `DATABASE_URL` and run `alembic revision --autogenerate -m "message"` to create migrations, followed by `alembic upgrade head` to apply them.
+
+## Database Connections
+
+Application code can call `configure_engine_from_env()` (in `apps.api.shared`) to build the SQLAlchemy engine using these environment variables:
+
+- `DB_ENDPOINT`
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
+- `DB_PORT` (optional, defaults to 5432)
+
+These align with the Serverless Lambda configuration and the helper script `temp.py`.

@@ -9,6 +9,8 @@ from sqlmodel import Session, SQLModel, create_engine
 
 _engine = None
 
+from .settings import DatabaseSettings
+
 
 def configure_engine(database_url: str, **engine_kwargs) -> None:
     """Configure the global SQLModel engine.
@@ -20,6 +22,14 @@ def configure_engine(database_url: str, **engine_kwargs) -> None:
 
     global _engine
     _engine = create_engine(database_url, **engine_kwargs)
+
+
+def configure_engine_from_env(**engine_kwargs) -> DatabaseSettings:
+    """Load settings from environment variables and configure the engine."""
+
+    settings = DatabaseSettings.from_env()
+    configure_engine(settings.sqlalchemy_url, **engine_kwargs)
+    return settings
 
 
 def get_engine():
@@ -65,6 +75,7 @@ def init_db(metadata: Optional[SQLModel] = None) -> None:
 
 __all__ = [
     "configure_engine",
+    "configure_engine_from_env",
     "get_engine",
     "get_session",
     "session_scope",
