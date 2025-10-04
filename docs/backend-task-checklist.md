@@ -9,7 +9,7 @@ This checklist translates the data management specification into actionable step
 - [x] **Task 1 — Scaffold API package**  
       Create the `apps/api/` package with subpackages for `shared/`, `models/`, `repositories/`, `services/`, `schemas/`, and `routes/`. Add `__init__.py` files and a short README pointing to `docs/data-management-spec.md`.
 
-- [ ] **Task 2 — Configure shared library core**  
+- [x] **Task 2 — Configure shared library core**  
       Implement shared base classes (`TimestampMixin`, `UUIDPrimaryKeyMixin`, `AuditSourceMixin`) and utility modules in `apps/api/shared/`. Include SQLModel session helpers and a validation function for net-zero transaction legs.
 
 - [ ] **Task 3 — Domain enums & constants**  
