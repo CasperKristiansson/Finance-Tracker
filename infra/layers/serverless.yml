@@ -4,8 +4,8 @@ provider:
   name: aws
   runtime: python3.13
   region: eu-north-1
-  stage: ${opt:stage, 'prod'}
   profile: Personal
+  stage: default
 
 layers:
   backendDeps:

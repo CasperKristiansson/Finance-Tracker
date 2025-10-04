@@ -7,7 +7,6 @@ TF_CMD = terraform -chdir=$(TF_DIR)
 AWS_PROFILE ?= Personal
 AWS_REGION  ?= eu-north-1
 PYTHON ?= python3
-STAGE  ?= prod
 
 # Terraform helpers
 
@@ -63,9 +62,9 @@ test:
 
 deploy-layer:
 	$(MAKE) -C infra/layers build
-	cd infra/layers && npx serverless deploy --stage $(STAGE)
+	cd infra/layers && npx serverless deploy
 
 deploy-api:
-	cd infra/serverless && npx serverless deploy --stage $(STAGE)
+	cd infra/serverless && npx serverless deploy
 
 deploy: deploy-layer deploy-api
