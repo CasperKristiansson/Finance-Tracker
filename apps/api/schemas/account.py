@@ -29,6 +29,7 @@ class LoanRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    account_id: UUID
     origin_principal: Decimal
     current_principal: Decimal
     interest_rate_annual: Decimal

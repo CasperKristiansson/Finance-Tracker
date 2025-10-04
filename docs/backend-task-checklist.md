@@ -57,7 +57,7 @@ This checklist translates the data management specification into actionable step
 - [x] **Task 15 — Transaction endpoints & tests**  
        Implement `/transactions` routes for listing and creation with validation of legs, plus tests covering transfers and loan payments.
 
-- [ ] **Task 16 — Loan endpoints & tests**  
+- [x] **Task 16 — Loan endpoints & tests**  
        Implement `/loans` POST/PATCH plus `/loans/{account_id}/schedule` and `/loans/{account_id}/events` endpoints. Include tests for schedule generation and event retrieval.
 
 - [ ] **Task 17 — Reporting endpoints & tests**  
