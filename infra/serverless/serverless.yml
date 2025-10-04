@@ -26,10 +26,11 @@ provider:
             - ssm:GetParameters
           Resource: arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/finance-tracker/${self:provider.stage}/db/*
   httpApi:
+    cors: true
     authorizers:
       cognitoJwt:
         type: jwt
-        identitySource: '$request.header.Authorization'
+        identitySource: "$request.header.Authorization"
         issuerUrl: ${aws:ssm:/finance-tracker/${self:provider.stage}/auth/user_pool_issuer}
         audience:
           - ${aws:ssm:/finance-tracker/${self:provider.stage}/auth/user_pool_client_id}
