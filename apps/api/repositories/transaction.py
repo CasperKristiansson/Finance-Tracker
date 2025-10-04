@@ -9,6 +9,7 @@ from typing import Iterable, List, Optional
 from uuid import UUID
 
 from sqlalchemy import desc
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from ..models import LoanEvent, Transaction, TransactionImportBatch, TransactionLeg
@@ -31,7 +32,11 @@ class TransactionRepository:
         end_date: Optional[datetime] = None,
         account_ids: Optional[Iterable[UUID]] = None,
     ) -> List[Transaction]:
-        statement = select(Transaction).order_by(desc(Transaction.occurred_at))  # type: ignore[arg-type]
+        statement = (
+            select(Transaction)
+            .options(selectinload(Transaction.legs))
+            .order_by(desc(Transaction.occurred_at))  # type: ignore[arg-type]
+        )
 
         if start_date is not None:
             statement = statement.where(Transaction.occurred_at >= start_date)
@@ -42,7 +47,9 @@ class TransactionRepository:
                 TransactionLeg.account_id.in_(list(account_ids))  # type: ignore[attr-defined]
             )
 
-        return list(self.session.exec(statement))
+        result = self.session.exec(statement)
+        transactions = list(result.unique().all())
+        return transactions
 
     def _validate_legs(self, legs: List[TransactionLeg]) -> None:
         if len(legs) < 2:
