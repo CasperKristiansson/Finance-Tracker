@@ -73,10 +73,10 @@ This checklist translates the data management specification into actionable step
 
 ## Infrastructure & Deployment
 
-- [ ] **Task 20 — Serverless configuration**  
+- [x] **Task 20 — Serverless configuration**  
        Update `infra/serverless/serverless.yml` to deploy the API Lambda within the Aurora VPC. Configure `vpc.securityGroupIds`, `vpc.subnetIds`, environment variables (`DB_ENDPOINT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` via SSM), and IAM statements allowing `ssm:GetParameter(s)` on `arn:aws:ssm:eu-north-1:#{AWS::AccountId}:parameter/personal/db/*`. Comment any deviations from the example snippet.
 
-- [ ] **Task 21 — Terraform alignment**  
+- [x] **Task 21 — Terraform alignment**  
        Ensure Terraform outputs expose `LAMBDA_SG`, `SUBNET_A`, `SUBNET_B`, and SSM parameter paths. Update modules or documentation so Serverless can consume them.
 
 ## Documentation & Support
