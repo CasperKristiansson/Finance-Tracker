@@ -32,3 +32,12 @@ output "db_parameter_paths" {
     password = module.resources.db_password_parameter_name
   }
 }
+
+output "network_parameter_paths" {
+  description = "SSM parameter names containing network configuration for Lambda."
+  value = {
+    lambda_sg   = module.resources.lambda_sg_parameter_name
+    subnet_a_id = module.resources.subnet_private_a_parameter_name
+    subnet_b_id = module.resources.subnet_private_b_parameter_name
+  }
+}
