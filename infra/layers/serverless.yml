@@ -5,9 +5,7 @@ provider:
   runtime: python3.13
   region: eu-north-1
   stage: ${opt:stage, 'prod'}
-
-package:
-  individually: true
+  profile: Personal
 
 layers:
   backendDeps:
