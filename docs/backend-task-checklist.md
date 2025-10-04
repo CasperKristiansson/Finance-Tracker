@@ -60,7 +60,7 @@ This checklist translates the data management specification into actionable step
 - [x] **Task 16 — Loan endpoints & tests**  
        Implement `/loans` POST/PATCH plus `/loans/{account_id}/schedule` and `/loans/{account_id}/events` endpoints. Include tests for schedule generation and event retrieval.
 
-- [ ] **Task 17 — Reporting endpoints & tests**  
+- [x] **Task 17 — Reporting endpoints & tests**  
        Implement `/reports/monthly`, `/reports/yearly`, and `/reports/total` endpoints with aggregation tests.
 
 ## Background Jobs & Views
