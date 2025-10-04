@@ -8,15 +8,15 @@ provider:
   stage: default
   vpc:
     securityGroupIds:
-      - ${ssm:/finance-tracker/default/lambda/sg}
+      - ${ssm:/finance-tracker/${self:provider.stage}/lambda/sg}
     subnetIds:
-      - ${ssm:/finance-tracker/default/subnet/private-a}
-      - ${ssm:/finance-tracker/default/subnet/private-b}
+      - ${ssm:/finance-tracker/${self:provider.stage}/subnet/private-a}
+      - ${ssm:/finance-tracker/${self:provider.stage}/subnet/private-b}
   environment:
-    DB_ENDPOINT: ${ssm:/finance-tracker/default/db/endpoint}
-    DB_NAME: ${ssm:/finance-tracker/default/db/name}
-    DB_USER: ${ssm:/finance-tracker/default/db/user}
-    DB_PASSWORD: ${ssm-secure:/finance-tracker/default/db/password}
+    DB_ENDPOINT: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/endpoint}
+    DB_NAME: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/name}
+    DB_USER: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/user}
+    DB_PASSWORD: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/password}
   iam:
     role:
       statements:
@@ -24,10 +24,10 @@ provider:
           Action:
             - ssm:GetParameter
             - ssm:GetParameters
-          Resource: arn:aws:ssm:eu-north-1:#{AWS::AccountId}:parameter/finance-tracker/default/db/*
+          Resource: arn:aws:ssm:eu-north-1:#{AWS::AccountId}:parameter/finance-tracker/${self:provider.stage}/db/*
 
 custom:
-  backendLayerArn: ${cf:finance-tracker-layer-service-default.BackendDepsLambdaLayerQualifiedArn}
+  backendLayerArn: ${cf:finance-tracker-layer-service-${self:provider.stage}.BackendDepsLambdaLayerQualifiedArn}
 
 functions:
   listAccounts:
