@@ -26,13 +26,8 @@ class Category(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
     __tablename__ = "categories"
 
     name: str = Field(sa_column=Column(String(120), unique=True, nullable=False))
-    category_type: CategoryType = Field(
-        sa_column=Column(SAEnum(CategoryType), nullable=False)
-    )
-    color_hex: str | None = Field(
-        default=None,
-        sa_column=Column(String(7), nullable=True)
-    )
+    category_type: CategoryType = Field(sa_column=Column(SAEnum(CategoryType), nullable=False))
+    color_hex: str | None = Field(default=None, sa_column=Column(String(7), nullable=True))
     is_archived: bool = Field(
         default=False,
         sa_column=Column(Boolean, nullable=False, server_default="false"),
@@ -50,10 +45,7 @@ class SystemAccount(UUIDPrimaryKeyMixin, SQLModel, table=True):
     code: SystemAccountCode = Field(
         sa_column=Column(SAEnum(SystemAccountCode), unique=True, nullable=False)
     )
-    description: str | None = Field(
-        default=None,
-        sa_column=Column(String(255), nullable=True)
-    )
+    description: str | None = Field(default=None, sa_column=Column(String(255), nullable=True))
 
 
 __all__ = [

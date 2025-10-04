@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 from uuid import UUID
 
-from sqlalchemy import desc, select
 from sqlalchemy.orm import selectinload
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from ..models import Account, Loan, LoanEvent
 from ..shared import AccountType, InterestCompound
@@ -29,8 +28,9 @@ class LoanRepository:
     ) -> Optional[Loan]:
         statement = select(Loan).where(Loan.account_id == account_id)
         if with_account:
-            statement = statement.options(selectinload(Loan.account))
-        return self.session.exec(statement).scalars().one_or_none()
+            statement = statement.options(selectinload(Loan.account))  # type: ignore[arg-type]
+        result = self.session.exec(statement)
+        return result.one_or_none()
 
     def create(self, loan: Loan) -> Loan:
         self.session.add(loan)
@@ -77,11 +77,11 @@ class LoanRepository:
         statement = (
             select(LoanEvent)
             .where(LoanEvent.loan_id == loan_id)
-            .order_by(desc(LoanEvent.occurred_at))  # type: ignore[arg-type]
+            .order_by(cast(Any, LoanEvent.occurred_at).desc())
             .limit(limit)
             .offset(offset)
         )
-        return list(self.session.exec(statement).scalars().all())
+        return list(self.session.exec(statement).all())
 
     def validate_account_can_have_loan(self, account: Account) -> None:
         if account.account_type != AccountType.DEBT:

@@ -16,6 +16,8 @@ from apps.api.shared import (
     TransactionType,
 )
 
+# pylint: disable=redefined-outer-name
+
 
 @pytest.fixture()
 def repo(session):

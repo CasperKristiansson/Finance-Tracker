@@ -10,7 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..shared import InterestCompound, LoanEventType
-from .account import LoanCreate, LoanRead
+from .account import LoanCreate
 
 
 class LoanCreateRequest(LoanCreate):

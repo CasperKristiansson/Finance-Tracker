@@ -17,6 +17,8 @@ from apps.api.repositories.reporting import (
 from apps.api.services.reporting import ReportingService
 from apps.api.shared import AccountType, TransactionType
 
+# pylint: disable=redefined-outer-name
+
 
 @pytest.fixture()
 def reporting_repo(session) -> ReportingRepository:
@@ -128,15 +130,34 @@ def test_monthly_yearly_and_total_reports(reporting_repo, session):
 
     monthly = reporting_repo.get_monthly_totals(year=2024, account_ids=[bank_account.id])
     assert monthly == [
-        MonthlyTotals(period=date(2024, 1, 1), income=Decimal("5000.00"), expense=Decimal("200.00"), net=Decimal("4800.00")),
-        MonthlyTotals(period=date(2024, 2, 1), income=Decimal("1000.00"), expense=Decimal("0"), net=Decimal("1000.00")),
-        MonthlyTotals(period=date(2024, 3, 1), income=Decimal("0"), expense=Decimal("1200.00"), net=Decimal("-1200.00")),
+        MonthlyTotals(
+            period=date(2024, 1, 1),
+            income=Decimal("5000.00"),
+            expense=Decimal("200.00"),
+            net=Decimal("4800.00"),
+        ),
+        MonthlyTotals(
+            period=date(2024, 2, 1),
+            income=Decimal("1000.00"),
+            expense=Decimal("0"),
+            net=Decimal("1000.00"),
+        ),
+        MonthlyTotals(
+            period=date(2024, 3, 1),
+            income=Decimal("0"),
+            expense=Decimal("1200.00"),
+            net=Decimal("-1200.00"),
+        ),
     ]
 
     yearly = reporting_repo.get_yearly_totals(account_ids=[bank_account.id])
     assert yearly == [
-        YearlyTotals(year=2023, income=Decimal("4000.00"), expense=Decimal("0"), net=Decimal("4000.00")),
-        YearlyTotals(year=2024, income=Decimal("6000.00"), expense=Decimal("1400.00"), net=Decimal("4600.00")),
+        YearlyTotals(
+            year=2023, income=Decimal("4000.00"), expense=Decimal("0"), net=Decimal("4000.00")
+        ),
+        YearlyTotals(
+            year=2024, income=Decimal("6000.00"), expense=Decimal("1400.00"), net=Decimal("4600.00")
+        ),
     ]
 
     totals = reporting_repo.get_total_summary(account_ids=[bank_account.id])

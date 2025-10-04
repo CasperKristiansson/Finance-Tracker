@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Dict, Optional
-from uuid import UUID
+from typing import Any, Dict
 
 from pydantic import ValidationError
 
@@ -59,10 +57,7 @@ def list_accounts(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             as_of=query.as_of_date,
         )
 
-        data = [
-            _account_to_schema(account, balance)
-            for account, balance in accounts_with_balances
-        ]
+        data = [_account_to_schema(account, balance) for account, balance in accounts_with_balances]
     response = ListAccountsResponse(accounts=data)
     return json_response(200, response.model_dump(mode="json"))
 

@@ -4,16 +4,14 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 from datetime import datetime
 from typing import Any, Dict, Optional, Sequence
 from uuid import UUID
 
-import os
-
 from sqlalchemy.pool import StaticPool
 
 from ..shared import configure_engine, configure_engine_from_env, get_engine
-
 
 _JSON_HEADERS = {"Content-Type": "application/json"}
 

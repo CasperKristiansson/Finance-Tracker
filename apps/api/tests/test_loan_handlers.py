@@ -19,7 +19,13 @@ from apps.api.handlers import (
 )
 from apps.api.models import Account, Loan, Transaction, TransactionLeg
 from apps.api.services import TransactionService
-from apps.api.shared import AccountType, InterestCompound, TransactionType, configure_engine, get_engine
+from apps.api.shared import (
+    AccountType,
+    InterestCompound,
+    TransactionType,
+    configure_engine,
+    get_engine,
+)
 
 
 @pytest.fixture(autouse=True)

@@ -6,11 +6,12 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Generator, Optional
 
+from sqlalchemy.engine import Engine
 from sqlmodel import Session, SQLModel, create_engine
 
-_engine = None
-
 from .settings import DatabaseSettings
+
+_engine: Optional[Engine] = None
 
 
 def configure_engine(database_url: str, **engine_kwargs) -> None:

@@ -15,7 +15,6 @@ from sqlmodel import Session, select
 from ..models import Transaction, TransactionLeg
 from ..shared import coerce_decimal
 
-
 DecimalTotals = Tuple[Decimal, Decimal]
 
 
@@ -164,7 +163,9 @@ class ReportingRepository:
 
         statement = (
             select(transaction_table.c.occurred_at, leg_table.c.amount)
-            .join_from(leg_table, transaction_table, leg_table.c.transaction_id == transaction_table.c.id)
+            .join_from(
+                leg_table, transaction_table, leg_table.c.transaction_id == transaction_table.c.id
+            )
             .order_by(desc(transaction_table.c.occurred_at))
         )
 
@@ -174,10 +175,7 @@ class ReportingRepository:
             statement = statement.where(transaction_table.c.category_id.in_(list(category_ids)))
 
         rows = self.session.exec(statement).all()
-        return [
-            (occurred_at, coerce_decimal(amount))
-            for occurred_at, amount in rows
-        ]
+        return [(occurred_at, coerce_decimal(amount)) for occurred_at, amount in rows]
 
     @staticmethod
     def _accumulate(

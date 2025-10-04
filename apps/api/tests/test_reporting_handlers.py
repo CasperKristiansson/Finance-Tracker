@@ -4,7 +4,6 @@ import json
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Iterator
-from uuid import UUID
 
 import pytest
 from sqlalchemy.pool import StaticPool

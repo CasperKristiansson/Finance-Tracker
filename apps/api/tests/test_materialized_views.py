@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Iterator
+from typing import Any, Iterator, cast
 from uuid import UUID
 
 import pytest
@@ -10,6 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel
 
+from apps.api.models import Account, Category, Transaction, TransactionLeg
 from apps.api.shared import (
     AccountType,
     CategoryType,
@@ -18,7 +19,6 @@ from apps.api.shared import (
     create_or_replace_materialized_views,
     get_engine,
 )
-from apps.api.models import Account, Category, Transaction, TransactionLeg
 
 
 @pytest.fixture(autouse=True)
@@ -60,8 +60,12 @@ def _seed_sample_data(session: Session) -> None:
 
     session.add_all(
         [
-            TransactionLeg(transaction_id=salary_tx.id, account_id=asset.id, amount=Decimal("1000.00")),
-            TransactionLeg(transaction_id=salary_tx.id, account_id=savings.id, amount=Decimal("-1000.00")),
+            TransactionLeg(
+                transaction_id=salary_tx.id, account_id=asset.id, amount=Decimal("1000.00")
+            ),
+            TransactionLeg(
+                transaction_id=salary_tx.id, account_id=savings.id, amount=Decimal("-1000.00")
+            ),
         ]
     )
 
@@ -75,8 +79,12 @@ def _seed_sample_data(session: Session) -> None:
     session.flush()
     session.add_all(
         [
-            TransactionLeg(transaction_id=loan_tx.id, account_id=debt.id, amount=Decimal("-400.00")),
-            TransactionLeg(transaction_id=loan_tx.id, account_id=asset.id, amount=Decimal("400.00")),
+            TransactionLeg(
+                transaction_id=loan_tx.id, account_id=debt.id, amount=Decimal("-400.00")
+            ),
+            TransactionLeg(
+                transaction_id=loan_tx.id, account_id=asset.id, amount=Decimal("400.00")
+            ),
         ]
     )
     session.commit()
@@ -91,9 +99,13 @@ def test_create_or_replace_views_on_sqlite() -> None:
     create_or_replace_materialized_views(engine, replace=True)
 
     with Session(engine) as session:
-        monthly_rows = session.exec(text(
-            "SELECT period, account_id, income_total, expense_total, net_total FROM vw_monthly_account_totals"
-        )).all()
+        monthly_query = (
+            "SELECT period, account_id, income_total, expense_total, net_total "
+            "FROM vw_monthly_account_totals"
+        )
+        monthly_rows = cast(
+            Any, session.exec(text(monthly_query))  # type: ignore[call-overload]
+        ).all()
         assert len(monthly_rows) == 3
         monthly = {
             UUID(row[1]): (
@@ -106,9 +118,11 @@ def test_create_or_replace_views_on_sqlite() -> None:
         }
         assert sum(entry[3] for entry in monthly.values()) == Decimal("0")
 
-        yearly = session.exec(text(
-            "SELECT year, category_id, income_total, expense_total, net_total FROM vw_category_yearly_totals"
-        )).all()
+        yearly_query = (
+            "SELECT year, category_id, income_total, expense_total, net_total "
+            "FROM vw_category_yearly_totals"
+        )
+        yearly = cast(Any, session.exec(text(yearly_query))).all()  # type: ignore[call-overload]
         assert len(yearly) == 1
         year, category_id, income_total, expense_total, net_total = yearly[0]
         assert year == 2024
@@ -117,9 +131,10 @@ def test_create_or_replace_views_on_sqlite() -> None:
         assert Decimal(expense_total) == Decimal("1000.00")
         assert Decimal(net_total) == Decimal("0")
 
-        net_worth = session.exec(text(
-            "SELECT total_assets, total_liabilities, net_worth FROM vw_net_worth"
-        )).one()
+        net_worth_query = "SELECT total_assets, total_liabilities, net_worth FROM vw_net_worth"
+        net_worth = cast(
+            Any, session.exec(text(net_worth_query))  # type: ignore[call-overload]
+        ).one()
         assets, liabilities, net = [Decimal(str(value)) for value in net_worth]
         assert assets == Decimal("400.00")
         assert liabilities == Decimal("400.00")
@@ -131,5 +146,6 @@ def test_create_views_subset() -> None:
     create_or_replace_materialized_views(engine, replace=True, view_names=["vw_net_worth"])
 
     with Session(engine) as session:
-        result = session.exec(text("SELECT * FROM sqlite_master WHERE name = 'vw_net_worth'"))
+        query = "SELECT * FROM sqlite_master WHERE name = 'vw_net_worth'"
+        result = cast(Any, session.exec(text(query)))  # type: ignore[call-overload]
         assert result.first() is not None

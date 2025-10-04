@@ -6,7 +6,6 @@ from decimal import Decimal
 
 from .enums import CategoryType
 
-
 BASE_CURRENCY = "SEK"
 DECIMAL_PLACES = Decimal("0.01")
 

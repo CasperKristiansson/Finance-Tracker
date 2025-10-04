@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Optional
 from urllib.parse import quote_plus
 
-
 DB_ENDPOINT_ENV = "DB_ENDPOINT"
 DB_NAME_ENV = "DB_NAME"
 DB_USER_ENV = "DB_USER"
@@ -36,8 +35,7 @@ class DatabaseSettings:
         ]
         if missing:
             raise RuntimeError(
-                "Missing required database environment variables: "
-                + ", ".join(missing)
+                "Missing required database environment variables: " + ", ".join(missing)
             )
 
         port = int(os.getenv(DB_PORT_ENV, "5432"))
@@ -52,10 +50,7 @@ class DatabaseSettings:
     @property
     def sqlalchemy_url(self) -> str:
         password = quote_plus(self.password)
-        url = (
-            f"{self.driver}://{self.user}:{password}"
-            f"@{self.endpoint}:{self.port}/{self.name}"
-        )
+        url = f"{self.driver}://{self.user}:{password}" f"@{self.endpoint}:{self.port}/{self.name}"
         if self.options:
             return f"{url}?{self.options}"
         return url

@@ -6,7 +6,6 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Callable, Iterable, Protocol, TypeVar, Union
 
-
 Number = Union[int, float, Decimal]
 T = TypeVar("T")
 

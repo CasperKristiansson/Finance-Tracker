@@ -4,7 +4,6 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 import pytest
-
 from sqlmodel import select
 
 from apps.api.models import Account, Loan, Transaction, TransactionLeg
@@ -13,7 +12,9 @@ from apps.api.services import AccountService
 from apps.api.shared import AccountType, CreatedSource, InterestCompound, TransactionType
 
 
-def _create_transaction(session, account_src: Account, account_dst: Account, amount: Decimal, occurred: datetime) -> None:
+def _create_transaction(
+    session, account_src: Account, account_dst: Account, amount: Decimal, occurred: datetime
+) -> None:
     transaction = Transaction(
         transaction_type=TransactionType.TRANSFER,
         description="transfer",
@@ -99,22 +100,28 @@ def test_attach_loan_rules(session):
     assert attached.account_id == debt_account.id
 
     with pytest.raises(ValueError):
-        repo.attach_loan(debt_account.id, Loan(
-            account_id=debt_account.id,
-            origin_principal=Decimal("500.00"),
-            current_principal=Decimal("500.00"),
-            interest_rate_annual=Decimal("0.0300"),
-            interest_compound=InterestCompound.MONTHLY,
-        ))
+        repo.attach_loan(
+            debt_account.id,
+            Loan(
+                account_id=debt_account.id,
+                origin_principal=Decimal("500.00"),
+                current_principal=Decimal("500.00"),
+                interest_rate_annual=Decimal("0.0300"),
+                interest_compound=InterestCompound.MONTHLY,
+            ),
+        )
 
     with pytest.raises(ValueError):
-        repo.attach_loan(normal_account.id, Loan(
-            account_id=normal_account.id,
-            origin_principal=Decimal("500.00"),
-            current_principal=Decimal("500.00"),
-            interest_rate_annual=Decimal("0.0300"),
-            interest_compound=InterestCompound.MONTHLY,
-        ))
+        repo.attach_loan(
+            normal_account.id,
+            Loan(
+                account_id=normal_account.id,
+                origin_principal=Decimal("500.00"),
+                current_principal=Decimal("500.00"),
+                interest_rate_annual=Decimal("0.0300"),
+                interest_compound=InterestCompound.MONTHLY,
+            ),
+        )
 
 
 def test_account_service_create_and_balance(session):
@@ -144,7 +151,9 @@ def test_account_service_create_and_balance(session):
     assert updated_balance == Decimal("75.00")
 
     listings = service.list_accounts_with_balance()
-    assert any(account.id == created.id and balance == Decimal("75.00") for account, balance in listings)
+    assert any(
+        account.id == created.id and balance == Decimal("75.00") for account, balance in listings
+    )
 
     debt_account = Account(account_type=AccountType.DEBT)
     with pytest.raises(ValueError):
@@ -159,9 +168,7 @@ def test_account_service_create_and_balance(session):
     }
     created_debt = service.create_account(debt_account, loan_kwargs=loan_args)
 
-    loan_in_db = session.exec(
-        select(Loan).where(Loan.account_id == created_debt.id)
-    ).one()
+    loan_in_db = session.exec(select(Loan).where(Loan.account_id == created_debt.id)).one()
     assert loan_in_db.origin_principal == Decimal("2000.00")
 
     updated_account = service.update_account(created.id, is_active=False)

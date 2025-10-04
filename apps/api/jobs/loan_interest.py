@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Iterable, List, Optional
 from uuid import UUID
 
@@ -28,7 +28,7 @@ def accrue_interest(
 
     statement = select(Loan)
     if loan_ids:
-        statement = statement.where(Loan.id.in_(list(loan_ids)))  # type: ignore[arg-type]
+        statement = statement.where(Loan.id.in_(list(loan_ids)))  # type: ignore[attr-defined]
 
     loans = session.exec(statement).all()
     if not loans:
@@ -57,7 +57,9 @@ def accrue_interest(
         ]
 
         persisted = service.create_transaction(transaction, legs)
-        loan.current_principal = (coerce_decimal(loan.current_principal) + interest_amount).quantize(
+        loan.current_principal = (
+            coerce_decimal(loan.current_principal) + interest_amount
+        ).quantize(
             _DECIMAL_CENT,
             rounding=ROUND_HALF_UP,
         )
