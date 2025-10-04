@@ -14,3 +14,7 @@ apps/api/
 ```
 
 Refer to `docs/backend-task-checklist.md` for the implementation roadmap and check off tasks as each area is completed.
+
+## Database Migrations
+
+Alembic is configured at the repository root (`alembic.ini`) with scripts in `apps/api/migrations/`. Set `DATABASE_URL` and run `alembic revision --autogenerate -m "message"` to create migrations, followed by `alembic upgrade head` to apply them.

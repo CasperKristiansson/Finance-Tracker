@@ -26,7 +26,7 @@ This checklist translates the data management specification into actionable step
 - [x] **Task 6 — Transaction & support models**  
       Implement `Transaction`, `TransactionLeg`, `LoanEvent`, and `TransactionImportBatch` schemas with validators ensuring SEK-only amounts and double-entry balancing.
 
-- [ ] **Task 7 — Alembic & migrations setup**  
+- [x] **Task 7 — Alembic & migrations setup**  
       Configure Alembic to autogenerate migrations from SQLModel metadata and document migration commands.
 
 ## Data Access Layer
