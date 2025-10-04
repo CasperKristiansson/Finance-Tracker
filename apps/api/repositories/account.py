@@ -9,6 +9,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session
 
 from ..models import Account, Loan, Transaction, TransactionLeg
@@ -23,18 +24,20 @@ class AccountRepository:
 
     def get(self, account_id: UUID, *, with_relationships: bool = False) -> Optional[Account]:
         if with_relationships:
-            return self.session.exec(
+            statement = (
                 select(Account)
+                .options(selectinload(Account.loan))
                 .where(Account.id == account_id)
-            ).one_or_none()
+            )
+            return self.session.exec(statement).scalars().one_or_none()
         return self.session.get(Account, account_id)
 
     def list_accounts(self, include_inactive: bool = False) -> List[Account]:
-        statement = select(Account)
+        statement = select(Account).options(selectinload(Account.loan))
         if not include_inactive:
             statement = statement.where(Account.is_active.is_(True))
         statement = statement.order_by(Account.display_order, Account.created_at)
-        return list(self.session.exec(statement))
+        return list(self.session.exec(statement).scalars())
 
     def save(self, account: Account) -> Account:
         self.session.add(account)
@@ -71,6 +74,23 @@ class AccountRepository:
         self.session.commit()
         self.session.refresh(loan)
         return loan
+
+    def update_fields(
+        self,
+        account: Account,
+        *,
+        display_order: Optional[int] = None,
+        is_active: Optional[bool] = None,
+    ) -> Account:
+        if display_order is not None:
+            account.display_order = display_order
+        if is_active is not None:
+            account.is_active = is_active
+
+        self.session.add(account)
+        self.session.commit()
+        self.session.refresh(account)
+        return account
 
     def delete(self, account: Account) -> None:
         self.session.delete(account)

@@ -11,12 +11,37 @@ from uuid import UUID
 from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Numeric, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.types import Enum as SAEnum
-from sqlmodel import Field, SQLModel
+from sqlalchemy.orm import relationship
+from sqlmodel import Field, Relationship, SQLModel
 
 from ..shared import AccountType, InterestCompound, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:  # pragma: no cover
     from .transaction import LoanEvent, TransactionLeg
+
+
+class Account(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+    """Represents a user-visible account (normal, debt, or investment)."""
+
+    __tablename__ = "accounts"
+
+    display_order: int | None = Field(default=None)
+    account_type: AccountType = Field(
+        sa_column=Column(SAEnum(AccountType), nullable=False)
+    )
+    is_active: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, server_default="true"),
+    )
+
+    if TYPE_CHECKING:  # pragma: no cover
+        balance_snapshots: List["BalanceSnapshot"]
+        transaction_legs: List["TransactionLeg"]
+        loan: Optional["Loan"]
+
+    loan: Optional["Loan"] = Relationship(
+        sa_relationship=relationship("Loan", back_populates="account", uselist=False)
+    )
 
 
 class Loan(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
@@ -56,6 +81,11 @@ class Loan(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
     if TYPE_CHECKING:  # pragma: no cover
         rate_changes: List["LoanRateChange"]
         loan_events: List["LoanEvent"]
+        account: Account
+
+    account: Account = Relationship(
+        sa_relationship=relationship("Account", back_populates="loan")
+    )
 
 
 class LoanRateChange(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
@@ -75,25 +105,6 @@ class LoanRateChange(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
 
     if TYPE_CHECKING:  # pragma: no cover
         loan: Loan
-
-
-class Account(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
-    """Represents a user-visible account (normal, debt, or investment)."""
-
-    __tablename__ = "accounts"
-
-    display_order: int | None = Field(default=None)
-    account_type: AccountType = Field(
-        sa_column=Column(SAEnum(AccountType), nullable=False)
-    )
-    is_active: bool = Field(
-        default=True,
-        sa_column=Column(Boolean, nullable=False, server_default="true"),
-    )
-
-    if TYPE_CHECKING:  # pragma: no cover
-        balance_snapshots: List["BalanceSnapshot"]
-        transaction_legs: List["TransactionLeg"]
 
 
 class BalanceSnapshot(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
