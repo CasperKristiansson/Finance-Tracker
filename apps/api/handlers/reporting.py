@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timezone
 from typing import Any, Dict
 
 from pydantic import ValidationError
-from sqlalchemy.pool import StaticPool
 
 from ..schemas import (
     MonthlyReportEntry,
@@ -20,49 +18,16 @@ from ..schemas import (
     YearlyReportResponse,
 )
 from ..services import ReportingService
-from ..shared import (
-    configure_engine,
-    configure_engine_from_env,
-    get_engine,
-    session_scope,
-)
-from .utils import get_query_params, json_response
-
-
-_ENGINE_INITIALIZED = False
+from ..shared import session_scope
+from .utils import ensure_engine, get_query_params, json_response, reset_engine_state
 
 
 def reset_handler_state() -> None:
-    global _ENGINE_INITIALIZED
-    _ENGINE_INITIALIZED = False
-
-
-def _ensure_engine() -> None:
-    global _ENGINE_INITIALIZED
-    if _ENGINE_INITIALIZED:
-        return
-
-    try:
-        get_engine()
-        _ENGINE_INITIALIZED = True
-        return
-    except RuntimeError:
-        pass
-
-    database_url = os.environ.get("DATABASE_URL")
-    if database_url:
-        kwargs: Dict[str, Any] = {}
-        if database_url.startswith("sqlite"):
-            kwargs["connect_args"] = {"check_same_thread": False}
-            kwargs["poolclass"] = StaticPool
-        configure_engine(database_url, **kwargs)
-    else:
-        configure_engine_from_env()
-    _ENGINE_INITIALIZED = True
+    reset_engine_state()
 
 
 def monthly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
-    _ensure_engine()
+    ensure_engine()
     params = get_query_params(event)
 
     try:
@@ -84,7 +49,7 @@ def monthly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 
 def yearly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
-    _ensure_engine()
+    ensure_engine()
     params = get_query_params(event)
 
     try:
@@ -105,7 +70,7 @@ def yearly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 
 def total_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
-    _ensure_engine()
+    ensure_engine()
     params = get_query_params(event)
 
     try:
