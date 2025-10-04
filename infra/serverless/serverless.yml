@@ -24,7 +24,7 @@ provider:
           Action:
             - ssm:GetParameter
             - ssm:GetParameters
-          Resource: arn:aws:ssm:eu-north-1:#{AWS::AccountId}:parameter/finance-tracker/${self:provider.stage}/db/*
+          Resource: arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/finance-tracker/${self:provider.stage}/db/*
 
 custom:
   backendLayerArn: ${cf:finance-tracker-layer-service-${self:provider.stage}.BackendDepsLambdaLayerQualifiedArn}
