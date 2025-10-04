@@ -34,6 +34,7 @@ from .settings import (
     DatabaseSettings,
 )
 from .validation import ensure_balanced_legs
+from .views import create_or_replace_materialized_views
 
 __all__ = [
     "AccountType",
@@ -64,4 +65,5 @@ __all__ = [
     "DB_USER_ENV",
     "DB_PASSWORD_ENV",
     "DB_PORT_ENV",
+    "create_or_replace_materialized_views",
 ]
