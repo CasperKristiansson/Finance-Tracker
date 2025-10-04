@@ -51,3 +51,11 @@ output "auth_parameter_paths" {
     user_pool_issuer = module.resources.user_pool_issuer_parameter_name
   }
 }
+
+output "api_domain_configuration" {
+  description = "API custom domain name and supporting parameter references."
+  value = {
+    domain_name               = module.resources.api_custom_domain
+    certificate_parameter_arn = module.resources.api_domain_certificate_parameter_name
+  }
+}
