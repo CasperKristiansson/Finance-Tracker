@@ -65,7 +65,7 @@ This checklist translates the data management specification into actionable step
 
 ## Background Jobs & Views
 
-- [ ] **Task 18 — Materialized views implementation**  
+- [x] **Task 18 — Materialized views implementation**  
        Create SQL definitions or ORM equivalents for monthly totals, category summaries, and net worth views, along with refresh utilities.
 
 - [ ] **Task 19 — Loan interest accrual job**  
