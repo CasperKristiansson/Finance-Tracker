@@ -41,3 +41,13 @@ output "network_parameter_paths" {
     subnet_b_id = module.resources.subnet_private_b_parameter_name
   }
 }
+
+output "auth_parameter_paths" {
+  description = "SSM parameter names containing Cognito authentication identifiers."
+  value = {
+    user_pool_id     = module.resources.user_pool_id_parameter_name
+    user_pool_client = module.resources.user_pool_client_id_parameter_name
+    user_group       = module.resources.user_group_parameter_name
+    user_pool_issuer = module.resources.user_pool_issuer_parameter_name
+  }
+}

@@ -25,6 +25,14 @@ provider:
             - ssm:GetParameter
             - ssm:GetParameters
           Resource: arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/finance-tracker/${self:provider.stage}/db/*
+  httpApi:
+    authorizers:
+      cognitoJwt:
+        type: jwt
+        identitySource: '$request.header.Authorization'
+        issuerUrl: ${aws:ssm:/finance-tracker/${self:provider.stage}/auth/user_pool_issuer}
+        audience:
+          - ${aws:ssm:/finance-tracker/${self:provider.stage}/auth/user_pool_client_id}
 
 custom:
   backendLayerArn: ${cf:finance-tracker-layer-service-${self:provider.stage}.BackendDepsLambdaLayerQualifiedArn}
@@ -40,6 +48,7 @@ functions:
       - httpApi:
           path: /accounts
           method: GET
+          authorizer: cognitoJwt
 
   createAccount:
     handler: apps/api/handlers/accounts.create_account
@@ -51,6 +60,7 @@ functions:
       - httpApi:
           path: /accounts
           method: POST
+          authorizer: cognitoJwt
 
   updateAccount:
     handler: apps/api/handlers/accounts.update_account
@@ -62,6 +72,7 @@ functions:
       - httpApi:
           path: /accounts/{accountId}
           method: PATCH
+          authorizer: cognitoJwt
 
   listCategories:
     handler: apps/api/handlers/categories.list_categories
@@ -73,6 +84,7 @@ functions:
       - httpApi:
           path: /categories
           method: GET
+          authorizer: cognitoJwt
 
   createCategory:
     handler: apps/api/handlers/categories.create_category
@@ -84,6 +96,7 @@ functions:
       - httpApi:
           path: /categories
           method: POST
+          authorizer: cognitoJwt
 
   updateCategory:
     handler: apps/api/handlers/categories.update_category
@@ -95,6 +108,7 @@ functions:
       - httpApi:
           path: /categories/{categoryId}
           method: PATCH
+          authorizer: cognitoJwt
 
   listTransactions:
     handler: apps/api/handlers/transactions.list_transactions
@@ -106,6 +120,7 @@ functions:
       - httpApi:
           path: /transactions
           method: GET
+          authorizer: cognitoJwt
 
   createTransaction:
     handler: apps/api/handlers/transactions.create_transaction
@@ -117,6 +132,7 @@ functions:
       - httpApi:
           path: /transactions
           method: POST
+          authorizer: cognitoJwt
 
   createLoan:
     handler: apps/api/handlers/loans.create_loan
@@ -128,6 +144,7 @@ functions:
       - httpApi:
           path: /loans
           method: POST
+          authorizer: cognitoJwt
 
   updateLoan:
     handler: apps/api/handlers/loans.update_loan
@@ -139,6 +156,7 @@ functions:
       - httpApi:
           path: /loans/{accountId}
           method: PATCH
+          authorizer: cognitoJwt
 
   listLoanEvents:
     handler: apps/api/handlers/loans.list_loan_events
@@ -150,6 +168,7 @@ functions:
       - httpApi:
           path: /loans/{accountId}/events
           method: GET
+          authorizer: cognitoJwt
 
   getLoanSchedule:
     handler: apps/api/handlers/loans.get_loan_schedule
@@ -161,6 +180,7 @@ functions:
       - httpApi:
           path: /loans/{accountId}/schedule
           method: GET
+          authorizer: cognitoJwt
 
   monthlyReport:
     handler: apps/api/handlers/reporting.monthly_report
@@ -172,6 +192,7 @@ functions:
       - httpApi:
           path: /reports/monthly
           method: GET
+          authorizer: cognitoJwt
 
   yearlyReport:
     handler: apps/api/handlers/reporting.yearly_report
@@ -183,6 +204,7 @@ functions:
       - httpApi:
           path: /reports/yearly
           method: GET
+          authorizer: cognitoJwt
 
   totalReport:
     handler: apps/api/handlers/reporting.total_report
@@ -194,3 +216,4 @@ functions:
       - httpApi:
           path: /reports/total
           method: GET
+          authorizer: cognitoJwt
