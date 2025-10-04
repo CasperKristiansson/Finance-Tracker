@@ -8,6 +8,12 @@ from datetime import datetime
 from typing import Any, Dict, Optional, Sequence
 from uuid import UUID
 
+import os
+
+from sqlalchemy.pool import StaticPool
+
+from ..shared import configure_engine, configure_engine_from_env, get_engine
+
 
 _JSON_HEADERS = {"Content-Type": "application/json"}
 
@@ -73,8 +79,44 @@ def _json_default(obj: Any) -> Any:
 
 
 __all__ = [
+    "ensure_engine",
+    "reset_engine_state",
     "json_response",
     "parse_body",
     "get_query_params",
     "extract_path_uuid",
 ]
+_ENGINE_INITIALIZED = False
+
+
+def reset_engine_state() -> None:
+    """Reset cached engine initialization state (primarily for tests)."""
+
+    global _ENGINE_INITIALIZED
+    _ENGINE_INITIALIZED = False
+
+
+def ensure_engine() -> None:
+    """Ensure a database engine is configured for handler execution."""
+
+    global _ENGINE_INITIALIZED
+    if _ENGINE_INITIALIZED:
+        return
+
+    try:
+        get_engine()
+        _ENGINE_INITIALIZED = True
+        return
+    except RuntimeError:
+        pass
+
+    database_url = os.environ.get("DATABASE_URL")
+    if database_url:
+        kwargs: Dict[str, Any] = {}
+        if database_url.startswith("sqlite"):
+            kwargs["connect_args"] = {"check_same_thread": False}
+            kwargs["poolclass"] = StaticPool
+        configure_engine(database_url, **kwargs)
+    else:
+        configure_engine_from_env()
+    _ENGINE_INITIALIZED = True

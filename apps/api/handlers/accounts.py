@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import os
 from datetime import datetime
 from typing import Any, Dict, Optional
 from uuid import UUID
 
 from pydantic import ValidationError
-from sqlalchemy.pool import StaticPool
 
 from ..models import Account
 from ..schemas import (
@@ -19,49 +17,21 @@ from ..schemas import (
     ListAccountsResponse,
 )
 from ..services import AccountService
-from ..shared import (
-    configure_engine,
-    configure_engine_from_env,
-    get_engine,
-    session_scope,
+from ..shared import session_scope
+from .utils import (
+    ensure_engine,
+    extract_path_uuid,
+    get_query_params,
+    json_response,
+    parse_body,
+    reset_engine_state,
 )
-from .utils import extract_path_uuid, get_query_params, json_response, parse_body
-
-
-_ENGINE_INITIALIZED = False
 
 
 def reset_handler_state() -> None:
     """Reset internal flags to allow clean reconfiguration in tests."""
 
-    global _ENGINE_INITIALIZED
-    _ENGINE_INITIALIZED = False
-
-
-def _ensure_engine() -> None:
-    """Ensure the SQLModel engine is configured before handling requests."""
-
-    global _ENGINE_INITIALIZED
-    if _ENGINE_INITIALIZED:
-        return
-
-    try:
-        get_engine()
-        _ENGINE_INITIALIZED = True
-        return
-    except RuntimeError:
-        pass
-
-    database_url = os.environ.get("DATABASE_URL")
-    if database_url:
-        kwargs: Dict[str, Any] = {}
-        if database_url.startswith("sqlite"):
-            kwargs["connect_args"] = {"check_same_thread": False}
-            kwargs["poolclass"] = StaticPool
-        configure_engine(database_url, **kwargs)
-    else:
-        configure_engine_from_env()
-    _ENGINE_INITIALIZED = True
+    reset_engine_state()
 
 
 def _account_to_schema(account: Account, balance: Any) -> AccountWithBalance:
@@ -74,7 +44,7 @@ def _account_to_schema(account: Account, balance: Any) -> AccountWithBalance:
 def list_accounts(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     """HTTP GET /accounts."""
 
-    _ensure_engine()
+    ensure_engine()
     params = get_query_params(event)
 
     try:
@@ -100,7 +70,7 @@ def list_accounts(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 def create_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     """HTTP POST /accounts."""
 
-    _ensure_engine()
+    ensure_engine()
     payload = parse_body(event)
 
     try:
@@ -129,7 +99,7 @@ def create_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 def update_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     """HTTP PATCH /accounts/{account_id}."""
 
-    _ensure_engine()
+    ensure_engine()
     payload = parse_body(event)
     account_id = extract_path_uuid(event, param_names=("account_id", "accountId"))
     if account_id is None:
