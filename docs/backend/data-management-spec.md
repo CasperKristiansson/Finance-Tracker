@@ -322,3 +322,12 @@ Authentication still required but multi-tenant scoping is unnecessary; endpoints
 - **Mechanics**: For each loan, compute `current_principal * (interest_rate_annual / periods_per_year)` using the loan's compounding setting. Post a system-generated expense transaction categorized as `interest`, crediting the debt account and debiting a configured interest-expense account.
 - **Audit**: Every accrual transaction is stamped with `created_source = system` and produces an `interest_accrual` entry in `loan_events` for reporting parity.
 - **Idempotency**: Job executes inside a database transaction; orchestration should ensure single execution per period (e.g., relying on a CloudWatch Events + Lambda schedule with dead-letter queue for retries).
+
+---
+
+## 13. Implementation Coverage
+
+- **Models & Persistence**: All entities described in §4 (accounts, loans, categories, transactions, loan events) exist in code with the enforced constraints noted in the spec. Future optional tables (`LoanSchedule`, `BalanceSnapshot`) remain deferred.
+- **API Endpoints**: REST handlers for accounts, categories, transactions, loans, and reporting endpoints match the contract in §8. Any missing endpoints are intentionally deferred (PATCH `/transactions/{id}` and future reporting extensions).
+- **Background Processing**: Materialized view refresh utilities (§7.2) and the loan interest accrual job (§12.1) are implemented. Automated scheduling (Celery/Step Functions) is still an infrastructure decision and is documented as a follow-up action.
+- **Deviations**: None outstanding at this time. Any future departures from the specification should be recorded here with rationale and linked implementation tickets.

@@ -1,6 +1,6 @@
 # Finance Tracker API
 
-This package hosts the backend code for the Finance Tracker application. The layout is organized so each feature can evolve independently and align with the [data management specification](../../docs/data-management-spec.md).
+This package hosts the backend code for the Finance Tracker application. The layout is organized so each feature can evolve independently and align with the [data management specification](../../docs/backend/data-management-spec.md).
 
 ```
 apps/api/
@@ -13,7 +13,7 @@ apps/api/
 └── README.md
 ```
 
-Refer to `docs/backend-task-checklist.md` for the implementation roadmap and check off tasks as each area is completed.
+Refer to `docs/backend/backend-task-checklist.md` for the implementation roadmap and check off tasks as each area is completed.
 
 ## Database Migrations
 
