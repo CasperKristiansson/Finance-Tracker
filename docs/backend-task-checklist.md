@@ -17,7 +17,7 @@ This checklist translates the data management specification into actionable step
 
 ## Data Models
 
-- [ ] **Task 4 — Account & loan models**  
+- [x] **Task 4 — Account & loan models**  
       Implement SQLModel tables for `Account`, `Loan`, `LoanRateChange`, and `BalanceSnapshot` per spec §4.1–4.2. Enforce the one-loan-per-debt-account constraint and expose relationships.
 
 - [ ] **Task 5 — Category & system account models**  
