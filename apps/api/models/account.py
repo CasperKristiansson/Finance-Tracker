@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
 from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Numeric, UniqueConstraint
@@ -12,12 +12,10 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.types import Enum as SAEnum
 from sqlmodel import Field, Relationship, SQLModel
 
-from ..shared import (
-    AccountType,
-    InterestCompound,
-    TimestampMixin,
-    UUIDPrimaryKeyMixin,
-)
+from ..shared import AccountType, InterestCompound, TimestampMixin, UUIDPrimaryKeyMixin
+
+if TYPE_CHECKING:  # pragma: no cover
+    from .transaction import LoanEvent, TransactionLeg
 
 
 class Account(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
@@ -36,6 +34,7 @@ class Account(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
 
     loan: Optional["Loan"] = Relationship(back_populates="account")
     balance_snapshots: List["BalanceSnapshot"] = Relationship(back_populates="account")
+    transaction_legs: List["TransactionLeg"] = Relationship(back_populates="account")
 
 
 class Loan(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
@@ -74,6 +73,7 @@ class Loan(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
 
     account: Account = Relationship(back_populates="loan")
     rate_changes: List["LoanRateChange"] = Relationship(back_populates="loan")
+    loan_events: List["LoanEvent"] = Relationship(back_populates="loan")
 
 
 class LoanRateChange(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
