@@ -310,3 +310,15 @@ Authentication still required but multi-tenant scoping is unnecessary; endpoints
 3. Implement Alembic migrations + SQLModel classes following this spec.
 4. Build repository/service layer with end-to-end tests covering transactions, transfers, and loan payments.
 5. Validate reporting outputs against historical data to confirm parity with existing system.
+
+---
+
+## 12. Background Jobs
+
+### 12.1 Loan Interest Accrual
+
+- **Purpose**: Automatically increase loan principal for accrued interest without manual postings.
+- **Frequency**: Run on the first calendar day of each month at 01:00 UTC (cron `0 1 1 * *`).
+- **Mechanics**: For each loan, compute `current_principal * (interest_rate_annual / periods_per_year)` using the loan's compounding setting. Post a system-generated expense transaction categorized as `interest`, crediting the debt account and debiting a configured interest-expense account.
+- **Audit**: Every accrual transaction is stamped with `created_source = system` and produces an `interest_accrual` entry in `loan_events` for reporting parity.
+- **Idempotency**: Job executes inside a database transaction; orchestration should ensure single execution per period (e.g., relying on a CloudWatch Events + Lambda schedule with dead-letter queue for retries).
