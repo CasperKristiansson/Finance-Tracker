@@ -14,3 +14,5 @@ infra/layers/layer-backend.zip
 docs/data
 apps/web/build
 apps/web/dist
+apps/web/.env.production
+.gitignore
