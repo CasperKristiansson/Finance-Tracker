@@ -40,7 +40,7 @@ This checklist translates the data management specification into actionable step
 - [x] **Task 10 — Category repository & services**  
        Provide create/update/archive operations for categories with uniqueness enforcement and tests.
 
-- [ ] **Task 11 — Transaction repository & services**  
+- [x] **Task 11 — Transaction repository & services**  
        Implement posting logic for transactions and transfers, including validation of legs and generation of loan events. Add tests for double-entry enforcement.
 
 - [ ] **Task 12 — Reporting utilities**  
