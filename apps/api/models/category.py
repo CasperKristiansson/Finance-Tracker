@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, List
 
 from sqlalchemy import Boolean, Column, String
 from sqlalchemy.types import Enum as SAEnum
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, SQLModel
 
 from ..shared import (
     CategoryType,
@@ -37,7 +37,8 @@ class Category(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
         sa_column=Column(Boolean, nullable=False, server_default="false"),
     )
 
-    transactions: List["Transaction"] = Relationship(back_populates="category")
+    if TYPE_CHECKING:  # pragma: no cover
+        transactions: List["Transaction"]
 
 
 class SystemAccount(UUIDPrimaryKeyMixin, SQLModel, table=True):
@@ -58,3 +59,7 @@ __all__ = [
     "Category",
     "SystemAccount",
 ]
+
+
+Category.model_rebuild()
+SystemAccount.model_rebuild()

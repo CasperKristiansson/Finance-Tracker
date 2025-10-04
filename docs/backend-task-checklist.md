@@ -34,7 +34,7 @@ This checklist translates the data management specification into actionable step
 - [x] **Task 8 — Database session configuration**  
       Build DB connection utilities using the pattern in `temp.py`, reading credentials from environment variables (DB endpoint, name, user, password).
 
-- [ ] **Task 9 — Account repository & services**  
+- [x] **Task 9 — Account repository & services**  
       Implement repositories/services for account CRUD, balance calculation, and loan linkage logic. Add unit tests covering balance derivation.
 
 - [ ] **Task 10 — Category repository & services**  
