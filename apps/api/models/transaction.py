@@ -11,7 +11,8 @@ from uuid import UUID
 from sqlalchemy import Column, DateTime, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.types import Enum as SAEnum
-from sqlmodel import Field, SQLModel
+from sqlalchemy.orm import relationship
+from sqlmodel import Field, Relationship, SQLModel
 
 from ..shared import (
     AuditSourceMixin,
@@ -103,6 +104,23 @@ class Transaction(
         UniqueConstraint("occurred_at", "description", "external_id", name="uq_transaction_identity"),
     )
 
+    legs: List["TransactionLeg"] = Relationship(
+        back_populates="transaction",
+        sa_relationship=relationship(
+            "TransactionLeg",
+            back_populates="transaction",
+            cascade="all, delete-orphan",
+        ),
+    )
+    loan_events: List["LoanEvent"] = Relationship(
+        back_populates="transaction",
+        sa_relationship=relationship(
+            "LoanEvent",
+            back_populates="transaction",
+            cascade="all, delete-orphan",
+        ),
+    )
+
 
 class TransactionLeg(UUIDPrimaryKeyMixin, SQLModel, table=True):
     """Individual account impact for a transaction."""
@@ -133,6 +151,17 @@ class TransactionLeg(UUIDPrimaryKeyMixin, SQLModel, table=True):
         transaction: Transaction
         account: "Account"
         loan_event: Optional["LoanEvent"]
+
+    transaction: Transaction = Relationship(
+        back_populates="legs",
+        sa_relationship=relationship("Transaction", back_populates="legs"),
+    )
+    account: "Account" = Relationship(
+        sa_relationship=relationship("Account", back_populates="transaction_legs"),
+    )
+    loan_event: Optional["LoanEvent"] = Relationship(
+        sa_relationship=relationship("LoanEvent", back_populates="transaction_leg", uselist=False),
+    )
 
 
 class LoanEvent(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
@@ -174,6 +203,19 @@ class LoanEvent(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
         transaction: Transaction
         loan: "Loan"
         transaction_leg: Optional["TransactionLeg"]
+
+    loan: "Loan" = Relationship(
+        back_populates="loan_events",
+        sa_relationship=relationship("Loan", back_populates="loan_events"),
+    )
+    transaction: Transaction = Relationship(
+        back_populates="loan_events",
+        sa_relationship=relationship("Transaction", back_populates="loan_events"),
+    )
+    transaction_leg: Optional["TransactionLeg"] = Relationship(
+        back_populates="loan_event",
+        sa_relationship=relationship("TransactionLeg", back_populates="loan_event"),
+    )
 
 
 __all__ = [

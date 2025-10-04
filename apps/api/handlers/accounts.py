@@ -13,12 +13,10 @@ from sqlalchemy.pool import StaticPool
 from ..models import Account
 from ..schemas import (
     AccountCreate,
-    AccountRead,
     AccountUpdate,
     AccountWithBalance,
     ListAccountsQuery,
     ListAccountsResponse,
-    UpdateAccountPath,
 )
 from ..services import AccountService
 from ..shared import (

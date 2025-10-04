@@ -12,7 +12,6 @@ from ..models import Category
 from ..schemas import (
     CategoryCreate,
     CategoryListResponse,
-    CategoryPathParams,
     CategoryRead,
     CategoryUpdate,
     ListCategoriesQuery,

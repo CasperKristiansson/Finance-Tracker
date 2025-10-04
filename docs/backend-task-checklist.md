@@ -54,7 +54,7 @@ This checklist translates the data management specification into actionable step
 - [x] **Task 14 — Category endpoints & tests**  
        Implement `/categories` routes for list/create/update with accompanying tests.
 
-- [ ] **Task 15 — Transaction endpoints & tests**  
+- [x] **Task 15 — Transaction endpoints & tests**  
        Implement `/transactions` routes for listing and creation with validation of legs, plus tests covering transfers and loan payments.
 
 - [ ] **Task 16 — Loan endpoints & tests**  

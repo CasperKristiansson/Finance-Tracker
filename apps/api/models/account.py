@@ -42,6 +42,9 @@ class Account(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
     loan: Optional["Loan"] = Relationship(
         sa_relationship=relationship("Loan", back_populates="account", uselist=False)
     )
+    transaction_legs: List["TransactionLeg"] = Relationship(
+        sa_relationship=relationship("TransactionLeg", back_populates="account"),
+    )
 
 
 class Loan(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
@@ -85,6 +88,13 @@ class Loan(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
 
     account: Account = Relationship(
         sa_relationship=relationship("Account", back_populates="loan")
+    )
+    loan_events: List["LoanEvent"] = Relationship(
+        sa_relationship=relationship(
+            "LoanEvent",
+            back_populates="loan",
+            cascade="all, delete-orphan",
+        )
     )
 
 

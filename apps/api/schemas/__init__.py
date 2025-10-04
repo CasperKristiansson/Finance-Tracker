@@ -19,6 +19,14 @@ from .category import (
     CategoryUpdate,
     ListCategoriesQuery,
 )
+from .transaction import (
+    TransactionCreate,
+    TransactionLegCreate,
+    TransactionLegRead,
+    TransactionListQuery,
+    TransactionListResponse,
+    TransactionRead,
+)
 
 __all__ = [
     "AccountCreate",
@@ -36,4 +44,10 @@ __all__ = [
     "ListCategoriesQuery",
     "CategoryPathParams",
     "CategoryListResponse",
+    "TransactionCreate",
+    "TransactionRead",
+    "TransactionLegCreate",
+    "TransactionLegRead",
+    "TransactionListQuery",
+    "TransactionListResponse",
 ]
