@@ -168,7 +168,7 @@ def test_materialized_view_refresh_noop_on_sqlite(reporting_repo):
 def test_materialized_view_refresh_executes_for_postgres(monkeypatch, reporting_repo):
     calls: list[str] = []
 
-    def fake_exec(statement):
+    def fake_execute(statement):
         statement_text = getattr(statement, "text", str(statement))
         calls.append(statement_text)
 
@@ -178,7 +178,7 @@ def test_materialized_view_refresh_executes_for_postgres(monkeypatch, reporting_
     dummy_bind = SimpleNamespace(dialect=SimpleNamespace(name="postgresql"))
 
     monkeypatch.setattr(reporting_repo.session, "get_bind", lambda: dummy_bind)
-    monkeypatch.setattr(reporting_repo.session, "exec", fake_exec)
+    monkeypatch.setattr(reporting_repo.session, "execute", fake_execute)
     monkeypatch.setattr(reporting_repo.session, "commit", fake_commit)
     monkeypatch.setattr(reporting_repo.session, "rollback", lambda: calls.append("rollback"))
 

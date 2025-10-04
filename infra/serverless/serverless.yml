@@ -28,11 +28,29 @@ provider:
           Resource: arn:aws:ssm:eu-north-1:#{AWS::AccountId}:parameter/personal/db/*
 
 functions:
-  api:
-    handler: handler.handler
+  listAccounts:
+    handler: apps/api/handlers/accounts.list_accounts
     timeout: 30
     memorySize: 512
     events:
       - httpApi:
-          path: /stats/monthly
+          path: /accounts
           method: GET
+
+  createAccount:
+    handler: apps/api/handlers/accounts.create_account
+    timeout: 30
+    memorySize: 512
+    events:
+      - httpApi:
+          path: /accounts
+          method: POST
+
+  updateAccount:
+    handler: apps/api/handlers/accounts.update_account
+    timeout: 30
+    memorySize: 512
+    events:
+      - httpApi:
+          path: /accounts/{accountId}
+          method: PATCH

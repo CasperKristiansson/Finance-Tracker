@@ -143,6 +143,9 @@ def test_account_service_create_and_balance(session):
     _, updated_balance = service.get_account_with_balance(created.id)
     assert updated_balance == Decimal("75.00")
 
+    listings = service.list_accounts_with_balance()
+    assert any(account.id == created.id and balance == Decimal("75.00") for account, balance in listings)
+
     debt_account = Account(account_type=AccountType.DEBT)
     with pytest.raises(ValueError):
         service.create_account(debt_account)
@@ -160,3 +163,6 @@ def test_account_service_create_and_balance(session):
         select(Loan).where(Loan.account_id == created_debt.id)
     ).one()
     assert loan_in_db.origin_principal == Decimal("2000.00")
+
+    updated_account = service.update_account(created.id, is_active=False)
+    assert updated_account.is_active is False
