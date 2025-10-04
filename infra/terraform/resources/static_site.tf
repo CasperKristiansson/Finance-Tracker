@@ -136,6 +136,7 @@ resource "aws_cloudfront_distribution" "static_site" {
   enabled             = true
   default_root_object = "index.html"
   price_class         = "PriceClass_100"
+  is_ipv6_enabled     = true
 
   aliases = [local.static_site_domain]
 
