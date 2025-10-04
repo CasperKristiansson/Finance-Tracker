@@ -31,7 +31,7 @@ This checklist translates the data management specification into actionable step
 
 ## Data Access Layer
 
-- [ ] **Task 8 — Database session configuration**  
+- [x] **Task 8 — Database session configuration**  
       Build DB connection utilities using the pattern in `temp.py`, reading credentials from environment variables (DB endpoint, name, user, password).
 
 - [ ] **Task 9 — Account repository & services**  
