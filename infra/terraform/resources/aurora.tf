@@ -223,6 +223,36 @@ resource "aws_ssm_parameter" "finance_tracker_db_password" {
   tags = local.common_tags
 }
 
+resource "aws_ssm_parameter" "finance_tracker_lambda_sg_id" {
+  name        = "/finance-tracker/${var.environment}/lambda/sg"
+  description = "Security group for Finance Tracker Lambda functions."
+  type        = "String"
+  value       = aws_security_group.finance_tracker_lambda.id
+  overwrite   = true
+
+  tags = local.common_tags
+}
+
+resource "aws_ssm_parameter" "finance_tracker_subnet_private_a" {
+  name        = "/finance-tracker/${var.environment}/subnet/private-a"
+  description = "Private subnet A for Finance Tracker workloads."
+  type        = "String"
+  value       = aws_subnet.finance_tracker_private_a.id
+  overwrite   = true
+
+  tags = local.common_tags
+}
+
+resource "aws_ssm_parameter" "finance_tracker_subnet_private_b" {
+  name        = "/finance-tracker/${var.environment}/subnet/private-b"
+  description = "Private subnet B for Finance Tracker workloads."
+  type        = "String"
+  value       = aws_subnet.finance_tracker_private_b.id
+  overwrite   = true
+
+  tags = local.common_tags
+}
+
 output "subnet_ids" {
   description = "Private subnet identifiers used by the Aurora cluster."
   value = [
@@ -264,4 +294,19 @@ output "db_user_parameter_name" {
 output "db_password_parameter_name" {
   description = "SSM parameter storing the Aurora database password."
   value       = aws_ssm_parameter.finance_tracker_db_password.name
+}
+
+output "lambda_sg_parameter_name" {
+  description = "SSM parameter containing the Lambda security group id."
+  value       = aws_ssm_parameter.finance_tracker_lambda_sg_id.name
+}
+
+output "subnet_private_a_parameter_name" {
+  description = "SSM parameter containing private subnet A id."
+  value       = aws_ssm_parameter.finance_tracker_subnet_private_a.name
+}
+
+output "subnet_private_b_parameter_name" {
+  description = "SSM parameter containing private subnet B id."
+  value       = aws_ssm_parameter.finance_tracker_subnet_private_b.name
 }

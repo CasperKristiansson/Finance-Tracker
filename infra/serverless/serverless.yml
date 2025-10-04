@@ -8,10 +8,10 @@ provider:
   profile: Personal
   vpc:
     securityGroupIds:
-      - ${env:LAMBDA_SG}
+      - ${ssm:/finance-tracker/${self:provider.stage}/lambda/sg}
     subnetIds:
-      - ${env:SUBNET_A}
-      - ${env:SUBNET_B}
+      - ${ssm:/finance-tracker/${self:provider.stage}/subnet/private-a}
+      - ${ssm:/finance-tracker/${self:provider.stage}/subnet/private-b}
   environment:
     DB_ENDPOINT: ${ssm:/finance-tracker/${self:provider.stage}/db/endpoint}
     DB_NAME: ${ssm:/finance-tracker/${self:provider.stage}/db/name}

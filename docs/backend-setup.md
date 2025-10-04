@@ -42,13 +42,10 @@ This guide summarizes the steps required to develop, test, and deploy the Financ
    terraform workspace select dev   # or create/select appropriate workspace
    terraform apply
    ```
-   Capture the outputs (`lambda_security_group_id`, `private_subnet_a_id`, `private_subnet_b_id`, and `db_parameter_paths`) for the next step.
+   Terraform writes the Aurora connection details, Lambda security group, and private subnet IDs to SSM Parameter Store (under `/finance-tracker/<stage>/...`).
 2. **Deploy the API** using Serverless Framework:
    ```bash
    cd ../../
-   export LAMBDA_SG=$(terraform output -raw lambda_security_group_id)
-   export SUBNET_A=$(terraform output -raw private_subnet_a_id)
-   export SUBNET_B=$(terraform output -raw private_subnet_b_id)
    serverless deploy --stage dev
    ```
 3. **Post-deploy verification**:

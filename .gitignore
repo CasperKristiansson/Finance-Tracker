@@ -5,3 +5,4 @@
 **.terraform*
 *.pyc
 infra/layers/layer-backend.zip
+*.serverless
