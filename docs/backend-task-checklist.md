@@ -12,7 +12,7 @@ This checklist translates the data management specification into actionable step
 - [x] **Task 2 — Configure shared library core**  
       Implement shared base classes (`TimestampMixin`, `UUIDPrimaryKeyMixin`, `AuditSourceMixin`) and utility modules in `apps/api/shared/`. Include SQLModel session helpers and a validation function for net-zero transaction legs.
 
-- [ ] **Task 3 — Domain enums & constants**  
+- [x] **Task 3 — Domain enums & constants**  
       Define enums for account, category, transaction, system account codes, and created source. Add SEK currency constant plus helper functions enforcing sign conventions.
 
 ## Data Models

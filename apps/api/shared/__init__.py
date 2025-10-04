@@ -1,19 +1,45 @@
 """Shared utilities for the Finance Tracker backend."""
 
-from .enums import CreatedSource
+from .enums import (
+    AccountType,
+    CategoryType,
+    CreatedSource,
+    InterestCompound,
+    LoanEventType,
+    SystemAccountCode,
+    TransactionType,
+)
+from .finance import (
+    BASE_CURRENCY,
+    DECIMAL_PLACES,
+    SignConventionError,
+    coerce_decimal,
+    validate_category_amount,
+)
 from .mixins import AuditSourceMixin, TimestampMixin, UUIDPrimaryKeyMixin
 from .session import configure_engine, get_engine, get_session, init_db, session_scope
 from .validation import ensure_balanced_legs
 
 __all__ = [
+    "AccountType",
+    "CategoryType",
     "AuditSourceMixin",
+    "CreatedSource",
+    "InterestCompound",
+    "LoanEventType",
+    "SystemAccountCode",
+    "TransactionType",
     "TimestampMixin",
     "UUIDPrimaryKeyMixin",
-    "CreatedSource",
+    "BASE_CURRENCY",
+    "DECIMAL_PLACES",
+    "SignConventionError",
     "configure_engine",
     "get_engine",
     "get_session",
     "session_scope",
     "init_db",
     "ensure_balanced_legs",
+    "coerce_decimal",
+    "validate_category_amount",
 ]
