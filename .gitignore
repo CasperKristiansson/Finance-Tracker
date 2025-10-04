@@ -4,3 +4,4 @@
 .DS_Store
 **.terraform*
 *.pyc
+infra/layers/layer-backend.zip
