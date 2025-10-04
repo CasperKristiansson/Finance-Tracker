@@ -35,6 +35,16 @@ from .loan import (
     LoanScheduleRead,
     LoanUpdate,
 )
+from .reporting import (
+    MonthlyReportEntry,
+    MonthlyReportQuery,
+    MonthlyReportResponse,
+    TotalReportQuery,
+    TotalReportRead,
+    YearlyReportEntry,
+    YearlyReportQuery,
+    YearlyReportResponse,
+)
 
 __all__ = [
     "AccountCreate",
@@ -64,4 +74,12 @@ __all__ = [
     "LoanScheduleRead",
     "LoanEventRead",
     "LoanEventListQuery",
+    "MonthlyReportQuery",
+    "MonthlyReportEntry",
+    "MonthlyReportResponse",
+    "YearlyReportQuery",
+    "YearlyReportEntry",
+    "YearlyReportResponse",
+    "TotalReportQuery",
+    "TotalReportRead",
 ]
