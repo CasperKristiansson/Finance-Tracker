@@ -11,3 +11,4 @@ infra/terraform/*.tfvars
 *.pyc
 infra/layers/layer-backend.zip
 *.serverless
+docs/data
