@@ -12,65 +12,65 @@
 
 ### Milestone 1 – Foundation & Auth
 
-- [ ] API client layer with base URL, Cognito bearer injection, error/loading normalization, typed hooks for accounts/categories/transactions/reports/imports/loans.
-- [ ] Auth UX: wire login form to saga (validation, errors, disable while loading), add demo mode toggle, ensure logout visible in header/sidebar collapsed states.
-- [ ] Route guards: keep redirect logic, add friendly unauthenticated states/loader skeletons.
+- [ ] API client + saga plumbing: base API URL, Cognito bearer injection, shared fetch helper (retry + 401 handling), global loading/error toasts, typed hooks for accounts/categories/transactions/reports/imports/loans.
+- [ ] Auth UX + flows: connect login form to saga (validation, inline errors, disabled during submit), demo mode toggle (mock user), logout entry visible in header + collapsed sidebar, remember-me flag.
+- [ ] Loading/skeletons: page-level spinner while auth initializes; skeleton shells for nav/content; unauthenticated state messaging.
+- [ ] Backend alignment: confirm Cognito config + API auth scheme; provide local dev env templates for Amplify + API base.
 
-### Milestone 2 – Dashboard
+### Milestone 2 – Dashboard (reporting baseline)
 
-- [ ] KPI cards: net worth, cash flow (period toggle), budget vs actual, upcoming bills placeholder.
-- [ ] Charts: income vs expense, category breakdown (donut), savings rate.
-- [ ] Activity: recent transactions list with inline category/status tags.
-- [ ] Quick actions: buttons for “Add transaction” and “Import file”.
-- [ ] Empty states: import CTA when no data.
+- [ ] Backend: ensure reporting endpoints accept account/category filters; add net worth history endpoint (area) if missing.
+- [ ] Redux slices/sagas: reporting fetch (monthly/yearly/total), net worth history, recent transactions (limit N), cache by period key; selectors for KPIs.
+- [ ] KPI cards: net worth, cash flow (toggle month/quarter/year), budget vs actual placeholder (wired once budgets exist), upcoming bills placeholder.
+- [ ] Charts: stacked area for income vs expense; donut for category breakdown; bar for savings rate (%).
+- [ ] Layout: 2-column grid with KPIs top, charts middle, recent transactions list bottom with status tags and inline loading placeholders.
+- [ ] Quick actions: primary buttons for “Add transaction” and “Import file” opening stubs; empty state CTA to import when no data.
 
-### Milestone 3 – Accounts
+### Milestone 3 – Accounts & Loans
 
-- [ ] Replace mock data with live accounts + balances; sorting/filtering; archive toggle.
-- [ ] Add “Add/Edit account” modal (normal/debt/investment) including loan metadata for debt.
-- [ ] Show balance as-of selector if backend supports timestamp filter.
-- [ ] Debt accounts: surface loan schedule/metrics (uses loan endpoints).
+- [ ] Backend: confirm account list supports `as_of` filter; extend account update with bank template metadata if needed.
+- [ ] Redux slice/saga: accounts list with balances, create/update/archive, loan read/attach/update flows.
+- [ ] UI: replace mocks with live data; sortable/filterable list; status pill (active/inactive); archive toggle; balance as-of control if supported.
+- [ ] Modals: Add/Edit account (type picker normal/debt/investment), loan metadata for debt (principal, rate, min payment, maturity), validation + error display.
+- [ ] Debt views: loan schedule table and metrics; events list preview; loading skeletons + “add first account” empty state.
 
 ### Milestone 4 – Transactions & Imports
 
-- [ ] Transactions table with pagination/virtualization, filters (date/account/category/amount/status), search, bulk select, running balance per account.
-- [ ] Manual transaction modal with leg builder, inline category edit, status badges (imported/reviewed/flagged).
-- [ ] Imports flow: account picker, bank template picker, file dropzone (CSV/XLSX), mapping preview, inline error surfacing, import summary.
-- [ ] Bank template management per account (select predefined parser config, allow overrides).
+- [ ] Backend: add transaction update/delete + status flags (imported/reviewed/flagged); ensure validation errors are UI-friendly. Implement import upload endpoint (CSV/XLSX) with bank template selection, mapping preview, job status + per-row errors; persist import batch summary.
+- [ ] Redux slices/sagas: transactions list with filters/pagination, transaction mutations, status updates; import job creation/status polling; selectors for running balance.
+- [ ] UI table: virtualized rows; columns (date, payee/description, account, category, amount, status, notes); sortable headers; column visibility; bulk select + actions (categorize/delete/mark reviewed); running balance per account.
+- [ ] Filters/search: date range, account multi-select, category, amount range, status, text search; sticky filter bar; inline loading state on filter change.
+- [ ] Manual transaction modal: leg builder with balanced validation, inline category edit, notes, occurred/posted dates; status badge and error display.
+- [ ] Imports flow UI: stepper (account picker, bank template picker, file dropzone, mapping preview table with error highlights, confirm), summary screen with imported/skipped/errors and download errors link; bank template management per account (select parser, override mapping).
+- [ ] Loading/empty: table skeletons; “add/import transactions” empty card; progress indicators during import.
 
 ### Milestone 5 – Categories & Budgets
 
-- [ ] Category management page (list, create, edit, archive, color/icon).
-- [ ] Budget inputs per category (monthly/quarterly/yearly), progress bars and rollup.
-- [ ] Empty states/wizard for first budget setup.
+- [ ] Backend: ensure category CRUD supports color/icon metadata; add budget models/endpoints (category budgets with period + amount).
+- [ ] Redux slices/sagas: categories CRUD; budgets fetch/create/update; selectors for rollups and progress.
+- [ ] UI: category management table with color/emoji/icon picker, archive toggle, inline edit; filter by type (income/expense/etc).
+- [ ] Budgets: inputs per category (period selector monthly/quarterly/yearly), progress bars with spent vs budget; rollup cards for total budget vs actual.
+- [ ] Empty/wizard: guided first-time budget setup using top categories by spend; skeleton rows/cards.
 
-### Milestone 6 – Reports & Analytics
+### Milestone 6 – Reports & Analytics (fully featured)
 
-- [ ] Reports page with month/quarter/year toggles, compare vs prior period, drill-down by category/account.
-- [ ] Charts: stacked/line/donut options, export CSV/XLSX.
-- [ ] Net worth history view (line/area) if endpoint available.
+- [ ] Backend: extend reporting to support quarter + custom date range; add net worth history endpoint if absent; ensure filters for account/category; CSV/XLSX export endpoints for reports.
+- [ ] Redux slices/sagas: reporting fetch keyed by granularity (month/quarter/year/custom), cache + revalidate; export actions; drill-down fetch for category/account detail.
+- [ ] Layout: top row controls (period selector, compare toggle vs prior period, account/category chips, export buttons); bottom grid of charts/tables.
+- [ ] Charts: stacked area (income vs expense), grouped bar (cash flow by period), donut/treemap for category share, line/area for net worth history, bar for savings rate. Include tooltips, legends, hover states, and theme-aware palette.
+- [ ] Drill-down: click category slice to open detail panel/table; click bar point to show period breakdown; CSV export of detail.
+- [ ] Loading/empty: chart skeletons matching shapes; empty copy prompting to import/add data; inline spinner on compare toggle.
 
-### Milestone 7 – Loans/Investments/Cash Flow/Goals/Settings
+### Milestone 7 – Settings, Goals, Cash Flow, Investments
 
-- [ ] Scaffold pages to match sidebar (empty states + navigation) to avoid 404s.
-- [ ] Loans: events list + schedule display; Investments: performance placeholders; Cash Flow: inflow/outflow view; Goals: tracker cards; Settings: theme/profile/bank template management.
+- [ ] Settings: theme toggle, profile info, bank template management UI, API base URL/env info display; saga to persist settings if backend allows.
+- [ ] Goals: tracker cards (target, amount, due date) with placeholders; connect once backend model exists.
+- [ ] Cash Flow: focused inflow/outflow chart (stacked bars) with month/quarter toggle using reporting data; quick filters by account.
+- [ ] Investments: placeholder performance cards + chart; connect when investment endpoints exist.
+- [ ] Loading/empty: consistent skeletons + guided copy; avoid dead-end pages.
 
-### Milestone 8 – UI/UX Polish
+### Milestone 8 – Tooling & DX
 
-- [ ] Responsive sidebar states, focus outlines, keyboard shortcuts for review flows.
-- [ ] Skeleton/empty/error states standardized across pages; toasts on success/failure.
-- [ ] Theme tokens (colors/spacing/typography) and chart palette consolidation.
-
-### Milestone 9 – Tooling & DX
-
-- [ ] Document env vars for web (Cognito pool/client, API URL) and backend (DB settings, DATABASE_URL for SQLite dev).
+- [ ] Document env vars for web (Cognito pool/client, API URL) and backend (DB settings, DATABASE_URL for SQLite dev); add sample `.env` files.
 - [ ] Add API client mocks/fixtures and saga/hook integration tests.
 - [ ] Align lint/format scripts across workspace; CI steps for web build/test and api tests.
-
-### Backend Enablers (parallel)
-
-- [ ] Transactions: add update/delete endpoints; expose status flags (imported/reviewed/flagged); leg validation errors suitable for UI.
-- [ ] Imports: upload endpoint with bank template selection, mapping preview, job status + per-row errors; persist import batch summary.
-- [ ] Categories/Budgets: extend models/endpoints for budgets or at least category pagination + color/icon metadata.
-- [ ] Reporting: ensure filters for account/category; add quarter/custom range; net worth history endpoint for charts.
-- [ ] Auth: confirm Cognito config + API auth scheme; provide local dev env templates.
