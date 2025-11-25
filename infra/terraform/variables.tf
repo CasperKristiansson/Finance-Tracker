@@ -1,5 +1,6 @@
 variable "account_id" {
-  default = ""
+  description = "AWS account ID where Finance Tracker resources are provisioned."
+  type        = string
 }
 
 variable "enable_bastion" {

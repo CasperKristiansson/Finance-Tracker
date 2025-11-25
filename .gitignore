@@ -7,6 +7,7 @@
 .vscode
 .DS_Store
 **.terraform*
+infra/terraform/*.tfvars
 *.pyc
 infra/layers/layer-backend.zip
 *.serverless
