@@ -28,11 +28,11 @@
 
 ### Milestone 3 – Accounts & Loans
 
-- [ ] Backend: confirm account list supports `as_of` filter; extend account update with bank template metadata if needed.
-- [ ] Redux slice/saga: accounts list with balances, create/update/archive, loan read/attach/update flows.
-- [ ] UI: replace mocks with live data; sortable/filterable list; status pill (active/inactive); archive toggle; balance as-of control if supported.
-- [ ] Modals: Add/Edit account (type picker normal/debt/investment), loan metadata for debt (principal, rate, min payment, maturity), validation + error display.
-- [ ] Debt views: loan schedule table and metrics; events list preview; loading skeletons + “add first account” empty state.
+- [x] Backend: confirm account list supports `as_of` filter; extend account update with bank template metadata if needed.
+- [x] Redux slice/saga: accounts list with balances, create/update/archive, loan read/attach/update flows.
+- [x] UI: replace mocks with live data; sortable/filterable list; status pill (active/inactive); archive toggle; balance as-of control if supported.
+- [x] Modals: Add/Edit account (type picker normal/debt/investment), loan metadata for debt (principal, rate, min payment, maturity), validation + error display.
+- [x] Debt views: loan schedule table and metrics; events list preview; loading skeletons + “add first account” empty state.
 
 ### Milestone 4 – Transactions & Imports
 

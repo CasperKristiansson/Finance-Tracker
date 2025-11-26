@@ -61,6 +61,25 @@ export interface AccountWithBalance extends AccountRead {
   balance: string;
 }
 
+export interface AccountCreateRequest {
+  display_order?: number | null;
+  account_type: AccountType;
+  is_active?: boolean;
+  loan?: {
+    origin_principal: string;
+    current_principal: string;
+    interest_rate_annual: string;
+    interest_compound: InterestCompound;
+    minimum_payment?: string | null;
+    expected_maturity_date?: string | null;
+  } | null;
+}
+
+export interface AccountUpdateRequest {
+  display_order?: number | null;
+  is_active?: boolean;
+}
+
 export interface CategoryRead {
   id: string;
   name: string;
@@ -144,6 +163,25 @@ export interface LoanScheduleRead {
   generated_at: string;
   as_of_date: string;
   schedule: LoanScheduleEntry[];
+}
+
+export interface LoanCreateRequest {
+  account_id: string;
+  origin_principal: string;
+  current_principal: string;
+  interest_rate_annual: string;
+  interest_compound: InterestCompound;
+  minimum_payment?: string | null;
+  expected_maturity_date?: string | null;
+}
+
+export interface LoanUpdateRequest {
+  origin_principal?: string;
+  current_principal?: string;
+  interest_rate_annual?: string;
+  interest_compound?: InterestCompound;
+  minimum_payment?: string | null;
+  expected_maturity_date?: string | null;
 }
 
 export interface ImportJob {

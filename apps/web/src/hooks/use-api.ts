@@ -1,6 +1,13 @@
 import { useCallback } from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
-import { FetchAccounts } from "@/features/accounts/accountsSaga";
+import {
+  ArchiveAccount,
+  AttachLoan,
+  CreateAccount,
+  FetchAccounts,
+  UpdateAccount,
+  UpdateLoan,
+} from "@/features/accounts/accountsSaga";
 import {
   selectAccountsState,
   type AccountsState,
@@ -65,7 +72,44 @@ export const useAccountsApi = () => {
     [dispatch],
   );
 
-  return { ...state, fetchAccounts };
+  const createAccount = useCallback(
+    (payload: Parameters<typeof CreateAccount>[0]) =>
+      dispatch(CreateAccount(payload)),
+    [dispatch],
+  );
+
+  const updateAccount = useCallback(
+    (accountId: string, data: Parameters<typeof UpdateAccount>[0]["data"]) =>
+      dispatch(UpdateAccount({ accountId, data })),
+    [dispatch],
+  );
+
+  const archiveAccount = useCallback(
+    (accountId: string) => dispatch(ArchiveAccount({ accountId })),
+    [dispatch],
+  );
+
+  const attachLoan = useCallback(
+    (payload: Parameters<typeof AttachLoan>[0]) =>
+      dispatch(AttachLoan(payload)),
+    [dispatch],
+  );
+
+  const updateLoan = useCallback(
+    (accountId: string, data: Parameters<typeof UpdateLoan>[0]["data"]) =>
+      dispatch(UpdateLoan({ accountId, data })),
+    [dispatch],
+  );
+
+  return {
+    ...state,
+    fetchAccounts,
+    createAccount,
+    updateAccount,
+    archiveAccount,
+    attachLoan,
+    updateLoan,
+  };
 };
 
 export const useCategoriesApi = () => {

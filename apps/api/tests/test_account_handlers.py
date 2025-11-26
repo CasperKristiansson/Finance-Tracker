@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Iterator
 from uuid import UUID
 
 import pytest
 from sqlalchemy.pool import StaticPool
-from sqlmodel import SQLModel
+from sqlmodel import Session, SQLModel
 
 from apps.api.handlers import (
     create_account,
@@ -14,7 +16,9 @@ from apps.api.handlers import (
     reset_account_handler_state,
     update_account,
 )
-from apps.api.shared import configure_engine, get_engine
+from apps.api.models import Account, Transaction, TransactionLeg
+from apps.api.services import TransactionService
+from apps.api.shared import AccountType, TransactionType, configure_engine, get_engine
 
 
 @pytest.fixture(autouse=True)
@@ -113,3 +117,48 @@ def test_update_account_not_found():
     response = update_account(event, None)
     assert response["statusCode"] == 404
     assert _json_body(response)["error"] == "Account not found"
+
+
+def test_list_accounts_respects_as_of_date():
+    engine = get_engine()
+    with Session(engine) as session:
+        tracked = Account(account_type=AccountType.NORMAL)
+        offset = Account(account_type=AccountType.NORMAL)
+        session.add_all([tracked, offset])
+        session.commit()
+        session.refresh(tracked)
+        session.refresh(offset)
+        tracked_id = tracked.id
+
+        service = TransactionService(session)
+
+        jan_tx = Transaction(
+            transaction_type=TransactionType.TRANSFER,
+            occurred_at=datetime(2024, 1, 5, tzinfo=timezone.utc),
+            posted_at=datetime(2024, 1, 5, tzinfo=timezone.utc),
+        )
+        jan_legs = [
+            TransactionLeg(account_id=tracked.id, amount=Decimal("100")),
+            TransactionLeg(account_id=offset.id, amount=Decimal("-100")),
+        ]
+        service.create_transaction(jan_tx, jan_legs)
+
+        feb_tx = Transaction(
+            transaction_type=TransactionType.TRANSFER,
+            occurred_at=datetime(2024, 2, 1, tzinfo=timezone.utc),
+            posted_at=datetime(2024, 2, 1, tzinfo=timezone.utc),
+        )
+        feb_legs = [
+            TransactionLeg(account_id=tracked.id, amount=Decimal("25")),
+            TransactionLeg(account_id=offset.id, amount=Decimal("-25")),
+        ]
+        service.create_transaction(feb_tx, feb_legs)
+
+    response = list_accounts(
+        {"queryStringParameters": {"as_of_date": "2024-01-31T00:00:00+00:00"}},
+        None,
+    )
+    assert response["statusCode"] == 200
+    body = _json_body(response)
+    tracked_entry = next(acc for acc in body["accounts"] if acc["id"] == str(tracked_id))
+    assert Decimal(tracked_entry["balance"]) == Decimal("100")

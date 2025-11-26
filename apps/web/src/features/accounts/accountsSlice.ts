@@ -7,6 +7,9 @@ export interface AccountsState {
   error?: string;
   includeInactive: boolean;
   asOfDate?: string | null;
+  createLoading: boolean;
+  updateLoading: boolean;
+  mutationError?: string;
 }
 
 const initialState: AccountsState = {
@@ -14,6 +17,8 @@ const initialState: AccountsState = {
   loading: false,
   includeInactive: false,
   asOfDate: null,
+  createLoading: false,
+  updateLoading: false,
 };
 
 const accountsSlice = createSlice({
@@ -27,8 +32,17 @@ const accountsSlice = createSlice({
     setAccountsLoading(state, action: PayloadAction<boolean>) {
       state.loading = action.payload;
     },
+    setAccountCreateLoading(state, action: PayloadAction<boolean>) {
+      state.createLoading = action.payload;
+    },
+    setAccountUpdateLoading(state, action: PayloadAction<boolean>) {
+      state.updateLoading = action.payload;
+    },
     setAccountsError(state, action: PayloadAction<string | undefined>) {
       state.error = action.payload ?? "Unable to load accounts";
+    },
+    setAccountMutationError(state, action: PayloadAction<string | undefined>) {
+      state.mutationError = action.payload;
     },
     setAccountsFilters(
       state,
@@ -51,13 +65,19 @@ const accountsSlice = createSlice({
     selectAccounts: (state) => state.items,
     selectAccountsLoading: (state) => state.loading,
     selectAccountsError: (state) => state.error,
+    selectAccountCreateLoading: (state) => state.createLoading,
+    selectAccountUpdateLoading: (state) => state.updateLoading,
+    selectAccountMutationError: (state) => state.mutationError,
   },
 });
 
 export const {
   setAccounts,
   setAccountsLoading,
+  setAccountCreateLoading,
+  setAccountUpdateLoading,
   setAccountsError,
+  setAccountMutationError,
   setAccountsFilters,
   resetAccounts,
 } = accountsSlice.actions;
@@ -66,5 +86,8 @@ export const {
   selectAccounts,
   selectAccountsLoading,
   selectAccountsError,
+  selectAccountCreateLoading,
+  selectAccountUpdateLoading,
+  selectAccountMutationError,
 } = accountsSlice.selectors;
 export const AccountsReducer = accountsSlice.reducer;
