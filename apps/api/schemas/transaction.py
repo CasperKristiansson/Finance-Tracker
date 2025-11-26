@@ -74,8 +74,8 @@ class TransactionListQuery(BaseModel):
     start_date: Optional[datetime] = Field(default=None, alias="start_date")
     end_date: Optional[datetime] = Field(default=None, alias="end_date")
     account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
-    limit: Optional[int] = Field(default=None, ge=1, le=200)
-    offset: Optional[int] = Field(default=0, ge=0)
+    limit: int = Field(default=50, ge=1, le=200)
+    offset: int = Field(default=0, ge=0)
 
     @model_validator(mode="before")
     @classmethod

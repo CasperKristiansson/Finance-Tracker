@@ -44,6 +44,7 @@ const accountsSlice = createSlice({
         state.asOfDate = action.payload.asOfDate;
       }
     },
+    resetAccounts: () => initialState,
   },
   selectors: {
     selectAccountsState: (state) => state,
@@ -58,6 +59,7 @@ export const {
   setAccountsLoading,
   setAccountsError,
   setAccountsFilters,
+  resetAccounts,
 } = accountsSlice.actions;
 export const {
   selectAccountsState,

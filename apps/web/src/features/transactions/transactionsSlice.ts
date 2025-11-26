@@ -62,6 +62,7 @@ const transactionsSlice = createSlice({
     setRecentLimit(state, action: PayloadAction<number>) {
       state.recent.limit = action.payload;
     },
+    resetTransactions: () => initialState,
   },
   selectors: {
     selectTransactionsState: (state) => state,
@@ -82,6 +83,7 @@ export const {
   setRecentLoading,
   setRecentError,
   setRecentLimit,
+  resetTransactions,
 } = transactionsSlice.actions;
 export const {
   selectTransactionsState,

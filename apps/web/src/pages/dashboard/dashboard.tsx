@@ -20,6 +20,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
@@ -237,13 +238,26 @@ export const Dashboard: React.FC = () => {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="default" className="gap-2">
+          <Button
+            variant="default"
+            className="gap-2"
+            onClick={() =>
+              toast.info("Add transaction", {
+                description: "Flow coming soon.",
+              })
+            }
+          >
             <Plus className="h-4 w-4" />
             Add transaction
           </Button>
           <Button
             variant="outline"
             className="gap-2 border-slate-300 text-slate-800"
+            onClick={() =>
+              toast.info("Import file", {
+                description: "Upload flow coming soon.",
+              })
+            }
           >
             <Upload className="h-4 w-4" />
             Import file
@@ -483,17 +497,38 @@ export const Dashboard: React.FC = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Button variant="outline" className="w-full justify-start gap-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-2"
+              onClick={() =>
+                toast.info("Add transaction", {
+                  description: "Flow coming soon.",
+                })
+              }
+            >
               <Plus className="h-4 w-4" />
               Add transaction
             </Button>
-            <Button variant="outline" className="w-full justify-start gap-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-2"
+              onClick={() =>
+                toast.info("Import file", {
+                  description: "Upload flow coming soon.",
+                })
+              }
+            >
               <Upload className="h-4 w-4" />
               Import bank file
             </Button>
             <Button
               variant="ghost"
               className="w-full justify-start gap-2 text-slate-700"
+              onClick={() =>
+                toast.info("Goals", {
+                  description: "Goals experience coming soon.",
+                })
+              }
             >
               <PiggyBank className="h-4 w-4" />
               Start a goal (coming soon)

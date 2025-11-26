@@ -116,6 +116,7 @@ const reportsSlice = createSlice({
     setNetWorthCurrentKey(state, action: PayloadAction<string>) {
       state.netWorth.currentKey = action.payload;
     },
+    resetReports: () => initialState,
   },
   selectors: {
     selectReportsState: (state) => state,
@@ -187,6 +188,7 @@ export const {
   setNetWorthLoading,
   setNetWorthError,
   setNetWorthCurrentKey,
+  resetReports,
 } = reportsSlice.actions;
 
 export const {

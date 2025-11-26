@@ -1,6 +1,9 @@
 import { createAction } from "@reduxjs/toolkit";
 import { all, call, put, select, takeLatest } from "redux-saga/effects";
 import { toast } from "sonner";
+import { resetAccounts } from "@/features/accounts/accountsSlice";
+import { resetReports } from "@/features/reports/reportsSlice";
+import { resetTransactions } from "@/features/transactions/transactionsSlice";
 import { setLoading } from "../app/appSlice";
 import authService, { type AuthenticatedUser } from "./authHelpers";
 import {
@@ -85,6 +88,9 @@ function* handleLogout() {
       yield call(() => authService.signOut());
     }
     yield put(logoutSuccess());
+    yield put(resetAccounts());
+    yield put(resetTransactions());
+    yield put(resetReports());
     toast.success("Logout Successful");
   } catch (error) {
     if (error instanceof Error) {
