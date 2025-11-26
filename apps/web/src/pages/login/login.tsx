@@ -2,16 +2,67 @@ import React from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { Spinner } from "@/components/spinner";
 import { selectLoading } from "@/features/app/appSlice";
-import { AuthLogin } from "@/features/auth/authSaga";
+import { AuthLogin, AuthLoginDemo } from "@/features/auth/authSaga";
+import {
+  selectLastUsername,
+  selectLoginError,
+  selectRememberMe,
+  setLastUsername,
+  setLoginError,
+  setRememberMe,
+} from "@/features/auth/authSlice";
 
 export const Login: React.FC = () => {
   const dispatch = useAppDispatch();
   const loadingLogIn = useAppSelector(selectLoading)["login"];
+  const rememberMe = useAppSelector(selectRememberMe);
+  const lastUsername = useAppSelector(selectLastUsername);
+  const loginError = useAppSelector(selectLoginError);
 
-  const [userInformation, setUserInformation] = React.useState({
-    username: "",
+  const [userInformation, setUserInformation] = React.useState(() => ({
+    username: lastUsername || "",
     password: "",
-  });
+    remember: rememberMe,
+  }));
+  const [fieldErrors, setFieldErrors] = React.useState<{
+    username?: string;
+    password?: string;
+  }>({});
+
+  React.useEffect(() => {
+    setUserInformation((prev) => ({
+      ...prev,
+      username: lastUsername || prev.username,
+      remember: rememberMe,
+    }));
+  }, [lastUsername, rememberMe]);
+
+  const validate = () => {
+    const errors: { username?: string; password?: string } = {};
+    if (!userInformation.username) {
+      errors.username = "Email is required";
+    } else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(userInformation.username)) {
+      errors.username = "Enter a valid email";
+    }
+    if (!userInformation.password) {
+      errors.password = "Password is required";
+    }
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    dispatch(setLoginError(null));
+    if (!validate()) return;
+    dispatch(
+      AuthLogin({
+        username: userInformation.username,
+        password: userInformation.password,
+        rememberMe: userInformation.remember,
+      }),
+    );
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
@@ -34,13 +85,15 @@ export const Login: React.FC = () => {
             <button
               type="button"
               className="inline-flex w-full items-center justify-center gap-x-2 rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm font-medium text-gray-800 shadow-2xs hover:bg-gray-50 focus:bg-gray-50 focus:outline-hidden disabled:pointer-events-none disabled:opacity-50"
+              onClick={() => dispatch(AuthLoginDemo())}
+              disabled={loadingLogIn}
             >
               Demo Account
             </button>
             <div className="flex items-center py-3 text-xs text-gray-400 uppercase before:me-6 before:flex-1 before:border-t before:border-gray-200 after:ms-6 after:flex-1 after:border-t after:border-gray-200">
               Or
             </div>
-            <form>
+            <form onSubmit={handleSubmit} className="space-y-2">
               <div className="grid gap-y-4">
                 <div>
                   <label htmlFor="email" className="mb-2 block text-sm">
@@ -54,33 +107,24 @@ export const Login: React.FC = () => {
                       className="block w-full rounded-lg border-1 border-gray-200 px-4 py-2.5 focus:border-blue-500 focus:ring-blue-500 disabled:pointer-events-none disabled:opacity-50 sm:py-3 sm:text-sm"
                       required
                       aria-describedby="email-error"
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setUserInformation({
                           ...userInformation,
                           username: e.target.value,
-                        })
-                      }
+                        });
+                        setFieldErrors((prev) => ({
+                          ...prev,
+                          username: undefined,
+                        }));
+                      }}
+                      value={userInformation.username}
                     />
-                    <div className="pointer-events-none absolute inset-y-0 end-0 hidden pe-3">
-                      <svg
-                        className="size-5 text-red-500"
-                        width="16"
-                        height="16"
-                        fill="currentColor"
-                        viewBox="0 0 16 16"
-                        aria-hidden="true"
-                      >
-                        <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM8 4a.905.905 0 0 0-.9.995l.35 3.507a.552.552 0 0 0 1.1 0l.35-3.507A.905.905 0 0 0 8 4zm.002 6a1 1 0 1 0 0 2 1 1 0 0 0 0-2z" />
-                      </svg>
-                    </div>
                   </div>
-                  <p
-                    className="mt-2 hidden text-xs text-red-600"
-                    id="email-error"
-                  >
-                    Please include a valid email address so we can get back to
-                    you
-                  </p>
+                  {fieldErrors.username ? (
+                    <p className="mt-2 text-xs text-red-600" id="email-error">
+                      {fieldErrors.username}
+                    </p>
+                  ) : null}
                 </div>
                 <div>
                   <div className="flex flex-wrap items-center justify-between gap-2">
@@ -102,32 +146,27 @@ export const Login: React.FC = () => {
                       className="block w-full rounded-lg border-1 border-gray-200 px-4 py-2.5 focus:border-blue-500 focus:ring-blue-500 disabled:pointer-events-none disabled:opacity-50 sm:py-3 sm:text-sm"
                       required
                       aria-describedby="password-error"
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setUserInformation({
                           ...userInformation,
                           password: e.target.value,
-                        })
-                      }
+                        });
+                        setFieldErrors((prev) => ({
+                          ...prev,
+                          password: undefined,
+                        }));
+                      }}
+                      value={userInformation.password}
                     />
-                    <div className="pointer-events-none absolute inset-y-0 end-0 hidden pe-3">
-                      <svg
-                        className="size-5 text-red-500"
-                        width="16"
-                        height="16"
-                        fill="currentColor"
-                        viewBox="0 0 16 16"
-                        aria-hidden="true"
-                      >
-                        <path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM8 4a.905.905 0 0 0-.9.995l.35 3.507a.552.552 0 0 0 1.1 0l.35-3.507A.905.905 0 0 0 8 4zm.002 6a1 1 0 1 0 0 2 1 1 0 0 0 0-2z" />
-                      </svg>
-                    </div>
                   </div>
-                  <p
-                    className="mt-2 hidden text-xs text-red-600"
-                    id="password-error"
-                  >
-                    8+ characters required
-                  </p>
+                  {fieldErrors.password ? (
+                    <p
+                      className="mt-2 text-xs text-red-600"
+                      id="password-error"
+                    >
+                      {fieldErrors.password}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex items-center">
                   <div className="flex">
@@ -136,6 +175,20 @@ export const Login: React.FC = () => {
                       name="remember-me"
                       type="checkbox"
                       className="mt-0.5 shrink-0 rounded-sm border-gray-200 text-blue-600 focus:ring-blue-500"
+                      checked={userInformation.remember}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setUserInformation({
+                          ...userInformation,
+                          remember: checked,
+                        });
+                        dispatch(setRememberMe(checked));
+                        if (!checked) {
+                          dispatch(setLastUsername(""));
+                        } else if (userInformation.username) {
+                          dispatch(setLastUsername(userInformation.username));
+                        }
+                      }}
                     />
                   </div>
                   <div className="ms-3">
@@ -144,14 +197,19 @@ export const Login: React.FC = () => {
                     </label>
                   </div>
                 </div>
+                {loginError ? (
+                  <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {loginError}
+                  </div>
+                ) : null}
                 <button
                   type="submit"
                   className="inline-flex w-full items-center justify-center gap-x-2 rounded-lg border border-transparent bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 focus:bg-blue-700 focus:outline-hidden disabled:pointer-events-none disabled:opacity-50"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    dispatch(AuthLogin(userInformation));
-                    setUserInformation({ username: "", password: "" });
-                  }}
+                  disabled={
+                    loadingLogIn ||
+                    !userInformation.username ||
+                    !userInformation.password
+                  }
                 >
                   {loadingLogIn ? (
                     <Spinner height={20} width={20} color="white" />
