@@ -41,6 +41,7 @@ class TransactionType(StrEnum):
     ADJUSTMENT = "adjustment"
     INVESTMENT_EVENT = "investment_event"
 
+
 class TransactionStatus(StrEnum):
     RECORDED = "recorded"
     IMPORTED = "imported"

@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import Any, List, Optional
 from uuid import UUID
 
+import base64
+
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_core import PydanticCustomError
 
@@ -22,11 +24,11 @@ class ImportFile(BaseModel):
     @classmethod
     def validate_base64(cls, value: str) -> str:
         try:
-            import base64
-
             base64.b64decode(value, validate=True)
         except Exception as exc:  # pragma: no cover - defensive
-            raise PydanticCustomError("invalid_base64", "content_base64 must be valid base64") from exc
+            raise PydanticCustomError(
+                "invalid_base64", "content_base64 must be valid base64"
+            ) from exc
         return value
 
 

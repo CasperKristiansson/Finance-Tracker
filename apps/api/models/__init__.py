@@ -2,7 +2,7 @@
 
 from .account import Account, BalanceSnapshot, Loan, LoanRateChange
 from .category import Category, SystemAccount
-from .imports import ImportError, ImportFile, TransactionImportBatch
+from .imports import ImportErrorRecord, ImportFile, TransactionImportBatch
 from .transaction import LoanEvent, Transaction, TransactionLeg
 
 __all__ = [
@@ -17,5 +17,5 @@ __all__ = [
     "LoanEvent",
     "TransactionImportBatch",
     "ImportFile",
-    "ImportError",
+    "ImportErrorRecord",
 ]

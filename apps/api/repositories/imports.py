@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Iterable, List, Optional
+from typing import Any, Iterable, List, Optional
 
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
-from ..models import ImportError, ImportFile, TransactionImportBatch
+from ..models import ImportErrorRecord, ImportFile, TransactionImportBatch
 
 
 class ImportRepository:
@@ -20,7 +20,7 @@ class ImportRepository:
         self,
         batch: TransactionImportBatch,
         files: Iterable[ImportFile],
-        errors: Optional[Iterable[ImportError]] = None,
+        errors: Optional[Iterable[ImportErrorRecord]] = None,
     ) -> TransactionImportBatch:
         file_list = list(files)
         error_list = list(errors or [])
@@ -42,8 +42,8 @@ class ImportRepository:
         self.session.refresh(batch)
         return batch
 
-    def add_errors(self, errors: Iterable[ImportError]) -> None:
-        error_list = list(errors)
+    def add_errors(self, errors: Iterable[ImportErrorRecord]) -> None:
+        error_list: list[ImportErrorRecord] = list(errors)
         if not error_list:
             return
         self.session.add_all(error_list)
@@ -57,10 +57,14 @@ class ImportRepository:
     ) -> List[TransactionImportBatch]:
         statement = select(TransactionImportBatch)
         if include_files:
-            file_loader = selectinload(TransactionImportBatch.files)
+            statement = statement.options(
+                selectinload(TransactionImportBatch.files)  # type: ignore[arg-type]
+            )
             if include_errors:
-                file_loader = file_loader.options(selectinload(ImportFile.errors))
-            statement = statement.options(file_loader)
+                statement = statement.options(
+                    selectinload(TransactionImportBatch.files)  # type: ignore[arg-type]
+                    .selectinload(ImportFile.errors)  # type: ignore[arg-type]
+                )
 
         result = self.session.exec(statement)
         return list(result.unique().all())

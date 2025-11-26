@@ -16,9 +16,8 @@ import type {
 } from "@/types/api";
 
 export const FetchImportBatches = createAction("imports/fetchAll");
-export const UploadImportBatch = createAction<ImportCreateRequest>(
-  "imports/upload",
-);
+export const UploadImportBatch =
+  createAction<ImportCreateRequest>("imports/upload");
 export const StartImportPolling = createAction<number | undefined>(
   "imports/startPolling",
 );
@@ -87,7 +86,8 @@ function* handleUploadImportBatch(
     });
 
     toast.success("Import received", {
-      description: "Files uploaded. Processing will continue in the background.",
+      description:
+        "Files uploaded. Processing will continue in the background.",
     });
   } catch (error) {
     yield put(

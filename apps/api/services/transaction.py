@@ -22,6 +22,7 @@ from ..repositories.transaction import TransactionRepository
 from ..shared import (
     CategoryType,
     LoanEventType,
+    TransactionStatus,
     TransactionType,
     coerce_decimal,
     ensure_balanced_legs,

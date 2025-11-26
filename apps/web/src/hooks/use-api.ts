@@ -291,7 +291,10 @@ export const useImportsApi = () => {
     (intervalMs?: number) => dispatch(StartImportPolling(intervalMs)),
     [dispatch],
   );
-  const stopPolling = useCallback(() => dispatch(StopImportPolling()), [dispatch]);
+  const stopPolling = useCallback(
+    () => dispatch(StopImportPolling()),
+    [dispatch],
+  );
 
   return {
     batches,

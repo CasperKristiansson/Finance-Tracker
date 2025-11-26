@@ -24,10 +24,10 @@ def reset_handler_state() -> None:
 
 def create_import_batch(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
-    payload = parse_body(event)
+    parsed_body = parse_body(event)
 
     try:
-        data = ImportBatchCreate.model_validate(payload)
+        data = ImportBatchCreate.model_validate(parsed_body)
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
@@ -41,7 +41,7 @@ def create_import_batch(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     return json_response(201, payload.model_dump(mode="json"))
 
 
-def list_import_batches(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+def list_import_batches(_event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
     with session_scope() as session:
         service = ImportService(session)
@@ -59,9 +59,11 @@ def _to_batch_read(
     for idx, file_model in enumerate(file_models):
         parsed = parsed_files[idx] if parsed_files and idx < len(parsed_files) else None
 
-        errors = parsed.errors if parsed else [
-            (error.row_number, error.message) for error in getattr(file_model, "errors", [])
-        ]
+        errors = (
+            parsed.errors
+            if parsed
+            else [(error.row_number, error.message) for error in getattr(file_model, "errors", [])]
+        )
         error_payloads = [ImportErrorRead(row_number=row, message=msg) for row, msg in errors]
 
         preview_rows = parsed.preview_rows if (include_preview and parsed) else []

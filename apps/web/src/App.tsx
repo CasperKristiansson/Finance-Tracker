@@ -9,12 +9,12 @@ import { selectInitialLoaded } from "./features/auth/authSlice.ts";
 import { Accounts } from "./pages/accounts/accounts.tsx";
 import { Cover } from "./pages/cover/cover.tsx";
 import { Dashboard } from "./pages/dashboard/dashboard.tsx";
+import { Imports } from "./pages/imports/imports.tsx";
 import { Login } from "./pages/login/login.tsx";
 import { Navigation } from "./pages/navigation/navigation.tsx";
 import { NotFound } from "./pages/notFound/notFound.tsx";
 import { Redirect } from "./pages/redirect/redirect.tsx";
 import { Transactions } from "./pages/transactions/transactions.tsx";
-import { Imports } from "./pages/imports/imports.tsx";
 
 export const App: React.FC = () => {
   const dispatch = useAppDispatch();

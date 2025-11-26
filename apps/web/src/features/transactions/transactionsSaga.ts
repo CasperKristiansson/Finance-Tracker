@@ -43,9 +43,7 @@ export const UpdateTransactionStatus = createAction<{
   id: string;
   status: TransactionStatus;
 }>("transactions/updateStatus");
-export const DeleteTransaction = createAction<string>(
-  "transactions/delete",
-);
+export const DeleteTransaction = createAction<string>("transactions/delete");
 
 const serializeAccounts = (ids?: string[]) => {
   if (!ids || ids.length === 0) return undefined;
@@ -71,7 +69,9 @@ function* handleFetchTransactions(
       ...(serializeAccounts(filters.accountIds)
         ? { account_ids: serializeAccounts(filters.accountIds) }
         : {}),
-      ...(filters.categoryIds?.length ? { category_ids: filters.categoryIds.join(",") } : {}),
+      ...(filters.categoryIds?.length
+        ? { category_ids: filters.categoryIds.join(",") }
+        : {}),
       ...(filters.status?.length ? { status: filters.status.join(",") } : {}),
       ...(filters.minAmount ? { min_amount: filters.minAmount } : {}),
       ...(filters.maxAmount ? { max_amount: filters.maxAmount } : {}),
@@ -87,7 +87,10 @@ function* handleFetchTransactions(
     );
 
     const existing: TransactionRead[] = yield select(selectTransactions);
-    const combined = offset > 0 ? [...existing, ...response.transactions] : response.transactions;
+    const combined =
+      offset > 0
+        ? [...existing, ...response.transactions]
+        : response.transactions;
     yield put(setTransactions(combined));
     yield put(
       setPagination({
@@ -143,7 +146,9 @@ function* handleFetchRecentTransactions(
   }
 }
 
-function* handleCreateTransaction(action: ReturnType<typeof CreateTransaction>) {
+function* handleCreateTransaction(
+  action: ReturnType<typeof CreateTransaction>,
+) {
   try {
     const response: TransactionRead = yield call(
       callApiWithAuth,
@@ -162,7 +167,9 @@ function* handleCreateTransaction(action: ReturnType<typeof CreateTransaction>) 
   }
 }
 
-function* handleUpdateTransaction(action: ReturnType<typeof UpdateTransaction>) {
+function* handleUpdateTransaction(
+  action: ReturnType<typeof UpdateTransaction>,
+) {
   try {
     const response: TransactionRead = yield call(
       callApiWithAuth,
@@ -206,7 +213,9 @@ function* handleUpdateTransactionStatus(
   }
 }
 
-function* handleDeleteTransaction(action: ReturnType<typeof DeleteTransaction>) {
+function* handleDeleteTransaction(
+  action: ReturnType<typeof DeleteTransaction>,
+) {
   try {
     yield call(
       callApiWithAuth,

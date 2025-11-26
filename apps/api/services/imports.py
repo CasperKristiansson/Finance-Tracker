@@ -1,4 +1,5 @@
 """Service layer for imports."""
+# pylint: disable=broad-exception-caught
 
 from __future__ import annotations
 
@@ -6,18 +7,17 @@ import base64
 import csv
 import io
 import json
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from openpyxl import load_workbook
 from sqlmodel import Session
 
-from ..models import ImportError, ImportFile, TransactionImportBatch
+from ..models import ImportErrorRecord, ImportFile, TransactionImportBatch
 from ..repositories.imports import ImportRepository
 from ..schemas import ExampleTransaction, ImportBatchCreate
 from ..schemas import ImportFile as ImportFilePayload
@@ -35,7 +35,7 @@ class ParsedImportFile:
 
     model: ImportFile
     rows: List[dict]
-    preview_rows: List[dict]
+    preview_rows: List[dict[str, Any]]
     errors: List[Tuple[int, str]]
     column_map: Optional[Dict[str, str]]
 
@@ -72,11 +72,11 @@ class ImportService:
         self._enrich_previews(parsed_files, payload.examples or [])
         saved_batch = self.repository.create_batch(batch, [result.model for result in parsed_files])
 
-        error_models: List[ImportError] = []
+        error_models: List[ImportErrorRecord] = []
         for saved_file, parsed in zip(saved_batch.files, parsed_files):
             for row_number, message in parsed.errors:
                 error_models.append(
-                    ImportError(file_id=saved_file.id, row_number=row_number, message=message)
+                    ImportErrorRecord(file_id=saved_file.id, row_number=row_number, message=message)
                 )
 
         if error_models:
@@ -127,7 +127,9 @@ class ImportService:
         except Exception as exc:  # pragma: no cover - validated earlier
             raise ValueError("Unable to decode file content") from exc
 
-    def _extract_rows(self, filename: str, content: bytes) -> tuple[List[dict], List[Tuple[int, str]]]:
+    def _extract_rows(
+        self, filename: str, content: bytes
+    ) -> tuple[List[dict[str, Any]], List[Tuple[int, str]]]:
         name = filename.lower()
         if name.endswith(".xlsx"):
             return self._parse_xlsx(content)
@@ -135,21 +137,21 @@ class ImportService:
             return self._parse_csv(content)
         return ([], [(0, "Unsupported file type; use CSV or XLSX")])
 
-    def _parse_csv(self, content: bytes) -> tuple[List[dict], List[Tuple[int, str]]]:
+    def _parse_csv(self, content: bytes) -> tuple[List[dict[str, Any]], List[Tuple[int, str]]]:
         text = content.decode("utf-8-sig", errors="replace")
         reader = csv.DictReader(io.StringIO(text))
         if reader.fieldnames is None:
             return ([], [(0, "CSV is missing a header row")])
 
-        rows: List[dict] = []
-        for index, row in enumerate(reader, start=2):
+        rows: List[dict[str, Any]] = []
+        for row in reader:
             cleaned = {self._clean_header(k): self._clean_value(v) for k, v in row.items() if k}
             if not any(cleaned.values()):
                 continue
             rows.append(cleaned)
         return rows, []
 
-    def _parse_xlsx(self, content: bytes) -> tuple[List[dict], List[Tuple[int, str]]]:
+    def _parse_xlsx(self, content: bytes) -> tuple[List[dict[str, Any]], List[Tuple[int, str]]]:
         try:
             workbook = load_workbook(filename=io.BytesIO(content), read_only=True, data_only=True)
         except Exception as exc:
@@ -164,8 +166,8 @@ class ImportService:
         if not headers:
             return ([], [(0, "XLSX is missing a header row")])
 
-        rows: List[dict] = []
-        for index, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+        rows: List[dict[str, Any]] = []
+        for row in sheet.iter_rows(min_row=2, values_only=True):
             mapped = {}
             for header, cell in zip(headers, row):
                 if not header:
@@ -176,18 +178,25 @@ class ImportService:
             rows.append(mapped)
         return rows, []
 
-    def _build_column_map(self, rows: List[dict]) -> Optional[Dict[str, str]]:
+    def _build_column_map(self, rows: List[dict[str, Any]]) -> Optional[Dict[str, str]]:
         if not rows:
             return None
-        header_keys = set(rows[0].keys())
-        return {
+        header_keys: set[str] = set(rows[0].keys())
+        column_map: Dict[str, Optional[str]] = {
             "date": self._resolve_header(header_keys, DATE_FIELDS),
             "description": self._resolve_header(header_keys, DESCRIPTION_FIELDS),
             "amount": self._resolve_header(header_keys, AMOUNT_FIELDS),
         }
+        if any(value is None for value in column_map.values()):
+            return None
+        return {
+            "date": str(column_map["date"]),
+            "description": str(column_map["description"]),
+            "amount": str(column_map["amount"]),
+        }
 
     def _validate_rows(
-        self, rows: List[dict], column_map: Optional[Dict[str, str]]
+        self, rows: List[dict[str, Any]], column_map: Optional[Dict[str, str]]
     ) -> List[Tuple[int, str]]:
         if not rows:
             return []
@@ -204,7 +213,9 @@ class ImportService:
             return errors
 
         for idx, row in enumerate(rows, start=1):
-            missing_fields = [field for field, header in column_map.items() if not row.get(header, "")]
+            missing_fields = [
+                field for field, header in column_map.items() if not row.get(header, "")
+            ]
             if missing_fields:
                 errors.append((idx, f"Missing required fields: {', '.join(missing_fields)}"))
                 continue
@@ -289,7 +300,9 @@ class ImportService:
             if keyword in normalized_desc:
                 return CategorySuggestion(category=category, confidence=0.65)
 
-        return CategorySuggestion(category=None, confidence=0.3, reason=f"No signal for {amount_text}")
+        return CategorySuggestion(
+            category=None, confidence=0.3, reason=f"No signal for {amount_text}"
+        )
 
     def _get_bedrock_client(self):
         try:
@@ -304,12 +317,12 @@ class ImportService:
         column_map: Dict[str, str],
         examples: List[ExampleTransaction],
     ) -> Dict[int, CategorySuggestion]:
-        transactions = []
+        transactions: list[dict[str, str]] = []
         for row in rows:
             transactions.append(
                 {
-                    "description": str(row.get(column_map["description"], "")),
-                    "amount": str(row.get(column_map["amount"], "")),
+                    "description": str(row.get(column_map.get("description") or "")),
+                    "amount": str(row.get(column_map.get("amount") or "")),
                 }
             )
 
@@ -345,9 +358,7 @@ class ImportService:
             body_text = raw_body.read().decode("utf-8")
             parsed = json.loads(body_text)
             output_text = (
-                parsed.get("output_text")
-                or parsed.get("content", [{}])[0].get("text")
-                or ""
+                parsed.get("output_text") or parsed.get("content", [{}])[0].get("text") or ""
             )
 
             suggestions_raw = json.loads(output_text)
@@ -363,8 +374,8 @@ class ImportService:
             return {}
 
     def _match_transfers(
-        self, rows: List[dict], column_map: Dict[str, str]
-    ) -> Dict[int, dict]:
+        self, rows: List[dict[str, Any]], column_map: Dict[str, str]
+    ) -> Dict[int, dict[str, Any]]:
         if not rows:
             return {}
 
@@ -373,7 +384,7 @@ class ImportService:
         if not amount_header:
             return {}
 
-        entries = []
+        entries: List[Dict[str, Any]] = []
         for idx, row in enumerate(rows):
             try:
                 amount = Decimal(str(row.get(amount_header, "")))
@@ -382,7 +393,7 @@ class ImportService:
             date_value = self._parse_date(str(row.get(date_header, ""))) if date_header else None
             entries.append({"idx": idx, "amount": amount, "date": date_value})
 
-        matches: Dict[int, dict] = {}
+        matches: Dict[int, dict[str, Any]] = {}
         used: set[int] = set()
         for entry in entries:
             if entry["idx"] in used:

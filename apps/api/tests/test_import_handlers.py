@@ -40,10 +40,12 @@ def _json_body(response: dict) -> dict:
 
 
 def test_create_import_batch_parses_csv_and_returns_preview():
-    csv_body = (
-        "date,description,amount\n"
-        "2024-01-01,Deposit,100.50\n"
-        "2024-01-02,Transfer,-100.50\n"
+    csv_body = "\n".join(
+        [
+            "date,description,amount",
+            "2024-01-01,Deposit,100.50",
+            "2024-01-02,Transfer,-100.50",
+        ]
     )
     event = {
         "body": json.dumps(

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlmodel import Field, Relationship, SQLModel
@@ -35,16 +34,16 @@ class ImportFile(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
     error_count: int = Field(default=0, sa_column=Column(Integer, nullable=False))
     status: str = Field(default="received", sa_column=Column(String(32), nullable=False))
     template_id: Optional[str] = Field(default=None, sa_column=Column(String(120), nullable=True))
-    errors: List["ImportError"] = Relationship(
+    errors: List["ImportErrorRecord"] = Relationship(
         sa_relationship=relationship(
-            "ImportError",
-            primaryjoin="ImportFile.id==ImportError.file_id",
+            "ImportErrorRecord",
+            primaryjoin="ImportFile.id==ImportErrorRecord.file_id",
             cascade="all, delete-orphan",
         )
     )
 
 
-class ImportError(UUIDPrimaryKeyMixin, SQLModel, table=True):
+class ImportErrorRecord(UUIDPrimaryKeyMixin, SQLModel, table=True):
     """Per-row error details for an import file."""
 
     __tablename__ = "import_errors"
@@ -87,4 +86,4 @@ class TransactionImportBatch(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, tabl
     )
 
 
-__all__ = ["TransactionImportBatch", "ImportFile", "ImportError"]
+__all__ = ["TransactionImportBatch", "ImportFile", "ImportErrorRecord"]

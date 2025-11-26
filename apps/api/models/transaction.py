@@ -16,7 +16,6 @@ from sqlmodel import Field, Relationship, SQLModel
 
 from ..shared import (
     AuditSourceMixin,
-    CreatedSource,
     LoanEventType,
     TimestampMixin,
     TransactionStatus,

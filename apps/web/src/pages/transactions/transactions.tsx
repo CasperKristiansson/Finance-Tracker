@@ -1,22 +1,34 @@
-import { ArrowDownWideNarrow, ArrowUpWideNarrow, Eye, Filter, Layers, Loader2, MoreHorizontal, Trash2 } from "lucide-react";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+/* eslint-disable react/prop-types */
 import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+  ArrowDownWideNarrow,
+  ArrowUpWideNarrow,
+  Eye,
+  Filter,
+  Layers,
+  Loader2,
+  MoreHorizontal,
+  Plus,
+  Trash2,
+} from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useAccountsApi, useCategoriesApi, useTransactionsApi } from "@/hooks/use-api";
-import { TransactionStatus, type CategoryRead, type TransactionRead } from "@/types/api";
+import {
+  useAccountsApi,
+  useCategoriesApi,
+  useTransactionsApi,
+} from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
+import { TransactionStatus, type CategoryRead } from "@/types/api";
 import TransactionModal from "./transaction-modal";
 
 type SortKey = "date" | "description" | "amount" | "status" | "category";
@@ -56,7 +68,13 @@ const formatCurrency = (value: number) =>
   });
 
 const formatDate = (iso?: string) =>
-  iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—";
+  iso
+    ? new Date(iso).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })
+    : "—";
 
 const statusTone: Record<TransactionStatus, string> = {
   [TransactionStatus.RECORDED]: "bg-slate-100 text-slate-700",
@@ -66,7 +84,12 @@ const statusTone: Record<TransactionStatus, string> = {
 };
 
 const badge = (status: TransactionStatus) => (
-  <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", statusTone[status])}>
+  <span
+    className={cn(
+      "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+      statusTone[status],
+    )}
+  >
     {status.charAt(0).toUpperCase() + status.slice(1)}
   </span>
 );
@@ -78,7 +101,11 @@ const ColumnToggle: React.FC<{
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2 border-slate-300 text-slate-700">
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 border-slate-300 text-slate-700"
+        >
           <Eye className="h-4 w-4" /> Columns
         </Button>
       </DropdownMenuTrigger>
@@ -119,7 +146,9 @@ export const Transactions: React.FC = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortAsc, setSortAsc] = useState(false);
-  const [columnVisibility, setColumnVisibility] = useState<Record<ColumnKey, boolean>>({
+  const [columnVisibility, setColumnVisibility] = useState<
+    Record<ColumnKey, boolean>
+  >({
     select: true,
     date: true,
     description: true,
@@ -164,29 +193,41 @@ export const Transactions: React.FC = () => {
     }, 250);
     return () => clearTimeout(debounce);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountFilter, categoryFilter, statusFilter, search, minAmount, maxAmount, startDate, endDate]);
+  }, [
+    accountFilter,
+    categoryFilter,
+    statusFilter,
+    search,
+    minAmount,
+    maxAmount,
+    startDate,
+    endDate,
+  ]);
 
   const accountLookup = useMemo(
-    () => Object.fromEntries(accounts.map((acc) => [acc.id, `${acc.account_type} • ${acc.id.slice(0, 6)}`])),
+    () =>
+      Object.fromEntries(
+        accounts.map((acc) => [
+          acc.id,
+          `${acc.account_type} • ${acc.id.slice(0, 6)}`,
+        ]),
+      ),
     [accounts],
   );
   const categoryLookup = useMemo(
-    () => new Map<string, string>(categories?.map((c: CategoryRead) => [c.id, c.name]) ?? []),
-    [categories],
-  );
-
-  const skeletonRows = useMemo(
     () =>
-      Array.from({ length: 6 }).map((_, idx) => (
-        <Skeleton key={idx} className="h-12 w-full rounded" />
-      )),
-    [],
+      new Map<string, string>(
+        categories?.map((c: CategoryRead) => [c.id, c.name]) ?? [],
+      ),
+    [categories],
   );
 
   const filtered = useMemo(() => {
     return items
       .filter((tx) => {
-        const categoryMatch = categoryFilter ? tx.category_id === categoryFilter : true;
+        const categoryMatch = categoryFilter
+          ? tx.category_id === categoryFilter
+          : true;
         const accountMatch =
           accountFilter === ""
             ? true
@@ -196,7 +237,11 @@ export const Transactions: React.FC = () => {
       .sort((a, b) => {
         const direction = sortAsc ? 1 : -1;
         if (sortKey === "date") {
-          return (new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime()) * direction;
+          return (
+            (new Date(a.occurred_at).getTime() -
+              new Date(b.occurred_at).getTime()) *
+            direction
+          );
         }
         if (sortKey === "amount") {
           const aSum = a.legs.reduce((sum, leg) => sum + Number(leg.amount), 0);
@@ -207,11 +252,15 @@ export const Transactions: React.FC = () => {
           return a.status.localeCompare(b.status) * direction;
         }
         if (sortKey === "category") {
-          return (categoryLookup.get(a.category_id || "") || "").localeCompare(
-            categoryLookup.get(b.category_id || "") || "",
-          ) * direction;
+          return (
+            (categoryLookup.get(a.category_id || "") || "").localeCompare(
+              categoryLookup.get(b.category_id || "") || "",
+            ) * direction
+          );
         }
-        return (a.description || "").localeCompare(b.description || "") * direction;
+        return (
+          (a.description || "").localeCompare(b.description || "") * direction
+        );
       });
   }, [items, categoryFilter, accountFilter, sortKey, sortAsc, categoryLookup]);
 
@@ -254,7 +303,9 @@ export const Transactions: React.FC = () => {
 
   const applyBulkCategory = () => {
     if (!bulkCategory || selectedIds.size === 0) return;
-    selectedIds.forEach((id) => updateTransaction(id, { category_id: bulkCategory }));
+    selectedIds.forEach((id) =>
+      updateTransaction(id, { category_id: bulkCategory }),
+    );
   };
 
   const applyBulkStatus = (status: TransactionStatus) => {
@@ -268,19 +319,29 @@ export const Transactions: React.FC = () => {
 
   const loadMore = () => {
     if (!pagination.hasMore || loading) return;
-    fetchTransactions({ offset: pagination.offset + pagination.limit, limit: pagination.limit });
+    fetchTransactions({
+      offset: pagination.offset + pagination.limit,
+      limit: pagination.limit,
+    });
   };
 
-  const visibleColumns = columns.filter((col) => columnVisibility[col.key] !== false);
+  const visibleColumns = columns.filter(
+    (col) => columnVisibility[col.key] !== false,
+  );
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-xs tracking-wide text-slate-500 uppercase">Transactions</p>
-          <h1 className="text-2xl font-semibold text-slate-900">Activity and ledger</h1>
+          <p className="text-xs tracking-wide text-slate-500 uppercase">
+            Transactions
+          </p>
+          <h1 className="text-2xl font-semibold text-slate-900">
+            Activity and ledger
+          </h1>
           <p className="text-sm text-slate-500">
-            Virtualized list with bulk actions, column controls, and running balances.
+            Virtualized list with bulk actions, column controls, and running
+            balances.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -294,11 +355,17 @@ export const Transactions: React.FC = () => {
             variant="outline"
             size="sm"
             className="gap-2 border-slate-300 text-slate-700"
-            onClick={() => fetchTransactions({ limit: pagination.limit, offset: 0 })}
+            onClick={() =>
+              fetchTransactions({ limit: pagination.limit, offset: 0 })
+            }
           >
             <RefreshIcon className="h-4 w-4" /> Refresh
           </Button>
-          <Button size="sm" className="gap-2" onClick={() => setModalOpen(true)}>
+          <Button
+            size="sm"
+            className="gap-2"
+            onClick={() => setModalOpen(true)}
+          >
             <Plus className="h-4 w-4" /> Add transaction
           </Button>
         </div>
@@ -314,10 +381,13 @@ export const Transactions: React.FC = () => {
                   key={accountId}
                   className="rounded-full bg-slate-100 px-2 py-1 font-medium text-slate-800"
                 >
-                  {accountLookup[accountId] || accountId.slice(0, 6)}: {formatCurrency(balance)}
+                  {accountLookup[accountId] || accountId.slice(0, 6)}:{" "}
+                  {formatCurrency(balance)}
                 </span>
               ))}
-              {Object.keys(runningBalances).length === 0 ? "No balances yet" : null}
+              {Object.keys(runningBalances).length === 0
+                ? "No balances yet"
+                : null}
             </div>
           </div>
           <div className="flex flex-col gap-3">
@@ -395,7 +465,9 @@ export const Transactions: React.FC = () => {
                 value={maxAmount}
                 onChange={(e) => setMaxAmount(e.target.value)}
               />
-              {loading ? <Loader2 className="h-4 w-4 animate-spin text-slate-500" /> : null}
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+              ) : null}
             </div>
             <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
               <span className="text-slate-600">Bulk:</span>
@@ -411,16 +483,36 @@ export const Transactions: React.FC = () => {
                   </option>
                 ))}
               </select>
-              <Button size="sm" variant="secondary" onClick={applyBulkCategory} disabled={!bulkCategory || selectedIds.size === 0}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={applyBulkCategory}
+                disabled={!bulkCategory || selectedIds.size === 0}
+              >
                 Apply
               </Button>
-              <Button size="sm" variant="outline" onClick={() => applyBulkStatus(TransactionStatus.REVIEWED)} disabled={selectedIds.size === 0}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => applyBulkStatus(TransactionStatus.REVIEWED)}
+                disabled={selectedIds.size === 0}
+              >
                 Mark reviewed
               </Button>
-              <Button size="sm" variant="outline" onClick={() => applyBulkStatus(TransactionStatus.FLAGGED)} disabled={selectedIds.size === 0}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => applyBulkStatus(TransactionStatus.FLAGGED)}
+                disabled={selectedIds.size === 0}
+              >
                 Flag
               </Button>
-              <Button size="sm" variant="destructive" onClick={applyBulkDelete} disabled={selectedIds.size === 0}>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={applyBulkDelete}
+                disabled={selectedIds.size === 0}
+              >
                 <Trash2 className="mr-1 h-4 w-4" /> Delete
               </Button>
             </div>
@@ -432,20 +524,27 @@ export const Transactions: React.FC = () => {
               <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_rgba(0,0,0,0.05)]">
                 <tr
                   className="border-b"
-                  style={{ display: "table", tableLayout: "fixed", width: "100%" }}
+                  style={{
+                    display: "table",
+                    tableLayout: "fixed",
+                    width: "100%",
+                  }}
                 >
                   {visibleColumns.map((col) => (
                     <th
                       key={col.key}
                       className={cn(
-                        "px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500",
+                        "px-3 py-2 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase",
                         col.align === "right" && "text-right",
                       )}
                     >
                       {col.key === "select" ? (
                         <input
                           type="checkbox"
-                          checked={selectedIds.size === filtered.length && filtered.length > 0}
+                          checked={
+                            selectedIds.size === filtered.length &&
+                            filtered.length > 0
+                          }
                           onChange={(e) => toggleSelectAll(e.target.checked)}
                         />
                       ) : (
@@ -479,9 +578,15 @@ export const Transactions: React.FC = () => {
                 {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                   const row = filtered[virtualRow.index];
                   if (!row) return null;
-                  const amount = row.legs.reduce((sum, leg) => sum + Number(leg.amount), 0);
+                  const amount = row.legs.reduce(
+                    (sum, leg) => sum + Number(leg.amount),
+                    0,
+                  );
                   const accountsLabel = row.legs
-                    .map((leg) => `${accountLookup[leg.account_id] || leg.account_id.slice(0, 6)} (${Number(leg.amount) >= 0 ? "+" : ""}${Number(leg.amount).toFixed(2)})`)
+                    .map(
+                      (leg) =>
+                        `${accountLookup[leg.account_id] || leg.account_id.slice(0, 6)} (${Number(leg.amount) >= 0 ? "+" : ""}${Number(leg.amount).toFixed(2)})`,
+                    )
                     .join(", ");
 
                   return (
@@ -512,45 +617,72 @@ export const Transactions: React.FC = () => {
                         if (col.key === "date") {
                           return (
                             <td key={`${row.id}-date`} className="px-3 py-2">
-                              <div className="text-sm font-medium text-slate-900">{formatDate(row.occurred_at)}</div>
-                              <div className="text-xs text-slate-500">{row.external_id || ""}</div>
+                              <div className="text-sm font-medium text-slate-900">
+                                {formatDate(row.occurred_at)}
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                {row.external_id || ""}
+                              </div>
                             </td>
                           );
                         }
                         if (col.key === "description") {
                           return (
                             <td key={`${row.id}-desc`} className="px-3 py-2">
-                              <div className="font-semibold text-slate-900">{row.description || "(No description)"}</div>
-                              <div className="text-xs text-slate-500">{row.notes || ""}</div>
+                              <div className="font-semibold text-slate-900">
+                                {row.description || "(No description)"}
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                {row.notes || ""}
+                              </div>
                             </td>
                           );
                         }
                         if (col.key === "accounts") {
                           return (
-                            <td key={`${row.id}-accounts`} className="px-3 py-2 text-slate-700">
+                            <td
+                              key={`${row.id}-accounts`}
+                              className="px-3 py-2 text-slate-700"
+                            >
                               {accountsLabel}
                             </td>
                           );
                         }
                         if (col.key === "category") {
                           return (
-                            <td key={`${row.id}-category`} className="px-3 py-2 text-slate-700">
-                              {row.category_id ? categoryLookup.get(row.category_id) || "Assigned" : "Unassigned"}
+                            <td
+                              key={`${row.id}-category`}
+                              className="px-3 py-2 text-slate-700"
+                            >
+                              {row.category_id
+                                ? categoryLookup.get(row.category_id) ||
+                                  "Assigned"
+                                : "Unassigned"}
                             </td>
                           );
                         }
                         if (col.key === "amount") {
                           return (
-                            <td key={`${row.id}-amount`} className="px-3 py-2 text-right font-semibold text-slate-900">
+                            <td
+                              key={`${row.id}-amount`}
+                              className="px-3 py-2 text-right font-semibold text-slate-900"
+                            >
                               {formatCurrency(amount)}
                             </td>
                           );
                         }
                         if (col.key === "status") {
-                          return <td key={`${row.id}-status`} className="px-3 py-2">{badge(row.status)}</td>;
+                          return (
+                            <td key={`${row.id}-status`} className="px-3 py-2">
+                              {badge(row.status)}
+                            </td>
+                          );
                         }
                         return (
-                          <td key={`${row.id}-notes`} className="px-3 py-2 text-slate-600">
+                          <td
+                            key={`${row.id}-notes`}
+                            className="px-3 py-2 text-slate-600"
+                          >
                             {row.notes || ""}
                           </td>
                         );
@@ -565,7 +697,9 @@ export const Transactions: React.FC = () => {
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
-                checked={selectedIds.size === filtered.length && filtered.length > 0}
+                checked={
+                  selectedIds.size === filtered.length && filtered.length > 0
+                }
                 onChange={(e) => toggleSelectAll(e.target.checked)}
               />
               <span>{selectedIds.size} selected</span>
@@ -578,7 +712,11 @@ export const Transactions: React.FC = () => {
                 onClick={loadMore}
                 disabled={!pagination.hasMore || loading}
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreHorizontal className="h-4 w-4" />}
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MoreHorizontal className="h-4 w-4" />
+                )}
                 {pagination.hasMore ? "Load more" : "End of list"}
               </Button>
             </div>
@@ -592,7 +730,15 @@ export const Transactions: React.FC = () => {
 };
 
 const RefreshIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cn("h-4 w-4", props.className)}>
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={cn("h-4 w-4", props.className)}
+  >
     <path d="M21 2v6h-6" />
     <path d="M3 13v-6h6" />
     <path d="M21 13a9 9 0 0 1-15 6l-3-3" />
@@ -601,3 +747,5 @@ const RefreshIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 );
 
 export default Transactions;
+
+/* eslint-enable react/prop-types */

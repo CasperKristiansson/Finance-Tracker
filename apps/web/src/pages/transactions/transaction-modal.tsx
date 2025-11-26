@@ -1,9 +1,13 @@
-import React, { useEffect, useMemo, useState } from "react";
 import { X, Plus, Trash2 } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useAccountsApi, useCategoriesApi, useTransactionsApi } from "@/hooks/use-api";
-import { TransactionStatus } from "@/types/api";
+import {
+  useAccountsApi,
+  useCategoriesApi,
+  useTransactionsApi,
+} from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
+import { TransactionStatus } from "@/types/api";
 
 type LegInput = {
   id: string;
@@ -19,7 +23,12 @@ const statusTone: Record<TransactionStatus, string> = {
 };
 
 const statusBadge = (status: TransactionStatus) => (
-  <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold", statusTone[status])}>
+  <span
+    className={cn(
+      "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
+      statusTone[status],
+    )}
+  >
     {status}
   </span>
 );
@@ -35,7 +44,9 @@ export const TransactionModal: React.FC<{
   const [description, setDescription] = useState("");
   const [notes, setNotes] = useState("");
   const [categoryId, setCategoryId] = useState<string>("");
-  const [status, setStatus] = useState<TransactionStatus>(TransactionStatus.RECORDED);
+  const [status, setStatus] = useState<TransactionStatus>(
+    TransactionStatus.RECORDED,
+  );
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [occurredAt, setOccurredAt] = useState(today);
   const [postedAt, setPostedAt] = useState(today);
@@ -70,7 +81,8 @@ export const TransactionModal: React.FC<{
 
   const validate = () => {
     if (legs.length < 2) return "Add at least two legs";
-    if (legs.some((leg) => !leg.account_id || !leg.amount)) return "Each leg needs an account and amount";
+    if (legs.some((leg) => !leg.account_id || !leg.amount))
+      return "Each leg needs an account and amount";
     const total = legs.reduce((sum, leg) => sum + Number(leg.amount || 0), 0);
     if (Number.isNaN(total)) return "Amounts must be numeric";
     if (Math.abs(total) > 0.0001) return "Legs must balance to zero";
@@ -93,7 +105,10 @@ export const TransactionModal: React.FC<{
         occurred_at: new Date(occurredAt).toISOString(),
         posted_at: postedAt ? new Date(postedAt).toISOString() : undefined,
         status,
-        legs: legs.map((leg) => ({ account_id: leg.account_id, amount: leg.amount })),
+        legs: legs.map((leg) => ({
+          account_id: leg.account_id,
+          amount: leg.amount,
+        })),
       });
       resetForm();
       onClose();
@@ -105,7 +120,9 @@ export const TransactionModal: React.FC<{
   };
 
   const updateLeg = (id: string, field: keyof LegInput, value: string) => {
-    setLegs((prev) => prev.map((leg) => (leg.id === id ? { ...leg, [field]: value } : leg)));
+    setLegs((prev) =>
+      prev.map((leg) => (leg.id === id ? { ...leg, [field]: value } : leg)),
+    );
   };
 
   const removeLeg = (id: string) => {
@@ -113,7 +130,10 @@ export const TransactionModal: React.FC<{
   };
 
   const addLeg = () => {
-    setLegs((prev) => [...prev, { id: crypto.randomUUID(), account_id: "", amount: "" }]);
+    setLegs((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), account_id: "", amount: "" },
+    ]);
   };
 
   if (!open) return null;
@@ -123,7 +143,9 @@ export const TransactionModal: React.FC<{
       <div className="w-full max-w-3xl rounded-xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b px-6 py-4">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-slate-900">Add Transaction</h2>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Add Transaction
+            </h2>
             {statusBadge(status)}
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
@@ -191,7 +213,9 @@ export const TransactionModal: React.FC<{
                 <select
                   className="rounded border border-slate-200 px-3 py-2"
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as TransactionStatus)}
+                  onChange={(e) =>
+                    setStatus(e.target.value as TransactionStatus)
+                  }
                 >
                   {Object.values(TransactionStatus).map((s) => (
                     <option key={s} value={s}>
@@ -218,7 +242,9 @@ export const TransactionModal: React.FC<{
                   <select
                     className="rounded border border-slate-200 px-2 py-1 text-sm"
                     value={leg.account_id}
-                    onChange={(e) => updateLeg(leg.id, "account_id", e.target.value)}
+                    onChange={(e) =>
+                      updateLeg(leg.id, "account_id", e.target.value)
+                    }
                   >
                     <option value="">Select account</option>
                     {accounts.map((acc) => (
@@ -232,7 +258,9 @@ export const TransactionModal: React.FC<{
                     step="0.01"
                     className="rounded border border-slate-200 px-2 py-1 text-sm"
                     value={leg.amount}
-                    onChange={(e) => updateLeg(leg.id, "amount", e.target.value)}
+                    onChange={(e) =>
+                      updateLeg(leg.id, "amount", e.target.value)
+                    }
                     placeholder="0.00"
                   />
                   <Button
@@ -247,7 +275,8 @@ export const TransactionModal: React.FC<{
               ))}
             </div>
             <div className="rounded border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              Legs must balance to zero. Debits are negative, credits are positive. Minimum two legs.
+              Legs must balance to zero. Debits are negative, credits are
+              positive. Minimum two legs.
             </div>
           </div>
         </div>
