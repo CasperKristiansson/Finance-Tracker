@@ -1,7 +1,13 @@
 import createSagaMiddleware from "@redux-saga/core";
 import { configureStore } from "@reduxjs/toolkit";
+import { AccountsReducer } from "@/features/accounts/accountsSlice";
 import { AppReducer } from "@/features/app/appSlice";
 import { AuthReducer } from "@/features/auth/authSlice";
+import { CategoriesReducer } from "@/features/categories/categoriesSlice";
+import { ImportsReducer } from "@/features/imports/importsSlice";
+import { LoansReducer } from "@/features/loans/loansSlice";
+import { ReportsReducer } from "@/features/reports/reportsSlice";
+import { TransactionsReducer } from "@/features/transactions/transactionsSlice";
 import { RootSaga } from "./rootSaga";
 
 const sagaMiddleware = createSagaMiddleware();
@@ -10,6 +16,12 @@ export const Store = configureStore({
   reducer: {
     auth: AuthReducer,
     app: AppReducer,
+    accounts: AccountsReducer,
+    categories: CategoriesReducer,
+    transactions: TransactionsReducer,
+    reports: ReportsReducer,
+    loans: LoansReducer,
+    imports: ImportsReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

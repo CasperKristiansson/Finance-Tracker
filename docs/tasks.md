@@ -12,7 +12,7 @@
 
 ### Milestone 1 – Foundation & Auth
 
-- [ ] API client + saga plumbing: base API URL, Cognito bearer injection, shared fetch helper (retry + 401 handling), global loading/error toasts, typed hooks for accounts/categories/transactions/reports/imports/loans.
+- [x] API client + saga plumbing: base API URL, Cognito bearer injection, shared fetch helper (retry + 401 handling), global loading/error toasts, typed hooks for accounts/categories/transactions/reports/imports/loans.
 - [ ] Auth UX + flows: connect login form to saga (validation, inline errors, disabled during submit), demo mode toggle (mock user), logout entry visible in header + collapsed sidebar, remember-me flag.
 - [ ] Loading/skeletons: page-level spinner while auth initializes; skeleton shells for nav/content; unauthenticated state messaging.
 - [ ] Backend alignment: confirm Cognito config + API auth scheme; provide local dev env templates for Amplify + API base.
