@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, cast
 from uuid import UUID
 
-from sqlalchemy import Table, desc, text
+from sqlalchemy import Table, desc, func, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, select
 
@@ -45,6 +45,14 @@ class LifetimeTotals:
     income: Decimal
     expense: Decimal
     net: Decimal
+
+
+@dataclass(frozen=True)
+class NetWorthPoint:
+    """Net worth value at a point in time."""
+
+    period: date
+    net_worth: Decimal
 
 
 class ReportingRepository:
@@ -128,6 +136,40 @@ class ReportingRepository:
         net_total = income_total - expense_total
         return LifetimeTotals(income=income_total, expense=expense_total, net=net_total)
 
+    def get_net_worth_history(
+        self,
+        *,
+        account_ids: Optional[Iterable[UUID]] = None,
+    ) -> List[NetWorthPoint]:
+        transaction_table = cast(Table, getattr(Transaction, "__table__"))
+        leg_table = cast(Table, getattr(TransactionLeg, "__table__"))
+
+        period_column = func.date(transaction_table.c.occurred_at)
+
+        statement = (
+            select(period_column.label("period"), func.sum(leg_table.c.amount).label("delta"))
+            .join_from(
+                leg_table, transaction_table, leg_table.c.transaction_id == transaction_table.c.id
+            )
+            .group_by(period_column)
+            .order_by(period_column.asc())
+        )
+
+        if account_ids:
+            statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
+
+        rows = self.session.exec(statement).all()
+
+        history: List[NetWorthPoint] = []
+        running_total = Decimal("0")
+
+        for period_value, delta in rows:
+            period = self._coerce_date(period_value)
+            running_total += coerce_decimal(delta)
+            history.append(NetWorthPoint(period=period, net_worth=running_total))
+
+        return history
+
     def refresh_materialized_views(
         self,
         view_names: Iterable[str],
@@ -190,10 +232,17 @@ class ReportingRepository:
             expense += -amount
         return income, expense
 
+    @staticmethod
+    def _coerce_date(raw: object) -> date:
+        if isinstance(raw, date):
+            return raw
+        return date.fromisoformat(str(raw))
+
 
 __all__ = [
     "ReportingRepository",
     "MonthlyTotals",
     "YearlyTotals",
     "LifetimeTotals",
+    "NetWorthPoint",
 ]

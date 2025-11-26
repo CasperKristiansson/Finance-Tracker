@@ -47,6 +47,8 @@ def list_transactions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             start_date=query.start_date,
             end_date=query.end_date,
             account_ids=query.account_ids,
+            limit=query.limit,
+            offset=query.offset,
         )
         response = TransactionListResponse(
             transactions=[_transaction_to_schema(tx) for tx in transactions]

@@ -12,12 +12,23 @@ export interface TransactionsState {
   loading: boolean;
   error?: string;
   filters: TransactionFilters;
+  recent: {
+    items: TransactionRead[];
+    loading: boolean;
+    error?: string;
+    limit: number;
+  };
 }
 
 const initialState: TransactionsState = {
   items: [],
   loading: false,
   filters: {},
+  recent: {
+    items: [],
+    loading: false,
+    limit: 5,
+  },
 };
 
 const transactionsSlice = createSlice({
@@ -37,6 +48,20 @@ const transactionsSlice = createSlice({
     setTransactionFilters(state, action: PayloadAction<TransactionFilters>) {
       state.filters = { ...state.filters, ...action.payload };
     },
+    setRecentTransactions(state, action: PayloadAction<TransactionRead[]>) {
+      state.recent.items = action.payload;
+      state.recent.error = undefined;
+    },
+    setRecentLoading(state, action: PayloadAction<boolean>) {
+      state.recent.loading = action.payload;
+    },
+    setRecentError(state, action: PayloadAction<string | undefined>) {
+      state.recent.error =
+        action.payload ?? "Unable to load recent transactions";
+    },
+    setRecentLimit(state, action: PayloadAction<number>) {
+      state.recent.limit = action.payload;
+    },
   },
   selectors: {
     selectTransactionsState: (state) => state,
@@ -44,6 +69,7 @@ const transactionsSlice = createSlice({
     selectTransactionsLoading: (state) => state.loading,
     selectTransactionsError: (state) => state.error,
     selectTransactionFilters: (state) => state.filters,
+    selectRecentTransactions: (state) => state.recent,
   },
 });
 
@@ -52,6 +78,10 @@ export const {
   setTransactionsLoading,
   setTransactionsError,
   setTransactionFilters,
+  setRecentTransactions,
+  setRecentLoading,
+  setRecentError,
+  setRecentLimit,
 } = transactionsSlice.actions;
 export const {
   selectTransactionsState,
@@ -59,5 +89,6 @@ export const {
   selectTransactionsLoading,
   selectTransactionsError,
   selectTransactionFilters,
+  selectRecentTransactions,
 } = transactionsSlice.selectors;
 export const TransactionsReducer = transactionsSlice.reducer;

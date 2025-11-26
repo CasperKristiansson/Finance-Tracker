@@ -31,6 +31,8 @@ class TransactionRepository:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         account_ids: Optional[Iterable[UUID]] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> List[Transaction]:
         statement = (
             select(Transaction)
@@ -46,6 +48,10 @@ class TransactionRepository:
             statement = statement.join(TransactionLeg).where(
                 TransactionLeg.account_id.in_(list(account_ids))  # type: ignore[attr-defined]
             )
+        if limit is not None:
+            statement = statement.limit(limit)
+        if offset:
+            statement = statement.offset(offset)
 
         result = self.session.exec(statement)
         transactions = list(result.unique().all())

@@ -117,6 +117,34 @@ class TotalReportRead(BaseModel):
     net: Decimal
 
 
+class NetWorthHistoryQuery(_CsvUUIDMixin):
+    """Query parameters for net worth history endpoint."""
+
+    account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _split_lists(cls, values: Any) -> Any:
+        if isinstance(values, dict) and "account_ids" in values:
+            values["account_ids"] = cls._parse_uuid_list(values.get("account_ids"))
+        return values
+
+
+class NetWorthPoint(BaseModel):
+    """Net worth value for a given date."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    period: date
+    net_worth: Decimal
+
+
+class NetWorthHistoryResponse(BaseModel):
+    """Response payload for net worth history."""
+
+    points: List[NetWorthPoint]
+
+
 __all__ = [
     "MonthlyReportQuery",
     "YearlyReportQuery",
@@ -126,4 +154,7 @@ __all__ = [
     "YearlyReportEntry",
     "YearlyReportResponse",
     "TotalReportRead",
+    "NetWorthHistoryQuery",
+    "NetWorthPoint",
+    "NetWorthHistoryResponse",
 ]

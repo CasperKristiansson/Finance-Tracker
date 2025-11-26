@@ -110,6 +110,15 @@ export interface TotalReportRead {
   generated_at?: string;
 }
 
+export interface NetWorthPoint {
+  period: string;
+  net_worth: string;
+}
+
+export interface NetWorthHistoryResponse {
+  points: NetWorthPoint[];
+}
+
 export interface LoanEventRead {
   id: string;
   loan_id: string;

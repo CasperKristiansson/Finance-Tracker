@@ -6,6 +6,10 @@ import {
   setTransactions,
   setTransactionsError,
   setTransactionsLoading,
+  setRecentTransactions,
+  setRecentError,
+  setRecentLoading,
+  setRecentLimit,
   type TransactionFilters,
 } from "@/features/transactions/transactionsSlice";
 import type { TransactionListResponse } from "@/types/api";
@@ -13,6 +17,10 @@ import type { TransactionListResponse } from "@/types/api";
 export const FetchTransactions = createAction<TransactionFilters | undefined>(
   "transactions/fetch",
 );
+export const FetchRecentTransactions = createAction<{
+  limit?: number;
+  accountIds?: string[];
+}>("transactions/fetchRecent");
 
 const serializeAccounts = (ids?: string[]) => {
   if (!ids || ids.length === 0) return undefined;
@@ -55,6 +63,43 @@ function* handleFetchTransactions(
   }
 }
 
+function* handleFetchRecentTransactions(
+  action: ReturnType<typeof FetchRecentTransactions>,
+) {
+  const limit = action.payload?.limit ?? 5;
+  yield put(setRecentLimit(limit));
+  yield put(setRecentLoading(true));
+
+  try {
+    const query = {
+      limit,
+      ...(serializeAccounts(action.payload?.accountIds)
+        ? { account_ids: serializeAccounts(action.payload?.accountIds) }
+        : {}),
+    };
+
+    const response: TransactionListResponse = yield call(
+      callApiWithAuth,
+      { path: "/transactions", query },
+      { loadingKey: "transactions-recent" },
+    );
+
+    const trimmed = response.transactions.slice(0, limit);
+    yield put(setRecentTransactions(trimmed));
+  } catch (error) {
+    yield put(
+      setRecentError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load recent transactions",
+      ),
+    );
+  } finally {
+    yield put(setRecentLoading(false));
+  }
+}
+
 export function* TransactionsSaga() {
   yield takeLatest(FetchTransactions.type, handleFetchTransactions);
+  yield takeLatest(FetchRecentTransactions.type, handleFetchRecentTransactions);
 }

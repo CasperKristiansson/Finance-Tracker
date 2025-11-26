@@ -41,11 +41,15 @@ class TransactionService:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         account_ids: Optional[Iterable[UUID]] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> List[Transaction]:
         return self.repository.list(
             start_date=start_date,
             end_date=end_date,
             account_ids=account_ids,
+            limit=limit,
+            offset=offset,
         )
 
     def create_transaction(

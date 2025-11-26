@@ -1,6 +1,11 @@
-import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
+import {
+  createSlice,
+  type PayloadAction,
+  createSelector,
+} from "@reduxjs/toolkit";
 import type {
   MonthlyReportEntry,
+  NetWorthPoint,
   TotalReportRead,
   YearlyReportEntry,
 } from "@/types/api";
@@ -11,55 +16,44 @@ export interface ReportFilters {
   categoryIds?: string[];
 }
 
+type CacheKeyedState<T> = {
+  cache: Record<string, T>;
+  currentKey: string | null;
+  loading: boolean;
+  error?: string;
+};
+
 export interface ReportsState {
-  monthly: {
-    data: MonthlyReportEntry[];
-    loading: boolean;
-    error?: string;
-    filters: ReportFilters;
-  };
-  yearly: {
-    data: YearlyReportEntry[];
-    loading: boolean;
-    error?: string;
-    filters: Omit<ReportFilters, "year">;
-  };
-  total: {
-    data?: TotalReportRead;
-    loading: boolean;
-    error?: string;
-    filters: Omit<ReportFilters, "year">;
-  };
+  monthly: CacheKeyedState<MonthlyReportEntry[]>;
+  yearly: CacheKeyedState<YearlyReportEntry[]>;
+  total: CacheKeyedState<TotalReportRead | undefined>;
+  netWorth: CacheKeyedState<NetWorthPoint[]>;
 }
 
+const createInitialCache = <T>(): CacheKeyedState<T> => ({
+  cache: {},
+  currentKey: null,
+  loading: false,
+});
+
 const initialState: ReportsState = {
-  monthly: {
-    data: [],
-    loading: false,
-    filters: {},
-  },
-  yearly: {
-    data: [],
-    loading: false,
-    filters: {},
-  },
-  total: {
-    data: undefined,
-    loading: false,
-    filters: {},
-  },
+  monthly: createInitialCache<MonthlyReportEntry[]>(),
+  yearly: createInitialCache<YearlyReportEntry[]>(),
+  total: createInitialCache<TotalReportRead | undefined>(),
+  netWorth: createInitialCache<NetWorthPoint[]>(),
 };
 
 const reportsSlice = createSlice({
   name: "reports",
   initialState,
   reducers: {
-    setMonthlyReport(state, action: PayloadAction<MonthlyReportEntry[]>) {
-      state.monthly.data = action.payload;
+    setMonthlyReport(
+      state,
+      action: PayloadAction<{ key: string; data: MonthlyReportEntry[] }>,
+    ) {
+      state.monthly.cache[action.payload.key] = action.payload.data;
+      state.monthly.currentKey = action.payload.key;
       state.monthly.error = undefined;
-    },
-    setMonthlyFilters(state, action: PayloadAction<ReportFilters>) {
-      state.monthly.filters = { ...state.monthly.filters, ...action.payload };
     },
     setMonthlyLoading(state, action: PayloadAction<boolean>) {
       state.monthly.loading = action.payload;
@@ -67,15 +61,16 @@ const reportsSlice = createSlice({
     setMonthlyError(state, action: PayloadAction<string | undefined>) {
       state.monthly.error = action.payload ?? "Unable to load monthly report";
     },
-    setYearlyReport(state, action: PayloadAction<YearlyReportEntry[]>) {
-      state.yearly.data = action.payload;
-      state.yearly.error = undefined;
+    setMonthlyCurrentKey(state, action: PayloadAction<string>) {
+      state.monthly.currentKey = action.payload;
     },
-    setYearlyFilters(
+    setYearlyReport(
       state,
-      action: PayloadAction<Omit<ReportFilters, "year">>,
+      action: PayloadAction<{ key: string; data: YearlyReportEntry[] }>,
     ) {
-      state.yearly.filters = { ...state.yearly.filters, ...action.payload };
+      state.yearly.cache[action.payload.key] = action.payload.data;
+      state.yearly.currentKey = action.payload.key;
+      state.yearly.error = undefined;
     },
     setYearlyLoading(state, action: PayloadAction<boolean>) {
       state.yearly.loading = action.payload;
@@ -83,12 +78,16 @@ const reportsSlice = createSlice({
     setYearlyError(state, action: PayloadAction<string | undefined>) {
       state.yearly.error = action.payload ?? "Unable to load yearly report";
     },
-    setTotalReport(state, action: PayloadAction<TotalReportRead | undefined>) {
-      state.total.data = action.payload;
-      state.total.error = undefined;
+    setYearlyCurrentKey(state, action: PayloadAction<string>) {
+      state.yearly.currentKey = action.payload;
     },
-    setTotalFilters(state, action: PayloadAction<Omit<ReportFilters, "year">>) {
-      state.total.filters = { ...state.total.filters, ...action.payload };
+    setTotalReport(
+      state,
+      action: PayloadAction<{ key: string; data: TotalReportRead | undefined }>,
+    ) {
+      state.total.cache[action.payload.key] = action.payload.data;
+      state.total.currentKey = action.payload.key;
+      state.total.error = undefined;
     },
     setTotalLoading(state, action: PayloadAction<boolean>) {
       state.total.loading = action.payload;
@@ -96,33 +95,123 @@ const reportsSlice = createSlice({
     setTotalError(state, action: PayloadAction<string | undefined>) {
       state.total.error = action.payload ?? "Unable to load totals";
     },
+    setTotalCurrentKey(state, action: PayloadAction<string>) {
+      state.total.currentKey = action.payload;
+    },
+    setNetWorthHistory(
+      state,
+      action: PayloadAction<{ key: string; data: NetWorthPoint[] }>,
+    ) {
+      state.netWorth.cache[action.payload.key] = action.payload.data;
+      state.netWorth.currentKey = action.payload.key;
+      state.netWorth.error = undefined;
+    },
+    setNetWorthLoading(state, action: PayloadAction<boolean>) {
+      state.netWorth.loading = action.payload;
+    },
+    setNetWorthError(state, action: PayloadAction<string | undefined>) {
+      state.netWorth.error =
+        action.payload ?? "Unable to load net worth history";
+    },
+    setNetWorthCurrentKey(state, action: PayloadAction<string>) {
+      state.netWorth.currentKey = action.payload;
+    },
   },
   selectors: {
     selectReportsState: (state) => state,
-    selectMonthlyReport: (state) => state.monthly,
-    selectYearlyReport: (state) => state.yearly,
-    selectTotalReport: (state) => state.total,
+    selectMonthlyReportState: (state) => state.monthly,
+    selectYearlyReportState: (state) => state.yearly,
+    selectTotalReportState: (state) => state.total,
+    selectNetWorthState: (state) => state.netWorth,
   },
 });
 
+const selectCurrentMonthly = createSelector(
+  reportsSlice.selectors.selectMonthlyReportState,
+  (monthly) => {
+    const key = monthly.currentKey;
+    return {
+      ...monthly,
+      data: key ? (monthly.cache[key] ?? []) : [],
+    };
+  },
+);
+
+const selectCurrentYearly = createSelector(
+  reportsSlice.selectors.selectYearlyReportState,
+  (yearly) => {
+    const key = yearly.currentKey;
+    return {
+      ...yearly,
+      data: key ? (yearly.cache[key] ?? []) : [],
+    };
+  },
+);
+
+const selectCurrentTotal = createSelector(
+  reportsSlice.selectors.selectTotalReportState,
+  (total) => {
+    const key = total.currentKey;
+    return {
+      ...total,
+      data: key ? total.cache[key] : undefined,
+    };
+  },
+);
+
+const selectCurrentNetWorth = createSelector(
+  reportsSlice.selectors.selectNetWorthState,
+  (netWorth) => {
+    const key = netWorth.currentKey;
+    return {
+      ...netWorth,
+      data: key ? (netWorth.cache[key] ?? []) : [],
+    };
+  },
+);
+
 export const {
   setMonthlyReport,
-  setMonthlyFilters,
   setMonthlyLoading,
   setMonthlyError,
+  setMonthlyCurrentKey,
   setYearlyReport,
-  setYearlyFilters,
   setYearlyLoading,
   setYearlyError,
+  setYearlyCurrentKey,
   setTotalReport,
-  setTotalFilters,
   setTotalLoading,
   setTotalError,
+  setTotalCurrentKey,
+  setNetWorthHistory,
+  setNetWorthLoading,
+  setNetWorthError,
+  setNetWorthCurrentKey,
 } = reportsSlice.actions;
+
 export const {
   selectReportsState,
-  selectMonthlyReport,
-  selectYearlyReport,
-  selectTotalReport,
+  selectMonthlyReportState,
+  selectYearlyReportState,
+  selectTotalReportState,
+  selectNetWorthState,
 } = reportsSlice.selectors;
+
+export const selectMonthlyReport = selectCurrentMonthly;
+export const selectYearlyReport = selectCurrentYearly;
+export const selectTotalReport = selectCurrentTotal;
+export const selectNetWorthReport = selectCurrentNetWorth;
+
+export const selectReportKpis = createSelector(selectCurrentTotal, (total) => {
+  const data = total.data;
+  if (!data) {
+    return { net: undefined, income: undefined, expense: undefined };
+  }
+  return {
+    net: data.net,
+    income: data.income,
+    expense: data.expense,
+  };
+});
+
 export const ReportsReducer = reportsSlice.reducer;

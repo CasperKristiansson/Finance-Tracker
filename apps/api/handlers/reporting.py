@@ -11,6 +11,9 @@ from ..schemas import (
     MonthlyReportEntry,
     MonthlyReportQuery,
     MonthlyReportResponse,
+    NetWorthHistoryQuery,
+    NetWorthHistoryResponse,
+    NetWorthPoint,
     TotalReportQuery,
     TotalReportRead,
     YearlyReportEntry,
@@ -42,9 +45,9 @@ def monthly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             account_ids=query.account_ids,
             category_ids=query.category_ids,
         )
-        payload = MonthlyReportResponse(
-            results=[MonthlyReportEntry.model_validate(item) for item in results]
-        )
+    payload = MonthlyReportResponse(
+        results=[MonthlyReportEntry.model_validate(item) for item in results]
+    )
     return json_response(200, payload.model_dump(mode="json"))
 
 
@@ -84,15 +87,34 @@ def total_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             account_ids=query.account_ids,
             category_ids=query.category_ids,
         )
-        payload = TotalReportRead.model_validate(result)
+    payload = TotalReportRead.model_validate(result)
     response = payload.model_dump(mode="json")
     response["generated_at"] = datetime.now(timezone.utc).isoformat()
     return json_response(200, response)
+
+
+def net_worth_history(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    params = get_query_params(event)
+
+    try:
+        query = NetWorthHistoryQuery.model_validate(params)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope() as session:
+        service = ReportingService(session)
+        results = service.net_worth_history(account_ids=query.account_ids)
+        payload = NetWorthHistoryResponse(
+            points=[NetWorthPoint.model_validate(item) for item in results]
+        )
+    return json_response(200, payload.model_dump(mode="json"))
 
 
 __all__ = [
     "monthly_report",
     "yearly_report",
     "total_report",
+    "net_worth_history",
     "reset_handler_state",
 ]

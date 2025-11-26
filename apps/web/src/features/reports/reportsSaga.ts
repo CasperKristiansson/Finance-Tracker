@@ -3,21 +3,26 @@ import { call, put, takeLatest } from "redux-saga/effects";
 import { callApiWithAuth } from "@/features/api/apiSaga";
 import {
   setMonthlyError,
-  setMonthlyFilters,
+  setMonthlyCurrentKey,
   setMonthlyLoading,
   setMonthlyReport,
+  setNetWorthCurrentKey,
+  setNetWorthError,
+  setNetWorthHistory,
+  setNetWorthLoading,
   setTotalError,
-  setTotalFilters,
+  setTotalCurrentKey,
   setTotalLoading,
   setTotalReport,
   setYearlyError,
-  setYearlyFilters,
+  setYearlyCurrentKey,
   setYearlyLoading,
   setYearlyReport,
   type ReportFilters,
 } from "@/features/reports/reportsSlice";
 import type {
   MonthlyReportEntry,
+  NetWorthHistoryResponse,
   TotalReportRead,
   YearlyReportEntry,
 } from "@/types/api";
@@ -31,18 +36,27 @@ export const FetchYearlyReport = createAction<
 export const FetchTotalReport = createAction<
   Omit<ReportFilters, "year"> | undefined
 >("reports/fetchTotal");
+export const FetchNetWorthHistory = createAction<
+  Omit<ReportFilters, "year" | "categoryIds"> | undefined
+>("reports/fetchNetWorth");
 
 const toCsv = (values?: string[]) => {
   if (!values || values.length === 0) return undefined;
   return values.join(",");
 };
 
+const buildKey = (filters: ReportFilters | undefined): string =>
+  JSON.stringify({
+    year: filters?.year ?? null,
+    accountIds: [...(filters?.accountIds ?? [])].sort(),
+    categoryIds: [...(filters?.categoryIds ?? [])].sort(),
+  });
+
 function* handleFetchMonthly(action: ReturnType<typeof FetchMonthlyReport>) {
   const filters = action.payload ?? {};
+  const key = buildKey(filters);
+  yield put(setMonthlyCurrentKey(key));
   yield put(setMonthlyLoading(true));
-  if (action.payload) {
-    yield put(setMonthlyFilters(action.payload));
-  }
 
   try {
     const query = {
@@ -61,7 +75,7 @@ function* handleFetchMonthly(action: ReturnType<typeof FetchMonthlyReport>) {
       { loadingKey: "report-monthly" },
     );
 
-    yield put(setMonthlyReport(response.results));
+    yield put(setMonthlyReport({ key, data: response.results }));
   } catch (error) {
     yield put(
       setMonthlyError(
@@ -77,10 +91,9 @@ function* handleFetchMonthly(action: ReturnType<typeof FetchMonthlyReport>) {
 
 function* handleFetchYearly(action: ReturnType<typeof FetchYearlyReport>) {
   const filters = action.payload ?? {};
+  const key = buildKey(filters);
+  yield put(setYearlyCurrentKey(key));
   yield put(setYearlyLoading(true));
-  if (action.payload) {
-    yield put(setYearlyFilters(action.payload));
-  }
 
   try {
     const query = {
@@ -98,7 +111,7 @@ function* handleFetchYearly(action: ReturnType<typeof FetchYearlyReport>) {
       { loadingKey: "report-yearly" },
     );
 
-    yield put(setYearlyReport(response.results));
+    yield put(setYearlyReport({ key, data: response.results }));
   } catch (error) {
     yield put(
       setYearlyError(
@@ -112,10 +125,9 @@ function* handleFetchYearly(action: ReturnType<typeof FetchYearlyReport>) {
 
 function* handleFetchTotal(action: ReturnType<typeof FetchTotalReport>) {
   const filters = action.payload ?? {};
+  const key = buildKey(filters);
+  yield put(setTotalCurrentKey(key));
   yield put(setTotalLoading(true));
-  if (action.payload) {
-    yield put(setTotalFilters(action.payload));
-  }
 
   try {
     const query = {
@@ -133,7 +145,7 @@ function* handleFetchTotal(action: ReturnType<typeof FetchTotalReport>) {
       { loadingKey: "report-total" },
     );
 
-    yield put(setTotalReport(response));
+    yield put(setTotalReport({ key, data: response }));
   } catch (error) {
     yield put(
       setTotalError(
@@ -145,8 +157,42 @@ function* handleFetchTotal(action: ReturnType<typeof FetchTotalReport>) {
   }
 }
 
+function* handleFetchNetWorth(action: ReturnType<typeof FetchNetWorthHistory>) {
+  const filters = action.payload ?? {};
+  const key = buildKey(filters);
+  yield put(setNetWorthCurrentKey(key));
+  yield put(setNetWorthLoading(true));
+
+  try {
+    const query = {
+      ...(toCsv(filters.accountIds)
+        ? { account_ids: toCsv(filters.accountIds) }
+        : {}),
+    };
+
+    const response: NetWorthHistoryResponse = yield call(
+      callApiWithAuth,
+      { path: "/reports/net-worth", query },
+      { loadingKey: "report-net-worth" },
+    );
+
+    yield put(setNetWorthHistory({ key, data: response.points }));
+  } catch (error) {
+    yield put(
+      setNetWorthError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load net worth history",
+      ),
+    );
+  } finally {
+    yield put(setNetWorthLoading(false));
+  }
+}
+
 export function* ReportsSaga() {
   yield takeLatest(FetchMonthlyReport.type, handleFetchMonthly);
   yield takeLatest(FetchYearlyReport.type, handleFetchYearly);
   yield takeLatest(FetchTotalReport.type, handleFetchTotal);
+  yield takeLatest(FetchNetWorthHistory.type, handleFetchNetWorth);
 }

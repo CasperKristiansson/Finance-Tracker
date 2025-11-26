@@ -28,19 +28,26 @@ import {
 } from "@/features/loans/loansSlice";
 import {
   FetchMonthlyReport,
+  FetchNetWorthHistory,
   FetchTotalReport,
   FetchYearlyReport,
 } from "@/features/reports/reportsSaga";
 import {
   selectMonthlyReport,
+  selectNetWorthReport,
+  selectReportKpis,
   selectReportsState,
   selectTotalReport,
   selectYearlyReport,
   type ReportFilters,
 } from "@/features/reports/reportsSlice";
-import { FetchTransactions } from "@/features/transactions/transactionsSaga";
+import {
+  FetchRecentTransactions,
+  FetchTransactions,
+} from "@/features/transactions/transactionsSaga";
 import {
   selectTransactionFilters,
+  selectRecentTransactions,
   selectTransactions,
   selectTransactionsError,
   selectTransactionsLoading,
@@ -81,6 +88,7 @@ export const useTransactionsApi = () => {
   const loading = useAppSelector(selectTransactionsLoading);
   const error = useAppSelector(selectTransactionsError);
   const filters = useAppSelector(selectTransactionFilters);
+  const recent = useAppSelector(selectRecentTransactions);
 
   const fetchTransactions = useCallback(
     (nextFilters?: TransactionFilters) => {
@@ -88,8 +96,22 @@ export const useTransactionsApi = () => {
     },
     [dispatch],
   );
+  const fetchRecentTransactions = useCallback(
+    (params?: { limit?: number; accountIds?: string[] }) => {
+      dispatch(FetchRecentTransactions(params));
+    },
+    [dispatch],
+  );
 
-  return { items, loading, error, filters, fetchTransactions };
+  return {
+    items,
+    loading,
+    error,
+    filters,
+    recent,
+    fetchTransactions,
+    fetchRecentTransactions,
+  };
 };
 
 export const useReportsApi = () => {
@@ -97,6 +119,8 @@ export const useReportsApi = () => {
   const monthly = useAppSelector(selectMonthlyReport);
   const yearly = useAppSelector(selectYearlyReport);
   const total = useAppSelector(selectTotalReport);
+  const netWorth = useAppSelector(selectNetWorthReport);
+  const kpis = useAppSelector(selectReportKpis);
   const state = useAppSelector(selectReportsState);
 
   const fetchMonthlyReport = useCallback(
@@ -113,15 +137,23 @@ export const useReportsApi = () => {
       dispatch(FetchTotalReport(filters)),
     [dispatch],
   );
+  const fetchNetWorthReport = useCallback(
+    (filters?: Omit<ReportFilters, "year" | "categoryIds">) =>
+      dispatch(FetchNetWorthHistory(filters)),
+    [dispatch],
+  );
 
   return {
     monthly,
     yearly,
     total,
+    netWorth,
+    kpis,
     state,
     fetchMonthlyReport,
     fetchYearlyReport,
     fetchTotalReport,
+    fetchNetWorthReport,
   };
 };
 

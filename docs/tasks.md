@@ -19,8 +19,8 @@
 
 ### Milestone 2 – Dashboard (reporting baseline)
 
-- [ ] Backend: ensure reporting endpoints accept account/category filters; add net worth history endpoint (area) if missing.
-- [ ] Redux slices/sagas: reporting fetch (monthly/yearly/total), net worth history, recent transactions (limit N), cache by period key; selectors for KPIs.
+- [x] Backend: ensure reporting endpoints accept account/category filters; add net worth history endpoint (area) if missing.
+- [x] Redux slices/sagas: reporting fetch (monthly/yearly/total), net worth history, recent transactions (limit N), cache by period key; selectors for KPIs.
 - [ ] KPI cards: net worth, cash flow (toggle month/quarter/year), budget vs actual placeholder (wired once budgets exist), upcoming bills placeholder.
 - [ ] Charts: stacked area for income vs expense; donut for category breakdown; bar for savings rate (%).
 - [ ] Layout: 2-column grid with KPIs top, charts middle, recent transactions list bottom with status tags and inline loading placeholders.

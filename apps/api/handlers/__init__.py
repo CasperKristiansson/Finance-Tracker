@@ -25,6 +25,7 @@ from .reporting import (
 )
 from .reporting import reset_handler_state as reset_reporting_handler_state
 from .reporting import (
+    net_worth_history,
     total_report,
     yearly_report,
 )
@@ -48,6 +49,7 @@ __all__ = [
     "monthly_report",
     "yearly_report",
     "total_report",
+    "net_worth_history",
     "create_transaction",
     "list_transactions",
     "reset_account_handler_state",

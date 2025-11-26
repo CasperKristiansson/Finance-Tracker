@@ -13,6 +13,7 @@ from ..repositories.reporting import (
     ReportingRepository,
     YearlyTotals,
 )
+from ..repositories.reporting import NetWorthPoint
 
 
 class ReportingService:
@@ -57,6 +58,13 @@ class ReportingService:
             category_ids=category_ids,
         )
 
+    def net_worth_history(
+        self,
+        *,
+        account_ids: Optional[Iterable[UUID]] = None,
+    ) -> List[NetWorthPoint]:
+        return self.repository.get_net_worth_history(account_ids=account_ids)
+
     def refresh_materialized_views(
         self,
         view_names: Iterable[str],
@@ -74,4 +82,5 @@ __all__ = [
     "MonthlyTotals",
     "YearlyTotals",
     "LifetimeTotals",
+    "NetWorthPoint",
 ]

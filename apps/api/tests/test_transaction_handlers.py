@@ -129,6 +129,39 @@ def test_list_transactions_with_filters():
     assert len(transactions) == 1
 
 
+def test_list_transactions_respects_limit():
+    engine = get_engine()
+    with Session(engine) as session:
+        source = _create_account(session)
+        destination = _create_account(session)
+        source_id = source.id
+        destination_id = destination.id
+
+        for _ in range(3):
+            occurred = datetime(2024, 1, 10, tzinfo=timezone.utc)
+            payload = {
+                "occurred_at": occurred.isoformat(),
+                "legs": [
+                    {"account_id": str(source_id), "amount": "-25"},
+                    {"account_id": str(destination_id), "amount": "25"},
+                ],
+            }
+            create_transaction(
+                {"body": json.dumps(payload), "isBase64Encoded": False},
+                None,
+            )
+
+    query = {
+        "queryStringParameters": {
+            "limit": "2",
+        }
+    }
+    response = list_transactions(query, None)
+    assert response["statusCode"] == 200
+    transactions = _json_body(response)["transactions"]
+    assert len(transactions) == 2
+
+
 def test_create_transaction_generates_loan_event():
     engine = get_engine()
     with Session(engine) as session:
