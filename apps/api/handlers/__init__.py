@@ -29,9 +29,15 @@ from .reporting import (
     total_report,
     yearly_report,
 )
+from .imports import (
+    create_import_batch,
+    list_import_batches,
+)
 from .transactions import (
     create_transaction,
+    delete_transaction,
     list_transactions,
+    update_transaction,
 )
 from .transactions import reset_handler_state as reset_transaction_handler_state
 
@@ -52,6 +58,10 @@ __all__ = [
     "net_worth_history",
     "create_transaction",
     "list_transactions",
+    "update_transaction",
+    "delete_transaction",
+    "create_import_batch",
+    "list_import_batches",
     "reset_account_handler_state",
     "reset_category_handler_state",
     "reset_loan_handler_state",

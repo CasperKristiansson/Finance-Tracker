@@ -36,14 +36,14 @@
 
 ### Milestone 4 – Transactions & Imports
 
-- [ ] Backend: add transaction update/delete + status flags (imported/reviewed/flagged); ensure validation errors are UI-friendly. Implement import upload endpoint (CSV/XLSX) with bank template selection, mapping preview, job status + per-row errors; support multi-file upload in one session (e.g., multiple accounts). Persist import batch summary.
-- [ ] Backend AI assist: integrate AWS Bedrock model (category suggestion) for imported rows; accept optional user-provided example transactions to improve suggestions; return suggested category + confidence. Add backend-side transfer matcher to detect intra-account transfers by amount/date proximity and flag paired rows.
-- [ ] Redux slices/sagas: transactions list with filters/pagination, transaction mutations, status updates; import job creation/status polling; selectors for running balance.
-- [ ] UI table: virtualized rows; columns (date, payee/description, account, category, amount, status, notes); sortable headers; column visibility; bulk select + actions (categorize/delete/mark reviewed); running balance per account.
-- [ ] Filters/search: date range, account multi-select, category, amount range, status, text search; sticky filter bar; inline loading state on filter change.
-- [ ] Manual transaction modal: leg builder with balanced validation, inline category edit, notes, occurred/posted dates; status badge and error display.
-- [ ] Imports flow UI: stepper (multi-file dropzone supporting multiple accounts, bank template picker per file, mapping preview table with error highlights + AI-suggested categories + transfer match flags, confirm), summary screen with imported/skipped/errors and download errors link; inline edit of suggested categories/transfer links before submit; bank template management per account (select parser, override mapping).
-- [ ] Loading/empty: table skeletons; “add/import transactions” empty card; progress indicators during import.
+- [x] Backend: add transaction update/delete + status flags (imported/reviewed/flagged); ensure validation errors are UI-friendly. Implement import upload endpoint (CSV/XLSX) with bank template selection, mapping preview, job status + per-row errors; support multi-file upload in one session (e.g., multiple accounts). Persist import batch summary.
+- [x] Backend AI assist: integrate AWS Bedrock model (category suggestion) for imported rows; accept optional user-provided example transactions to improve suggestions; return suggested category + confidence. Add backend-side transfer matcher to detect intra-account transfers by amount/date proximity and flag paired rows.
+- [x] Redux slices/sagas: transactions list with filters/pagination, transaction mutations, status updates; import job creation/status polling; selectors for running balance.
+- [x] UI table: virtualized rows; columns (date, payee/description, account, category, amount, status, notes); sortable headers; column visibility; bulk select + actions (categorize/delete/mark reviewed); running balance per account.
+- [x] Filters/search: date range, account multi-select, category, amount range, status, text search; sticky filter bar; inline loading state on filter change.
+- [x] Manual transaction modal: leg builder with balanced validation, inline category edit, notes, occurred/posted dates; status badge and error display.
+- [x] Imports flow UI: stepper (multi-file dropzone supporting multiple accounts, bank template picker per file, mapping preview table with error highlights + AI-suggested categories + transfer match flags, confirm), summary screen with imported/skipped/errors and download errors link; inline edit of suggested categories/transfer links before submit; bank template management per account (select parser, override mapping).
+- [x] Loading/empty: table skeletons; “add/import transactions” empty card; progress indicators during import.
 
 ### Milestone 5 – Categories & Budgets
 

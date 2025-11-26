@@ -12,11 +12,13 @@ from ..schemas import (
     TransactionListQuery,
     TransactionListResponse,
     TransactionRead,
+    TransactionUpdate,
 )
 from ..services import TransactionService
 from ..shared import session_scope
 from .utils import (
     ensure_engine,
+    extract_path_uuid,
     get_query_params,
     json_response,
     parse_body,
@@ -73,6 +75,7 @@ def create_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         external_id=data.external_id,
         occurred_at=data.occurred_at,
         posted_at=data.posted_at or data.occurred_at,
+        status=data.status,
     )
     legs = [TransactionLeg(account_id=leg.account_id, amount=leg.amount) for leg in data.legs]
 
@@ -87,5 +90,52 @@ def create_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 __all__ = [
     "list_transactions",
     "create_transaction",
+    "update_transaction",
+    "delete_transaction",
     "reset_handler_state",
 ]
+
+
+def update_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    payload = parse_body(event)
+    transaction_id = extract_path_uuid(event, param_names=("transaction_id", "transactionId"))
+    if transaction_id is None:
+        return json_response(400, {"error": "Transaction ID missing from path"})
+
+    try:
+        data = TransactionUpdate.model_validate(payload)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope() as session:
+        service = TransactionService(session)
+        try:
+            updated = service.update_transaction(
+                transaction_id,
+                description=data.description,
+                notes=data.notes,
+                occurred_at=data.occurred_at,
+                posted_at=data.posted_at,
+                category_id=data.category_id,
+                status=data.status,
+            )
+        except LookupError:
+            return json_response(404, {"error": "Transaction not found"})
+        response = _transaction_to_schema(updated).model_dump(mode="json")
+    return json_response(200, response)
+
+
+def delete_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    transaction_id = extract_path_uuid(event, param_names=("transaction_id", "transactionId"))
+    if transaction_id is None:
+        return json_response(400, {"error": "Transaction ID missing from path"})
+
+    with session_scope() as session:
+        service = TransactionService(session)
+        try:
+            service.delete_transaction(transaction_id)
+        except LookupError:
+            return json_response(404, {"error": "Transaction not found"})
+    return json_response(204, {})

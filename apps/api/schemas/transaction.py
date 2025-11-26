@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from ..shared import TransactionType
+from ..shared import TransactionStatus, TransactionType
 
 
 class TransactionLegCreate(BaseModel):
@@ -39,6 +39,7 @@ class TransactionCreate(BaseModel):
     occurred_at: datetime
     posted_at: Optional[datetime] = None
     transaction_type: TransactionType = TransactionType.TRANSFER
+    status: TransactionStatus = TransactionStatus.RECORDED
     legs: List[TransactionLegCreate]
 
     @model_validator(mode="after")
@@ -65,6 +66,7 @@ class TransactionRead(BaseModel):
     posted_at: datetime
     created_at: datetime
     updated_at: datetime
+    status: TransactionStatus
     legs: List[TransactionLegRead]
 
 
@@ -107,6 +109,37 @@ class TransactionListResponse(BaseModel):
     """Response payload for transaction listings."""
 
     transactions: List[TransactionRead]
+
+
+class TransactionUpdate(BaseModel):
+    """Partial update payload for transactions."""
+
+    description: Optional[str] = Field(default=None, max_length=250)
+    notes: Optional[str] = None
+    occurred_at: Optional[datetime] = None
+    posted_at: Optional[datetime] = None
+    category_id: Optional[UUID] = None
+    status: Optional[TransactionStatus] = None
+
+    @model_validator(mode="after")
+    def ensure_updates_present(self) -> "TransactionUpdate":
+        if not any(
+            value is not None
+            for value in (
+                self.description,
+                self.notes,
+                self.occurred_at,
+                self.posted_at,
+                self.category_id,
+                self.status,
+            )
+        ):
+            raise ValueError("At least one field must be provided for update")
+        return self
+
+
+class TransactionPathParams(BaseModel):
+    transaction_id: UUID
 
 
 __all__ = [

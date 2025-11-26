@@ -16,8 +16,10 @@ from sqlmodel import Field, Relationship, SQLModel
 
 from ..shared import (
     AuditSourceMixin,
+    CreatedSource,
     LoanEventType,
     TimestampMixin,
+    TransactionStatus,
     TransactionType,
     UUIDPrimaryKeyMixin,
 )
@@ -25,24 +27,7 @@ from ..shared import (
 if TYPE_CHECKING:  # pragma: no cover
     from .account import Account, Loan
     from .category import Category
-
-
-class TransactionImportBatch(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
-    """Groups transactions imported together for auditing."""
-
-    __tablename__ = "transaction_import_batches"
-
-    source_name: Optional[str] = Field(
-        default=None,
-        sa_column=Column(String(160), nullable=True),
-    )
-    note: Optional[str] = Field(
-        default=None,
-        sa_column=Column(String(255), nullable=True),
-    )
-
-    if TYPE_CHECKING:  # pragma: no cover
-        transactions: List["Transaction"]
+    from .imports import TransactionImportBatch
 
 
 class Transaction(
@@ -88,6 +73,10 @@ class Transaction(
             ForeignKey("transaction_import_batches.id", ondelete="SET NULL"),
             nullable=True,
         ),
+    )
+    status: TransactionStatus = Field(
+        default=TransactionStatus.RECORDED,
+        sa_column=Column(SAEnum(TransactionStatus), nullable=False),
     )
 
     if TYPE_CHECKING:  # pragma: no cover
@@ -216,11 +205,9 @@ __all__ = [
     "Transaction",
     "TransactionLeg",
     "LoanEvent",
-    "TransactionImportBatch",
 ]
 
 
 Transaction.model_rebuild()
 TransactionLeg.model_rebuild()
 LoanEvent.model_rebuild()
-TransactionImportBatch.model_rebuild()

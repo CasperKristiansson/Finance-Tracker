@@ -18,13 +18,16 @@ import {
   type CategoriesState,
 } from "@/features/categories/categoriesSlice";
 import {
-  FetchImportJobs,
-  RegisterImportJob,
+  FetchImportBatches,
+  UploadImportBatch,
+  StartImportPolling,
+  StopImportPolling,
 } from "@/features/imports/importsSaga";
 import {
-  selectImportJobs,
+  selectImportBatches,
   selectImportsError,
   selectImportsLoading,
+  selectImportsPolling,
 } from "@/features/imports/importsSlice";
 import { FetchLoanEvents, FetchLoanSchedule } from "@/features/loans/loansSaga";
 import {
@@ -51,6 +54,10 @@ import {
 import {
   FetchRecentTransactions,
   FetchTransactions,
+  CreateTransaction,
+  UpdateTransaction,
+  DeleteTransaction,
+  UpdateTransactionStatus,
 } from "@/features/transactions/transactionsSaga";
 import {
   selectTransactionFilters,
@@ -58,9 +65,16 @@ import {
   selectTransactions,
   selectTransactionsError,
   selectTransactionsLoading,
+  selectTransactionsPagination,
+  selectRunningBalanceByAccount,
   type TransactionFilters,
 } from "@/features/transactions/transactionsSlice";
-import type { ImportJob } from "@/types/api";
+import type {
+  ImportCreateRequest,
+  TransactionCreate,
+  TransactionStatus,
+  TransactionUpdateRequest,
+} from "@/types/api";
 
 export const useAccountsApi = () => {
   const dispatch = useAppDispatch();
@@ -133,11 +147,31 @@ export const useTransactionsApi = () => {
   const error = useAppSelector(selectTransactionsError);
   const filters = useAppSelector(selectTransactionFilters);
   const recent = useAppSelector(selectRecentTransactions);
+  const pagination = useAppSelector(selectTransactionsPagination);
+  const runningBalances = useAppSelector(selectRunningBalanceByAccount);
 
   const fetchTransactions = useCallback(
     (nextFilters?: TransactionFilters) => {
       dispatch(FetchTransactions(nextFilters));
     },
+    [dispatch],
+  );
+  const createTransaction = useCallback(
+    (payload: TransactionCreate) => dispatch(CreateTransaction(payload)),
+    [dispatch],
+  );
+  const updateTransaction = useCallback(
+    (id: string, data: TransactionUpdateRequest) =>
+      dispatch(UpdateTransaction({ id, data })),
+    [dispatch],
+  );
+  const updateTransactionStatus = useCallback(
+    (id: string, status: TransactionStatus) =>
+      dispatch(UpdateTransactionStatus({ id, status })),
+    [dispatch],
+  );
+  const deleteTransaction = useCallback(
+    (id: string) => dispatch(DeleteTransaction(id)),
     [dispatch],
   );
   const fetchRecentTransactions = useCallback(
@@ -153,8 +187,14 @@ export const useTransactionsApi = () => {
     error,
     filters,
     recent,
+    pagination,
+    runningBalances,
     fetchTransactions,
     fetchRecentTransactions,
+    createTransaction,
+    updateTransaction,
+    updateTransactionStatus,
+    deleteTransaction,
   };
 };
 
@@ -234,18 +274,33 @@ export const useLoansApi = () => {
 
 export const useImportsApi = () => {
   const dispatch = useAppDispatch();
-  const jobs = useAppSelector(selectImportJobs);
+  const batches = useAppSelector(selectImportBatches);
   const loading = useAppSelector(selectImportsLoading);
+  const polling = useAppSelector(selectImportsPolling);
   const error = useAppSelector(selectImportsError);
 
-  const fetchImportJobs = useCallback(
-    () => dispatch(FetchImportJobs()),
+  const fetchImportBatches = useCallback(
+    () => dispatch(FetchImportBatches()),
     [dispatch],
   );
-  const registerImportJob = useCallback(
-    (job: ImportJob) => dispatch(RegisterImportJob(job)),
+  const uploadImportBatch = useCallback(
+    (payload: ImportCreateRequest) => dispatch(UploadImportBatch(payload)),
     [dispatch],
   );
+  const startPolling = useCallback(
+    (intervalMs?: number) => dispatch(StartImportPolling(intervalMs)),
+    [dispatch],
+  );
+  const stopPolling = useCallback(() => dispatch(StopImportPolling()), [dispatch]);
 
-  return { jobs, loading, error, fetchImportJobs, registerImportJob };
+  return {
+    batches,
+    loading,
+    polling,
+    error,
+    fetchImportBatches,
+    uploadImportBatch,
+    startPolling,
+    stopPolling,
+  };
 };

@@ -1,10 +1,17 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { TransactionRead } from "@/types/api";
+import type { TransactionRead, TransactionStatus } from "@/types/api";
 
 export interface TransactionFilters {
   startDate?: string | null;
   endDate?: string | null;
   accountIds?: string[];
+  limit?: number;
+  offset?: number;
+  categoryIds?: string[];
+  status?: string[];
+  minAmount?: string;
+  maxAmount?: string;
+  search?: string;
 }
 
 export interface TransactionsState {
@@ -12,6 +19,11 @@ export interface TransactionsState {
   loading: boolean;
   error?: string;
   filters: TransactionFilters;
+  pagination: {
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
   recent: {
     items: TransactionRead[];
     loading: boolean;
@@ -24,6 +36,11 @@ const initialState: TransactionsState = {
   items: [],
   loading: false,
   filters: {},
+  pagination: {
+    limit: 50,
+    offset: 0,
+    hasMore: true,
+  },
   recent: {
     items: [],
     loading: false,
@@ -39,6 +56,17 @@ const transactionsSlice = createSlice({
       state.items = action.payload;
       state.error = undefined;
     },
+    upsertTransaction(state, action: PayloadAction<TransactionRead>) {
+      const idx = state.items.findIndex((tx) => tx.id === action.payload.id);
+      if (idx >= 0) {
+        state.items[idx] = action.payload;
+      } else {
+        state.items.unshift(action.payload);
+      }
+    },
+    removeTransaction(state, action: PayloadAction<string>) {
+      state.items = state.items.filter((tx) => tx.id !== action.payload);
+    },
     setTransactionsLoading(state, action: PayloadAction<boolean>) {
       state.loading = action.payload;
     },
@@ -47,6 +75,21 @@ const transactionsSlice = createSlice({
     },
     setTransactionFilters(state, action: PayloadAction<TransactionFilters>) {
       state.filters = { ...state.filters, ...action.payload };
+    },
+    setPagination(
+      state,
+      action: PayloadAction<Partial<TransactionsState["pagination"]>>,
+    ) {
+      state.pagination = { ...state.pagination, ...action.payload };
+    },
+    setTransactionStatus(
+      state,
+      action: PayloadAction<{ id: string; status: TransactionStatus }>,
+    ) {
+      const tx = state.items.find((item) => item.id === action.payload.id);
+      if (tx) {
+        tx.status = action.payload.status;
+      }
     },
     setRecentTransactions(state, action: PayloadAction<TransactionRead[]>) {
       state.recent.items = action.payload;
@@ -67,18 +110,34 @@ const transactionsSlice = createSlice({
   selectors: {
     selectTransactionsState: (state) => state,
     selectTransactions: (state) => state.items,
+    selectRunningBalanceByAccount: (state) => {
+      const totals: Record<string, number> = {};
+      state.items.forEach((tx) => {
+        tx.legs.forEach((leg) => {
+          const value = parseFloat(leg.amount as unknown as string);
+          if (!Number.isFinite(value)) return;
+          totals[leg.account_id] = (totals[leg.account_id] ?? 0) + value;
+        });
+      });
+      return totals;
+    },
     selectTransactionsLoading: (state) => state.loading,
     selectTransactionsError: (state) => state.error,
     selectTransactionFilters: (state) => state.filters,
+    selectTransactionsPagination: (state) => state.pagination,
     selectRecentTransactions: (state) => state.recent,
   },
 });
 
 export const {
   setTransactions,
+  upsertTransaction,
+  removeTransaction,
   setTransactionsLoading,
   setTransactionsError,
   setTransactionFilters,
+  setPagination,
+  setTransactionStatus,
   setRecentTransactions,
   setRecentLoading,
   setRecentError,
@@ -88,9 +147,11 @@ export const {
 export const {
   selectTransactionsState,
   selectTransactions,
+  selectRunningBalanceByAccount,
   selectTransactionsLoading,
   selectTransactionsError,
   selectTransactionFilters,
+  selectTransactionsPagination,
   selectRecentTransactions,
 } = transactionsSlice.selectors;
 export const TransactionsReducer = transactionsSlice.reducer;

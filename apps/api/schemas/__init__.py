@@ -47,6 +47,16 @@ from .transaction import (
     TransactionListQuery,
     TransactionListResponse,
     TransactionRead,
+    TransactionUpdate,
+)
+from .imports import (
+    ExampleTransaction,
+    ImportBatchCreate,
+    ImportBatchListResponse,
+    ImportBatchRead,
+    ImportFile,
+    ImportFileRead,
+    ImportErrorRead,
 )
 
 __all__ = [
@@ -71,6 +81,14 @@ __all__ = [
     "TransactionLegRead",
     "TransactionListQuery",
     "TransactionListResponse",
+    "TransactionUpdate",
+    "ImportBatchCreate",
+    "ImportBatchRead",
+    "ImportBatchListResponse",
+    "ImportFile",
+    "ImportFileRead",
+    "ImportErrorRead",
+    "ExampleTransaction",
     "LoanCreateRequest",
     "LoanUpdate",
     "LoanScheduleQuery",

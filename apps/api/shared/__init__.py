@@ -7,6 +7,7 @@ from .enums import (
     InterestCompound,
     LoanEventType,
     SystemAccountCode,
+    TransactionStatus,
     TransactionType,
 )
 from .finance import (
@@ -43,6 +44,7 @@ __all__ = [
     "CreatedSource",
     "InterestCompound",
     "LoanEventType",
+    "TransactionStatus",
     "SystemAccountCode",
     "TransactionType",
     "TimestampMixin",

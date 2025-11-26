@@ -9,6 +9,7 @@ import {
   Target,
   Home,
   Banknote,
+  Upload,
 } from "lucide-react";
 import * as React from "react";
 import { useAppSelector } from "@/app/hooks";
@@ -38,6 +39,11 @@ const data = {
       title: "Accounts",
       url: PageRoutes.accounts,
       icon: Banknote,
+    },
+    {
+      title: "Imports",
+      url: PageRoutes.imports,
+      icon: Upload,
     },
     {
       title: "Transactions",

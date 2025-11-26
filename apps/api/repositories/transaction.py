@@ -14,6 +14,7 @@ from sqlmodel import Session, select
 
 from ..models import LoanEvent, Transaction, TransactionImportBatch, TransactionLeg
 from ..shared import LoanEventType, coerce_decimal, ensure_balanced_legs
+from ..shared import TransactionStatus
 
 
 class TransactionRepository:
@@ -95,6 +96,39 @@ class TransactionRepository:
         self.session.commit()
         self.session.refresh(transaction)
         return transaction
+
+    def update(
+        self,
+        transaction: Transaction,
+        *,
+        description: Optional[str] = None,
+        notes: Optional[str] = None,
+        occurred_at: Optional[datetime] = None,
+        posted_at: Optional[datetime] = None,
+        category_id: Optional[UUID] = None,
+        status: Optional[TransactionStatus] = None,
+    ) -> Transaction:
+        if description is not None:
+            transaction.description = description
+        if notes is not None:
+            transaction.notes = notes
+        if occurred_at is not None:
+            transaction.occurred_at = occurred_at
+        if posted_at is not None:
+            transaction.posted_at = posted_at
+        if category_id is not None:
+            transaction.category_id = category_id
+        if status is not None:
+            transaction.status = status
+
+        self.session.add(transaction)
+        self.session.commit()
+        self.session.refresh(transaction)
+        return transaction
+
+    def delete(self, transaction: Transaction) -> None:
+        self.session.delete(transaction)
+        self.session.commit()
 
     def add_leg(self, transaction: Transaction, leg: TransactionLeg) -> TransactionLeg:
         leg.transaction_id = transaction.id

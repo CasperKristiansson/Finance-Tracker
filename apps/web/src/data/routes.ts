@@ -4,6 +4,7 @@ export const PageRoutes = {
   notFound: "*",
   home: "/",
   accounts: "/accounts",
+  imports: "/imports",
   transactions: "/transactions",
   reports: "/reports",
   cashFlow: "/cash-flow",

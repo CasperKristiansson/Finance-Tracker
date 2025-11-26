@@ -20,6 +20,13 @@ export enum TransactionType {
   INVESTMENT_EVENT = "investment_event",
 }
 
+export enum TransactionStatus {
+  RECORDED = "recorded",
+  IMPORTED = "imported",
+  REVIEWED = "reviewed",
+  FLAGGED = "flagged",
+}
+
 export enum InterestCompound {
   DAILY = "daily",
   MONTHLY = "monthly",
@@ -94,6 +101,32 @@ export interface TransactionLegRead {
   amount: string;
 }
 
+export interface TransactionLegCreate {
+  account_id: string;
+  amount: string;
+}
+
+export interface TransactionCreate {
+  category_id?: string | null;
+  description?: string | null;
+  notes?: string | null;
+  external_id?: string | null;
+  occurred_at: string;
+  posted_at?: string | null;
+  transaction_type?: TransactionType;
+  status?: TransactionStatus;
+  legs: TransactionLegCreate[];
+}
+
+export interface TransactionUpdateRequest {
+  description?: string | null;
+  notes?: string | null;
+  occurred_at?: string;
+  posted_at?: string;
+  category_id?: string | null;
+  status?: TransactionStatus;
+}
+
 export interface TransactionRead {
   id: string;
   category_id?: string | null;
@@ -105,6 +138,7 @@ export interface TransactionRead {
   posted_at: string;
   created_at: string;
   updated_at: string;
+  status: TransactionStatus;
   legs: TransactionLegRead[];
 }
 
@@ -184,13 +218,57 @@ export interface LoanUpdateRequest {
   expected_maturity_date?: string | null;
 }
 
-export interface ImportJob {
+export interface ImportError {
+  row_number: number;
+  message: string;
+}
+
+export interface ImportFileRead {
   id: string;
-  status: "pending" | "processing" | "completed" | "failed";
-  file_name?: string;
-  error_message?: string | null;
-  created_at?: string;
-  completed_at?: string | null;
+  filename: string;
+  account_id?: string;
+  row_count: number;
+  error_count: number;
+  status: string;
+  template_id?: string;
+  preview_rows?: Record<string, string>[];
+  errors?: ImportError[];
+}
+
+export interface ImportBatch {
+  id: string;
+  source_name?: string | null;
+  note?: string | null;
+  created_at: string;
+  updated_at: string;
+  file_count: number;
+  total_rows: number;
+  total_errors: number;
+  status: string;
+  files?: ImportFileRead[];
+}
+
+export interface ImportListResponse {
+  imports: ImportBatch[];
+}
+
+export interface ImportFileUpload {
+  filename: string;
+  content_base64: string;
+  account_id?: string;
+  template_id?: string;
+}
+
+export interface ImportExampleTransaction {
+  description: string;
+  amount: string;
+  category_hint: string;
+}
+
+export interface ImportCreateRequest {
+  files: ImportFileUpload[];
+  note?: string;
+  examples?: ImportExampleTransaction[];
 }
 
 export interface AccountListResponse {

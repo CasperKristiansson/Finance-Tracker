@@ -12,11 +12,19 @@ from sqlmodel import Session, SQLModel, select
 
 from apps.api.handlers import (
     create_transaction,
+    delete_transaction,
     list_transactions,
+    update_transaction,
     reset_transaction_handler_state,
 )
 from apps.api.models import Account, Loan, LoanEvent
-from apps.api.shared import AccountType, InterestCompound, configure_engine, get_engine
+from apps.api.shared import (
+    AccountType,
+    InterestCompound,
+    TransactionStatus,
+    configure_engine,
+    get_engine,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -75,6 +83,7 @@ def test_create_and_list_transactions():
     created = _json_body(create_response)
     transaction_id = created["id"]
     assert len(created["legs"]) == 2
+    assert created["status"] == TransactionStatus.RECORDED
 
     list_response = list_transactions({"queryStringParameters": None}, None)
     assert list_response["statusCode"] == 200
@@ -198,3 +207,55 @@ def test_create_transaction_generates_loan_event():
         events = session.exec(select(LoanEvent)).all()
         assert len(events) == 1
         assert events[0].event_type == "payment_principal"
+
+
+def test_update_and_delete_transaction():
+    engine = get_engine()
+    with Session(engine) as session:
+        source = _create_account(session)
+        destination = _create_account(session)
+        source_id = source.id
+        destination_id = destination.id
+
+    occurred = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    payload = {
+        "occurred_at": occurred.isoformat(),
+        "posted_at": occurred.isoformat(),
+        "legs": [
+            {"account_id": str(source_id), "amount": "-50.00"},
+            {"account_id": str(destination_id), "amount": "50.00"},
+        ],
+    }
+    create_response = create_transaction(
+        {"body": json.dumps(payload), "isBase64Encoded": False},
+        None,
+    )
+    created = _json_body(create_response)
+    transaction_id = created["id"]
+
+    update_payload = {
+        "description": "Updated",
+        "status": TransactionStatus.REVIEWED,
+    }
+    update_response = update_transaction(
+        {
+            "body": json.dumps(update_payload),
+            "isBase64Encoded": False,
+            "pathParameters": {"transaction_id": transaction_id},
+        },
+        None,
+    )
+    assert update_response["statusCode"] == 200
+    updated = _json_body(update_response)
+    assert updated["description"] == "Updated"
+    assert updated["status"] == TransactionStatus.REVIEWED
+
+    delete_response = delete_transaction(
+        {"pathParameters": {"transaction_id": transaction_id}},
+        None,
+    )
+    assert delete_response["statusCode"] == 204
+
+    list_response = list_transactions({"queryStringParameters": None}, None)
+    transactions = _json_body(list_response)["transactions"]
+    assert all(item["id"] != transaction_id for item in transactions)

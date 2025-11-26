@@ -1,37 +1,42 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { ImportJob } from "@/types/api";
+import type { ImportBatch } from "@/types/api";
 
 export interface ImportsState {
-  jobs: ImportJob[];
+  batches: ImportBatch[];
   loading: boolean;
   error?: string;
+  polling: boolean;
 }
 
 const initialState: ImportsState = {
-  jobs: [],
+  batches: [],
   loading: false,
+  polling: false,
 };
 
 const importsSlice = createSlice({
   name: "imports",
   initialState,
   reducers: {
-    setImportJobs(state, action: PayloadAction<ImportJob[]>) {
-      state.jobs = action.payload;
+    setImportBatches(state, action: PayloadAction<ImportBatch[]>) {
+      state.batches = action.payload;
       state.error = undefined;
     },
-    upsertImportJob(state, action: PayloadAction<ImportJob>) {
-      const existingIndex = state.jobs.findIndex(
-        (job) => job.id === action.payload.id,
+    upsertImportBatch(state, action: PayloadAction<ImportBatch>) {
+      const existingIndex = state.batches.findIndex(
+        (batch) => batch.id === action.payload.id,
       );
       if (existingIndex >= 0) {
-        state.jobs[existingIndex] = action.payload;
+        state.batches[existingIndex] = action.payload;
       } else {
-        state.jobs.unshift(action.payload);
+        state.batches.unshift(action.payload);
       }
     },
     setImportsLoading(state, action: PayloadAction<boolean>) {
       state.loading = action.payload;
+    },
+    setImportsPolling(state, action: PayloadAction<boolean>) {
+      state.polling = action.payload;
     },
     setImportsError(state, action: PayloadAction<string | undefined>) {
       state.error = action.payload ?? "Unable to process import job";
@@ -39,22 +44,25 @@ const importsSlice = createSlice({
   },
   selectors: {
     selectImportsState: (state) => state,
-    selectImportJobs: (state) => state.jobs,
+    selectImportBatches: (state) => state.batches,
     selectImportsLoading: (state) => state.loading,
+    selectImportsPolling: (state) => state.polling,
     selectImportsError: (state) => state.error,
   },
 });
 
 export const {
-  setImportJobs,
-  upsertImportJob,
+  setImportBatches,
+  upsertImportBatch,
   setImportsLoading,
+  setImportsPolling,
   setImportsError,
 } = importsSlice.actions;
 export const {
   selectImportsState,
-  selectImportJobs,
+  selectImportBatches,
   selectImportsLoading,
+  selectImportsPolling,
   selectImportsError,
 } = importsSlice.selectors;
 export const ImportsReducer = importsSlice.reducer;

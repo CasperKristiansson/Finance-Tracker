@@ -81,6 +81,36 @@ class TransactionService:
         self._record_loan_events(created, category)
         return created
 
+    def update_transaction(
+        self,
+        transaction_id: UUID,
+        *,
+        description: Optional[str] = None,
+        notes: Optional[str] = None,
+        occurred_at: Optional[datetime] = None,
+        posted_at: Optional[datetime] = None,
+        category_id: Optional[UUID] = None,
+        status: Optional["TransactionStatus"] = None,
+    ) -> Transaction:
+        transaction = self.repository.get(transaction_id)
+        if transaction is None:
+            raise LookupError("Transaction not found")
+        return self.repository.update(
+            transaction,
+            description=description,
+            notes=notes,
+            occurred_at=occurred_at,
+            posted_at=posted_at,
+            category_id=category_id,
+            status=status,
+        )
+
+    def delete_transaction(self, transaction_id: UUID) -> None:
+        transaction = self.repository.get(transaction_id)
+        if transaction is None:
+            raise LookupError("Transaction not found")
+        self.repository.delete(transaction)
+
     def add_transaction_leg(self, transaction_id: UUID, leg: TransactionLeg) -> TransactionLeg:
         transaction = self.repository.get(transaction_id)
         if transaction is None:

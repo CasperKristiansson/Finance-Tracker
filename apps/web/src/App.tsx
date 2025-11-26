@@ -13,6 +13,8 @@ import { Login } from "./pages/login/login.tsx";
 import { Navigation } from "./pages/navigation/navigation.tsx";
 import { NotFound } from "./pages/notFound/notFound.tsx";
 import { Redirect } from "./pages/redirect/redirect.tsx";
+import { Transactions } from "./pages/transactions/transactions.tsx";
+import { Imports } from "./pages/imports/imports.tsx";
 
 export const App: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -58,6 +60,22 @@ export const App: React.FC = () => {
           element={
             <NavigationWrapper title="Accounts">
               <Accounts />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.transactions}
+          element={
+            <NavigationWrapper title="Transactions">
+              <Transactions />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.imports}
+          element={
+            <NavigationWrapper title="Imports">
+              <Imports />
             </NavigationWrapper>
           }
         />
