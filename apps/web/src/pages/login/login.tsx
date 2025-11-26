@@ -80,6 +80,9 @@ export const Login: React.FC = () => {
                 Message me
               </a>
             </p>
+            <p className="mt-2 text-xs text-gray-500">
+              Access is protected. Use your credentials or explore in demo mode.
+            </p>
           </div>
           <div className="mt-5">
             <button

@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { Route, Routes } from "react-router";
 import { useAppDispatch, useAppSelector } from "./app/hooks.ts";
-import { Spinner } from "./components/spinner.tsx";
+import { AppLoadingShell } from "./components/app-loading-shell.tsx";
 import { PageRoutes } from "./data/routes.ts";
 import { selectLoading } from "./features/app/appSlice.tsx";
 import { AuthInitialize } from "./features/auth/authSaga.ts";
@@ -34,15 +34,7 @@ export const App: React.FC = () => {
   }, [dispatch]);
 
   if (!initialLoaded || loadingLogout) {
-    return (
-      <div
-        className={
-          "fixed inset-0 z-50 flex items-center justify-center opacity-80 transition-opacity duration-200 ease-in-out"
-        }
-      >
-        <Spinner height={100} width={100} />
-      </div>
-    );
+    return <AppLoadingShell />;
   }
 
   return (
