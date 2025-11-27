@@ -60,10 +60,15 @@ import {
   FetchNetWorthHistory,
   FetchTotalReport,
   FetchYearlyReport,
+  FetchQuarterlyReport,
+  FetchCustomReport,
+  ExportReport,
 } from "@/features/reports/reportsSaga";
 import {
   selectMonthlyReport,
   selectNetWorthReport,
+  selectQuarterlyByFilters,
+  selectCustomByFilters,
   selectReportKpis,
   selectReportsState,
   selectTotalReport,
@@ -248,6 +253,15 @@ export const useReportsApi = () => {
   const dispatch = useAppDispatch();
   const monthly = useAppSelector(selectMonthlyReport);
   const yearly = useAppSelector(selectYearlyReport);
+  const quarterly = useAppSelector((state) =>
+    selectQuarterlyByFilters(state, undefined),
+  );
+  const custom = useAppSelector((state) =>
+    selectCustomByFilters(state, {
+      start_date: "",
+      end_date: "",
+    }),
+  );
   const total = useAppSelector(selectTotalReport);
   const netWorth = useAppSelector(selectNetWorthReport);
   const kpis = useAppSelector(selectReportKpis);
@@ -272,10 +286,26 @@ export const useReportsApi = () => {
       dispatch(FetchNetWorthHistory(filters)),
     [dispatch],
   );
+  const fetchQuarterlyReport = useCallback(
+    (filters?: ReportFilters) => dispatch(FetchQuarterlyReport(filters)),
+    [dispatch],
+  );
+  const fetchCustomReport = useCallback(
+    (params: Parameters<typeof FetchCustomReport>[0]) =>
+      dispatch(FetchCustomReport(params)),
+    [dispatch],
+  );
+  const exportReport = useCallback(
+    (payload: Parameters<typeof ExportReport>[0]) =>
+      dispatch(ExportReport(payload)),
+    [dispatch],
+  );
 
   return {
     monthly,
     yearly,
+    quarterly,
+    custom,
     total,
     netWorth,
     kpis,
@@ -284,6 +314,9 @@ export const useReportsApi = () => {
     fetchYearlyReport,
     fetchTotalReport,
     fetchNetWorthReport,
+    fetchQuarterlyReport,
+    fetchCustomReport,
+    exportReport,
   };
 };
 

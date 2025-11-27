@@ -48,6 +48,17 @@ class LifetimeTotals:
 
 
 @dataclass(frozen=True)
+class QuarterlyTotals:
+    """Aggregate totals for a specific quarter."""
+
+    year: int
+    quarter: int
+    income: Decimal
+    expense: Decimal
+    net: Decimal
+
+
+@dataclass(frozen=True)
 class NetWorthPoint:
     """Net worth value at a point in time."""
 
@@ -67,10 +78,14 @@ class ReportingRepository:
         year: Optional[int] = None,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
     ) -> List[MonthlyTotals]:
         legs = self._fetch_legs(
             account_ids=account_ids,
             category_ids=category_ids,
+            start_date=start_date,
+            end_date=end_date,
         )
 
         buckets: Dict[date, DecimalTotals] = {}
@@ -96,10 +111,14 @@ class ReportingRepository:
         *,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
     ) -> List[YearlyTotals]:
         legs = self._fetch_legs(
             account_ids=account_ids,
             category_ids=category_ids,
+            start_date=start_date,
+            end_date=end_date,
         )
 
         buckets: Dict[int, DecimalTotals] = {}
@@ -121,10 +140,14 @@ class ReportingRepository:
         *,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
     ) -> LifetimeTotals:
         legs = self._fetch_legs(
             account_ids=account_ids,
             category_ids=category_ids,
+            start_date=start_date,
+            end_date=end_date,
         )
 
         income_total = Decimal("0")
@@ -194,11 +217,60 @@ class ReportingRepository:
                 self.session.rollback()
                 raise
 
+    def get_quarterly_totals(
+        self,
+        *,
+        year: Optional[int] = None,
+        account_ids: Optional[Iterable[UUID]] = None,
+        category_ids: Optional[Iterable[UUID]] = None,
+    ) -> List[QuarterlyTotals]:
+        legs = self._fetch_legs(
+            account_ids=account_ids,
+            category_ids=category_ids,
+        )
+
+        buckets: Dict[tuple[int, int], DecimalTotals] = {}
+
+        for occurred_at, amount in legs:
+            if year is not None and occurred_at.year != year:
+                continue
+            quarter = (occurred_at.month - 1) // 3 + 1
+            key = (occurred_at.year, quarter)
+            income, expense = buckets.get(key, (Decimal("0"), Decimal("0")))
+            income, expense = self._accumulate(amount, income, expense)
+            buckets[key] = (income, expense)
+
+        results: List[QuarterlyTotals] = []
+        for (yr, qtr) in sorted(buckets.keys()):
+            income, expense = buckets[(yr, qtr)]
+            net = income - expense
+            results.append(
+                QuarterlyTotals(year=yr, quarter=qtr, income=income, expense=expense, net=net)
+            )
+        return results
+
+    def get_range_monthly_totals(
+        self,
+        *,
+        start_date: date,
+        end_date: date,
+        account_ids: Optional[Iterable[UUID]] = None,
+        category_ids: Optional[Iterable[UUID]] = None,
+    ) -> List[MonthlyTotals]:
+        return self.get_monthly_totals(
+            account_ids=account_ids,
+            category_ids=category_ids,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
     def _fetch_legs(
         self,
         *,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
     ) -> Sequence[Tuple[datetime, Decimal]]:
         transaction_table = cast(Table, getattr(Transaction, "__table__"))
         leg_table = cast(Table, getattr(TransactionLeg, "__table__"))
@@ -215,6 +287,10 @@ class ReportingRepository:
             statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
         if category_ids:
             statement = statement.where(transaction_table.c.category_id.in_(list(category_ids)))
+        if start_date:
+            statement = statement.where(transaction_table.c.occurred_at >= start_date)
+        if end_date:
+            statement = statement.where(transaction_table.c.occurred_at <= end_date)
 
         rows = self.session.exec(statement).all()
         return [(occurred_at, coerce_decimal(amount)) for occurred_at, amount in rows]
@@ -243,6 +319,7 @@ __all__ = [
     "ReportingRepository",
     "MonthlyTotals",
     "YearlyTotals",
+    "QuarterlyTotals",
     "LifetimeTotals",
     "NetWorthPoint",
 ]

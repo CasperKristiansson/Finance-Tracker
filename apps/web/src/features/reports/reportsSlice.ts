@@ -29,6 +29,12 @@ export interface ReportsState {
   yearly: CacheKeyedState<YearlyReportEntry[]>;
   total: CacheKeyedState<TotalReportRead | undefined>;
   netWorth: CacheKeyedState<NetWorthPoint[]>;
+  quarterly: CacheKeyedState<import("@/types/api").QuarterlyReportEntry[]>;
+  custom: CacheKeyedState<MonthlyReportEntry[]>;
+  exportState: {
+    loading: boolean;
+    error?: string;
+  };
 }
 
 const createInitialCache = <T>(): CacheKeyedState<T> => ({
@@ -42,6 +48,9 @@ const initialState: ReportsState = {
   yearly: createInitialCache<YearlyReportEntry[]>(),
   total: createInitialCache<TotalReportRead | undefined>(),
   netWorth: createInitialCache<NetWorthPoint[]>(),
+  quarterly: createInitialCache<import("@/types/api").QuarterlyReportEntry[]>(),
+  custom: createInitialCache<MonthlyReportEntry[]>(),
+  exportState: { loading: false },
 };
 
 export const buildReportKey = (filters: ReportFilters | undefined): string =>
@@ -125,6 +134,52 @@ const reportsSlice = createSlice({
       state.netWorth.currentKey = action.payload;
     },
     resetReports: () => initialState,
+    setQuarterlyReport(
+      state,
+      action: PayloadAction<{
+        key: string;
+        data: import("@/types/api").QuarterlyReportEntry[];
+      }>,
+    ) {
+      state.quarterly.cache[action.payload.key] = action.payload.data;
+      state.quarterly.currentKey = action.payload.key;
+      state.quarterly.error = undefined;
+    },
+    setQuarterlyLoading(state, action: PayloadAction<boolean>) {
+      state.quarterly.loading = action.payload;
+    },
+    setQuarterlyError(state, action: PayloadAction<string | undefined>) {
+      state.quarterly.error =
+        action.payload ?? "Unable to load quarterly report";
+    },
+    setQuarterlyCurrentKey(state, action: PayloadAction<string>) {
+      state.quarterly.currentKey = action.payload;
+    },
+    setCustomReport(
+      state,
+      action: PayloadAction<{ key: string; data: MonthlyReportEntry[] }>,
+    ) {
+      state.custom.cache[action.payload.key] = action.payload.data;
+      state.custom.currentKey = action.payload.key;
+      state.custom.error = undefined;
+    },
+    setCustomLoading(state, action: PayloadAction<boolean>) {
+      state.custom.loading = action.payload;
+    },
+    setCustomError(state, action: PayloadAction<string | undefined>) {
+      state.custom.error =
+        action.payload ?? "Unable to load custom date range report";
+    },
+    setCustomCurrentKey(state, action: PayloadAction<string>) {
+      state.custom.currentKey = action.payload;
+    },
+    setExportLoading(state, action: PayloadAction<boolean>) {
+      state.exportState.loading = action.payload;
+    },
+    setExportError(state, action: PayloadAction<string | undefined>) {
+      state.exportState.error =
+        action.payload ?? "Unable to export report";
+    },
   },
   selectors: {
     selectReportsState: (state) => state,
@@ -132,6 +187,9 @@ const reportsSlice = createSlice({
     selectYearlyReportState: (state) => state.yearly,
     selectTotalReportState: (state) => state.total,
     selectNetWorthState: (state) => state.netWorth,
+    selectQuarterlyReportState: (state) => state.quarterly,
+    selectCustomReportState: (state) => state.custom,
+    selectExportState: (state) => state.exportState,
   },
 });
 
@@ -197,6 +255,16 @@ export const {
   setNetWorthError,
   setNetWorthCurrentKey,
   resetReports,
+  setQuarterlyReport,
+  setQuarterlyLoading,
+  setQuarterlyError,
+  setQuarterlyCurrentKey,
+  setCustomReport,
+  setCustomLoading,
+  setCustomError,
+  setCustomCurrentKey,
+  setExportLoading,
+  setExportError,
 } = reportsSlice.actions;
 
 export const {
@@ -205,6 +273,9 @@ export const {
   selectYearlyReportState,
   selectTotalReportState,
   selectNetWorthState,
+  selectQuarterlyReportState,
+  selectCustomReportState,
+  selectExportState,
 } = reportsSlice.selectors;
 
 export const selectMonthlyByFilters = (
@@ -217,6 +288,35 @@ export const selectMonthlyByFilters = (
     data: monthly.cache[key] ?? [],
     loading: monthly.loading && monthly.currentKey === key,
     error: monthly.error,
+  };
+};
+
+export const selectQuarterlyByFilters = (
+  state: RootState,
+  filters: ReportFilters | undefined,
+) => {
+  const key = buildReportKey(filters);
+  const quarterly = selectQuarterlyReportState(state);
+  return {
+    data: quarterly.cache[key] ?? [],
+    loading: quarterly.loading && quarterly.currentKey === key,
+    error: quarterly.error,
+  };
+};
+
+export const selectCustomByFilters = (
+  state: RootState,
+  filters: { start_date: string; end_date: string } & Omit<
+    ReportFilters,
+    "year"
+  >,
+) => {
+  const key = JSON.stringify(filters);
+  const custom = selectCustomReportState(state);
+  return {
+    data: custom.cache[key] ?? [],
+    loading: custom.loading && custom.currentKey === key,
+    error: custom.error,
   };
 };
 

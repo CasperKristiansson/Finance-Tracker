@@ -286,6 +286,30 @@ functions:
           method: GET
           authorizer: cognitoJwt
 
+  quarterlyReport:
+    handler: apps/api/handlers/reporting.quarterly_report
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/quarterly
+          method: GET
+          authorizer: cognitoJwt
+
+  dateRangeReport:
+    handler: apps/api/handlers/reporting.date_range_report
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/custom
+          method: GET
+          authorizer: cognitoJwt
+
   totalReport:
     handler: apps/api/handlers/reporting.total_report
     timeout: 29
@@ -296,4 +320,28 @@ functions:
       - httpApi:
           path: /reports/total
           method: GET
+          authorizer: cognitoJwt
+
+  netWorthHistory:
+    handler: apps/api/handlers/reporting.net_worth_history
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/net-worth
+          method: GET
+          authorizer: cognitoJwt
+
+  exportReport:
+    handler: apps/api/handlers/reporting.export_report
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/export
+          method: POST
           authorizer: cognitoJwt

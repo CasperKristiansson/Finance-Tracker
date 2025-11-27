@@ -19,11 +19,22 @@ import {
   setYearlyLoading,
   setYearlyReport,
   type ReportFilters,
+  setQuarterlyCurrentKey,
+  setQuarterlyError,
+  setQuarterlyLoading,
+  setQuarterlyReport,
+  setCustomCurrentKey,
+  setCustomError,
+  setCustomLoading,
+  setCustomReport,
+  setExportError,
+  setExportLoading,
 } from "@/features/reports/reportsSlice";
 import { buildReportKey } from "@/features/reports/reportsSlice";
 import type {
   MonthlyReportEntry,
   NetWorthHistoryResponse,
+  QuarterlyReportEntry,
   TotalReportRead,
   YearlyReportEntry,
 } from "@/types/api";
@@ -40,6 +51,24 @@ export const FetchTotalReport = createAction<
 export const FetchNetWorthHistory = createAction<
   Omit<ReportFilters, "year" | "categoryIds"> | undefined
 >("reports/fetchNetWorth");
+export const FetchQuarterlyReport = createAction<ReportFilters | undefined>(
+  "reports/fetchQuarterly",
+);
+export const FetchCustomReport = createAction<{
+  start_date: string;
+  end_date: string;
+  accountIds?: string[];
+  categoryIds?: string[];
+}>("reports/fetchCustom");
+export const ExportReport = createAction<{
+  granularity: "monthly" | "yearly" | "quarterly" | "total" | "net_worth";
+  format?: "csv" | "xlsx";
+  year?: number;
+  start_date?: string;
+  end_date?: string;
+  accountIds?: string[];
+  categoryIds?: string[];
+}>("reports/export");
 
 const toCsv = (values?: string[]) => {
   if (!values || values.length === 0) return undefined;
@@ -184,9 +213,125 @@ function* handleFetchNetWorth(action: ReturnType<typeof FetchNetWorthHistory>) {
   }
 }
 
+function* handleFetchQuarterly(
+  action: ReturnType<typeof FetchQuarterlyReport>,
+) {
+  const filters = action.payload ?? {};
+  const key = buildReportKey(filters);
+  yield put(setQuarterlyCurrentKey(key));
+  yield put(setQuarterlyLoading(true));
+
+  try {
+    const query = {
+      ...(filters.year ? { year: filters.year } : {}),
+      ...(toCsv(filters.accountIds)
+        ? { account_ids: toCsv(filters.accountIds) }
+        : {}),
+      ...(toCsv(filters.categoryIds)
+        ? { category_ids: toCsv(filters.categoryIds) }
+        : {}),
+    };
+    const response: { results: QuarterlyReportEntry[] } = yield call(
+      callApiWithAuth,
+      { path: "/reports/quarterly", query },
+      { loadingKey: "report-quarterly" },
+    );
+    yield put(setQuarterlyReport({ key, data: response.results }));
+  } catch (error) {
+    yield put(
+      setQuarterlyError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load quarterly report",
+      ),
+    );
+  } finally {
+    yield put(setQuarterlyLoading(false));
+  }
+}
+
+function* handleFetchCustom(action: ReturnType<typeof FetchCustomReport>) {
+  const params = action.payload;
+  const key = JSON.stringify(params);
+  yield put(setCustomCurrentKey(key));
+  yield put(setCustomLoading(true));
+
+  try {
+    const query = {
+      start_date: params.start_date,
+      end_date: params.end_date,
+      ...(toCsv(params.accountIds)
+        ? { account_ids: toCsv(params.accountIds) }
+        : {}),
+      ...(toCsv(params.categoryIds)
+        ? { category_ids: toCsv(params.categoryIds) }
+        : {}),
+    };
+    const response: { results: MonthlyReportEntry[] } = yield call(
+      callApiWithAuth,
+      { path: "/reports/custom", query },
+      { loadingKey: "report-custom" },
+    );
+    yield put(setCustomReport({ key, data: response.results }));
+  } catch (error) {
+    yield put(
+      setCustomError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load custom report",
+      ),
+    );
+  } finally {
+    yield put(setCustomLoading(false));
+  }
+}
+
+function* handleExportReport(action: ReturnType<typeof ExportReport>) {
+  yield put(setExportLoading(true));
+  try {
+    const payload = {
+      granularity: action.payload.granularity,
+      format: action.payload.format ?? "csv",
+      year: action.payload.year,
+      start_date: action.payload.start_date,
+      end_date: action.payload.end_date,
+      ...(toCsv(action.payload.accountIds)
+        ? { account_ids: toCsv(action.payload.accountIds) }
+        : {}),
+      ...(toCsv(action.payload.categoryIds)
+        ? { category_ids: toCsv(action.payload.categoryIds) }
+        : {}),
+    };
+    const response: {
+      filename: string;
+      content_type: string;
+      data_base64: string;
+    } = yield call(
+      callApiWithAuth,
+      { path: "/reports/export", method: "POST", body: payload },
+      { loadingKey: "report-export" },
+    );
+    const link = document.createElement("a");
+    link.href = `data:${response.content_type};base64,${response.data_base64}`;
+    link.download = response.filename;
+    link.click();
+  } catch (error) {
+    yield put(
+      setExportError(
+        error instanceof Error ? error.message : "Failed to export report",
+      ),
+    );
+  } finally {
+    yield put(setExportLoading(false));
+  }
+}
+
 export function* ReportsSaga() {
   yield takeLatest(FetchMonthlyReport.type, handleFetchMonthly);
   yield takeLatest(FetchYearlyReport.type, handleFetchYearly);
   yield takeLatest(FetchTotalReport.type, handleFetchTotal);
   yield takeLatest(FetchNetWorthHistory.type, handleFetchNetWorth);
+  yield takeLatest(FetchQuarterlyReport.type, handleFetchQuarterly);
+  yield takeLatest(FetchCustomReport.type, handleFetchCustom);
+  yield takeLatest(ExportReport.type, handleExportReport);
 }

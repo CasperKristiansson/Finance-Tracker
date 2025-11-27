@@ -55,10 +55,10 @@
 
 ### Milestone 6 – Reports & Analytics (fully featured)
 
-- [ ] Backend: extend reporting to support quarter + custom date range; add net worth history endpoint if absent; ensure filters for account/category; CSV/XLSX export endpoints for reports.
-- [ ] Redux slices/sagas: reporting fetch keyed by granularity (month/quarter/year/custom), cache + revalidate; export actions; drill-down fetch for category/account detail.
+- [x] Backend: extend reporting to support quarter + custom date range; add net worth history endpoint if absent; ensure filters for account/category; CSV/XLSX export endpoints for reports.
+- [x] Redux slices/sagas: reporting fetch keyed by granularity (month/quarter/year/custom), cache + revalidate; export actions; drill-down fetch for category/account detail.
 - [ ] Layout: top row controls (period selector, compare toggle vs prior period, account/category chips, export buttons); bottom grid of charts/tables.
-- [ ] Charts: stacked area (income vs expense), grouped bar (cash flow by period), donut/treemap for category share, line/area for net worth history, bar for savings rate, and Sankey flow (income sources → categories/accounts). Sankey should group tiny nodes under “Other” below a threshold and support hover details.
+- [x] Charts: stacked area (income vs expense), grouped bar (cash flow by period), donut/treemap for category share, line/area for net worth history, bar for savings rate, and Sankey flow (income sources → categories/accounts). Sankey should group tiny nodes under “Other” below a threshold and support hover details.
 - [ ] Drill-down: click category slice to open detail panel/table; click bar point to show period breakdown; CSV export of detail.
 - [ ] Loading/empty: chart skeletons matching shapes; empty copy prompting to import/add data; inline spinner on compare toggle.
 

@@ -23,6 +23,9 @@ from .loans import (
 )
 from .reporting import (
     monthly_report,
+    quarterly_report,
+    date_range_report,
+    export_report,
 )
 from .reporting import reset_handler_state as reset_reporting_handler_state
 from .reporting import (
@@ -63,6 +66,9 @@ __all__ = [
     "list_loan_events",
     "get_loan_schedule",
     "monthly_report",
+    "quarterly_report",
+    "date_range_report",
+    "export_report",
     "yearly_report",
     "total_report",
     "net_worth_history",

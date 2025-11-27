@@ -16,6 +16,7 @@ import { Login } from "./pages/login/login.tsx";
 import { Navigation } from "./pages/navigation/navigation.tsx";
 import { NotFound } from "./pages/notFound/notFound.tsx";
 import { Redirect } from "./pages/redirect/redirect.tsx";
+import { Reports } from "./pages/reports/reports.tsx";
 import { Transactions } from "./pages/transactions/transactions.tsx";
 
 export const App: React.FC = () => {
@@ -94,6 +95,14 @@ export const App: React.FC = () => {
           element={
             <NavigationWrapper title="Imports">
               <Imports />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.reports}
+          element={
+            <NavigationWrapper title="Reports">
+              <Reports />
             </NavigationWrapper>
           }
         />

@@ -178,6 +178,14 @@ export interface YearlyReportEntry {
   net: string;
 }
 
+export interface QuarterlyReportEntry {
+  year: number;
+  quarter: number;
+  income: string;
+  expense: string;
+  net: string;
+}
+
 export interface TotalReportRead {
   income: string;
   expense: string;

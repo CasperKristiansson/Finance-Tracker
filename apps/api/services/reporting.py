@@ -8,6 +8,7 @@ from uuid import UUID
 from sqlmodel import Session
 
 from ..repositories.reporting import (
+    QuarterlyTotals,
     LifetimeTotals,
     MonthlyTotals,
     ReportingRepository,
@@ -52,10 +53,14 @@ class ReportingService:
         *,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
     ) -> LifetimeTotals:
         return self.repository.get_total_summary(
             account_ids=account_ids,
             category_ids=category_ids,
+            start_date=start_date,
+            end_date=end_date,
         )
 
     def net_worth_history(
@@ -76,11 +81,40 @@ class ReportingService:
             concurrently=concurrently,
         )
 
+    def quarterly_report(
+        self,
+        *,
+        year: Optional[int] = None,
+        account_ids: Optional[Iterable[UUID]] = None,
+        category_ids: Optional[Iterable[UUID]] = None,
+    ) -> List[QuarterlyTotals]:
+        return self.repository.get_quarterly_totals(
+            year=year,
+            account_ids=account_ids,
+            category_ids=category_ids,
+        )
+
+    def date_range_report(
+        self,
+        *,
+        start_date: date,
+        end_date: date,
+        account_ids: Optional[Iterable[UUID]] = None,
+        category_ids: Optional[Iterable[UUID]] = None,
+    ) -> List[MonthlyTotals]:
+        return self.repository.get_range_monthly_totals(
+            start_date=start_date,
+            end_date=end_date,
+            account_ids=account_ids,
+            category_ids=category_ids,
+        )
+
 
 __all__ = [
     "ReportingService",
     "MonthlyTotals",
     "YearlyTotals",
+    "QuarterlyTotals",
     "LifetimeTotals",
     "NetWorthPoint",
 ]
