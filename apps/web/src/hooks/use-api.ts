@@ -37,16 +37,17 @@ import {
   type CategoriesState,
 } from "@/features/categories/categoriesSlice";
 import {
-  FetchImportBatches,
-  UploadImportBatch,
-  StartImportPolling,
-  StopImportPolling,
+  StartImportSession,
+  AppendImportFiles,
+  FetchImportSession,
+  CommitImportSession,
+  ResetImportSession,
 } from "@/features/imports/importsSaga";
 import {
-  selectImportBatches,
+  selectImportSession,
   selectImportsError,
   selectImportsLoading,
-  selectImportsPolling,
+  selectImportsSaving,
 } from "@/features/imports/importsSlice";
 import { FetchLoanEvents, FetchLoanSchedule } from "@/features/loans/loansSaga";
 import {
@@ -99,6 +100,7 @@ import type {
   CategoryCreateRequest,
   CategoryUpdateRequest,
   ImportCreateRequest,
+  ImportCommitRow,
   TransactionCreate,
   TransactionStatus,
   TransactionUpdateRequest,
@@ -353,37 +355,48 @@ export const useLoansApi = () => {
 
 export const useImportsApi = () => {
   const dispatch = useAppDispatch();
-  const batches = useAppSelector(selectImportBatches);
+  const session = useAppSelector(selectImportSession);
   const loading = useAppSelector(selectImportsLoading);
-  const polling = useAppSelector(selectImportsPolling);
+  const saving = useAppSelector(selectImportsSaving);
   const error = useAppSelector(selectImportsError);
 
-  const fetchImportBatches = useCallback(
-    () => dispatch(FetchImportBatches()),
+  const startImportSession = useCallback(
+    (payload: ImportCreateRequest) => dispatch(StartImportSession(payload)),
     [dispatch],
   );
-  const uploadImportBatch = useCallback(
-    (payload: ImportCreateRequest) => dispatch(UploadImportBatch(payload)),
+
+  const appendImportFiles = useCallback(
+    (sessionId: string, payload: ImportCreateRequest) =>
+      dispatch(AppendImportFiles({ ...payload, sessionId })),
     [dispatch],
   );
-  const startPolling = useCallback(
-    (intervalMs?: number) => dispatch(StartImportPolling(intervalMs)),
+
+  const fetchImportSession = useCallback(
+    (sessionId: string) => dispatch(FetchImportSession(sessionId)),
     [dispatch],
   );
-  const stopPolling = useCallback(
-    () => dispatch(StopImportPolling()),
+
+  const commitImportSession = useCallback(
+    (sessionId: string, rows: ImportCommitRow[]) =>
+      dispatch(CommitImportSession({ sessionId, rows })),
+    [dispatch],
+  );
+
+  const resetImportSession = useCallback(
+    () => dispatch(ResetImportSession()),
     [dispatch],
   );
 
   return {
-    batches,
+    session,
     loading,
-    polling,
+    saving,
     error,
-    fetchImportBatches,
-    uploadImportBatch,
-    startPolling,
-    stopPolling,
+    startImportSession,
+    appendImportFiles,
+    fetchImportSession,
+    commitImportSession,
+    resetImportSession,
   };
 };
 

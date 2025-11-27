@@ -23,7 +23,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccountsApi, useCategoriesApi, useReportsApi } from "@/hooks/use-api";
+import { useTransactionsApi } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
+import { useNavigate } from "react-router-dom";
+import { PageRoutes } from "@/data/routes";
+import type { TransactionRead } from "@/types/api";
 import { useTransactionsApi } from "@/hooks/use-api";
 import {
   selectTransactions,
@@ -158,6 +162,30 @@ export const Reports: React.FC = () => {
     }));
   }, [granularity, monthly.data, yearly.data, quarterly.data, custom.data]);
 
+  useEffect(() => {
+    const prev = chartData.map((point, idx) => {
+      const prior = idx > 0 ? chartData[idx - 1] : undefined;
+      return {
+        ...point,
+        incomePrev: prior?.income ?? 0,
+        expensePrev: prior?.expense ?? 0,
+        netPrev: prior?.net ?? 0,
+      };
+    });
+    setCompareSeries(prev);
+    if (chartData.length > 1) {
+      const latest = chartData[chartData.length - 1];
+      const prevPoint = chartData[chartData.length - 2];
+      const diff = latest.net - prevPoint.net;
+      const direction = diff >= 0 ? "▲" : "▼";
+      setDeltaBadge(`${direction} ${currency(Math.abs(diff))} vs prior`);
+      setNetDelta(diff);
+    } else {
+      setDeltaBadge(null);
+      setNetDelta(null);
+    }
+  }, [chartData]);
+
   const activeLoading =
     monthly.loading ||
     yearly.loading ||
@@ -177,10 +205,30 @@ export const Reports: React.FC = () => {
     });
   };
 
+  const deriveRange = (): { start: string; end: string } => {
+    if (granularity === "custom") {
+      return { start: dateRange.start, end: dateRange.end };
+    }
+    const year = filters.year || new Date().getFullYear();
+    if (granularity === "quarterly") {
+      const now = new Date();
+      const q = Math.floor(now.getMonth() / 3);
+      const start = new Date(year, q * 3, 1);
+      const end = new Date(year, q * 3 + 3, 0);
+      return {
+        start: start.toISOString().slice(0, 10),
+        end: end.toISOString().slice(0, 10),
+      };
+    }
+    const start = new Date(year, 0, 1).toISOString().slice(0, 10);
+    const end = new Date(year, 11, 31).toISOString().slice(0, 10);
+    return { start, end };
+  };
+
   return (
     <div className="space-y-4">
       <Card className="border-slate-200 shadow-sm">
-        <CardContent className="flex flex-col gap-4 py-4">
+        <CardContent className="sticky top-16 z-20 flex flex-col gap-4 border-b border-slate-100 bg-white/80 py-4 backdrop-blur">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
               <span className="text-xs uppercase tracking-wide text-slate-500">
@@ -417,9 +465,21 @@ export const Reports: React.FC = () => {
           </CardHeader>
           <CardContent className="h-80">
             {chartData.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-slate-500">
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-slate-500">
                 <Skeleton className="h-48 w-full" />
                 <p>Import data or add transactions to see income vs expense.</p>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => navigate(PageRoutes.imports)}>
+                    Import data
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(PageRoutes.transactions)}
+                  >
+                    Add transaction
+                  </Button>
+                </div>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -445,6 +505,26 @@ export const Reports: React.FC = () => {
                     fill="#ef4444"
                     fillOpacity={0.35}
                   />
+                  {compare && compareSeries.length ? (
+                    <>
+                      <Area
+                        type="monotone"
+                        dataKey="incomePrev"
+                        stackId="stackPrev"
+                        stroke="#16a34a"
+                        fill="#16a34a"
+                        fillOpacity={0.12}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="expensePrev"
+                        stackId="stackPrev"
+                        stroke="#f97316"
+                        fill="#f97316"
+                        fillOpacity={0.12}
+                      />
+                    </>
+                  ) : null}
                 </AreaChart>
               </ResponsiveContainer>
             )}
@@ -457,14 +537,28 @@ export const Reports: React.FC = () => {
               Net trend
             </CardTitle>
             {compare ? (
-              <Badge variant="outline">Comparing vs prior</Badge>
+              <Badge variant="outline">
+                {deltaBadge ?? "Comparing vs prior"}
+              </Badge>
             ) : null}
           </CardHeader>
           <CardContent className="h-80">
             {chartData.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-slate-500">
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-slate-500">
                 <Skeleton className="h-48 w-full" />
                 <p>Import data or add transactions to see net trends.</p>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => navigate(PageRoutes.imports)}>
+                    Import data
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(PageRoutes.transactions)}
+                  >
+                    Add transaction
+                  </Button>
+                </div>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -489,6 +583,14 @@ export const Reports: React.FC = () => {
                   <YAxis />
                   <Tooltip />
                   <Line type="monotone" dataKey="net" stroke="#0ea5e9" />
+                  {compare && compareSeries.length ? (
+                    <Line
+                      type="monotone"
+                      dataKey="netPrev"
+                      stroke="#94a3b8"
+                      strokeDasharray="4 4"
+                    />
+                  ) : null}
                 </LineChart>
               </ResponsiveContainer>
             )}
@@ -505,9 +607,21 @@ export const Reports: React.FC = () => {
           </CardHeader>
           <CardContent className="h-72">
             {chartData.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-slate-500">
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-slate-500">
                 <Skeleton className="h-48 w-full" />
                 <p>Bring in data to view cash flow by period.</p>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => navigate(PageRoutes.imports)}>
+                    Import data
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(PageRoutes.transactions)}
+                  >
+                    Add transaction
+                  </Button>
+                </div>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -534,9 +648,21 @@ export const Reports: React.FC = () => {
           </CardHeader>
           <CardContent className="h-72">
             {categoryShare.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-slate-500">
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-slate-500">
                 <Skeleton className="h-48 w-full" />
                 <p>Add categories and transactions to see share breakdown.</p>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => navigate(PageRoutes.imports)}>
+                    Import data
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(PageRoutes.transactions)}
+                  >
+                    Add transaction
+                  </Button>
+                </div>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -569,9 +695,21 @@ export const Reports: React.FC = () => {
           </CardHeader>
           <CardContent className="h-72">
             {netWorthSeries.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-slate-500">
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-slate-500">
                 <Skeleton className="h-48 w-full" />
                 <p>Connect accounts to track net worth over time.</p>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => navigate(PageRoutes.imports)}>
+                    Import data
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(PageRoutes.transactions)}
+                  >
+                    Add transaction
+                  </Button>
+                </div>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -601,9 +739,21 @@ export const Reports: React.FC = () => {
           </CardHeader>
           <CardContent className="h-72">
             {savingsRate.length === 0 ? (
-              <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-slate-500">
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-slate-500">
                 <Skeleton className="h-48 w-full" />
                 <p>Add income and expense data to see savings rate.</p>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => navigate(PageRoutes.imports)}>
+                    Import data
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(PageRoutes.transactions)}
+                  >
+                    Add transaction
+                  </Button>
+                </div>
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -613,6 +763,9 @@ export const Reports: React.FC = () => {
                   <YAxis />
                   <Tooltip />
                   <Bar dataKey="rate" fill="#10b981" />
+                  {compare ? (
+                    <Bar dataKey="prior" fill="#cbd5e1" />
+                  ) : null}
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -628,9 +781,21 @@ export const Reports: React.FC = () => {
         </CardHeader>
         <CardContent className="h-96">
           {sankeyData.nodes.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-slate-500">
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-slate-500">
               <Skeleton className="h-48 w-full" />
               <p>Import data to see income flow between accounts and categories.</p>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={() => navigate(PageRoutes.imports)}>
+                  Import data
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => navigate(PageRoutes.transactions)}
+                >
+                  Add transaction
+                </Button>
+              </div>
             </div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
@@ -649,39 +814,6 @@ export const Reports: React.FC = () => {
     </div>
   );
 };
-  const categoryShare = useMemo(() => {
-    const palette = [
-      "#22c55e",
-      "#ef4444",
-      "#6366f1",
-      "#f59e0b",
-      "#0ea5e9",
-      "#8b5cf6",
-    ];
-    const items =
-      categories.length > 0
-        ? categories
-            .filter((c) => !c.is_archived)
-            .slice(0, 8)
-            .map((c, idx) => ({
-              name: `${c.icon ? `${c.icon} ` : ""}${c.name}`,
-              value: (idx + 1) * 10,
-              fill: c.color_hex || palette[idx % palette.length],
-            }))
-        : [];
-
-    const total = items.reduce((sum, i) => sum + i.value, 0);
-    const threshold = total * 0.05;
-    const main = items.filter((i) => i.value >= threshold);
-    const otherSum = items
-      .filter((i) => i.value < threshold)
-      .reduce((sum, i) => sum + i.value, 0);
-    if (otherSum > 0) {
-      main.push({ name: "Other", value: otherSum, fill: "#cbd5e1" });
-    }
-    return main;
-  }, [categories]);
-
   const netWorthSeries = useMemo(
     () =>
       (netWorth.data || []).map((p: NetWorthPoint) => ({
@@ -692,7 +824,7 @@ export const Reports: React.FC = () => {
   );
 
   const savingsRate = useMemo(() => {
-    return (monthly.data || []).map((row) => {
+    const series = (monthly.data || []).map((row) => {
       const income = Number(row.income);
       const expense = Math.abs(Number(row.expense));
       const rate = income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
@@ -701,6 +833,10 @@ export const Reports: React.FC = () => {
         rate,
       };
     });
+    return series.map((point, idx) => ({
+      ...point,
+      prior: idx > 0 ? series[idx - 1].rate : 0,
+    }));
   }, [monthly.data]);
 
   const sankeyData = useMemo(() => {
@@ -722,10 +858,21 @@ export const Reports: React.FC = () => {
         links.push({
           source: sourceIdx,
           target: targetIdx,
-          value: cat.value / incomeSources.length,
+          value: cat.value / Math.max(incomeSources.length, 1),
         });
       });
     });
+
+    if (categoryShare.length > 5) {
+      const otherValue = categoryShare
+        .slice(5)
+        .reduce((sum, item) => sum + item.value, 0);
+      if (otherValue > 0) {
+        const sourceIdx = addNode("Other income");
+        const targetIdx = addNode("Other categories");
+        links.push({ source: sourceIdx, target: targetIdx, value: otherValue });
+      }
+    }
 
     return { nodes, links };
   }, [accounts, categoryShare]);
@@ -741,6 +888,13 @@ export const Reports: React.FC = () => {
     net: number;
   } | null>(null);
   const [detailRows, setDetailRows] = useState<TransactionRead[]>([]);
+  const [categoryShare, setCategoryShare] = useState<
+    { name: string; value: number; fill: string }[]
+  >([]);
+  const navigate = useNavigate();
+  const [compareSeries, setCompareSeries] = useState<typeof chartData>([]);
+  const [deltaBadge, setDeltaBadge] = useState<string | null>(null);
+  const [netDelta, setNetDelta] = useState<number | null>(null);
 
   const exportDetailCsv = () => {
     const headers = ["label", "income", "expense", "net", "category", "value"];
@@ -834,3 +988,64 @@ export const Reports: React.FC = () => {
   useEffect(() => {
     setDetailRows(transactionItems);
   }, [transactionItems, globalTransactions]);
+
+  useEffect(() => {
+    const { start, end } = deriveRange();
+    fetchTransactions({
+      startDate: start,
+      endDate: end,
+      accountIds: selectedAccounts,
+      categoryIds: selectedCategories,
+      limit: 500,
+      offset: 0,
+    });
+  }, [
+    granularity,
+    dateRange.start,
+    dateRange.end,
+    selectedAccounts,
+    selectedCategories,
+    fetchTransactions,
+  ]);
+
+  useEffect(() => {
+    if (!transactionItems.length) {
+      setCategoryShare([]);
+      return;
+    }
+    const totals = transactionItems.reduce<Record<string, number>>(
+      (acc, tx) => {
+        const catId = tx.category_id ?? "uncategorized";
+        const amount = tx.legs.reduce((sum, leg) => sum + Number(leg.amount), 0);
+        acc[catId] = (acc[catId] ?? 0) + Math.abs(amount);
+        return acc;
+      },
+      {},
+    );
+    const palette = [
+      "#22c55e",
+      "#ef4444",
+      "#6366f1",
+      "#f59e0b",
+      "#0ea5e9",
+      "#8b5cf6",
+    ];
+    const items = Object.entries(totals).map(([catId, value], idx) => {
+      const cat = categories.find((c) => c.id === catId);
+      const name = cat
+        ? `${cat.icon ? `${cat.icon} ` : ""}${cat.name}`
+        : "Uncategorized";
+      const fill = cat?.color_hex || palette[idx % palette.length];
+      return { name, value, fill };
+    });
+    const total = items.reduce((sum, i) => sum + i.value, 0);
+    const threshold = total * 0.05;
+    const main = items.filter((i) => i.value >= threshold);
+    const otherSum = items
+      .filter((i) => i.value < threshold)
+      .reduce((sum, i) => sum + i.value, 0);
+    if (otherSum > 0) {
+      main.push({ name: "Other", value: otherSum, fill: "#cbd5e1" });
+    }
+    setCategoryShare(main);
+  }, [transactionItems, categories]);

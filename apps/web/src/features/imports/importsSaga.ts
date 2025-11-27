@@ -1,76 +1,35 @@
 import { createAction } from "@reduxjs/toolkit";
-import { call, put, takeLatest, delay, race, take } from "redux-saga/effects";
+import { call, put, takeLatest } from "redux-saga/effects";
 import { toast } from "sonner";
 import { callApiWithAuth } from "@/features/api/apiSaga";
 import {
-  setImportBatches,
+  clearImportSession,
+  setImportSession,
   setImportsError,
   setImportsLoading,
-  upsertImportBatch,
-  setImportsPolling,
+  setImportsSaving,
 } from "@/features/imports/importsSlice";
 import type {
-  ImportBatch,
+  ImportCommitRequest,
   ImportCreateRequest,
-  ImportListResponse,
+  ImportSessionResponse,
 } from "@/types/api";
 
-export const FetchImportBatches = createAction("imports/fetchAll");
-export const UploadImportBatch =
-  createAction<ImportCreateRequest>("imports/upload");
-export const StartImportPolling = createAction<number | undefined>(
-  "imports/startPolling",
-);
-export const StopImportPolling = createAction("imports/stopPolling");
+export const StartImportSession =
+  createAction<ImportCreateRequest>("imports/startSession");
+export const AppendImportFiles = createAction<
+  ImportCreateRequest & { sessionId: string }
+>("imports/appendFiles");
+export const FetchImportSession = createAction<string>("imports/fetchSession");
+export const CommitImportSession = createAction<
+  { sessionId: string; rows: ImportCommitRequest["rows"] }
+>("imports/commitSession");
+export const ResetImportSession = createAction("imports/resetSession");
 
-function* handleFetchImports() {
+function* handleStartSession(action: ReturnType<typeof StartImportSession>) {
   yield put(setImportsLoading(true));
   try {
-    const response: ImportListResponse = yield call(
-      callApiWithAuth,
-      { path: "/imports" },
-      { loadingKey: "imports", silent: true },
-    );
-
-    if (response?.imports) {
-      yield put(setImportBatches(response.imports));
-    }
-  } catch (error) {
-    yield put(
-      setImportsError(
-        error instanceof Error
-          ? error.message
-          : "Unable to load imports right now.",
-      ),
-    );
-  } finally {
-    yield put(setImportsLoading(false));
-  }
-}
-
-function* handlePollImports(action: ReturnType<typeof StartImportPolling>) {
-  const intervalMs = action.payload ?? 10000;
-  yield put(setImportsPolling(true));
-  try {
-    while (true) {
-      yield call(handleFetchImports);
-      const { stopped } = yield race({
-        stopped: take(StopImportPolling.type),
-        delayed: delay(intervalMs),
-      });
-      if (stopped) break;
-    }
-  } finally {
-    yield put(setImportsPolling(false));
-  }
-}
-
-function* handleUploadImportBatch(
-  action: ReturnType<typeof UploadImportBatch>,
-) {
-  yield put(setImportsLoading(true));
-  try {
-    const response: ImportListResponse = yield call(
+    const response: ImportSessionResponse = yield call(
       callApiWithAuth,
       {
         path: "/imports",
@@ -80,19 +39,16 @@ function* handleUploadImportBatch(
       { loadingKey: "imports" },
     );
 
-    const batches: ImportBatch[] = response?.imports ?? [];
-    batches.forEach((batch) => {
-      yield put(upsertImportBatch(batch));
-    });
-
-    toast.success("Import received", {
-      description:
-        "Files uploaded. Processing will continue in the background.",
-    });
+    if (response?.import_session) {
+      yield put(setImportSession(response.import_session));
+      toast.success("Files staged", {
+        description: "Review suggestions and save when ready.",
+      });
+    }
   } catch (error) {
     yield put(
       setImportsError(
-        error instanceof Error ? error.message : "Unable to upload import.",
+        error instanceof Error ? error.message : "Unable to stage import.",
       ),
     );
     toast.error("Import failed", {
@@ -104,11 +60,105 @@ function* handleUploadImportBatch(
   }
 }
 
+function* handleAppendFiles(action: ReturnType<typeof AppendImportFiles>) {
+  yield put(setImportsLoading(true));
+  try {
+    const response: ImportSessionResponse = yield call(
+      callApiWithAuth,
+      {
+        path: `/imports/${action.payload.sessionId}/files`,
+        method: "POST",
+        body: {
+          files: action.payload.files,
+          note: action.payload.note,
+          examples: action.payload.examples,
+        },
+      },
+      { loadingKey: "imports" },
+    );
+
+    if (response?.import_session) {
+      yield put(setImportSession(response.import_session));
+      toast.success("Files added", {
+        description: "New rows are ready for review.",
+      });
+    }
+  } catch (error) {
+    yield put(
+      setImportsError(
+        error instanceof Error ? error.message : "Unable to add files.",
+      ),
+    );
+    toast.error("Upload failed", {
+      description:
+        error instanceof Error ? error.message : "Please try again shortly.",
+    });
+  } finally {
+    yield put(setImportsLoading(false));
+  }
+}
+
+function* handleFetchSession(action: ReturnType<typeof FetchImportSession>) {
+  yield put(setImportsLoading(true));
+  try {
+    const response: ImportSessionResponse = yield call(
+      callApiWithAuth,
+      { path: `/imports/${action.payload}` },
+      { loadingKey: "imports", silent: true },
+    );
+    if (response?.import_session) {
+      yield put(setImportSession(response.import_session));
+    }
+  } catch (error) {
+    yield put(
+      setImportsError(
+        error instanceof Error ? error.message : "Unable to load session.",
+      ),
+    );
+  } finally {
+    yield put(setImportsLoading(false));
+  }
+}
+
+function* handleCommitSession(action: ReturnType<typeof CommitImportSession>) {
+  yield put(setImportsSaving(true));
+  try {
+    const body: ImportCommitRequest = { rows: action.payload.rows };
+    yield call(
+      callApiWithAuth,
+      {
+        path: `/imports/${action.payload.sessionId}/commit`,
+        method: "POST",
+        body,
+      },
+      { loadingKey: "imports" },
+    );
+
+    toast.success("Transactions saved", {
+      description: "Your staged transactions are now in the ledger.",
+    });
+    yield put(clearImportSession());
+  } catch (error) {
+    yield put(
+      setImportsError(
+        error instanceof Error ? error.message : "Unable to save transactions.",
+      ),
+    );
+    toast.error("Save failed", {
+      description:
+        error instanceof Error ? error.message : "Please try again shortly.",
+    });
+  } finally {
+    yield put(setImportsSaving(false));
+  }
+}
+
 export function* ImportsSaga() {
-  yield takeLatest(FetchImportBatches.type, handleFetchImports);
-  yield takeLatest(UploadImportBatch.type, handleUploadImportBatch);
-  yield takeLatest(StartImportPolling.type, handlePollImports);
-  yield takeLatest(StopImportPolling.type, function* () {
-    yield put(setImportsPolling(false));
+  yield takeLatest(StartImportSession.type, handleStartSession);
+  yield takeLatest(AppendImportFiles.type, handleAppendFiles);
+  yield takeLatest(FetchImportSession.type, handleFetchSession);
+  yield takeLatest(CommitImportSession.type, handleCommitSession);
+  yield takeLatest(ResetImportSession.type, function* () {
+    yield put(clearImportSession());
   });
 }

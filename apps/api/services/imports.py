@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Optional, Tuple
+from uuid import UUID
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -22,12 +23,13 @@ from ..models import (
     Category,
     ImportErrorRecord,
     ImportFile,
+    ImportRow,
     Transaction,
     TransactionImportBatch,
     TransactionLeg,
 )
 from ..repositories.imports import ImportRepository
-from ..schemas import ExampleTransaction, ImportBatchCreate
+from ..schemas import ExampleTransaction, ImportBatchCreate, ImportCommitRequest
 from ..schemas import ImportFile as ImportFilePayload
 from .transaction import TransactionService
 from ..shared import AccountType, CreatedSource, TransactionStatus, TransactionType
@@ -85,26 +87,277 @@ class ImportService:
         )
 
         parsed_files = [self._parse_file(file) for file in payload.files]
-        self._enrich_previews(parsed_files, payload.examples or [])
-        saved_batch = self.repository.create_batch(batch, [result.model for result in parsed_files])
 
+        row_models: List[ImportRow] = []
         error_models: List[ImportErrorRecord] = []
-        for saved_file, parsed in zip(saved_batch.files, parsed_files):
+
+        for parsed in parsed_files:
+            suggestions = self._suggest_rows(parsed.rows, parsed.column_map or {}, payload.examples or [])
+            transfers = self._match_transfers(parsed.rows, parsed.column_map or {})
+
+            # decorate preview rows
+            for idx, row in enumerate(parsed.preview_rows):
+                suggestion = suggestions.get(idx)
+                transfer = transfers.get(idx)
+                if suggestion:
+                    row["suggested_category"] = suggestion.category
+                    row["suggested_confidence"] = round(suggestion.confidence, 2)
+                    if suggestion.reason:
+                        row["suggested_reason"] = suggestion.reason
+                if transfer:
+                    row["transfer_match"] = transfer
+
             for row_number, message in parsed.errors:
                 error_models.append(
-                    ImportErrorRecord(file_id=saved_file.id, row_number=row_number, message=message)
+                    ImportErrorRecord(
+                        file_id=parsed.model.id,
+                        row_number=row_number,
+                        message=message,
+                    )
                 )
 
-        ingestion_errors = self._ingest_files(saved_batch, parsed_files, payload.examples or [])
-        error_models.extend(ingestion_errors)
+            parsed.model.row_count = len(parsed.rows)
+            parsed.model.error_count = len(parsed.errors)
+            parsed.model.status = "staged"
+            if parsed.errors:
+                parsed.model.status = "error"
+            if not parsed.rows:
+                parsed.model.status = "empty"
 
-        if error_models:
-            self.repository.add_errors(error_models)
+            for idx, row in enumerate(parsed.rows, start=1):
+                suggestion = suggestions.get(idx - 1)
+                transfer = transfers.get(idx - 1)
+                row_models.append(
+                    ImportRow(
+                        file_id=parsed.model.id,
+                        row_index=idx,
+                        data=row,
+                        suggested_category=suggestion.category if suggestion else None,
+                        suggested_confidence=suggestion.confidence if suggestion else None,
+                        suggested_reason=suggestion.reason if suggestion else None,
+                        transfer_match=transfer,
+                    )
+                )
+
+        saved_batch = self.repository.create_batch(
+            batch,
+            [result.model for result in parsed_files],
+            row_models,
+            error_models,
+        )
 
         return saved_batch, parsed_files
 
     def list_imports(self) -> List[TransactionImportBatch]:
-        return self.repository.list_batches(include_files=True, include_errors=True)
+        return self.repository.list_batches(include_files=True, include_errors=True, include_rows=True)
+
+    def get_import_session(self, batch_id: UUID) -> Optional[TransactionImportBatch]:
+        return self.repository.get_batch(
+            batch_id,
+            include_files=True,
+            include_errors=True,
+            include_rows=True,
+        )
+
+    def commit_session(
+        self,
+        batch_id: UUID,
+        payload: ImportCommitRequest,
+    ) -> TransactionImportBatch:
+        batch = self.get_import_session(batch_id)
+        if batch is None:
+            raise LookupError("Import session not found")
+
+        override_map = {item.row_id: item for item in (payload.rows or [])}
+        transaction_service = TransactionService(self.session)
+        offset_account = self._get_or_create_offset_account()
+        unassigned_account = self._get_or_create_unassigned_account()
+
+        error_models: List[ImportErrorRecord] = []
+        category_map = self._category_lookup()
+
+        for file in batch.files:
+            added_errors = 0
+            for row in getattr(file, "rows", []):
+                override = override_map.get(row.id)
+                if override and override.delete:
+                    continue
+
+                payload_data = dict(row.data)
+                if override and override.description is not None:
+                    payload_data["description"] = override.description
+                if override and override.amount is not None:
+                    payload_data["amount"] = override.amount
+                if override and override.occurred_at is not None:
+                    payload_data["occurred_at"] = override.occurred_at.isoformat()
+
+                date_value = payload_data.get("date") or payload_data.get("occurred_at") or payload_data.get("posted_at")
+                occurred_at = (
+                    override.occurred_at
+                    if override and override.occurred_at is not None
+                    else self._parse_date(str(date_value))
+                )
+                if occurred_at is None:
+                    error_models.append(
+                        ImportErrorRecord(
+                            file_id=file.id,
+                            row_number=row.row_index,
+                            message="Date is not a valid ISO date",
+                        )
+                    )
+                    added_errors += 1
+                    continue
+
+                amount_text = payload_data.get("amount") or payload_data.get("value")
+                if not self._is_decimal(str(amount_text)):
+                    error_models.append(
+                        ImportErrorRecord(
+                            file_id=file.id,
+                            row_number=row.row_index,
+                            message="Amount must be numeric",
+                        )
+                    )
+                    added_errors += 1
+                    continue
+
+                amount = Decimal(str(amount_text))
+                description = str(payload_data.get("description", "")) or None
+                category_id = None
+                if override and override.category_id:
+                    category_id = override.category_id
+                elif row.suggested_category:
+                    category = category_map.get(row.suggested_category.lower())
+                    if category:
+                        category_id = category.id
+
+                target_account_id = (
+                    override.account_id
+                    if override and override.account_id is not None
+                    else file.account_id
+                    or unassigned_account.id
+                )
+
+                legs = [
+                    TransactionLeg(account_id=target_account_id, amount=amount),
+                    TransactionLeg(account_id=offset_account.id, amount=-amount),
+                ]
+
+                transaction = Transaction(
+                    category_id=category_id,
+                    transaction_type=TransactionType.TRANSFER,
+                    description=description,
+                    notes=None,
+                    external_id=None,
+                    occurred_at=occurred_at,
+                    posted_at=occurred_at,
+                    status=TransactionStatus.RECORDED,
+                    created_source=CreatedSource.IMPORT,
+                    import_batch_id=batch.id,
+                )
+
+                try:
+                    transaction_service.create_transaction(transaction, legs, import_batch=batch)
+                except Exception as exc:  # pragma: no cover - defensive
+                    error_models.append(
+                        ImportErrorRecord(
+                            file_id=file.id,
+                            row_number=row.row_index,
+                            message=str(exc),
+                        )
+                    )
+                    added_errors += 1
+                    continue
+
+            if added_errors:
+                file.status = "error"
+                file.error_count += added_errors
+            elif file.status == "staged":
+                file.status = "committed"
+
+            self.session.add(file)
+
+        self.session.commit()
+
+        if error_models:
+            self.repository.add_errors(error_models)
+
+        self.session.refresh(batch)
+        return batch
+
+    def append_files_to_session(
+        self,
+        batch_id: UUID,
+        files: List[ImportFilePayload],
+        examples: List[ExampleTransaction] | None = None,
+    ) -> TransactionImportBatch:
+        batch = self.get_import_session(batch_id)
+        if batch is None:
+            raise LookupError("Import session not found")
+
+        parsed_files = [self._parse_file(file) for file in files]
+        row_models: List[ImportRow] = []
+        error_models: List[ImportErrorRecord] = []
+
+        for parsed in parsed_files:
+            suggestions = self._suggest_rows(parsed.rows, parsed.column_map or {}, examples or [])
+            transfers = self._match_transfers(parsed.rows, parsed.column_map or {})
+
+            for idx, row in enumerate(parsed.preview_rows):
+                suggestion = suggestions.get(idx)
+                transfer = transfers.get(idx)
+                if suggestion:
+                    row["suggested_category"] = suggestion.category
+                    row["suggested_confidence"] = round(suggestion.confidence, 2)
+                    if suggestion.reason:
+                        row["suggested_reason"] = suggestion.reason
+                if transfer:
+                    row["transfer_match"] = transfer
+
+            for row_number, message in parsed.errors:
+                error_models.append(
+                    ImportErrorRecord(
+                        file_id=parsed.model.id,
+                        row_number=row_number,
+                        message=message,
+                    )
+                )
+
+            parsed.model.row_count = len(parsed.rows)
+            parsed.model.error_count = len(parsed.errors)
+            parsed.model.status = "staged"
+            if parsed.errors:
+                parsed.model.status = "error"
+            if not parsed.rows:
+                parsed.model.status = "empty"
+
+            parsed.model.batch_id = batch.id
+            self.session.add(parsed.model)
+
+            for idx, row in enumerate(parsed.rows, start=1):
+                suggestion = suggestions.get(idx - 1)
+                transfer = transfers.get(idx - 1)
+                row_models.append(
+                    ImportRow(
+                        file_id=parsed.model.id,
+                        row_index=idx,
+                        data=row,
+                        suggested_category=suggestion.category if suggestion else None,
+                        suggested_confidence=suggestion.confidence if suggestion else None,
+                        suggested_reason=suggestion.reason if suggestion else None,
+                        transfer_match=transfer,
+                    )
+                )
+
+        self.session.flush()
+        for row in row_models:
+            self.session.add(row)
+
+        if error_models:
+            self.session.add_all(error_models)
+
+        self.session.commit()
+        self.session.refresh(batch)
+        return batch
 
     def _derive_source_name(self, payload: ImportBatchCreate) -> str:
         return payload.note or (payload.files[0].filename if payload.files else "import")
@@ -288,6 +541,8 @@ class ImportService:
         column_map: Dict[str, str],
         examples: List[ExampleTransaction],
     ) -> Dict[int, CategorySuggestion]:
+        if not column_map or not column_map.get("description") or not column_map.get("amount"):
+            return {}
         heuristic: Dict[int, CategorySuggestion] = {}
         for idx, row in enumerate(rows):
             heuristic[idx] = self._suggest_category_heuristic(row, column_map, examples)

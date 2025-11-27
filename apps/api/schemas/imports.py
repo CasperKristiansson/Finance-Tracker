@@ -81,6 +81,21 @@ class ImportFileRead(BaseModel):
     errors: List["ImportErrorRead"] = Field(default_factory=list)
 
 
+class ImportRowRead(BaseModel):
+    """Parsed row staged for review."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    file_id: UUID
+    row_index: int
+    data: dict[str, Any]
+    suggested_category: Optional[str] = None
+    suggested_confidence: Optional[float] = None
+    suggested_reason: Optional[str] = None
+    transfer_match: Optional[dict[str, Any]] = None
+
+
 class ImportErrorRead(BaseModel):
     """Error details for a row in an import file."""
 
@@ -96,6 +111,48 @@ class ImportBatchListResponse(BaseModel):
     imports: List[ImportBatchRead]
 
 
+class ImportSessionRead(BaseModel):
+    """Staged import session returned to the client."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    source_name: Optional[str] = None
+    note: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    file_count: int
+    total_rows: int
+    total_errors: int
+    status: str
+    files: List[ImportFileRead] = Field(default_factory=list)
+    rows: List[ImportRowRead] = Field(default_factory=list)
+
+
+class ImportSessionResponse(BaseModel):
+    """Response wrapper for a single import session."""
+
+    import_session: ImportSessionRead
+
+
+class ImportCommitRow(BaseModel):
+    """Overrides for committing a staged row."""
+
+    row_id: UUID
+    category_id: Optional[UUID] = None
+    account_id: Optional[UUID] = None
+    description: Optional[str] = None
+    amount: Optional[str] = None
+    occurred_at: Optional[datetime] = None
+    delete: bool = False
+
+
+class ImportCommitRequest(BaseModel):
+    """Payload to commit a staged import session."""
+
+    rows: List[ImportCommitRow]
+
+
 __all__ = [
     "ImportFile",
     "ImportBatchCreate",
@@ -104,4 +161,9 @@ __all__ = [
     "ImportFileRead",
     "ImportErrorRead",
     "ExampleTransaction",
+    "ImportRowRead",
+    "ImportSessionRead",
+    "ImportSessionResponse",
+    "ImportCommitRow",
+    "ImportCommitRequest",
 ]

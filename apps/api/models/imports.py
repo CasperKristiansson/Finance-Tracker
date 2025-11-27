@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Any, List, Optional
 from uuid import UUID
 
-from sqlalchemy import Column, ForeignKey, Integer, String
+from sqlalchemy import Column, ForeignKey, Integer, String, JSON, Numeric
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlmodel import Field, Relationship, SQLModel
@@ -41,6 +41,13 @@ class ImportFile(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
             cascade="all, delete-orphan",
         )
     )
+    rows: List["ImportRow"] = Relationship(
+        sa_relationship=relationship(
+            "ImportRow",
+            primaryjoin="ImportFile.id==ImportRow.file_id",
+            cascade="all, delete-orphan",
+        )
+    )
 
 
 class ImportErrorRecord(UUIDPrimaryKeyMixin, SQLModel, table=True):
@@ -57,6 +64,32 @@ class ImportErrorRecord(UUIDPrimaryKeyMixin, SQLModel, table=True):
     )
     row_number: int = Field(sa_column=Column(Integer, nullable=False))
     message: str = Field(sa_column=Column(String(500), nullable=False))
+
+
+class ImportRow(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+    """Parsed row stored for staged import review."""
+
+    __tablename__ = "import_rows"
+
+    file_id: UUID = Field(
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("import_files.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    row_index: int = Field(sa_column=Column(Integer, nullable=False))
+    data: dict[str, Any] = Field(sa_column=Column(JSON, nullable=False))
+    suggested_category: Optional[str] = Field(default=None, sa_column=Column(String(160)))
+    suggested_confidence: Optional[float] = Field(
+        default=None,
+        sa_column=Column(Numeric(5, 2), nullable=True),
+    )
+    suggested_reason: Optional[str] = Field(default=None, sa_column=Column(String(500)))
+    transfer_match: Optional[dict[str, Any]] = Field(
+        default=None,
+        sa_column=Column(JSON, nullable=True),
+    )
 
 
 class TransactionImportBatch(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
@@ -86,4 +119,4 @@ class TransactionImportBatch(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, tabl
     )
 
 
-__all__ = ["TransactionImportBatch", "ImportFile", "ImportErrorRecord"]
+__all__ = ["TransactionImportBatch", "ImportFile", "ImportErrorRecord", "ImportRow"]

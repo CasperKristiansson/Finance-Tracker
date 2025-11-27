@@ -1,22 +1,7 @@
-import {
-  Check,
-  Download,
-  FileSpreadsheet,
-  Loader2,
-  Shield,
-  UploadCloud,
-} from "lucide-react";
+import { Check, Loader2, Plus, Trash2, UploadCloud } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -26,16 +11,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  useAccountsApi,
-  useCategoriesApi,
-  useImportsApi,
-} from "@/hooks/use-api";
+import { useAccountsApi, useCategoriesApi, useImportsApi } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
 import type {
-  ImportBatch,
+  ImportCommitRow,
   ImportCreateRequest,
-  ImportFileRead,
+  ImportRowRead,
+  ImportSession,
 } from "@/types/api";
 
 type LocalFile = {
@@ -49,7 +31,11 @@ type LocalFile = {
 
 type RowOverride = {
   categoryId?: string;
-  transferLinked?: boolean;
+  accountId?: string;
+  description?: string;
+  amount?: string;
+  occurredAt?: string;
+  delete?: boolean;
 };
 
 const templates = [
@@ -70,42 +56,36 @@ const badgeTone: Record<string, string> = {
   ready: "bg-emerald-100 text-emerald-800",
   error: "bg-rose-100 text-rose-800",
   empty: "bg-slate-100 text-slate-700",
+  staged: "bg-blue-100 text-blue-800",
+  committed: "bg-emerald-100 text-emerald-800",
 };
 
 export const Imports: React.FC = () => {
   const {
-    batches,
     loading,
-    polling,
-    fetchImportBatches,
-    uploadImportBatch,
-    startPolling,
-    stopPolling,
+    saving,
+    session,
+    startImportSession,
+    appendImportFiles,
+    fetchImportSession,
+    commitImportSession,
+    resetImportSession,
   } = useImportsApi();
   const { items: accounts, fetchAccounts } = useAccountsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
   const [localFiles, setLocalFiles] = useState<LocalFile[]>([]);
   const [note, setNote] = useState("");
-  const [activeStep, setActiveStep] = useState<1 | 2 | 3>(1);
   const [uploading, setUploading] = useState(false);
   const dropRef = useRef<HTMLLabelElement | null>(null);
-  const [overrides, setOverrides] = useState<
-    Record<string, Record<number, RowOverride>>
-  >({});
+  const [overrides, setOverrides] = useState<Record<string, RowOverride>>({});
 
   useEffect(() => {
-    fetchImportBatches();
     fetchAccounts({});
     fetchCategories();
-    startPolling(8000);
-    return () => stopPolling();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const latestBatch: ImportBatch | undefined = useMemo(
-    () => (batches && batches.length > 0 ? batches[0] : undefined),
-    [batches],
-  );
+  const currentSession: ImportSession | undefined = session;
 
   const handleFiles = async (files: FileList | null) => {
     if (!files) return;
@@ -121,9 +101,7 @@ export const Imports: React.FC = () => {
   };
 
   const updateLocal = (id: string, patch: Partial<LocalFile>) => {
-    setLocalFiles((prev) =>
-      prev.map((lf) => (lf.id === id ? { ...lf, ...patch } : lf)),
-    );
+    setLocalFiles((prev) => prev.map((lf) => (lf.id === id ? { ...lf, ...patch } : lf)));
   };
 
   const removeLocal = (id: string) => {
@@ -136,8 +114,7 @@ export const Imports: React.FC = () => {
     try {
       const filesPayload = await Promise.all(
         localFiles.map(async (lf) => {
-          const content =
-            lf.contentBase64 || (lf.file ? await toBase64(lf.file) : "");
+          const content = lf.contentBase64 || (lf.file ? await toBase64(lf.file) : "");
           return {
             filename: lf.filename,
             content_base64: content,
@@ -150,399 +127,383 @@ export const Imports: React.FC = () => {
         files: filesPayload,
         note: note || undefined,
       };
-      await uploadImportBatch(payload);
-      setActiveStep(2);
-      fetchImportBatches();
+      if (currentSession?.id) {
+        await appendImportFiles(currentSession.id, payload);
+        await fetchImportSession(currentSession.id);
+      } else {
+        await startImportSession(payload);
+      }
       setLocalFiles([]);
     } finally {
       setUploading(false);
     }
   };
 
-  const errorCsv = useMemo(() => {
-    if (!latestBatch?.files) return null;
-    const lines: string[] = ["filename,row,message"];
-    latestBatch.files.forEach((file) => {
-      file.errors?.forEach((err) =>
-        lines.push(`${file.filename},${err.row_number},${err.message}`),
-      );
-    });
-    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
-    return URL.createObjectURL(blob);
-  }, [latestBatch]);
-
-  const applyOverride = (
-    fileId: string,
-    rowIndex: number,
-    patch: RowOverride,
-  ) => {
-    setOverrides((prev) => {
-      const fileOverrides = prev[fileId] ? { ...prev[fileId] } : {};
-      fileOverrides[rowIndex] = { ...fileOverrides[rowIndex], ...patch };
-      return { ...prev, [fileId]: fileOverrides };
-    });
+  const applyOverride = (rowId: string, patch: RowOverride) => {
+    setOverrides((prev) => ({ ...prev, [rowId]: { ...prev[rowId], ...patch } }));
   };
 
-  const renderPreview = (file: ImportFileRead) => {
-    const rows = file.preview_rows || [];
-    const errorsByRow = new Map<number, string>(
-      (file.errors || []).map((err) => [err.row_number, err.message]),
-    );
-    return (
-      <div
-        key={file.id}
-        className="space-y-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm"
-      >
-        <div className="flex items-center justify-between text-sm font-semibold text-slate-800">
-          <div className="flex items-center gap-2">
-            <FileSpreadsheet className="h-4 w-4 text-slate-500" />
-            {file.filename}
-          </div>
-          <div
-            className={cn(
-              "rounded-full px-2 py-0.5 text-xs font-semibold",
-              badgeTone[file.status] || "",
-            )}
-          >
-            {file.status}
-          </div>
-        </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Amount</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Suggested Category</TableHead>
-              <TableHead>Transfer</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-slate-500">
-                  No preview rows
-                </TableCell>
-              </TableRow>
-            ) : (
-              rows.map((row, idx) => {
-                const err = errorsByRow.get(idx + 1);
-                const override = overrides[file.id]?.[idx] || {};
-                const suggested = row.suggested_category || "Unassigned";
-                return (
-                  <TableRow key={idx} className={err ? "bg-rose-50" : ""}>
-                    <TableCell>{row.date || row.occurred_at || "—"}</TableCell>
-                    <TableCell>{row.description || row.memo || "—"}</TableCell>
-                    <TableCell className="font-semibold text-slate-900">
-                      {row.amount || row.value || "—"}
-                    </TableCell>
-                    <TableCell>
-                      {err ? (
-                        <span className="text-rose-600">{err}</span>
-                      ) : (
-                        "OK"
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="rounded border border-slate-200 px-2 py-1 text-left text-sm text-slate-800">
-                          {override.categoryId
-                            ? categories.find(
-                                (c) => c.id === override.categoryId,
-                              )?.name || "Custom"
-                            : suggested}
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="start"
-                          className="max-h-60 w-56 overflow-auto"
-                        >
-                          <DropdownMenuLabel>Pick category</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() =>
-                              applyOverride(file.id, idx, {
-                                categoryId: undefined,
-                              })
-                            }
-                          >
-                            Keep suggested ({suggested})
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {categories.map((cat) => (
-                            <DropdownMenuItem
-                              key={cat.id}
-                              onClick={() =>
-                                applyOverride(file.id, idx, {
-                                  categoryId: cat.id,
-                                })
-                              }
-                            >
-                              {cat.name}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                    <TableCell className="text-xs text-slate-600">
-                      <label className="flex items-center gap-2 text-slate-700">
-                        <input
-                          type="checkbox"
-                          checked={
-                            override.transferLinked ??
-                            Boolean(row.transfer_match)
-                          }
-                          onChange={(e) =>
-                            applyOverride(file.id, idx, {
-                              transferLinked: e.target.checked,
-                            })
-                          }
-                        />
-                        {row.transfer_match?.reason || "Transfer match"}
-                      </label>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </div>
-    );
+  const clearOverrides = () => setOverrides({});
+
+  const rows: ImportRowRead[] = useMemo(() => currentSession?.rows ?? [], [currentSession]);
+
+  const commit = async () => {
+    if (!currentSession?.id || !rows.length) return;
+    const commitRows: ImportCommitRow[] = rows.map((row) => {
+      const override = overrides[row.id];
+      const baseData = row.data || {};
+      const dateValue =
+        override?.occurredAt || baseData.date || baseData.occurred_at || baseData.posted_at || "";
+      const amountValue = override?.amount || baseData.amount || baseData.value;
+
+      return {
+        row_id: row.id,
+        category_id: override?.categoryId,
+        account_id: override?.accountId,
+        description: override?.description,
+        amount: amountValue ? String(amountValue) : undefined,
+        occurred_at: dateValue ? String(dateValue) : undefined,
+        delete: override?.delete || false,
+      };
+    });
+
+    await commitImportSession(currentSession.id, commitRows);
+    clearOverrides();
   };
+
+  const summaryFiles = currentSession?.files || [];
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-xs tracking-wide text-slate-500 uppercase">
-            Imports
-          </p>
-          <h1 className="text-2xl font-semibold text-slate-900">
-            Upload & map bank files
-          </h1>
+          <p className="text-xs tracking-wide text-slate-500 uppercase">Imports</p>
+          <h1 className="text-2xl font-semibold text-slate-900">Stage, review, then save</h1>
           <p className="text-sm text-slate-500">
-            Multi-file dropzone with AI suggestions and transfer detection.
-            Templates per account are supported.
+            Upload multiple files, get AI suggestions, edit inline, and commit when ready.
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-600">
-          {polling ? (
+          {loading || uploading ? (
             <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
-              <Loader2 className="h-4 w-4 animate-spin text-slate-500" />{" "}
-              Checking status
+              <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+              Processing
+            </span>
+          ) : null}
+          {saving ? (
+            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
+              <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+              Saving
             </span>
           ) : null}
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {[1, 2, 3].map((step) => (
-          <Card
-            key={step}
-            className={cn(
-              "border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]",
-              activeStep === step && "border-slate-400",
-            )}
-          >
-            <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-              <div>
-                <p className="text-xs tracking-wide text-slate-500 uppercase">
-                  Step {step}
-                </p>
-                <CardTitle className="text-sm text-slate-800">
-                  {step === 1 && "Select files"}
-                  {step === 2 && "Review mapping"}
-                  {step === 3 && "Summary"}
-                </CardTitle>
-              </div>
-              {activeStep > step ? (
-                <Check className="h-4 w-4 text-emerald-600" />
-              ) : null}
-            </CardHeader>
-            <CardContent className="text-sm text-slate-700">
-              {step === 1 && (
-                <div className="space-y-3">
-                  <label
-                    ref={dropRef}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      dropRef.current?.classList.add("border-slate-400");
-                    }}
-                    onDragLeave={() =>
-                      dropRef.current?.classList.remove("border-slate-400")
-                    }
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      dropRef.current?.classList.remove("border-slate-400");
-                      handleFiles(e.dataTransfer.files);
-                    }}
-                    className="flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center transition hover:border-slate-400"
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2 border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-slate-800">
+              Upload files (add more anytime)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <label
+              ref={dropRef}
+              onDragOver={(e) => {
+                e.preventDefault();
+                dropRef.current?.classList.add("border-slate-400");
+              }}
+              onDragLeave={() => dropRef.current?.classList.remove("border-slate-400")}
+              onDrop={(e) => {
+                e.preventDefault();
+                dropRef.current?.classList.remove("border-slate-400");
+                handleFiles(e.dataTransfer.files);
+              }}
+              className="flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center transition hover:border-slate-400"
+            >
+              <UploadCloud className="h-8 w-8 text-slate-500" />
+              <p className="mt-2 text-sm font-medium text-slate-800">Drop CSV or XLSX files</p>
+              <p className="text-xs text-slate-500">
+                Assign accounts/templates per file. You can upload more after staging.
+              </p>
+              <input
+                type="file"
+                multiple
+                accept=".csv, .xlsx"
+                className="hidden"
+                onChange={(e) => handleFiles(e.target.files)}
+              />
+            </label>
+
+            <div className="space-y-2">
+              {localFiles.length === 0 ? (
+                <p className="text-slate-500">No files added yet.</p>
+              ) : (
+                localFiles.map((lf) => (
+                  <div
+                    key={lf.id}
+                    className="grid grid-cols-[1.2fr,1fr,1fr,auto] items-center gap-2 rounded border border-slate-200 bg-white px-3 py-2"
                   >
-                    <UploadCloud className="h-8 w-8 text-slate-500" />
-                    <p className="mt-2 text-sm font-medium text-slate-800">
-                      Drop CSV or XLSX files
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      You can add multiple files and assign accounts/templates.
-                    </p>
-                    <input
-                      type="file"
-                      multiple
-                      accept=".csv, .xlsx"
-                      className="hidden"
-                      onChange={(e) => handleFiles(e.target.files)}
-                    />
-                  </label>
-                  <div className="space-y-2">
-                    {localFiles.length === 0 ? (
-                      <p className="text-slate-500">No files added yet.</p>
-                    ) : (
-                      localFiles.map((lf) => (
-                        <div
-                          key={lf.id}
-                          className="grid grid-cols-[1.2fr,1fr,1fr,auto] items-center gap-2 rounded border border-slate-200 bg-white px-3 py-2"
-                        >
-                          <span className="truncate text-sm font-medium text-slate-800">
-                            {lf.filename}
-                          </span>
+                    <span className="truncate text-sm font-medium text-slate-800">{lf.filename}</span>
+                    <select
+                      className="rounded border border-slate-200 px-2 py-1 text-sm"
+                      value={lf.accountId || ""}
+                      onChange={(e) =>
+                        updateLocal(lf.id, {
+                          accountId: e.target.value || undefined,
+                        })
+                      }
+                    >
+                      <option value="">Account (optional)</option>
+                      {accounts.map((acc) => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.account_type} • {acc.id.slice(0, 6)}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="rounded border border-slate-200 px-2 py-1 text-sm"
+                      value={lf.templateId || "default"}
+                      onChange={(e) => updateLocal(lf.id, { templateId: e.target.value })}
+                    >
+                      {templates.map((tpl) => (
+                        <option key={tpl.id} value={tpl.id}>
+                          {tpl.name}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => removeLocal(lf.id)}
+                      className="text-slate-500"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-sm text-slate-700">Note (optional)</label>
+              <textarea
+                className="min-h-[60px] rounded border border-slate-200 px-3 py-2"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                placeholder="e.g., January statements"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              {currentSession ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-slate-600"
+                  onClick={() => {
+                    resetImportSession();
+                    clearOverrides();
+                  }}
+                >
+                  Reset session
+                </Button>
+              ) : null}
+              <Button
+                onClick={upload}
+                disabled={uploading || localFiles.length === 0}
+                className="gap-2"
+              >
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                Stage files
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-slate-800">Session summary</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm text-slate-700">
+            {currentSession ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600">Session</span>
+                  <span className="text-xs font-semibold text-slate-900">
+                    {currentSession.id.slice(0, 8)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600">Files</span>
+                  <span className="font-semibold text-slate-900">{currentSession.file_count}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600">Rows</span>
+                  <span className="font-semibold text-slate-900">{currentSession.total_rows}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600">Errors</span>
+                  <span className="font-semibold text-slate-900">{currentSession.total_errors}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-600">Status</span>
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-xs font-semibold",
+                      badgeTone[currentSession.status] || "bg-slate-100 text-slate-700",
+                    )}
+                  >
+                    {currentSession.status}
+                  </span>
+                </div>
+                <Button
+                  disabled={!rows.length || saving}
+                  className="mt-2 w-full gap-2"
+                  onClick={commit}
+                >
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Save all to transactions
+                </Button>
+              </>
+            ) : (
+              <p className="text-slate-500">Stage files to see a session summary.</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm text-slate-800">Staged transactions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading && !rows.length ? <Skeleton className="h-32 w-full" /> : null}
+          {!rows.length ? (
+            <p className="text-sm text-slate-500">
+              No staged rows yet. Upload files to see parsed transactions.
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Suggested</TableHead>
+                  <TableHead>Account</TableHead>
+                  <TableHead>Delete</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rows.map((row) => {
+                  const override = overrides[row.id] || {};
+                  const base = row.data || {};
+                  const dateValue = override.occurredAt || base.date || base.occurred_at || base.posted_at || "";
+                  const descriptionValue = override.description ?? base.description ?? base.memo ?? base.text ?? "";
+                  const amountValue = override.amount ?? base.amount ?? base.value ?? "";
+                  const fileAccountId = summaryFiles.find((f) => f.id === row.file_id)?.account_id;
+
+                  return (
+                    <TableRow key={row.id}>
+                      <TableCell className="min-w-[120px]">
+                        <input
+                          type="date"
+                          value={dateValue ? String(dateValue).slice(0, 10) : ""}
+                          onChange={(e) => applyOverride(row.id, { occurredAt: e.target.value })}
+                          className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <input
+                          type="text"
+                          value={descriptionValue}
+                          onChange={(e) => applyOverride(row.id, { description: e.target.value })}
+                          className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
+                          placeholder="Description"
+                        />
+                        {row.suggested_reason ? (
+                          <p className="text-xs text-slate-500">{row.suggested_reason}</p>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="min-w-[120px]">
+                        <input
+                          type="text"
+                          value={amountValue}
+                          onChange={(e) => applyOverride(row.id, { amount: e.target.value })}
+                          className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
+                        />
+                      </TableCell>
+                      <TableCell className="min-w-[180px]">
+                        <div className="flex flex-col gap-1">
                           <select
                             className="rounded border border-slate-200 px-2 py-1 text-sm"
-                            value={lf.accountId || ""}
+                            value={override.categoryId || ""}
                             onChange={(e) =>
-                              updateLocal(lf.id, {
-                                accountId: e.target.value || undefined,
+                              applyOverride(row.id, {
+                                categoryId: e.target.value || undefined,
                               })
                             }
                           >
-                            <option value="">Account (optional)</option>
-                            {accounts.map((acc) => (
-                              <option key={acc.id} value={acc.id}>
-                                {acc.account_type} • {acc.id.slice(0, 6)}
+                            <option value="">
+                              {row.suggested_category
+                                ? `Suggested: ${row.suggested_category}`
+                                : "Pick category"}
+                            </option>
+                            {categories.map((cat) => (
+                              <option key={cat.id} value={cat.id}>
+                                {cat.name}
                               </option>
                             ))}
                           </select>
-                          <select
-                            className="rounded border border-slate-200 px-2 py-1 text-sm"
-                            value={lf.templateId || "default"}
-                            onChange={(e) =>
-                              updateLocal(lf.id, { templateId: e.target.value })
-                            }
-                          >
-                            {templates.map((tpl) => (
-                              <option key={tpl.id} value={tpl.id}>
-                                {tpl.name}
-                              </option>
-                            ))}
-                          </select>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => removeLocal(lf.id)}
-                            className="text-slate-500"
-                          >
-                            <Shield className="h-4 w-4" />
-                          </Button>
+                          {row.suggested_confidence ? (
+                            <span className="text-xs text-slate-500">
+                              Confidence {Math.round(row.suggested_confidence * 100)}%
+                            </span>
+                          ) : null}
+                          {row.transfer_match ? (
+                            <span className="text-xs text-slate-500">
+                              Transfer? {row.transfer_match.reason}
+                            </span>
+                          ) : null}
                         </div>
-                      ))
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-sm text-slate-700">
-                      Note (optional)
-                    </label>
-                    <textarea
-                      className="min-h-[60px] rounded border border-slate-200 px-3 py-2"
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      placeholder="e.g., January statements"
-                    />
-                  </div>
-                  <div className="flex justify-end">
-                    <Button
-                      onClick={upload}
-                      disabled={uploading || localFiles.length === 0}
-                      className="gap-2"
-                    >
-                      {uploading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <UploadCloud className="h-4 w-4" />
-                      )}
-                      Upload & review
-                    </Button>
-                  </div>
-                </div>
-              )}
-              {step === 2 && (
-                <div className="space-y-3">
-                  {loading && <Skeleton className="h-24 w-full" />}
-                  {!latestBatch ? (
-                    <p className="text-slate-500">
-                      No imports yet. Upload files to preview.
-                    </p>
-                  ) : null}
-                  {latestBatch?.files?.map(renderPreview)}
-                  <div className="flex justify-end">
-                    <Button
-                      variant="default"
-                      className="gap-2"
-                      onClick={() => setActiveStep(3)}
-                      disabled={!latestBatch}
-                    >
-                      Confirm mapping
-                    </Button>
-                  </div>
-                </div>
-              )}
-              {step === 3 && (
-                <div className="space-y-3 text-sm text-slate-700">
-                  {latestBatch ? (
-                    <>
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                        <p className="text-sm font-semibold text-slate-800">
-                          Summary
-                        </p>
-                        <p className="text-xs text-slate-600">
-                          Files: {latestBatch.file_count} • Rows:{" "}
-                          {latestBatch.total_rows} • Errors:{" "}
-                          {latestBatch.total_errors}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          className="gap-2"
-                          onClick={() => fetchImportBatches()}
+                      </TableCell>
+                      <TableCell className="min-w-[160px]">
+                        <select
+                          className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
+                          value={override.accountId || fileAccountId || ""}
+                          onChange={(e) =>
+                            applyOverride(row.id, {
+                              accountId: e.target.value || undefined,
+                            })
+                          }
                         >
-                          Refresh status
-                        </Button>
-                        {errorCsv ? (
-                          <Button
-                            asChild
-                            variant="outline"
-                            size="sm"
-                            className="gap-2"
-                          >
-                            <a href={errorCsv} download="import-errors.csv">
-                              <Download className="h-4 w-4" /> Download errors
-                            </a>
-                          </Button>
-                        ) : null}
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-slate-500">
-                      Upload files to see a summary.
-                    </p>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                          <option value="">Use file/default account</option>
+                          {accounts.map((acc) => (
+                            <option key={acc.id} value={acc.id}>
+                              {acc.account_type} • {acc.id.slice(0, 6)}
+                            </option>
+                          ))}
+                        </select>
+                      </TableCell>
+                      <TableCell className="min-w-[80px]">
+                        <label className="flex items-center gap-2 text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={override.delete ?? false}
+                            onChange={(e) => applyOverride(row.id, { delete: e.target.checked })}
+                          />
+                          Remove
+                        </label>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };

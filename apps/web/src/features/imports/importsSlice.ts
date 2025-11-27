@@ -1,42 +1,35 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { ImportBatch } from "@/types/api";
+import type { ImportSession } from "@/types/api";
 
 export interface ImportsState {
-  batches: ImportBatch[];
+  session?: ImportSession;
   loading: boolean;
+  saving: boolean;
   error?: string;
-  polling: boolean;
 }
 
 const initialState: ImportsState = {
-  batches: [],
+  session: undefined,
   loading: false,
-  polling: false,
+  saving: false,
 };
 
 const importsSlice = createSlice({
   name: "imports",
   initialState,
   reducers: {
-    setImportBatches(state, action: PayloadAction<ImportBatch[]>) {
-      state.batches = action.payload;
+    setImportSession(state, action: PayloadAction<ImportSession | undefined>) {
+      state.session = action.payload;
       state.error = undefined;
     },
-    upsertImportBatch(state, action: PayloadAction<ImportBatch>) {
-      const existingIndex = state.batches.findIndex(
-        (batch) => batch.id === action.payload.id,
-      );
-      if (existingIndex >= 0) {
-        state.batches[existingIndex] = action.payload;
-      } else {
-        state.batches.unshift(action.payload);
-      }
+    clearImportSession(state) {
+      state.session = undefined;
     },
     setImportsLoading(state, action: PayloadAction<boolean>) {
       state.loading = action.payload;
     },
-    setImportsPolling(state, action: PayloadAction<boolean>) {
-      state.polling = action.payload;
+    setImportsSaving(state, action: PayloadAction<boolean>) {
+      state.saving = action.payload;
     },
     setImportsError(state, action: PayloadAction<string | undefined>) {
       state.error = action.payload ?? "Unable to process import job";
@@ -44,25 +37,26 @@ const importsSlice = createSlice({
   },
   selectors: {
     selectImportsState: (state) => state,
-    selectImportBatches: (state) => state.batches,
+    selectImportSession: (state) => state.session,
     selectImportsLoading: (state) => state.loading,
-    selectImportsPolling: (state) => state.polling,
+    selectImportsSaving: (state) => state.saving,
     selectImportsError: (state) => state.error,
   },
 });
 
 export const {
-  setImportBatches,
-  upsertImportBatch,
+  setImportSession,
+  clearImportSession,
   setImportsLoading,
-  setImportsPolling,
+  setImportsSaving,
   setImportsError,
 } = importsSlice.actions;
+
 export const {
   selectImportsState,
-  selectImportBatches,
+  selectImportSession,
   selectImportsLoading,
-  selectImportsPolling,
+  selectImportsSaving,
   selectImportsError,
 } = importsSlice.selectors;
 export const ImportsReducer = importsSlice.reducer;

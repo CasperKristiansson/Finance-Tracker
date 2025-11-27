@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from typing import Any, Iterable, List, Optional
+from uuid import UUID
 
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
-from ..models import ImportErrorRecord, ImportFile, TransactionImportBatch
+from ..models import ImportErrorRecord, ImportFile, ImportRow, TransactionImportBatch
 
 
 class ImportRepository:
@@ -20,9 +21,11 @@ class ImportRepository:
         self,
         batch: TransactionImportBatch,
         files: Iterable[ImportFile],
+        rows: Iterable[ImportRow],
         errors: Optional[Iterable[ImportErrorRecord]] = None,
     ) -> TransactionImportBatch:
         file_list = list(files)
+        row_list = list(rows)
         error_list = list(errors or [])
 
         self.session.add(batch)
@@ -34,6 +37,9 @@ class ImportRepository:
         batch.files = file_list
         self.session.add_all(file_list)
         self.session.flush()
+
+        for row in row_list:
+            self.session.add(row)
 
         if error_list:
             self.session.add_all(error_list)
@@ -49,11 +55,46 @@ class ImportRepository:
         self.session.add_all(error_list)
         self.session.commit()
 
+    def add_rows(self, rows: Iterable[ImportRow]) -> None:
+        row_list = list(rows)
+        if not row_list:
+            return
+        self.session.add_all(row_list)
+        self.session.commit()
+
+    def get_batch(
+        self,
+        batch_id: UUID,
+        *,
+        include_files: bool = False,
+        include_errors: bool = False,
+        include_rows: bool = False,
+    ) -> Optional[TransactionImportBatch]:
+        statement = select(TransactionImportBatch).where(TransactionImportBatch.id == batch_id)
+        if include_files:
+            statement = statement.options(
+                selectinload(TransactionImportBatch.files)  # type: ignore[arg-type]
+            )
+            if include_errors:
+                statement = statement.options(
+                    selectinload(TransactionImportBatch.files)  # type: ignore[arg-type]
+                    .selectinload(ImportFile.errors)  # type: ignore[arg-type]
+                )
+            if include_rows:
+                statement = statement.options(
+                    selectinload(TransactionImportBatch.files)  # type: ignore[arg-type]
+                    .selectinload(ImportFile.rows)  # type: ignore[arg-type]
+                )
+
+        result = self.session.exec(statement).one_or_none()
+        return result
+
     def list_batches(
         self,
         *,
         include_files: bool = False,
         include_errors: bool = False,
+        include_rows: bool = False,
     ) -> List[TransactionImportBatch]:
         statement = select(TransactionImportBatch)
         if include_files:
@@ -64,6 +105,11 @@ class ImportRepository:
                 statement = statement.options(
                     selectinload(TransactionImportBatch.files)  # type: ignore[arg-type]
                     .selectinload(ImportFile.errors)  # type: ignore[arg-type]
+                )
+            if include_rows:
+                statement = statement.options(
+                    selectinload(TransactionImportBatch.files)  # type: ignore[arg-type]
+                    .selectinload(ImportFile.rows)  # type: ignore[arg-type]
                 )
 
         result = self.session.exec(statement)

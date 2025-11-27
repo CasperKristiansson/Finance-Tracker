@@ -65,6 +65,11 @@ from .imports import (
     ImportFile,
     ImportFileRead,
     ImportErrorRead,
+    ImportRowRead,
+    ImportSessionRead,
+    ImportSessionResponse,
+    ImportCommitRow,
+    ImportCommitRequest,
 )
 from .budget import (
     BudgetCreate,
@@ -105,6 +110,11 @@ __all__ = [
     "ImportFile",
     "ImportFileRead",
     "ImportErrorRead",
+    "ImportRowRead",
+    "ImportSessionRead",
+    "ImportSessionResponse",
+    "ImportCommitRow",
+    "ImportCommitRequest",
     "ExampleTransaction",
     "LoanCreateRequest",
     "LoanUpdate",

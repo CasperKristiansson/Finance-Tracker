@@ -265,6 +265,17 @@ export interface ImportFileRead {
   errors?: ImportError[];
 }
 
+export interface ImportRowRead {
+  id: string;
+  file_id: string;
+  row_index: number;
+  data: Record<string, string>;
+  suggested_category?: string | null;
+  suggested_confidence?: number | null;
+  suggested_reason?: string | null;
+  transfer_match?: Record<string, string> | null;
+}
+
 export interface ImportBatch {
   id: string;
   source_name?: string | null;
@@ -280,6 +291,14 @@ export interface ImportBatch {
 
 export interface ImportListResponse {
   imports: ImportBatch[];
+}
+
+export interface ImportSession extends ImportBatch {
+  rows: ImportRowRead[];
+}
+
+export interface ImportSessionResponse {
+  import_session: ImportSession;
 }
 
 export interface ImportFileUpload {
@@ -299,6 +318,20 @@ export interface ImportCreateRequest {
   files: ImportFileUpload[];
   note?: string;
   examples?: ImportExampleTransaction[];
+}
+
+export interface ImportCommitRow {
+  row_id: string;
+  category_id?: string | null;
+  account_id?: string | null;
+  description?: string | null;
+  amount?: string | null;
+  occurred_at?: string | null;
+  delete?: boolean;
+}
+
+export interface ImportCommitRequest {
+  rows: ImportCommitRow[];
 }
 
 export interface AccountListResponse {

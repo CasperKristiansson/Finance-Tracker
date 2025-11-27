@@ -57,10 +57,10 @@
 
 - [x] Backend: extend reporting to support quarter + custom date range; add net worth history endpoint if absent; ensure filters for account/category; CSV/XLSX export endpoints for reports.
 - [x] Redux slices/sagas: reporting fetch keyed by granularity (month/quarter/year/custom), cache + revalidate; export actions; drill-down fetch for category/account detail.
-- [ ] Layout: top row controls (period selector, compare toggle vs prior period, account/category chips, export buttons); bottom grid of charts/tables.
+- [x] Layout: top row controls (period selector, compare toggle vs prior period, account/category chips, export buttons); bottom grid of charts/tables.
 - [x] Charts: stacked area (income vs expense), grouped bar (cash flow by period), donut/treemap for category share, line/area for net worth history, bar for savings rate, and Sankey flow (income sources → categories/accounts). Sankey should group tiny nodes under “Other” below a threshold and support hover details.
 - [ ] Drill-down: click category slice to open detail panel/table; click bar point to show period breakdown; CSV export of detail.
-- [ ] Loading/empty: chart skeletons matching shapes; empty copy prompting to import/add data; inline spinner on compare toggle.
+- [x] Loading/empty: chart skeletons matching shapes; empty copy prompting to import/add data; inline spinner on compare toggle.
 
 ### Milestone 7 – Settings, Goals, Cash Flow
 
@@ -82,3 +82,11 @@
 - [ ] Document env vars for web (Cognito pool/client, API URL) and backend (DB settings, DATABASE_URL for SQLite dev); add sample `.env` files.
 - [ ] Add API client mocks/fixtures and saga/hook integration tests.
 - [ ] Align lint/format scripts across workspace; CI steps for web build/test and api tests.
+
+### Milestone 9 – Subscriptions (label + insights, no auto-apply)
+
+- [ ] Backend model/API: add `subscriptions` table with fields (id, name, matcher_text, matcher_amount_tolerance?, matcher_day_of_month?, category_id optional, is_active, created_at/updated_at). Transactions gain optional `subscription_id`. Endpoints to create/update/list subscriptions and to attach/detach a transaction from a subscription.
+- [ ] Matching heuristic (suggest-only): reuse matcher_text (substring/regex) + optional day-of-month + amount tolerance. Never auto-apply; only surface suggestions with high confidence in import UI.
+- [ ] Import UI: in staged rows table, add a “Subscription” picker (select existing or “Create new”). Creating new captures matcher_text from the transaction description (date optional). Suggestions appear per row; user must confirm before commit.
+- [ ] Subscription page: list active/past subscriptions, show spend per subscription (current month + trailing 3/12 months), trend sparkline, last charge date, linked category. Controls to archive/reactivate and edit matchers.
+- [ ] Reports integration: surface top subscriptions by spend in Reports/Analytics page (tile + list) and allow filter by subscription in transactions/report queries.
