@@ -50,6 +50,8 @@ def test_create_category_and_list():
             {
                 "name": "Groceries",
                 "category_type": "expense",
+                "color_hex": "#00ff00",
+                "icon": "🛒",
             }
         ),
         "isBase64Encoded": False,
@@ -76,7 +78,7 @@ def test_update_category():
 
     update_response = update_category(
         {
-            "body": json.dumps({"name": "Utilities", "is_archived": True}),
+            "body": json.dumps({"name": "Utilities", "is_archived": True, "icon": "💡"}),
             "isBase64Encoded": False,
             "pathParameters": {"category_id": category_id},
         },
@@ -86,6 +88,7 @@ def test_update_category():
     updated = _json_body(update_response)
     assert updated["name"] == "Utilities"
     assert updated["is_archived"] is True
+    assert updated["icon"] == "💡"
 
 
 def test_create_category_validation_error():

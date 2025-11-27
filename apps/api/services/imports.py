@@ -15,18 +15,34 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from openpyxl import load_workbook
-from sqlmodel import Session
+from sqlmodel import Session, select
 
-from ..models import ImportErrorRecord, ImportFile, TransactionImportBatch
+from ..models import (
+    Account,
+    Category,
+    ImportErrorRecord,
+    ImportFile,
+    Transaction,
+    TransactionImportBatch,
+    TransactionLeg,
+)
 from ..repositories.imports import ImportRepository
 from ..schemas import ExampleTransaction, ImportBatchCreate
 from ..schemas import ImportFile as ImportFilePayload
+from .transaction import TransactionService
+from ..shared import AccountType, CreatedSource, TransactionStatus, TransactionType
 
 
 REQUIRED_FIELDS = ("date", "description", "amount")
 DATE_FIELDS = {"date", "transaction_date", "occurred_at", "posted_at"}
 DESCRIPTION_FIELDS = {"description", "memo", "payee", "text"}
 AMOUNT_FIELDS = {"amount", "amt", "transaction_amount", "value"}
+
+TEMPLATE_MAPPINGS: dict[str, Dict[str, str]] = {
+    "default": {"date": "date", "description": "description", "amount": "amount"},
+    "nordea": {"date": "bokforingsdatum", "description": "text", "amount": "belopp"},
+    "revolut": {"date": "completed_date", "description": "description", "amount": "amount"},
+}
 
 
 @dataclass
@@ -79,6 +95,9 @@ class ImportService:
                     ImportErrorRecord(file_id=saved_file.id, row_number=row_number, message=message)
                 )
 
+        ingestion_errors = self._ingest_files(saved_batch, parsed_files, payload.examples or [])
+        error_models.extend(ingestion_errors)
+
         if error_models:
             self.repository.add_errors(error_models)
 
@@ -93,7 +112,7 @@ class ImportService:
     def _parse_file(self, file: ImportFilePayload) -> ParsedImportFile:
         decoded = self._decode_base64(file.content_base64)
         rows, parse_errors = self._extract_rows(file.filename, decoded)
-        column_map = self._build_column_map(rows)
+        column_map = self._build_column_map(rows, file.template_id)
         validation_errors = self._validate_rows(rows, column_map)
         errors = parse_errors + validation_errors
 
@@ -178,10 +197,21 @@ class ImportService:
             rows.append(mapped)
         return rows, []
 
-    def _build_column_map(self, rows: List[dict[str, Any]]) -> Optional[Dict[str, str]]:
+    def _build_column_map(
+        self, rows: List[dict[str, Any]], template_id: Optional[str] = None
+    ) -> Optional[Dict[str, str]]:
         if not rows:
             return None
         header_keys: set[str] = set(rows[0].keys())
+
+        if template_id:
+            template = TEMPLATE_MAPPINGS.get(template_id)
+            if template and all(template.get(field) in header_keys for field in REQUIRED_FIELDS):
+                return {
+                    "date": str(template["date"]),
+                    "description": str(template["description"]),
+                    "amount": str(template["amount"]),
+                }
         column_map: Dict[str, Optional[str]] = {
             "date": self._resolve_header(header_keys, DATE_FIELDS),
             "description": self._resolve_header(header_keys, DESCRIPTION_FIELDS),
@@ -419,6 +449,139 @@ class ImportService:
                 used.update({entry["idx"], other["idx"]})
                 break
         return matches
+
+    def _get_or_create_offset_account(self) -> Account:
+        if hasattr(self, "_offset_account"):
+            return getattr(self, "_offset_account")
+
+        statement = select(Account).where(Account.is_active.is_(False), Account.display_order == 9999)
+        account = self.session.exec(statement).one_or_none()
+        if account is None:
+            account = Account(account_type=AccountType.NORMAL, is_active=False, display_order=9999)
+            self.session.add(account)
+            self.session.commit()
+            self.session.refresh(account)
+        setattr(self, "_offset_account", account)
+        return account
+
+    def _get_or_create_unassigned_account(self) -> Account:
+        if hasattr(self, "_unassigned_account"):
+            return getattr(self, "_unassigned_account")
+
+        statement = select(Account).where(Account.is_active.is_(False), Account.display_order == 9998)
+        account = self.session.exec(statement).one_or_none()
+        if account is None:
+            account = Account(account_type=AccountType.NORMAL, is_active=False, display_order=9998)
+            self.session.add(account)
+            self.session.commit()
+            self.session.refresh(account)
+        setattr(self, "_unassigned_account", account)
+        return account
+
+    def _category_lookup(self) -> dict[str, Category]:
+        statement = select(Category)
+        categories = self.session.exec(statement).all()
+        return {cat.name.lower(): cat for cat in categories}
+
+    def _ingest_files(
+        self,
+        batch: TransactionImportBatch,
+        parsed_files: List[ParsedImportFile],
+        examples: List[ExampleTransaction],
+    ) -> List[ImportErrorRecord]:
+        errors: List[ImportErrorRecord] = []
+        transaction_service = TransactionService(self.session)
+        offset_account = self._get_or_create_offset_account()
+        category_map = self._category_lookup()
+
+        for saved_file, parsed in zip(batch.files, parsed_files):
+            if saved_file.status == "error" or not parsed.rows or parsed.column_map is None:
+                saved_file.status = saved_file.status or "error"
+                continue
+
+            suggestions = self._suggest_rows(parsed.rows, parsed.column_map, examples)
+            added_errors = 0
+
+            for idx, row in enumerate(parsed.rows, start=1):
+                target_account_id = saved_file.account_id or self._get_or_create_unassigned_account().id
+                date_value = row.get(parsed.column_map["date"], "")
+                occurred_at = self._parse_date(str(date_value))
+                if occurred_at is None:
+                    errors.append(
+                        ImportErrorRecord(
+                            file_id=saved_file.id,
+                            row_number=idx,
+                            message="Date is not a valid ISO date",
+                        )
+                    )
+                    added_errors += 1
+                    continue
+
+                amount_text = row.get(parsed.column_map["amount"], "")
+                if not self._is_decimal(str(amount_text)):
+                    errors.append(
+                        ImportErrorRecord(
+                            file_id=saved_file.id,
+                            row_number=idx,
+                            message="Amount must be numeric",
+                        )
+                    )
+                    added_errors += 1
+                    continue
+
+                amount = Decimal(str(amount_text))
+                description = str(row.get(parsed.column_map["description"], "")).strip() or None
+                suggestion = suggestions.get(idx - 1)
+                category_id = None
+                if suggestion and suggestion.category:
+                    category = category_map.get(suggestion.category.lower())
+                    if category:
+                        category_id = category.id
+
+                legs = [
+                    TransactionLeg(account_id=target_account_id, amount=amount),
+                    TransactionLeg(account_id=offset_account.id, amount=-amount),
+                ]
+
+                transaction = Transaction(
+                    category_id=category_id,
+                    transaction_type=TransactionType.TRANSFER,
+                    description=description,
+                    notes=None,
+                    external_id=None,
+                    occurred_at=occurred_at,
+                    posted_at=occurred_at,
+                    status=TransactionStatus.IMPORTED,
+                    created_source=CreatedSource.IMPORT,
+                )
+
+                try:
+                    transaction_service.create_transaction(
+                        transaction,
+                        legs,
+                        import_batch=batch,
+                    )
+                except Exception as exc:  # pragma: no cover - defensive
+                    errors.append(
+                        ImportErrorRecord(
+                            file_id=saved_file.id,
+                            row_number=idx,
+                            message=str(exc),
+                        )
+                    )
+                    added_errors += 1
+                    continue
+
+            if added_errors:
+                saved_file.status = "error"
+                saved_file.error_count += added_errors
+            elif saved_file.status == "ready":
+                saved_file.status = "imported"
+
+            self.session.add(saved_file)
+
+        self.session.commit()
+        return errors
 
     def _parse_date(self, value: str) -> Optional[datetime]:
         if not value:

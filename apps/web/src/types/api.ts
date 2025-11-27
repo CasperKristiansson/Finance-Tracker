@@ -281,4 +281,5 @@ export interface CategoryListResponse {
 
 export interface TransactionListResponse {
   transactions: TransactionRead[];
+  running_balances: Record<string, string>;
 }

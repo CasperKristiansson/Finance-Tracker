@@ -65,6 +65,7 @@ def create_category(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         name=data.name,
         category_type=data.category_type,
         color_hex=data.color_hex,
+        icon=data.icon,
     )
 
     with session_scope() as session:
@@ -93,6 +94,8 @@ def update_category(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         updates["category_type"] = data.category_type
     if data.color_hex is not None:
         updates["color_hex"] = data.color_hex
+    if data.icon is not None:
+        updates["icon"] = data.icon
     if data.is_archived is not None:
         updates["is_archived"] = data.is_archived
 

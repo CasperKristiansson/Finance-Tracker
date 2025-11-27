@@ -13,6 +13,7 @@ import {
   setRecentError,
   setRecentLoading,
   setRecentLimit,
+  setRunningBalances,
   selectTransactions,
   type TransactionFilters,
 } from "@/features/transactions/transactionsSlice";
@@ -92,6 +93,9 @@ function* handleFetchTransactions(
         ? [...existing, ...response.transactions]
         : response.transactions;
     yield put(setTransactions(combined));
+    if (response.running_balances) {
+      yield put(setRunningBalances(response.running_balances));
+    }
     yield put(
       setPagination({
         limit,

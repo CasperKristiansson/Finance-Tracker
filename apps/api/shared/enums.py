@@ -69,6 +69,12 @@ class LoanEventType(StrEnum):
     FEE = "fee"
 
 
+class BudgetPeriod(StrEnum):
+    MONTHLY = "monthly"
+    QUARTERLY = "quarterly"
+    YEARLY = "yearly"
+
+
 __all__ = [
     "StrEnum",
     "CreatedSource",

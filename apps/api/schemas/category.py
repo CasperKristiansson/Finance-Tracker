@@ -16,6 +16,7 @@ class CategoryCreate(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     category_type: CategoryType
     color_hex: Optional[str] = Field(default=None, min_length=4, max_length=7)
+    icon: Optional[str] = Field(default=None, max_length=16)
 
 
 class CategoryUpdate(BaseModel):
@@ -24,6 +25,7 @@ class CategoryUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=120)
     category_type: Optional[CategoryType] = None
     color_hex: Optional[str] = Field(default=None, min_length=4, max_length=7)
+    icon: Optional[str] = Field(default=None, max_length=16)
     is_archived: Optional[bool] = None
 
     @model_validator(mode="after")
@@ -45,6 +47,7 @@ class CategoryRead(BaseModel):
     name: str
     category_type: CategoryType
     color_hex: Optional[str] = None
+    icon: Optional[str] = None
     is_archived: bool
 
 

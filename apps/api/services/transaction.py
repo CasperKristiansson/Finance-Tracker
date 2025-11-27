@@ -42,6 +42,11 @@ class TransactionService:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         account_ids: Optional[Iterable[UUID]] = None,
+        category_ids: Optional[Iterable[UUID]] = None,
+        status: Optional[Iterable[TransactionStatus]] = None,
+        min_amount: Optional[Decimal] = None,
+        max_amount: Optional[Decimal] = None,
+        search: Optional[str] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
     ) -> List[Transaction]:
@@ -49,6 +54,11 @@ class TransactionService:
             start_date=start_date,
             end_date=end_date,
             account_ids=account_ids,
+            category_ids=category_ids,
+            status=status,
+            min_amount=min_amount,
+            max_amount=max_amount,
+            search=search,
             limit=limit,
             offset=offset,
         )
@@ -122,6 +132,9 @@ class TransactionService:
         self, account_id: UUID, up_to: Optional[datetime] = None
     ) -> Decimal:
         return self.repository.calculate_account_balance(account_id, up_to)
+
+    def calculate_account_balances(self, account_ids: Iterable[UUID]) -> dict[UUID, Decimal]:
+        return self.repository.calculate_account_balances(account_ids)
 
     def list_loan_events(self, loan_id: UUID) -> List[LoanEvent]:
         return self.repository.list_loan_events(loan_id)

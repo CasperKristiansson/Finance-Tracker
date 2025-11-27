@@ -81,8 +81,10 @@ def _to_batch_read(
     status = "ready"
     if total_errors:
         status = "error"
-    if not total_rows:
+    elif not total_rows:
         status = "empty"
+    elif all(file.status == "imported" for file in file_models):
+        status = "imported"
 
     return ImportBatchRead(
         **batch.model_dump(mode="python", exclude={"files"}),

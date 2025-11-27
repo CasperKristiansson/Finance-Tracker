@@ -49,11 +49,19 @@ def list_transactions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             start_date=query.start_date,
             end_date=query.end_date,
             account_ids=query.account_ids,
+            category_ids=query.category_ids,
+            status=query.status,
+            min_amount=query.min_amount,
+            max_amount=query.max_amount,
+            search=query.search,
             limit=query.limit,
             offset=query.offset,
         )
+        account_ids = {leg.account_id for tx in transactions for leg in tx.legs}
+        running_balances = service.calculate_account_balances(account_ids)
         response = TransactionListResponse(
-            transactions=[_transaction_to_schema(tx) for tx in transactions]
+            transactions=[_transaction_to_schema(tx) for tx in transactions],
+            running_balances=running_balances,
         )
     return json_response(200, response.model_dump(mode="json"))
 
@@ -81,7 +89,10 @@ def create_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
     with session_scope() as session:
         service = TransactionService(session)
-        created = service.create_transaction(transaction, legs)
+        try:
+            created = service.create_transaction(transaction, legs)
+        except ValueError as exc:
+            return json_response(400, {"error": str(exc)})
         session.refresh(created)
         response = _transaction_to_schema(created).model_dump(mode="json")
     return json_response(201, response)
@@ -122,6 +133,8 @@ def update_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             )
         except LookupError:
             return json_response(404, {"error": "Transaction not found"})
+        except ValueError as exc:
+            return json_response(400, {"error": str(exc)})
         response = _transaction_to_schema(updated).model_dump(mode="json")
     return json_response(200, response)
 

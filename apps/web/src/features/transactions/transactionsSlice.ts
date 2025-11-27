@@ -24,6 +24,7 @@ export interface TransactionsState {
     offset: number;
     hasMore: boolean;
   };
+  runningBalances: Record<string, number>;
   recent: {
     items: TransactionRead[];
     loading: boolean;
@@ -41,6 +42,7 @@ const initialState: TransactionsState = {
     offset: 0,
     hasMore: true,
   },
+  runningBalances: {},
   recent: {
     items: [],
     loading: false,
@@ -55,6 +57,19 @@ const transactionsSlice = createSlice({
     setTransactions(state, action: PayloadAction<TransactionRead[]>) {
       state.items = action.payload;
       state.error = undefined;
+    },
+    setRunningBalances(
+      state,
+      action: PayloadAction<Record<string, number | string>>,
+    ) {
+      const next: Record<string, number> = {};
+      Object.entries(action.payload).forEach(([key, value]) => {
+        const numeric = typeof value === "string" ? parseFloat(value) : value;
+        if (Number.isFinite(numeric)) {
+          next[key] = Number(numeric);
+        }
+      });
+      state.runningBalances = next;
     },
     upsertTransaction(state, action: PayloadAction<TransactionRead>) {
       const idx = state.items.findIndex((tx) => tx.id === action.payload.id);
@@ -110,17 +125,7 @@ const transactionsSlice = createSlice({
   selectors: {
     selectTransactionsState: (state) => state,
     selectTransactions: (state) => state.items,
-    selectRunningBalanceByAccount: (state) => {
-      const totals: Record<string, number> = {};
-      state.items.forEach((tx) => {
-        tx.legs.forEach((leg) => {
-          const value = parseFloat(leg.amount as unknown as string);
-          if (!Number.isFinite(value)) return;
-          totals[leg.account_id] = (totals[leg.account_id] ?? 0) + value;
-        });
-      });
-      return totals;
-    },
+    selectRunningBalanceByAccount: (state) => state.runningBalances,
     selectTransactionsLoading: (state) => state.loading,
     selectTransactionsError: (state) => state.error,
     selectTransactionFilters: (state) => state.filters,
@@ -142,6 +147,7 @@ export const {
   setRecentLoading,
   setRecentError,
   setRecentLimit,
+  setRunningBalances,
   resetTransactions,
 } = transactionsSlice.actions;
 export const {

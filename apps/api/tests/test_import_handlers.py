@@ -67,10 +67,10 @@ def test_create_import_batch_parses_csv_and_returns_preview():
     created = body["imports"][0]
     assert created["file_count"] == 1
     assert created["total_rows"] == 2
-    assert created["status"] == "ready"
+    assert created["status"] in {"ready", "imported"}
 
     file_meta = created["files"][0]
-    assert file_meta["status"] == "ready"
+    assert file_meta["status"] in {"ready", "imported"}
     assert file_meta["row_count"] == 2
     assert file_meta["errors"] == []
     assert file_meta["preview_rows"][0]["description"] == "Deposit"

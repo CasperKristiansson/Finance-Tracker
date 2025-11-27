@@ -76,6 +76,11 @@ class TransactionListQuery(BaseModel):
     start_date: Optional[datetime] = Field(default=None, alias="start_date")
     end_date: Optional[datetime] = Field(default=None, alias="end_date")
     account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
+    category_ids: Optional[List[UUID]] = Field(default=None, alias="category_ids")
+    status: Optional[List[TransactionStatus]] = None
+    min_amount: Optional[Decimal] = Field(default=None, alias="min_amount")
+    max_amount: Optional[Decimal] = Field(default=None, alias="max_amount")
+    search: Optional[str] = None
     limit: int = Field(default=50, ge=1, le=200)
     offset: int = Field(default=0, ge=0)
 
@@ -102,6 +107,46 @@ class TransactionListQuery(BaseModel):
                             cls,
                         ) from exc
                 values["account_ids"] = converted
+
+        if isinstance(values, dict) and "category_ids" in values:
+            category_ids = values.get("category_ids")
+            if isinstance(category_ids, str):
+                parts = [part.strip() for part in category_ids.split(",") if part.strip()]
+                converted: List[UUID] = []
+                for part in parts:
+                    try:
+                        converted.append(UUID(part))
+                    except ValueError as exc:  # pragma: no cover - validation
+                        raise ValidationError(
+                            [
+                                {
+                                    "loc": ("category_ids",),
+                                    "msg": "Invalid UUID in category_ids",
+                                    "type": "value_error",
+                                }
+                            ],
+                            cls,
+                        ) from exc
+                values["category_ids"] = converted
+
+        if isinstance(values, dict) and "status" in values and isinstance(values["status"], str):
+            statuses = [part.strip() for part in str(values["status"]).split(",") if part.strip()]
+            converted_status: List[TransactionStatus] = []
+            for status in statuses:
+                try:
+                    converted_status.append(TransactionStatus(status))
+                except ValueError as exc:  # pragma: no cover - validation
+                    raise ValidationError(
+                        [
+                            {
+                                "loc": ("status",),
+                                "msg": "Invalid status provided",
+                                "type": "value_error",
+                            }
+                        ],
+                        cls,
+                    ) from exc
+            values["status"] = converted_status
         return values
 
 
@@ -109,6 +154,7 @@ class TransactionListResponse(BaseModel):
     """Response payload for transaction listings."""
 
     transactions: List[TransactionRead]
+    running_balances: dict[UUID, Decimal]
 
 
 class TransactionUpdate(BaseModel):

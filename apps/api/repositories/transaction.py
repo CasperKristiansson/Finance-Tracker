@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Iterable, List, Optional
 from uuid import UUID
 
-from sqlalchemy import desc
+from sqlalchemy import desc, func, or_
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
@@ -32,6 +32,11 @@ class TransactionRepository:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         account_ids: Optional[Iterable[UUID]] = None,
+        category_ids: Optional[Iterable[UUID]] = None,
+        status: Optional[Iterable[TransactionStatus]] = None,
+        min_amount: Optional[Decimal] = None,
+        max_amount: Optional[Decimal] = None,
+        search: Optional[str] = None,
         limit: Optional[int] = None,
         offset: Optional[int] = None,
     ) -> List[Transaction]:
@@ -49,6 +54,36 @@ class TransactionRepository:
             statement = statement.join(TransactionLeg).where(
                 TransactionLeg.account_id.in_(list(account_ids))  # type: ignore[attr-defined]
             )
+        if category_ids:
+            statement = statement.where(Transaction.category_id.in_(list(category_ids)))
+        if status:
+            statement = statement.where(Transaction.status.in_(list(status)))
+        if search:
+            pattern = f"%{search}%"
+            statement = statement.where(
+                or_(
+                    Transaction.description.ilike(pattern),  # type: ignore[attr-defined]
+                    Transaction.notes.ilike(pattern),  # type: ignore[attr-defined]
+                    Transaction.external_id.ilike(pattern),  # type: ignore[attr-defined]
+                )
+            )
+
+        if min_amount is not None or max_amount is not None:
+            leg_amounts = (
+                select(
+                    TransactionLeg.transaction_id,
+                    func.max(func.abs(TransactionLeg.amount)).label("max_abs_amount"),
+                )
+                .group_by(TransactionLeg.transaction_id)
+                .subquery()
+            )
+            statement = statement.join(
+                leg_amounts, Transaction.id == leg_amounts.c.transaction_id
+            )  # type: ignore[arg-type]
+            if min_amount is not None:
+                statement = statement.where(leg_amounts.c.max_abs_amount >= min_amount)
+            if max_amount is not None:
+                statement = statement.where(leg_amounts.c.max_abs_amount <= max_amount)
         if limit is not None:
             statement = statement.limit(limit)
         if offset:
@@ -156,6 +191,18 @@ class TransactionRepository:
         legs = self.session.exec(statement).all()
         total = sum(coerce_decimal(leg.amount) for leg in legs)
         return coerce_decimal(total)
+
+    def calculate_account_balances(self, account_ids: Iterable[UUID]) -> dict[UUID, Decimal]:
+        ids = list(account_ids)
+        if not ids:
+            return {}
+        statement = (
+            select(TransactionLeg.account_id, func.sum(TransactionLeg.amount))
+            .where(TransactionLeg.account_id.in_(ids))  # type: ignore[attr-defined]
+            .group_by(TransactionLeg.account_id)
+        )
+        result = self.session.exec(statement).all()
+        return {row[0]: coerce_decimal(row[1]) for row in result}
 
     def list_loan_events(self, loan_id: UUID) -> List[LoanEvent]:
         statement = (
