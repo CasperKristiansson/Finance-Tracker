@@ -9,6 +9,7 @@ from .categories import (
 )
 from .categories import reset_handler_state as reset_category_handler_state
 from .categories import (
+    merge_categories,
     update_category,
 )
 from .loans import (
@@ -56,6 +57,7 @@ __all__ = [
     "create_category",
     "list_categories",
     "update_category",
+    "merge_categories",
     "create_loan",
     "update_loan",
     "list_loan_events",

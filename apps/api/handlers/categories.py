@@ -13,6 +13,7 @@ from ..schemas import (
     CategoryRead,
     CategoryUpdate,
     ListCategoriesQuery,
+    MergeCategoriesRequest,
 )
 from ..services import CategoryService
 from ..shared import session_scope
@@ -109,9 +110,35 @@ def update_category(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     return json_response(200, response)
 
 
+def merge_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    payload = parse_body(event)
+
+    try:
+        data = MergeCategoriesRequest.model_validate(payload)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope() as session:
+        service = CategoryService(session)
+        try:
+            merged = service.merge_categories(
+                data.source_category_id,
+                data.target_category_id,
+                rename_target_to=data.rename_target_to,
+            )
+        except LookupError:
+            return json_response(404, {"error": "Category not found"})
+        except ValueError as exc:
+            return json_response(400, {"error": str(exc)})
+        response = _category_to_schema(merged).model_dump(mode="json")
+    return json_response(200, response)
+
+
 __all__ = [
     "list_categories",
     "create_category",
     "update_category",
+    "merge_categories",
     "reset_handler_state",
 ]

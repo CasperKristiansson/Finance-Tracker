@@ -22,11 +22,15 @@ import {
   selectBudgets,
   selectBudgetsError,
   selectBudgetsLoading,
+  selectBudgetRollups,
+  selectBudgetTotals,
+  selectBudgetsByUsage,
 } from "@/features/budgets/budgetsSlice";
 import {
   FetchCategories,
   CreateCategory,
   UpdateCategory,
+  MergeCategory,
 } from "@/features/categories/categoriesSaga";
 import {
   selectCategoriesState,
@@ -167,7 +171,19 @@ export const useCategoriesApi = () => {
     [dispatch],
   );
 
-  return { ...state, fetchCategories, createCategory, updateCategory };
+  const mergeCategory = useCallback(
+    (payload: Parameters<typeof MergeCategory>[0]) =>
+      dispatch(MergeCategory(payload)),
+    [dispatch],
+  );
+
+  return {
+    ...state,
+    fetchCategories,
+    createCategory,
+    updateCategory,
+    mergeCategory,
+  };
 };
 
 export const useTransactionsApi = () => {
@@ -343,6 +359,9 @@ export const useBudgetsApi = () => {
   const items = useAppSelector(selectBudgets);
   const loading = useAppSelector(selectBudgetsLoading);
   const error = useAppSelector(selectBudgetsError);
+  const totals = useAppSelector(selectBudgetTotals);
+  const rollups = useAppSelector(selectBudgetRollups);
+  const budgetsByUsage = useAppSelector(selectBudgetsByUsage);
 
   const fetchBudgets = useCallback(() => {
     dispatch(FetchBudgets());
@@ -372,5 +391,8 @@ export const useBudgetsApi = () => {
     createBudget,
     updateBudget,
     deleteBudget,
+    totals,
+    rollups,
+    budgetsByUsage,
   };
 };

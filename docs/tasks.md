@@ -47,11 +47,11 @@
 
 ### Milestone 5 – Categories & Budgets
 
-- [ ] Backend: ensure category CRUD supports color/icon metadata; add budget models/endpoints (category budgets with period + amount).
-- [ ] Redux slices/sagas: categories CRUD; budgets fetch/create/update; selectors for rollups and progress.
-- [ ] UI: category management table with color/emoji/icon picker, archive toggle, inline edit; filter by type (income/expense/etc).
-- [ ] Budgets: inputs per category (period selector monthly/quarterly/yearly), progress bars with spent vs budget; rollup cards for total budget vs actual.
-- [ ] Empty/wizard: guided first-time budget setup using top categories by spend; skeleton rows/cards.
+- [x] Backend: ensure category CRUD supports color/icon metadata; add budget models/endpoints (category budgets with period + amount).
+- [x] Redux slices/sagas: categories CRUD; budgets fetch/create/update; selectors for rollups and progress.
+- [x] UI: category management table with color/emoji/icon picker, archive toggle, inline edit; filter by type (income/expense/etc).
+- [x] Budgets: inputs per category (period selector monthly/quarterly/yearly), progress bars with spent vs budget; rollup cards for total budget vs actual.
+- [x] Empty/wizard: guided first-time budget setup using top categories by spend; skeleton rows/cards.
 
 ### Milestone 6 – Reports & Analytics (fully featured)
 

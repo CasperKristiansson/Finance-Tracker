@@ -23,6 +23,11 @@ export const UpdateCategory = createAction<{
   id: string;
   data: CategoryUpdateRequest;
 }>("categories/update");
+export const MergeCategory = createAction<{
+  sourceCategoryId: string;
+  targetCategoryId: string;
+  renameTargetTo?: string;
+}>("categories/merge");
 
 function* handleFetchCategories(action: ReturnType<typeof FetchCategories>) {
   const filters = action.payload ?? {};
@@ -96,8 +101,34 @@ function* handleUpdateCategory(action: ReturnType<typeof UpdateCategory>) {
   }
 }
 
+function* handleMergeCategory(action: ReturnType<typeof MergeCategory>) {
+  try {
+    yield call(
+      callApiWithAuth,
+      {
+        path: "/categories/merge",
+        method: "POST",
+        body: {
+          source_category_id: action.payload.sourceCategoryId,
+          target_category_id: action.payload.targetCategoryId,
+          rename_target_to: action.payload.renameTargetTo,
+        },
+      },
+      { loadingKey: "categories" },
+    );
+    yield call(handleFetchCategories, FetchCategories({}));
+  } catch (error) {
+    yield put(
+      setCategoriesError(
+        error instanceof Error ? error.message : "Failed to merge categories",
+      ),
+    );
+  }
+}
+
 export function* CategoriesSaga() {
   yield takeLatest(FetchCategories.type, handleFetchCategories);
   yield takeLatest(CreateCategory.type, handleCreateCategory);
   yield takeLatest(UpdateCategory.type, handleUpdateCategory);
+  yield takeLatest(MergeCategory.type, handleMergeCategory);
 }

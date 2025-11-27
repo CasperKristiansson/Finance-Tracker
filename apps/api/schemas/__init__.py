@@ -18,6 +18,7 @@ from .category import (
     CategoryRead,
     CategoryUpdate,
     ListCategoriesQuery,
+    MergeCategoriesRequest,
 )
 from .loan import (
     LoanCreateRequest,
@@ -83,6 +84,7 @@ __all__ = [
     "ListCategoriesQuery",
     "CategoryPathParams",
     "CategoryListResponse",
+    "MergeCategoriesRequest",
     "TransactionCreate",
     "TransactionRead",
     "TransactionLegCreate",

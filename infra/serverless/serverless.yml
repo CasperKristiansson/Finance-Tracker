@@ -118,6 +118,18 @@ functions:
           method: PATCH
           authorizer: cognitoJwt
 
+  mergeCategories:
+    handler: apps/api/handlers/categories.merge_categories
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /categories/merge
+          method: POST
+          authorizer: cognitoJwt
+
   listBudgets:
     handler: apps/api/handlers/budgets.list_budgets
     timeout: 29

@@ -75,6 +75,22 @@ class CategoryListResponse(BaseModel):
     categories: list[CategoryRead]
 
 
+class MergeCategoriesRequest(BaseModel):
+    """Request payload for merging one category into another."""
+
+    source_category_id: UUID = Field(description="Category to merge from")
+    target_category_id: UUID = Field(description="Category to merge into")
+    rename_target_to: Optional[str] = Field(
+        default=None, description="Optional new name for the target category"
+    )
+
+    @model_validator(mode="after")
+    def ensure_distinct(self) -> "MergeCategoriesRequest":
+        if self.source_category_id == self.target_category_id:
+            raise ValueError("Source and target categories must be different")
+        return self
+
+
 __all__ = [
     "CategoryCreate",
     "CategoryUpdate",
@@ -82,4 +98,5 @@ __all__ = [
     "ListCategoriesQuery",
     "CategoryPathParams",
     "CategoryListResponse",
+    "MergeCategoriesRequest",
 ]

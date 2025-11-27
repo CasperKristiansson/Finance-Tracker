@@ -101,6 +101,8 @@ export const Dashboard: React.FC = () => {
     items: budgets,
     loading: budgetsLoading,
     fetchBudgets,
+    totals: budgetTotals,
+    budgetsByUsage,
   } = useBudgetsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
 
@@ -122,16 +124,9 @@ export const Dashboard: React.FC = () => {
     const expense = numberFromString(total.data?.expense);
     const savingsRate =
       income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
-    const budgeted = budgets.reduce(
-      (acc, b) => ({
-        total: acc.total + Number(b.amount),
-        spent: acc.spent + Number(b.spent),
-      }),
-      { total: 0, spent: 0 },
-    );
     const budgetPercent =
-      budgeted.total > 0
-        ? Math.round((budgeted.spent / budgeted.total) * 100)
+      budgetTotals.budgetTotal > 0
+        ? Math.round((budgetTotals.spentTotal / budgetTotals.budgetTotal) * 100)
         : 0;
 
     return [
@@ -156,11 +151,11 @@ export const Dashboard: React.FC = () => {
       {
         title: "Budget usage",
         value: `${budgetPercent}%`,
-        helper: `${currency(budgeted.spent)} / ${currency(budgeted.total || 0)}`,
+        helper: `${currency(budgetTotals.spentTotal)} / ${currency(budgetTotals.budgetTotal || 0)}`,
         trend: budgetPercent > 100 ? "down" : "neutral",
       },
     ];
-  }, [total.data, budgets]);
+  }, [total.data, budgetTotals]);
 
   const incomeExpenseChart = useMemo(() => {
     return (monthly.data || []).map((entry) => ({
@@ -226,13 +221,12 @@ export const Dashboard: React.FC = () => {
 
   const budgetProgressData = useMemo(() => {
     if (!budgets.length) return [];
-    return budgets
+    return (budgetsByUsage.length ? budgetsByUsage : budgets)
       .map((b) => {
-        const category =
-          categories.find((c) => c.id === b.category_id)?.name ??
-          "Uncategorized";
-        const icon =
-          categories.find((c) => c.id === b.category_id)?.icon ?? "🏷️";
+        const cat = categories.find((c) => c.id === b.category_id);
+        const category = cat?.name ?? "Uncategorized";
+        const icon = cat?.icon ?? "🏷️";
+        const color = cat?.color_hex ?? "#0f172a";
         const percent = Math.min(150, Math.max(0, Number(b.percent_used || 0)));
         return {
           id: b.id,
@@ -241,11 +235,11 @@ export const Dashboard: React.FC = () => {
           remaining: Number(b.remaining),
           spent: Number(b.spent),
           total: Number(b.amount),
+          color,
         };
       })
-      .sort((a, b) => b.percent - a.percent)
       .slice(0, 5);
-  }, [budgets, categories]);
+  }, [budgets, budgetsByUsage, categories]);
 
   const recentTransactions = useMemo(() => {
     if (recent.items.length === 0) {
@@ -551,10 +545,20 @@ export const Dashboard: React.FC = () => {
               budgetProgressData.map((row) => (
                 <div key={row.id} className="space-y-1">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-slate-800">{row.label}</span>
+                    <span className="flex items-center gap-2 text-slate-800">
+                      <span
+                        className="inline-block h-2 w-2 rounded-full"
+                        style={{ backgroundColor: row.color }}
+                      />
+                      {row.label}
+                    </span>
                     <span className="text-slate-600">{row.percent}%</span>
                   </div>
-                  <Progress value={row.percent} className="h-2" />
+                  <Progress
+                    value={row.percent}
+                    className="h-2"
+                    indicatorStyle={{ backgroundColor: row.color }}
+                  />
                   <div className="flex items-center justify-between text-xs text-slate-500">
                     <span>Spent {currency(row.spent)}</span>
                     <span>Remaining {currency(row.remaining)}</span>

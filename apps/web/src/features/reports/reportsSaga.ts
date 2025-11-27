@@ -20,6 +20,7 @@ import {
   setYearlyReport,
   type ReportFilters,
 } from "@/features/reports/reportsSlice";
+import { buildReportKey } from "@/features/reports/reportsSlice";
 import type {
   MonthlyReportEntry,
   NetWorthHistoryResponse,
@@ -45,16 +46,9 @@ const toCsv = (values?: string[]) => {
   return values.join(",");
 };
 
-const buildKey = (filters: ReportFilters | undefined): string =>
-  JSON.stringify({
-    year: filters?.year ?? null,
-    accountIds: [...(filters?.accountIds ?? [])].sort(),
-    categoryIds: [...(filters?.categoryIds ?? [])].sort(),
-  });
-
 function* handleFetchMonthly(action: ReturnType<typeof FetchMonthlyReport>) {
   const filters = action.payload ?? {};
-  const key = buildKey(filters);
+  const key = buildReportKey(filters);
   yield put(setMonthlyCurrentKey(key));
   yield put(setMonthlyLoading(true));
 
@@ -91,7 +85,7 @@ function* handleFetchMonthly(action: ReturnType<typeof FetchMonthlyReport>) {
 
 function* handleFetchYearly(action: ReturnType<typeof FetchYearlyReport>) {
   const filters = action.payload ?? {};
-  const key = buildKey(filters);
+  const key = buildReportKey(filters);
   yield put(setYearlyCurrentKey(key));
   yield put(setYearlyLoading(true));
 
@@ -125,7 +119,7 @@ function* handleFetchYearly(action: ReturnType<typeof FetchYearlyReport>) {
 
 function* handleFetchTotal(action: ReturnType<typeof FetchTotalReport>) {
   const filters = action.payload ?? {};
-  const key = buildKey(filters);
+  const key = buildReportKey(filters);
   yield put(setTotalCurrentKey(key));
   yield put(setTotalLoading(true));
 
@@ -159,7 +153,7 @@ function* handleFetchTotal(action: ReturnType<typeof FetchTotalReport>) {
 
 function* handleFetchNetWorth(action: ReturnType<typeof FetchNetWorthHistory>) {
   const filters = action.payload ?? {};
-  const key = buildKey(filters);
+  const key = buildReportKey(filters);
   yield put(setNetWorthCurrentKey(key));
   yield put(setNetWorthLoading(true));
 

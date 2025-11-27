@@ -3,6 +3,7 @@ import {
   type PayloadAction,
   createSelector,
 } from "@reduxjs/toolkit";
+import type { RootState } from "@/app/store";
 import type {
   MonthlyReportEntry,
   NetWorthPoint,
@@ -42,6 +43,13 @@ const initialState: ReportsState = {
   total: createInitialCache<TotalReportRead | undefined>(),
   netWorth: createInitialCache<NetWorthPoint[]>(),
 };
+
+export const buildReportKey = (filters: ReportFilters | undefined): string =>
+  JSON.stringify({
+    year: filters?.year ?? null,
+    accountIds: [...(filters?.accountIds ?? [])].sort(),
+    categoryIds: [...(filters?.categoryIds ?? [])].sort(),
+  });
 
 const reportsSlice = createSlice({
   name: "reports",
@@ -198,6 +206,19 @@ export const {
   selectTotalReportState,
   selectNetWorthState,
 } = reportsSlice.selectors;
+
+export const selectMonthlyByFilters = (
+  state: RootState,
+  filters: ReportFilters | undefined,
+) => {
+  const key = buildReportKey(filters);
+  const monthly = selectMonthlyReportState(state);
+  return {
+    data: monthly.cache[key] ?? [],
+    loading: monthly.loading && monthly.currentKey === key,
+    error: monthly.error,
+  };
+};
 
 export const selectMonthlyReport = selectCurrentMonthly;
 export const selectYearlyReport = selectCurrentYearly;
