@@ -91,6 +91,29 @@ def test_update_category():
     assert updated["icon"] == "💡"
 
 
+def test_update_category_icon_only():
+    create_response = create_category(
+        {
+            "body": json.dumps({"name": "Travel", "category_type": "expense"}),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    category_id = _json_body(create_response)["id"]
+
+    update_response = update_category(
+        {
+            "body": json.dumps({"icon": "✈️"}),
+            "isBase64Encoded": False,
+            "pathParameters": {"category_id": category_id},
+        },
+        None,
+    )
+    assert update_response["statusCode"] == 200
+    updated = _json_body(update_response)
+    assert updated["icon"] == "✈️"
+
+
 def test_create_category_validation_error():
     response = create_category({"body": json.dumps({}), "isBase64Encoded": False}, None)
     assert response["statusCode"] == 400

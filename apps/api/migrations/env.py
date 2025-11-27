@@ -12,7 +12,7 @@ from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
 # ensure project root is on sys.path
-BASE_DIR = Path(__file__).resolve().parents[2]
+BASE_DIR = Path(__file__).resolve().parents[3]
 if str(BASE_DIR) not in sys.path:
     sys.path.append(str(BASE_DIR))
 

@@ -21,12 +21,19 @@ import {
   YAxis,
 } from "recharts";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useReportsApi, useTransactionsApi } from "@/hooks/use-api";
+import {
+  useBudgetsApi,
+  useCategoriesApi,
+  useReportsApi,
+  useTransactionsApi,
+} from "@/hooks/use-api";
 
 type KPI = {
   title: string;
@@ -90,6 +97,12 @@ export const Dashboard: React.FC = () => {
     fetchNetWorthReport,
   } = useReportsApi();
   const { recent, fetchRecentTransactions } = useTransactionsApi();
+  const {
+    items: budgets,
+    loading: budgetsLoading,
+    fetchBudgets,
+  } = useBudgetsApi();
+  const { items: categories, fetchCategories } = useCategoriesApi();
 
   useEffect(() => {
     const year = new Date().getFullYear();
@@ -98,6 +111,8 @@ export const Dashboard: React.FC = () => {
     fetchTotalReport();
     fetchNetWorthReport();
     fetchRecentTransactions({ limit: 5 });
+    fetchBudgets();
+    fetchCategories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -107,6 +122,17 @@ export const Dashboard: React.FC = () => {
     const expense = numberFromString(total.data?.expense);
     const savingsRate =
       income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
+    const budgeted = budgets.reduce(
+      (acc, b) => ({
+        total: acc.total + Number(b.amount),
+        spent: acc.spent + Number(b.spent),
+      }),
+      { total: 0, spent: 0 },
+    );
+    const budgetPercent =
+      budgeted.total > 0
+        ? Math.round((budgeted.spent / budgeted.total) * 100)
+        : 0;
 
     return [
       {
@@ -128,13 +154,13 @@ export const Dashboard: React.FC = () => {
         trend: savingsRate >= 0 ? "up" : "down",
       },
       {
-        title: "Upcoming bills",
-        value: "$3,200",
-        helper: "Placeholder until budgets land",
-        trend: "neutral",
+        title: "Budget usage",
+        value: `${budgetPercent}%`,
+        helper: `${currency(budgeted.spent)} / ${currency(budgeted.total || 0)}`,
+        trend: budgetPercent > 100 ? "down" : "neutral",
       },
     ];
-  }, [total.data]);
+  }, [total.data, budgets]);
 
   const incomeExpenseChart = useMemo(() => {
     return (monthly.data || []).map((entry) => ({
@@ -197,6 +223,29 @@ export const Dashboard: React.FC = () => {
       net: Number(point.net_worth),
     }));
   }, [netWorth.data]);
+
+  const budgetProgressData = useMemo(() => {
+    if (!budgets.length) return [];
+    return budgets
+      .map((b) => {
+        const category =
+          categories.find((c) => c.id === b.category_id)?.name ??
+          "Uncategorized";
+        const icon =
+          categories.find((c) => c.id === b.category_id)?.icon ?? "🏷️";
+        const percent = Math.min(150, Math.max(0, Number(b.percent_used || 0)));
+        return {
+          id: b.id,
+          label: `${icon ? `${icon} ` : ""}${category}`,
+          percent,
+          remaining: Number(b.remaining),
+          spent: Number(b.spent),
+          total: Number(b.amount),
+        };
+      })
+      .sort((a, b) => b.percent - a.percent)
+      .slice(0, 5);
+  }, [budgets, categories]);
 
   const recentTransactions = useMemo(() => {
     if (recent.items.length === 0) {
@@ -485,6 +534,35 @@ export const Dashboard: React.FC = () => {
               <Bar dataKey="rate" fill="#0ea5e9" radius={[6, 6, 4, 4]} />
             </BarChart>
           </ResponsiveContainer>
+        </ChartCard>
+
+        <ChartCard
+          title="Budgets vs actual"
+          description="Top categories by utilization"
+          loading={budgetsLoading}
+          action={<Badge variant="outline">{budgets.length} tracked</Badge>}
+        >
+          <div className="space-y-3">
+            {budgetProgressData.length === 0 ? (
+              <p className="text-sm text-slate-500">
+                No budgets yet. Add one to start tracking progress.
+              </p>
+            ) : (
+              budgetProgressData.map((row) => (
+                <div key={row.id} className="space-y-1">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-slate-800">{row.label}</span>
+                    <span className="text-slate-600">{row.percent}%</span>
+                  </div>
+                  <Progress value={row.percent} className="h-2" />
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>Spent {currency(row.spent)}</span>
+                    <span>Remaining {currency(row.remaining)}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </ChartCard>
 
         <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.25)]">

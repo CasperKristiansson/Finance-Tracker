@@ -32,7 +32,13 @@ class CategoryUpdate(BaseModel):
     def ensure_updates_present(self) -> "CategoryUpdate":
         if not any(
             value is not None
-            for value in (self.name, self.category_type, self.color_hex, self.is_archived)
+            for value in (
+                self.name,
+                self.category_type,
+                self.color_hex,
+                self.icon,
+                self.is_archived,
+            )
         ):
             raise ValueError("At least one field must be provided for update")
         return self

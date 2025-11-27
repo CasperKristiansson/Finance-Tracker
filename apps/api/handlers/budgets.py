@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any, Dict
 
 from pydantic import ValidationError
 
-from ..schemas import BudgetCreate, BudgetListResponse, BudgetRead, BudgetUpdate
+from ..schemas import (
+    BudgetCreate,
+    BudgetListResponse,
+    BudgetProgressListResponse,
+    BudgetRead,
+    BudgetUpdate,
+)
 from ..services import BudgetService
 from ..shared import session_scope
 from .utils import (
@@ -54,6 +62,8 @@ def create_budget(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             )
         except LookupError as exc:
             return json_response(404, {"error": str(exc)})
+        except ValueError as exc:
+            return json_response(400, {"error": str(exc)})
         response = _budget_to_schema(created).model_dump(mode="json")
     return json_response(201, response)
 
@@ -81,6 +91,8 @@ def update_budget(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             )
         except LookupError:
             return json_response(404, {"error": "Budget not found"})
+        except ValueError as exc:
+            return json_response(400, {"error": str(exc)})
         response = _budget_to_schema(updated).model_dump(mode="json")
     return json_response(200, response)
 
@@ -99,10 +111,47 @@ def delete_budget(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     return json_response(204, {})
 
 
+def list_budget_progress(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    params = event.get("queryStringParameters") or {}
+    as_of_raw = params.get("as_of")
+    as_of = (
+        datetime.fromisoformat(as_of_raw).astimezone(timezone.utc)
+        if as_of_raw
+        else datetime.now(timezone.utc)
+    )
+
+    with session_scope() as session:
+        service = BudgetService(session)
+        progress = service.list_budget_progress(as_of)
+        items = []
+        for budget, spent in progress:
+            percent = Decimal("0")
+            try:
+                percent = (spent / budget.amount * 100).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+            except (InvalidOperation, ZeroDivisionError):
+                percent = Decimal("0")
+
+            items.append(
+                {
+                    **_budget_to_schema(budget).model_dump(),
+                    "spent": str(spent),
+                    "remaining": str(budget.amount - spent),
+                    "percent_used": str(percent),
+                }
+            )
+
+        response = BudgetProgressListResponse(budgets=items)
+    return json_response(200, response.model_dump(mode="json"))
+
+
 __all__ = [
     "list_budgets",
     "create_budget",
     "update_budget",
     "delete_budget",
+    "list_budget_progress",
     "reset_handler_state",
 ]

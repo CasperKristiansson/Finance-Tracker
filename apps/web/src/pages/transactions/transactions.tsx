@@ -217,7 +217,10 @@ export const Transactions: React.FC = () => {
   const categoryLookup = useMemo(
     () =>
       new Map<string, string>(
-        categories?.map((c: CategoryRead) => [c.id, c.name]) ?? [],
+        categories?.map((c: CategoryRead) => [
+          c.id,
+          `${c.icon ? `${c.icon} ` : ""}${c.name}`,
+        ]) ?? [],
       ),
     [categories],
   );

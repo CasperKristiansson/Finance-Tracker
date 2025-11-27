@@ -4,6 +4,8 @@ export const PageRoutes = {
   notFound: "*",
   home: "/",
   accounts: "/accounts",
+  categories: "/categories",
+  budgets: "/budgets",
   imports: "/imports",
   transactions: "/transactions",
   reports: "/reports",

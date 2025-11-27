@@ -118,6 +118,66 @@ functions:
           method: PATCH
           authorizer: cognitoJwt
 
+  listBudgets:
+    handler: apps/api/handlers/budgets.list_budgets
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /budgets
+          method: GET
+          authorizer: cognitoJwt
+
+  createBudget:
+    handler: apps/api/handlers/budgets.create_budget
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /budgets
+          method: POST
+          authorizer: cognitoJwt
+
+  updateBudget:
+    handler: apps/api/handlers/budgets.update_budget
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /budgets/{budgetId}
+          method: PATCH
+          authorizer: cognitoJwt
+
+  deleteBudget:
+    handler: apps/api/handlers/budgets.delete_budget
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /budgets/{budgetId}
+          method: DELETE
+          authorizer: cognitoJwt
+
+  listBudgetProgress:
+    handler: apps/api/handlers/budgets.list_budget_progress
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /budgets/progress
+          method: GET
+          authorizer: cognitoJwt
+
   listTransactions:
     handler: apps/api/handlers/transactions.list_transactions
     timeout: 29

@@ -12,7 +12,22 @@ import {
   selectAccountsState,
   type AccountsState,
 } from "@/features/accounts/accountsSlice";
-import { FetchCategories } from "@/features/categories/categoriesSaga";
+import {
+  CreateBudget,
+  DeleteBudget,
+  FetchBudgets,
+  UpdateBudget,
+} from "@/features/budgets/budgetsSaga";
+import {
+  selectBudgets,
+  selectBudgetsError,
+  selectBudgetsLoading,
+} from "@/features/budgets/budgetsSlice";
+import {
+  FetchCategories,
+  CreateCategory,
+  UpdateCategory,
+} from "@/features/categories/categoriesSaga";
 import {
   selectCategoriesState,
   type CategoriesState,
@@ -70,6 +85,10 @@ import {
   type TransactionFilters,
 } from "@/features/transactions/transactionsSlice";
 import type {
+  BudgetCreateRequest,
+  BudgetUpdateRequest,
+  CategoryCreateRequest,
+  CategoryUpdateRequest,
   ImportCreateRequest,
   TransactionCreate,
   TransactionStatus,
@@ -137,7 +156,18 @@ export const useCategoriesApi = () => {
     [dispatch],
   );
 
-  return { ...state, fetchCategories };
+  const createCategory = useCallback(
+    (payload: CategoryCreateRequest) => dispatch(CreateCategory(payload)),
+    [dispatch],
+  );
+
+  const updateCategory = useCallback(
+    (id: string, data: CategoryUpdateRequest) =>
+      dispatch(UpdateCategory({ id, data })),
+    [dispatch],
+  );
+
+  return { ...state, fetchCategories, createCategory, updateCategory };
 };
 
 export const useTransactionsApi = () => {
@@ -305,5 +335,42 @@ export const useImportsApi = () => {
     uploadImportBatch,
     startPolling,
     stopPolling,
+  };
+};
+
+export const useBudgetsApi = () => {
+  const dispatch = useAppDispatch();
+  const items = useAppSelector(selectBudgets);
+  const loading = useAppSelector(selectBudgetsLoading);
+  const error = useAppSelector(selectBudgetsError);
+
+  const fetchBudgets = useCallback(() => {
+    dispatch(FetchBudgets());
+  }, [dispatch]);
+
+  const createBudget = useCallback(
+    (payload: BudgetCreateRequest) => dispatch(CreateBudget(payload)),
+    [dispatch],
+  );
+
+  const updateBudget = useCallback(
+    (id: string, data: BudgetUpdateRequest) =>
+      dispatch(UpdateBudget({ id, data })),
+    [dispatch],
+  );
+
+  const deleteBudget = useCallback(
+    (id: string) => dispatch(DeleteBudget(id)),
+    [dispatch],
+  );
+
+  return {
+    items,
+    loading,
+    error,
+    fetchBudgets,
+    createBudget,
+    updateBudget,
+    deleteBudget,
   };
 };

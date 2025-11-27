@@ -44,4 +44,21 @@ class BudgetListResponse(BaseModel):
     budgets: list[BudgetRead]
 
 
-__all__ = ["BudgetCreate", "BudgetUpdate", "BudgetRead", "BudgetListResponse"]
+class BudgetProgressRead(BudgetRead):
+    spent: Decimal
+    remaining: Decimal
+    percent_used: Decimal
+
+
+class BudgetProgressListResponse(BaseModel):
+    budgets: list[BudgetProgressRead]
+
+
+__all__ = [
+    "BudgetCreate",
+    "BudgetUpdate",
+    "BudgetRead",
+    "BudgetListResponse",
+    "BudgetProgressRead",
+    "BudgetProgressListResponse",
+]

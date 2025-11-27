@@ -7,6 +7,8 @@ import { selectLoading } from "./features/app/appSlice.tsx";
 import { AuthInitialize } from "./features/auth/authSaga.ts";
 import { selectInitialLoaded } from "./features/auth/authSlice.ts";
 import { Accounts } from "./pages/accounts/accounts.tsx";
+import { Budgets } from "./pages/budgets/budgets.tsx";
+import { Categories } from "./pages/categories/categories.tsx";
 import { Cover } from "./pages/cover/cover.tsx";
 import { Dashboard } from "./pages/dashboard/dashboard.tsx";
 import { Imports } from "./pages/imports/imports.tsx";
@@ -60,6 +62,22 @@ export const App: React.FC = () => {
           element={
             <NavigationWrapper title="Accounts">
               <Accounts />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.categories}
+          element={
+            <NavigationWrapper title="Categories">
+              <Categories />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.budgets}
+          element={
+            <NavigationWrapper title="Budgets">
+              <Budgets />
             </NavigationWrapper>
           }
         />

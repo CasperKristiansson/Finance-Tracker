@@ -27,6 +27,12 @@ export enum TransactionStatus {
   FLAGGED = "flagged",
 }
 
+export enum BudgetPeriod {
+  MONTHLY = "monthly",
+  QUARTERLY = "quarterly",
+  YEARLY = "yearly",
+}
+
 export enum InterestCompound {
   DAILY = "daily",
   MONTHLY = "monthly",
@@ -92,7 +98,23 @@ export interface CategoryRead {
   name: string;
   category_type: CategoryType;
   color_hex?: string | null;
+  icon?: string | null;
   is_archived: boolean;
+}
+
+export interface CategoryCreateRequest {
+  name: string;
+  category_type: CategoryType;
+  color_hex?: string | null;
+  icon?: string | null;
+}
+
+export interface CategoryUpdateRequest {
+  name?: string;
+  category_type?: CategoryType;
+  color_hex?: string | null;
+  icon?: string | null;
+  is_archived?: boolean;
 }
 
 export interface TransactionLegRead {
@@ -282,4 +304,39 @@ export interface CategoryListResponse {
 export interface TransactionListResponse {
   transactions: TransactionRead[];
   running_balances: Record<string, string>;
+}
+
+export interface BudgetRead {
+  id: string;
+  category_id: string;
+  period: BudgetPeriod;
+  amount: string;
+  note?: string | null;
+}
+
+export interface BudgetProgress extends BudgetRead {
+  spent: string;
+  remaining: string;
+  percent_used: string;
+}
+
+export interface BudgetListResponse {
+  budgets: BudgetRead[];
+}
+
+export interface BudgetProgressListResponse {
+  budgets: BudgetProgress[];
+}
+
+export interface BudgetCreateRequest {
+  category_id: string;
+  period: BudgetPeriod;
+  amount: string;
+  note?: string | null;
+}
+
+export interface BudgetUpdateRequest {
+  period?: BudgetPeriod;
+  amount?: string;
+  note?: string | null;
 }

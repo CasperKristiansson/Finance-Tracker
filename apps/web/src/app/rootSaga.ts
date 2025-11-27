@@ -1,6 +1,7 @@
 import { all, fork, select } from "redux-saga/effects";
 import { AccountsSaga } from "@/features/accounts/accountsSaga";
 import { AuthSaga } from "@/features/auth/authSaga";
+import { BudgetsSaga } from "@/features/budgets/budgetsSaga";
 import { CategoriesSaga } from "@/features/categories/categoriesSaga";
 import { ImportsSaga } from "@/features/imports/importsSaga";
 import { LoansSaga } from "@/features/loans/loansSaga";
@@ -25,5 +26,6 @@ export function* RootSaga() {
     fork(ReportsSaga),
     fork(LoansSaga),
     fork(ImportsSaga),
+    fork(BudgetsSaga),
   ]);
 }
