@@ -76,6 +76,22 @@ import {
   selectYearlyReport,
   type ReportFilters,
 } from "@/features/reports/reportsSlice";
+import { LoadSettings, SaveSettings } from "@/features/settings/settingsSaga";
+import {
+  selectApiBaseUrl,
+  selectBankTemplates,
+  selectEnvInfo,
+  selectSettingsError,
+  selectSettingsLastSavedAt,
+  selectSettingsLoading,
+  selectSettingsSaving,
+  selectSettingsState,
+  selectThemePreference,
+  setThemePreference,
+  upsertBankTemplate,
+  removeBankTemplate,
+  type BankTemplate,
+} from "@/features/settings/settingsSlice";
 import {
   FetchRecentTransactions,
   FetchTransactions,
@@ -104,6 +120,7 @@ import type {
   TransactionCreate,
   TransactionStatus,
   TransactionUpdateRequest,
+  ThemePreference,
 } from "@/types/api";
 
 export const useAccountsApi = () => {
@@ -153,6 +170,9 @@ export const useAccountsApi = () => {
     archiveAccount,
     attachLoan,
     updateLoan,
+    accountMutationError: state.mutationError,
+    createLoading: state.createLoading,
+    updateLoading: state.updateLoading,
   };
 };
 
@@ -228,7 +248,7 @@ export const useTransactionsApi = () => {
     [dispatch],
   );
   const fetchRecentTransactions = useCallback(
-    (params?: { limit?: number; accountIds?: string[] }) => {
+    (params: { limit?: number; accountIds?: string[] } = {}) => {
       dispatch(FetchRecentTransactions(params));
     },
     [dispatch],
@@ -440,5 +460,58 @@ export const useBudgetsApi = () => {
     totals,
     rollups,
     budgetsByUsage,
+  };
+};
+
+export const useSettings = () => {
+  const dispatch = useAppDispatch();
+  const state = useAppSelector(selectSettingsState);
+  const theme = useAppSelector(selectThemePreference);
+  const templates = useAppSelector(selectBankTemplates);
+  const envInfo = useAppSelector(selectEnvInfo);
+  const apiBaseUrl = useAppSelector(selectApiBaseUrl);
+  const loading = useAppSelector(selectSettingsLoading);
+  const saving = useAppSelector(selectSettingsSaving);
+  const error = useAppSelector(selectSettingsError);
+  const lastSavedAt = useAppSelector(selectSettingsLastSavedAt);
+
+  const loadSettings = useCallback(() => {
+    dispatch(LoadSettings());
+  }, [dispatch]);
+
+  const saveSettings = useCallback(() => {
+    dispatch(SaveSettings());
+  }, [dispatch]);
+
+  const changeTheme = useCallback(
+    (nextTheme: ThemePreference) => dispatch(setThemePreference(nextTheme)),
+    [dispatch],
+  );
+
+  const upsertTemplate = useCallback(
+    (template: BankTemplate) => dispatch(upsertBankTemplate(template)),
+    [dispatch],
+  );
+
+  const deleteTemplate = useCallback(
+    (id: string) => dispatch(removeBankTemplate(id)),
+    [dispatch],
+  );
+
+  return {
+    ...state,
+    theme,
+    templates,
+    envInfo,
+    apiBaseUrl,
+    loading,
+    saving,
+    error,
+    lastSavedAt,
+    loadSettings,
+    saveSettings,
+    changeTheme,
+    upsertTemplate,
+    deleteTemplate,
   };
 };

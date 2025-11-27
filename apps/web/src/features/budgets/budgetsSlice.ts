@@ -1,6 +1,10 @@
-import { createSelector, createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import { BudgetPeriod, type BudgetProgress } from "@/types/api";
+import {
+  createSelector,
+  createSlice,
+  type PayloadAction,
+} from "@reduxjs/toolkit";
 import type { RootState } from "@/app/store";
+import { BudgetPeriod, type BudgetProgress } from "@/types/api";
 
 export interface BudgetsState {
   items: BudgetProgress[];
@@ -69,7 +73,7 @@ export const selectBudgetTotals = createSelector(
 );
 
 export const selectBudgetRollups = createSelector(
-  (state: RootState) => selectBudgets(state.budgets),
+  (state: RootState) => state.budgets.items,
   (items): Record<BudgetPeriod, BudgetTotals> => {
     const emptyTotals = (): BudgetTotals => ({
       budgetTotal: 0,

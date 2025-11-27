@@ -381,3 +381,28 @@ export interface BudgetUpdateRequest {
   amount?: string;
   note?: string | null;
 }
+
+export type ThemePreference = "light" | "dark" | "system";
+
+export interface BankTemplateMapping {
+  date: string;
+  description: string;
+  amount: string;
+}
+
+export interface BankTemplateSetting {
+  id: string;
+  name: string;
+  description?: string | null;
+  mapping: BankTemplateMapping;
+  is_default?: boolean;
+}
+
+export interface SettingsPayload {
+  theme?: ThemePreference;
+  bank_templates?: BankTemplateSetting[];
+}
+
+export interface SettingsResponse {
+  settings: SettingsPayload;
+}

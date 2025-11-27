@@ -276,9 +276,7 @@ function* handleFetchCustom(action: ReturnType<typeof FetchCustomReport>) {
   } catch (error) {
     yield put(
       setCustomError(
-        error instanceof Error
-          ? error.message
-          : "Failed to load custom report",
+        error instanceof Error ? error.message : "Failed to load custom report",
       ),
     );
   } finally {

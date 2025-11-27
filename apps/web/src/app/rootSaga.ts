@@ -6,6 +6,7 @@ import { CategoriesSaga } from "@/features/categories/categoriesSaga";
 import { ImportsSaga } from "@/features/imports/importsSaga";
 import { LoansSaga } from "@/features/loans/loansSaga";
 import { ReportsSaga } from "@/features/reports/reportsSaga";
+import { SettingsSaga } from "@/features/settings/settingsSaga";
 import { TransactionsSaga } from "@/features/transactions/transactionsSaga";
 import type { RootState } from "./store";
 
@@ -27,5 +28,6 @@ export function* RootSaga() {
     fork(LoansSaga),
     fork(ImportsSaga),
     fork(BudgetsSaga),
+    fork(SettingsSaga),
   ]);
 }

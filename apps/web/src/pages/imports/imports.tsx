@@ -11,7 +11,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useAccountsApi, useCategoriesApi, useImportsApi } from "@/hooks/use-api";
+import {
+  useAccountsApi,
+  useCategoriesApi,
+  useImportsApi,
+  useSettings,
+} from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
 import type {
   ImportCommitRow,
@@ -37,12 +42,6 @@ type RowOverride = {
   occurredAt?: string;
   delete?: boolean;
 };
-
-const templates = [
-  { id: "default", name: "Auto-detect" },
-  { id: "nordea", name: "Nordea CSV" },
-  { id: "revolut", name: "Revolut CSV" },
-];
 
 const toBase64 = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -73,6 +72,7 @@ export const Imports: React.FC = () => {
   } = useImportsApi();
   const { items: accounts, fetchAccounts } = useAccountsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
+  const { templates } = useSettings();
   const [localFiles, setLocalFiles] = useState<LocalFile[]>([]);
   const [note, setNote] = useState("");
   const [uploading, setUploading] = useState(false);
@@ -101,7 +101,9 @@ export const Imports: React.FC = () => {
   };
 
   const updateLocal = (id: string, patch: Partial<LocalFile>) => {
-    setLocalFiles((prev) => prev.map((lf) => (lf.id === id ? { ...lf, ...patch } : lf)));
+    setLocalFiles((prev) =>
+      prev.map((lf) => (lf.id === id ? { ...lf, ...patch } : lf)),
+    );
   };
 
   const removeLocal = (id: string) => {
@@ -114,7 +116,8 @@ export const Imports: React.FC = () => {
     try {
       const filesPayload = await Promise.all(
         localFiles.map(async (lf) => {
-          const content = lf.contentBase64 || (lf.file ? await toBase64(lf.file) : "");
+          const content =
+            lf.contentBase64 || (lf.file ? await toBase64(lf.file) : "");
           return {
             filename: lf.filename,
             content_base64: content,
@@ -140,12 +143,18 @@ export const Imports: React.FC = () => {
   };
 
   const applyOverride = (rowId: string, patch: RowOverride) => {
-    setOverrides((prev) => ({ ...prev, [rowId]: { ...prev[rowId], ...patch } }));
+    setOverrides((prev) => ({
+      ...prev,
+      [rowId]: { ...prev[rowId], ...patch },
+    }));
   };
 
   const clearOverrides = () => setOverrides({});
 
-  const rows: ImportRowRead[] = useMemo(() => currentSession?.rows ?? [], [currentSession]);
+  const rows: ImportRowRead[] = useMemo(
+    () => currentSession?.rows ?? [],
+    [currentSession],
+  );
 
   const commit = async () => {
     if (!currentSession?.id || !rows.length) return;
@@ -153,7 +162,11 @@ export const Imports: React.FC = () => {
       const override = overrides[row.id];
       const baseData = row.data || {};
       const dateValue =
-        override?.occurredAt || baseData.date || baseData.occurred_at || baseData.posted_at || "";
+        override?.occurredAt ||
+        baseData.date ||
+        baseData.occurred_at ||
+        baseData.posted_at ||
+        "";
       const amountValue = override?.amount || baseData.amount || baseData.value;
 
       return {
@@ -177,10 +190,15 @@ export const Imports: React.FC = () => {
     <div className="space-y-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-xs tracking-wide text-slate-500 uppercase">Imports</p>
-          <h1 className="text-2xl font-semibold text-slate-900">Stage, review, then save</h1>
+          <p className="text-xs tracking-wide text-slate-500 uppercase">
+            Imports
+          </p>
+          <h1 className="text-2xl font-semibold text-slate-900">
+            Stage, review, then save
+          </h1>
           <p className="text-sm text-slate-500">
-            Upload multiple files, get AI suggestions, edit inline, and commit when ready.
+            Upload multiple files, get AI suggestions, edit inline, and commit
+            when ready.
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-600">
@@ -200,7 +218,7 @@ export const Imports: React.FC = () => {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2 border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
+        <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)] lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-slate-800">
               Upload files (add more anytime)
@@ -213,7 +231,9 @@ export const Imports: React.FC = () => {
                 e.preventDefault();
                 dropRef.current?.classList.add("border-slate-400");
               }}
-              onDragLeave={() => dropRef.current?.classList.remove("border-slate-400")}
+              onDragLeave={() =>
+                dropRef.current?.classList.remove("border-slate-400")
+              }
               onDrop={(e) => {
                 e.preventDefault();
                 dropRef.current?.classList.remove("border-slate-400");
@@ -222,9 +242,12 @@ export const Imports: React.FC = () => {
               className="flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center transition hover:border-slate-400"
             >
               <UploadCloud className="h-8 w-8 text-slate-500" />
-              <p className="mt-2 text-sm font-medium text-slate-800">Drop CSV or XLSX files</p>
+              <p className="mt-2 text-sm font-medium text-slate-800">
+                Drop CSV or XLSX files
+              </p>
               <p className="text-xs text-slate-500">
-                Assign accounts/templates per file. You can upload more after staging.
+                Assign accounts/templates per file. You can upload more after
+                staging.
               </p>
               <input
                 type="file"
@@ -244,7 +267,9 @@ export const Imports: React.FC = () => {
                     key={lf.id}
                     className="grid grid-cols-[1.2fr,1fr,1fr,auto] items-center gap-2 rounded border border-slate-200 bg-white px-3 py-2"
                   >
-                    <span className="truncate text-sm font-medium text-slate-800">{lf.filename}</span>
+                    <span className="truncate text-sm font-medium text-slate-800">
+                      {lf.filename}
+                    </span>
                     <select
                       className="rounded border border-slate-200 px-2 py-1 text-sm"
                       value={lf.accountId || ""}
@@ -264,7 +289,9 @@ export const Imports: React.FC = () => {
                     <select
                       className="rounded border border-slate-200 px-2 py-1 text-sm"
                       value={lf.templateId || "default"}
-                      onChange={(e) => updateLocal(lf.id, { templateId: e.target.value })}
+                      onChange={(e) =>
+                        updateLocal(lf.id, { templateId: e.target.value })
+                      }
                     >
                       {templates.map((tpl) => (
                         <option key={tpl.id} value={tpl.id}>
@@ -314,7 +341,11 @@ export const Imports: React.FC = () => {
                 disabled={uploading || localFiles.length === 0}
                 className="gap-2"
               >
-                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                {uploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
                 Stage files
               </Button>
             </div>
@@ -323,7 +354,9 @@ export const Imports: React.FC = () => {
 
         <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-slate-800">Session summary</CardTitle>
+            <CardTitle className="text-sm text-slate-800">
+              Session summary
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-slate-700">
             {currentSession ? (
@@ -336,22 +369,29 @@ export const Imports: React.FC = () => {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-600">Files</span>
-                  <span className="font-semibold text-slate-900">{currentSession.file_count}</span>
+                  <span className="font-semibold text-slate-900">
+                    {currentSession.file_count}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-600">Rows</span>
-                  <span className="font-semibold text-slate-900">{currentSession.total_rows}</span>
+                  <span className="font-semibold text-slate-900">
+                    {currentSession.total_rows}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-600">Errors</span>
-                  <span className="font-semibold text-slate-900">{currentSession.total_errors}</span>
+                  <span className="font-semibold text-slate-900">
+                    {currentSession.total_errors}
+                  </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-600">Status</span>
                   <span
                     className={cn(
                       "rounded-full px-2 py-0.5 text-xs font-semibold",
-                      badgeTone[currentSession.status] || "bg-slate-100 text-slate-700",
+                      badgeTone[currentSession.status] ||
+                        "bg-slate-100 text-slate-700",
                     )}
                   >
                     {currentSession.status}
@@ -362,12 +402,18 @@ export const Imports: React.FC = () => {
                   className="mt-2 w-full gap-2"
                   onClick={commit}
                 >
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
                   Save all to transactions
                 </Button>
               </>
             ) : (
-              <p className="text-slate-500">Stage files to see a session summary.</p>
+              <p className="text-slate-500">
+                Stage files to see a session summary.
+              </p>
             )}
           </CardContent>
         </Card>
@@ -375,10 +421,14 @@ export const Imports: React.FC = () => {
 
       <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm text-slate-800">Staged transactions</CardTitle>
+          <CardTitle className="text-sm text-slate-800">
+            Staged transactions
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          {loading && !rows.length ? <Skeleton className="h-32 w-full" /> : null}
+          {loading && !rows.length ? (
+            <Skeleton className="h-32 w-full" />
+          ) : null}
           {!rows.length ? (
             <p className="text-sm text-slate-500">
               No staged rows yet. Upload files to see parsed transactions.
@@ -399,18 +449,37 @@ export const Imports: React.FC = () => {
                 {rows.map((row) => {
                   const override = overrides[row.id] || {};
                   const base = row.data || {};
-                  const dateValue = override.occurredAt || base.date || base.occurred_at || base.posted_at || "";
-                  const descriptionValue = override.description ?? base.description ?? base.memo ?? base.text ?? "";
-                  const amountValue = override.amount ?? base.amount ?? base.value ?? "";
-                  const fileAccountId = summaryFiles.find((f) => f.id === row.file_id)?.account_id;
+                  const dateValue =
+                    override.occurredAt ||
+                    base.date ||
+                    base.occurred_at ||
+                    base.posted_at ||
+                    "";
+                  const descriptionValue =
+                    override.description ??
+                    base.description ??
+                    base.memo ??
+                    base.text ??
+                    "";
+                  const amountValue =
+                    override.amount ?? base.amount ?? base.value ?? "";
+                  const fileAccountId = summaryFiles.find(
+                    (f) => f.id === row.file_id,
+                  )?.account_id;
 
                   return (
                     <TableRow key={row.id}>
                       <TableCell className="min-w-[120px]">
                         <input
                           type="date"
-                          value={dateValue ? String(dateValue).slice(0, 10) : ""}
-                          onChange={(e) => applyOverride(row.id, { occurredAt: e.target.value })}
+                          value={
+                            dateValue ? String(dateValue).slice(0, 10) : ""
+                          }
+                          onChange={(e) =>
+                            applyOverride(row.id, {
+                              occurredAt: e.target.value,
+                            })
+                          }
                           className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
                         />
                       </TableCell>
@@ -418,19 +487,27 @@ export const Imports: React.FC = () => {
                         <input
                           type="text"
                           value={descriptionValue}
-                          onChange={(e) => applyOverride(row.id, { description: e.target.value })}
+                          onChange={(e) =>
+                            applyOverride(row.id, {
+                              description: e.target.value,
+                            })
+                          }
                           className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
                           placeholder="Description"
                         />
                         {row.suggested_reason ? (
-                          <p className="text-xs text-slate-500">{row.suggested_reason}</p>
+                          <p className="text-xs text-slate-500">
+                            {row.suggested_reason}
+                          </p>
                         ) : null}
                       </TableCell>
                       <TableCell className="min-w-[120px]">
                         <input
                           type="text"
                           value={amountValue}
-                          onChange={(e) => applyOverride(row.id, { amount: e.target.value })}
+                          onChange={(e) =>
+                            applyOverride(row.id, { amount: e.target.value })
+                          }
                           className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
                         />
                       </TableCell>
@@ -458,7 +535,8 @@ export const Imports: React.FC = () => {
                           </select>
                           {row.suggested_confidence ? (
                             <span className="text-xs text-slate-500">
-                              Confidence {Math.round(row.suggested_confidence * 100)}%
+                              Confidence{" "}
+                              {Math.round(row.suggested_confidence * 100)}%
                             </span>
                           ) : null}
                           {row.transfer_match ? (
@@ -491,7 +569,11 @@ export const Imports: React.FC = () => {
                           <input
                             type="checkbox"
                             checked={override.delete ?? false}
-                            onChange={(e) => applyOverride(row.id, { delete: e.target.checked })}
+                            onChange={(e) =>
+                              applyOverride(row.id, {
+                                delete: e.target.checked,
+                              })
+                            }
                           />
                           Remove
                         </label>

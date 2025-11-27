@@ -59,15 +59,15 @@
 - [x] Redux slices/sagas: reporting fetch keyed by granularity (month/quarter/year/custom), cache + revalidate; export actions; drill-down fetch for category/account detail.
 - [x] Layout: top row controls (period selector, compare toggle vs prior period, account/category chips, export buttons); bottom grid of charts/tables.
 - [x] Charts: stacked area (income vs expense), grouped bar (cash flow by period), donut/treemap for category share, line/area for net worth history, bar for savings rate, and Sankey flow (income sources → categories/accounts). Sankey should group tiny nodes under “Other” below a threshold and support hover details.
-- [ ] Drill-down: click category slice to open detail panel/table; click bar point to show period breakdown; CSV export of detail.
+- [x] Drill-down: click category slice to open detail panel/table; click bar point to show period breakdown; CSV export of detail.
 - [x] Loading/empty: chart skeletons matching shapes; empty copy prompting to import/add data; inline spinner on compare toggle.
 
 ### Milestone 7 – Settings, Goals, Cash Flow
 
-- [ ] Settings: theme toggle, profile info, bank template management UI, API base URL/env info display; saga to persist settings if backend allows.
-- [ ] Goals: tracker cards (target, amount, due date) with placeholders; connect once backend model exists.
-- [ ] Cash Flow: focused inflow/outflow chart (stacked bars) with month/quarter toggle using reporting data; quick filters by account.
-- [ ] Loading/empty: consistent skeletons + guided copy; avoid dead-end pages.
+- [x] Settings: theme toggle, profile info, bank template management UI, API base URL/env info display; saga to persist settings if backend allows.
+- [x] Goals: tracker cards (target, amount, due date) with placeholders; connect once backend model exists.
+- [x] Cash Flow: focused inflow/outflow chart (stacked bars) with month/quarter toggle using reporting data; quick filters by account.
+- [x] Loading/empty: consistent skeletons + guided copy; avoid dead-end pages.
 
 ### Milestone 8 – Investments (Nordnet text uploads; sample data in `docs/data/nordnet/`)
 

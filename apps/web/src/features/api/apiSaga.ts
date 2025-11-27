@@ -36,7 +36,7 @@ export function* callApiWithAuth<T>(
   request: ApiRequest,
   options: ApiCallOptions = {},
 ): Generator<unknown, T, unknown> {
-  const token: string | undefined = yield select(selectToken);
+  const token = (yield select(selectToken)) as string | undefined;
   const loadingKey = options.loadingKey;
 
   if (loadingKey) {
@@ -44,7 +44,10 @@ export function* callApiWithAuth<T>(
   }
 
   try {
-    const { data } = yield call(apiFetch<T>, { ...request, token });
+    const { data } = (yield call(apiFetch<T>, {
+      ...request,
+      token,
+    })) as { data: T };
     return data;
   } catch (error) {
     const shouldRetry =
@@ -53,18 +56,18 @@ export function* callApiWithAuth<T>(
       options.retryOnUnauthorized !== false;
 
     if (shouldRetry) {
-      const refreshedSession = yield call(() =>
+      const refreshedSession = (yield call(() =>
         authService.fetchAuthenticatedUser(true),
-      );
+      )) as Awaited<ReturnType<typeof authService.fetchAuthenticatedUser>>;
 
       if (refreshedSession) {
         yield put(loginSuccess(refreshedSession));
         try {
-          const { data } = yield call(apiFetch<T>, {
+          const { data } = (yield call(apiFetch<T>, {
             ...request,
             token: refreshedSession.accessToken,
             retryCount: 1,
-          });
+          })) as { data: T };
           return data;
         } catch (retryError) {
           if (

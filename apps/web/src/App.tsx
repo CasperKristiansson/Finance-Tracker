@@ -6,17 +6,21 @@ import { PageRoutes } from "./data/routes.ts";
 import { selectLoading } from "./features/app/appSlice.tsx";
 import { AuthInitialize } from "./features/auth/authSaga.ts";
 import { selectInitialLoaded } from "./features/auth/authSlice.ts";
+import { LoadSettings } from "./features/settings/settingsSaga.ts";
 import { Accounts } from "./pages/accounts/accounts.tsx";
 import { Budgets } from "./pages/budgets/budgets.tsx";
+import { CashFlow } from "./pages/cash-flow/cash-flow.tsx";
 import { Categories } from "./pages/categories/categories.tsx";
 import { Cover } from "./pages/cover/cover.tsx";
 import { Dashboard } from "./pages/dashboard/dashboard.tsx";
+import { Goals } from "./pages/goals/goals.tsx";
 import { Imports } from "./pages/imports/imports.tsx";
 import { Login } from "./pages/login/login.tsx";
 import { Navigation } from "./pages/navigation/navigation.tsx";
 import { NotFound } from "./pages/notFound/notFound.tsx";
 import { Redirect } from "./pages/redirect/redirect.tsx";
 import { Reports } from "./pages/reports/reports.tsx";
+import { Settings } from "./pages/settings/settings.tsx";
 import { Transactions } from "./pages/transactions/transactions.tsx";
 
 export const App: React.FC = () => {
@@ -36,6 +40,7 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     dispatch(AuthInitialize());
+    dispatch(LoadSettings());
   }, [dispatch]);
 
   if (!initialLoaded || loadingLogout) {
@@ -103,6 +108,30 @@ export const App: React.FC = () => {
           element={
             <NavigationWrapper title="Reports">
               <Reports />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.cashFlow}
+          element={
+            <NavigationWrapper title="Cash Flow">
+              <CashFlow />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.goals}
+          element={
+            <NavigationWrapper title="Goals">
+              <Goals />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.settings}
+          element={
+            <NavigationWrapper title="Settings">
+              <Settings />
             </NavigationWrapper>
           }
         />

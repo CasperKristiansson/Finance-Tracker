@@ -15,15 +15,17 @@ import type {
   ImportSessionResponse,
 } from "@/types/api";
 
-export const StartImportSession =
-  createAction<ImportCreateRequest>("imports/startSession");
+export const StartImportSession = createAction<ImportCreateRequest>(
+  "imports/startSession",
+);
 export const AppendImportFiles = createAction<
   ImportCreateRequest & { sessionId: string }
 >("imports/appendFiles");
 export const FetchImportSession = createAction<string>("imports/fetchSession");
-export const CommitImportSession = createAction<
-  { sessionId: string; rows: ImportCommitRequest["rows"] }
->("imports/commitSession");
+export const CommitImportSession = createAction<{
+  sessionId: string;
+  rows: ImportCommitRequest["rows"];
+}>("imports/commitSession");
 export const ResetImportSession = createAction("imports/resetSession");
 
 function* handleStartSession(action: ReturnType<typeof StartImportSession>) {

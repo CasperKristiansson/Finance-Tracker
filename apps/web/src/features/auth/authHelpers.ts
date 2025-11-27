@@ -81,7 +81,9 @@ const toAuthTokens = (
   return {
     accessToken: tokens.accessToken.toString(),
     idToken,
-    refreshToken: tokens.refreshToken?.toString() ?? "",
+    refreshToken:
+      (tokens as { refreshToken?: { toString(): string } }).refreshToken?.toString() ??
+      "",
   };
 };
 

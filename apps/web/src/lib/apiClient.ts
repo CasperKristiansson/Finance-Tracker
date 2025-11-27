@@ -97,7 +97,7 @@ export const apiFetch = async <T>(
 
   const method = request.method ?? "GET";
   const body =
-    request.body !== undefined && method !== "GET" && method !== "HEAD"
+    request.body !== undefined && method !== "GET"
       ? JSON.stringify(request.body)
       : undefined;
 

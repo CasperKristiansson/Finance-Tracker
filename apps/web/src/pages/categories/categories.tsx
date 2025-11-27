@@ -4,13 +4,13 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { useCategoriesApi } from "@/hooks/use-api";
 import { CategoryType, type CategoryRead } from "@/types/api";
 
@@ -26,7 +26,18 @@ const categoryBadges: Record<CategoryType, string> = {
 const formatCategory = (cat: CategoryRead) =>
   `${cat.icon ? `${cat.icon} ` : ""}${cat.name}`;
 
-const emojiPalette = ["💸", "🛒", "🍽️", "🚗", "🏠", "🎯", "🧾", "🎁", "🧠", "📈"];
+const emojiPalette = [
+  "💸",
+  "🛒",
+  "🍽️",
+  "🚗",
+  "🏠",
+  "🎯",
+  "🧾",
+  "🎁",
+  "🧠",
+  "📈",
+];
 
 const categoryTypeOptions = [
   { label: "All types", value: "all" },
@@ -46,9 +57,8 @@ export const Categories: React.FC = () => {
   } = useCategoriesApi();
 
   const [showArchived, setShowArchived] = useState(includeArchived);
-  const [typeFilter, setTypeFilter] = useState<(typeof categoryTypeOptions)[number]["value"]>(
-    "all",
-  );
+  const [typeFilter, setTypeFilter] =
+    useState<(typeof categoryTypeOptions)[number]["value"]>("all");
   const [form, setForm] = useState<{
     name: string;
     category_type: CategoryType;
@@ -61,7 +71,15 @@ export const Categories: React.FC = () => {
     icon: "",
   });
   const [editBuffer, setEditBuffer] = useState<
-    Record<string, { icon?: string; color_hex?: string; name?: string; category_type?: CategoryType }>
+    Record<
+      string,
+      {
+        icon?: string;
+        color_hex?: string;
+        name?: string;
+        category_type?: CategoryType;
+      }
+    >
   >({});
   const [mergeState, setMergeState] = useState<{
     sourceCategoryId: string;
@@ -104,7 +122,9 @@ export const Categories: React.FC = () => {
     const [headerLine, ...dataLines] = lines;
     const headers = headerLine.split(",").map((h) => h.trim());
     return dataLines.map((line) => {
-      const parts = line.split(",").map((p) => p.replace(/^"|"$/g, "").replace(/""/g, '"'));
+      const parts = line
+        .split(",")
+        .map((p) => p.replace(/^"|"$/g, "").replace(/""/g, '"'));
       const row: Record<string, string> = {};
       headers.forEach((key, idx) => {
         row[key] = parts[idx] ?? "";
@@ -114,7 +134,13 @@ export const Categories: React.FC = () => {
   };
 
   const exportCategories = () => {
-    const header = ["name", "category_type", "color_hex", "icon", "is_archived"];
+    const header = [
+      "name",
+      "category_type",
+      "color_hex",
+      "icon",
+      "is_archived",
+    ];
     const rows = items.map((cat) => [
       escapeCsv(cat.name),
       escapeCsv(cat.category_type),
@@ -166,14 +192,20 @@ export const Categories: React.FC = () => {
       renameTargetTo: mergeState.renameTargetTo || undefined,
     });
     toast.success("Merge requested");
-    setMergeState({ sourceCategoryId: "", targetCategoryId: "", renameTargetTo: "" });
+    setMergeState({
+      sourceCategoryId: "",
+      targetCategoryId: "",
+      renameTargetTo: "",
+    });
   };
 
   const visibleCategories = useMemo(
     () =>
       items
         .filter((c) => (showArchived ? true : !c.is_archived))
-        .filter((c) => (typeFilter === "all" ? true : c.category_type === typeFilter)),
+        .filter((c) =>
+          typeFilter === "all" ? true : c.category_type === typeFilter,
+        ),
     [items, showArchived, typeFilter],
   );
 
@@ -222,13 +254,15 @@ export const Categories: React.FC = () => {
             <span>Show archived</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-slate-700">
-            <span className="text-xs uppercase tracking-wide text-slate-500">
+            <span className="text-xs tracking-wide text-slate-500 uppercase">
               Type
             </span>
             <select
               className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-800"
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
+              onChange={(e) =>
+                setTypeFilter(e.target.value as typeof typeFilter)
+              }
             >
               {categoryTypeOptions.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -303,7 +337,10 @@ export const Categories: React.FC = () => {
                         <span className="font-semibold text-slate-900">
                           {appliedName}
                         </span>
-                        <Badge className={categoryBadges[appliedType]} variant="outline">
+                        <Badge
+                          className={categoryBadges[appliedType]}
+                          variant="outline"
+                        >
                           {appliedType}
                         </Badge>
                         {cat.is_archived ? (
@@ -366,7 +403,11 @@ export const Categories: React.FC = () => {
                     />
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="icon" aria-label="Pick emoji">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label="Pick emoji"
+                        >
                           <Sparkles className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -488,13 +529,19 @@ export const Categories: React.FC = () => {
                     className="h-10 w-16 rounded border border-slate-200 bg-white"
                     value={form.color_hex}
                     onChange={(e) =>
-                      setForm((prev) => ({ ...prev, color_hex: e.target.value }))
+                      setForm((prev) => ({
+                        ...prev,
+                        color_hex: e.target.value,
+                      }))
                     }
                   />
                   <Input
                     value={form.color_hex}
                     onChange={(e) =>
-                      setForm((prev) => ({ ...prev, color_hex: e.target.value }))
+                      setForm((prev) => ({
+                        ...prev,
+                        color_hex: e.target.value,
+                      }))
                     }
                     placeholder="#00aa88"
                   />
@@ -512,7 +559,11 @@ export const Categories: React.FC = () => {
                   />
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="icon" aria-label="Pick emoji">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        aria-label="Pick emoji"
+                      >
                         <Sparkles className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -551,8 +602,8 @@ export const Categories: React.FC = () => {
         <CardHeader>
           <CardTitle>Merge / Rename</CardTitle>
           <p className="text-sm text-slate-500">
-            Move transactions and budgets from one category into another. Optionally
-            rename the target after merging.
+            Move transactions and budgets from one category into another.
+            Optionally rename the target after merging.
           </p>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-4">
@@ -562,7 +613,10 @@ export const Categories: React.FC = () => {
               className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
               value={mergeState.sourceCategoryId}
               onChange={(e) =>
-                setMergeState((prev) => ({ ...prev, sourceCategoryId: e.target.value }))
+                setMergeState((prev) => ({
+                  ...prev,
+                  sourceCategoryId: e.target.value,
+                }))
               }
             >
               <option value="">Pick source</option>
@@ -579,7 +633,10 @@ export const Categories: React.FC = () => {
               className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
               value={mergeState.targetCategoryId}
               onChange={(e) =>
-                setMergeState((prev) => ({ ...prev, targetCategoryId: e.target.value }))
+                setMergeState((prev) => ({
+                  ...prev,
+                  targetCategoryId: e.target.value,
+                }))
               }
             >
               <option value="">Pick target</option>
@@ -595,14 +652,19 @@ export const Categories: React.FC = () => {
             <Input
               value={mergeState.renameTargetTo}
               onChange={(e) =>
-                setMergeState((prev) => ({ ...prev, renameTargetTo: e.target.value }))
+                setMergeState((prev) => ({
+                  ...prev,
+                  renameTargetTo: e.target.value,
+                }))
               }
               placeholder="(optional)"
             />
           </div>
           <div className="flex items-end">
             <Button className="w-full" onClick={handleMerge} disabled={loading}>
-              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {loading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
               Merge categories
             </Button>
           </div>

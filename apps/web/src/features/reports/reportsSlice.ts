@@ -177,8 +177,7 @@ const reportsSlice = createSlice({
       state.exportState.loading = action.payload;
     },
     setExportError(state, action: PayloadAction<string | undefined>) {
-      state.exportState.error =
-        action.payload ?? "Unable to export report";
+      state.exportState.error = action.payload ?? "Unable to export report";
     },
   },
   selectors: {

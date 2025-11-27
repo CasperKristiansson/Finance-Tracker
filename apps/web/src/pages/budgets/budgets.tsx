@@ -9,8 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useBudgetsApi, useCategoriesApi, useReportsApi } from "@/hooks/use-api";
 import { buildReportKey } from "@/features/reports/reportsSlice";
+import {
+  useBudgetsApi,
+  useCategoriesApi,
+  useReportsApi,
+} from "@/hooks/use-api";
 import {
   BudgetPeriod,
   CategoryType,
@@ -208,7 +212,9 @@ export const Budgets: React.FC = () => {
     const [headerLine, ...dataLines] = lines;
     const headers = headerLine.split(",").map((h) => h.trim());
     return dataLines.map((line) => {
-      const parts = line.split(",").map((p) => p.replace(/^"|"$/g, "").replace(/""/g, '"'));
+      const parts = line
+        .split(",")
+        .map((p) => p.replace(/^"|"$/g, "").replace(/""/g, '"'));
       const row: Record<string, string> = {};
       headers.forEach((key, idx) => {
         row[key] = parts[idx] ?? "";
@@ -220,7 +226,8 @@ export const Budgets: React.FC = () => {
   const exportBudgets = () => {
     const header = ["category", "period", "amount", "note"];
     const rows = items.map((b) => {
-      const catName = categories.find((c) => c.id === b.category_id)?.name ?? "";
+      const catName =
+        categories.find((c) => c.id === b.category_id)?.name ?? "";
       return [
         escapeCsv(catName),
         escapeCsv(b.period),
@@ -245,7 +252,8 @@ export const Budgets: React.FC = () => {
       const rows = parseCsvRows(text);
       rows.forEach((row) => {
         const name = row["category"]?.toLowerCase().trim();
-        const category_id = row["category_id"] || (name ? categoryNameMap.get(name) : "");
+        const category_id =
+          row["category_id"] || (name ? categoryNameMap.get(name) : "");
         const period = row["period"] as BudgetPeriod;
         const amount = row["amount"];
         const note = row["note"];
@@ -266,7 +274,9 @@ export const Budgets: React.FC = () => {
     const useIncome = category?.category_type === CategoryType.INCOME;
     return data
       .map((entry) => ({
-        label: new Date(entry.period).toLocaleString("en-US", { month: "short" }),
+        label: new Date(entry.period).toLocaleString("en-US", {
+          month: "short",
+        }),
         value: Number(useIncome ? entry.income : entry.expense),
       }))
       .slice(-6);
@@ -447,7 +457,9 @@ export const Budgets: React.FC = () => {
                         onChange={(e) =>
                           setWizardRows((prev) =>
                             prev.map((r, i) =>
-                              i === index ? { ...r, amount: e.target.value } : r,
+                              i === index
+                                ? { ...r, amount: e.target.value }
+                                : r,
                             ),
                           )
                         }
@@ -513,7 +525,7 @@ export const Budgets: React.FC = () => {
               </Badge>
             </CardTitle>
             <div className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
-              <span className="text-xs uppercase tracking-wide text-slate-500">
+              <span className="text-xs tracking-wide text-slate-500 uppercase">
                 Period
               </span>
               <select
@@ -575,16 +587,16 @@ export const Budgets: React.FC = () => {
                     >
                       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                         <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="inline-block h-2 w-2 rounded-full"
-                          style={{ backgroundColor: categoryColor }}
-                        />
-                        <span className="text-base font-semibold text-slate-900">
-                          {category
-                            ? categoryLabel(category)
-                            : "Uncategorized"}
-                        </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="inline-block h-2 w-2 rounded-full"
+                              style={{ backgroundColor: categoryColor }}
+                            />
+                            <span className="text-base font-semibold text-slate-900">
+                              {category
+                                ? categoryLabel(category)
+                                : "Uncategorized"}
+                            </span>
                             <Badge variant="outline">
                               {periodLabels[budget.period]}
                             </Badge>
