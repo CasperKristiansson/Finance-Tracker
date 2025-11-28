@@ -190,6 +190,10 @@ def _to_session_read(
                         "suggested_category": row_model.suggested_category,
                         "suggested_confidence": row_model.suggested_confidence,
                         "suggested_reason": row_model.suggested_reason,
+                        "suggested_subscription_id": row_model.suggested_subscription_id,
+                        "suggested_subscription_name": row_model.suggested_subscription_name,
+                        "suggested_subscription_confidence": row_model.suggested_subscription_confidence,
+                        "suggested_subscription_reason": row_model.suggested_subscription_reason,
                         "transfer_match": row_model.transfer_match,
                     }
                 )

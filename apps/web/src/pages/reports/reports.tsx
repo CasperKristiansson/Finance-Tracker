@@ -17,8 +17,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageRoutes } from "@/data/routes";
+import { useAppSelector } from "@/app/hooks";
+import { selectToken } from "@/features/auth/authSlice";
+import { apiFetch } from "@/lib/apiClient";
 import { useAccountsApi, useReportsApi } from "@/hooks/use-api";
-import type { QuarterlyReportEntry } from "@/types/api";
+import type { QuarterlyReportEntry, SubscriptionSummaryResponse } from "@/types/api";
 
 type Granularity = "monthly" | "quarterly" | "yearly";
 
@@ -46,6 +49,12 @@ export const Reports: React.FC = () => {
     fetchQuarterlyReport,
     fetchYearlyReport,
   } = useReportsApi();
+  const token = useAppSelector(selectToken);
+  const [subscriptionIds, setSubscriptionIds] = useState<string[]>([]);
+  const [subscriptionSummaries, setSubscriptionSummaries] = useState<
+    SubscriptionSummaryResponse["subscriptions"]
+  >([]);
+  const [subsLoading, setSubsLoading] = useState(false);
 
   const [granularity, setGranularity] = useState<Granularity>("monthly");
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
@@ -55,9 +64,29 @@ export const Reports: React.FC = () => {
   }, [fetchAccounts]);
 
   useEffect(() => {
+    const loadSubscriptions = async () => {
+      if (!token) return;
+      setSubsLoading(true);
+      try {
+        const { data } = await apiFetch<SubscriptionSummaryResponse>({
+          path: "/subscriptions/summary",
+          token,
+        });
+        setSubscriptionSummaries(data.subscriptions || []);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setSubsLoading(false);
+      }
+    };
+    void loadSubscriptions();
+  }, [token]);
+
+  useEffect(() => {
     const filters = {
       year: new Date().getFullYear(),
       accountIds: selectedAccounts,
+      subscriptionIds,
     };
     if (granularity === "monthly") {
       fetchMonthlyReport(filters);
@@ -72,6 +101,7 @@ export const Reports: React.FC = () => {
     fetchYearlyReport,
     granularity,
     selectedAccounts,
+    subscriptionIds,
   ]);
 
   const toggleAccount = (id: string) => {
@@ -79,6 +109,21 @@ export const Reports: React.FC = () => {
       prev.includes(id) ? prev.filter((acc) => acc !== id) : [...prev, id],
     );
   };
+
+  const toggleSubscription = (id: string) => {
+    setSubscriptionIds((prev) =>
+      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id],
+    );
+  };
+
+  const topSubscriptions = useMemo(() => {
+    const sorted = [...subscriptionSummaries].sort(
+      (a, b) =>
+        Number(b.trailing_three_month_spend ?? 0) -
+        Number(a.trailing_three_month_spend ?? 0),
+    );
+    return sorted.slice(0, 3);
+  }, [subscriptionSummaries]);
 
   const activeReport =
     granularity === "monthly"
@@ -167,7 +212,7 @@ export const Reports: React.FC = () => {
           <div>
             <CardTitle className="text-sm text-slate-700">Filters</CardTitle>
             <p className="text-sm text-slate-500">
-              Pick accounts to focus the chart.
+              Pick accounts or subscriptions to focus the chart.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 text-sm text-slate-700">
@@ -189,13 +234,32 @@ export const Reports: React.FC = () => {
               <Skeleton className="h-6 w-24 rounded-full" />
             ) : null}
           </div>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-3">
-          {[
-            { label: "Income", value: totals.income },
-            { label: "Expense", value: totals.expense },
-            { label: "Net", value: totals.net },
-          ].map((item) => (
+          <div className="flex flex-wrap gap-2 text-sm text-slate-700">
+            {subsLoading && subscriptionSummaries.length === 0 ? (
+              <Skeleton className="h-6 w-28 rounded-full" />
+            ) : null}
+            {subscriptionSummaries.map((sub) => (
+              <button
+                key={sub.id}
+                type="button"
+                onClick={() => toggleSubscription(sub.id)}
+                className={
+                  subscriptionIds.includes(sub.id)
+                    ? "rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white"
+                    : "rounded-full border border-emerald-200 px-3 py-1 text-xs text-emerald-700"
+                }
+              >
+                {sub.name}
+              </button>
+            ))}
+          </div>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-3">
+        {[
+          { label: "Income", value: totals.income },
+          { label: "Expense", value: totals.expense },
+          { label: "Net", value: totals.net },
+        ].map((item) => (
             <div
               key={item.label}
               className="space-y-1 rounded-lg border border-slate-100 bg-slate-50 p-4"
@@ -216,9 +280,93 @@ export const Reports: React.FC = () => {
                 </Badge>
               ) : null}
             </div>
-          ))}
-        </CardContent>
-      </Card>
+        ))}
+      </CardContent>
+    </Card>
+
+    <Card className="border-slate-200 shadow-[0_12px_36px_-26px_rgba(15,23,42,0.35)]">
+      <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <CardTitle className="text-sm text-slate-700">Top subscriptions</CardTitle>
+          <p className="text-sm text-slate-500">
+            Highest spend subscriptions by trailing 3 months.
+          </p>
+        </div>
+        <Link
+          to={PageRoutes.subscriptions}
+          className="text-xs font-semibold text-emerald-700"
+        >
+          Manage subscriptions →
+        </Link>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-3">
+        {topSubscriptions.map((sub) => (
+          <div
+            key={sub.id}
+            className="rounded-lg border border-slate-200 bg-white p-3 shadow-[0_10px_24px_-20px_rgba(16,185,129,0.6)]"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-slate-500">
+                  {sub.category_name || "Uncategorized"}
+                </p>
+                <p className="text-sm font-semibold text-slate-900">{sub.name}</p>
+              </div>
+              <Badge variant="secondary" className="bg-emerald-50 text-emerald-700">
+                {sub.is_active ? "Active" : "Archived"}
+              </Badge>
+            </div>
+            <div className="mt-2 text-sm text-slate-600">
+              <div className="flex items-center justify-between">
+                <span>Current month</span>
+                <span className="font-semibold">
+                  {currency(Number(sub.current_month_spend))}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Trailing 3 mo</span>
+                <span className="font-semibold">
+                  {currency(Number(sub.trailing_three_month_spend))}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Last charge</span>
+                <span className="font-semibold">
+                  {sub.last_charge_at
+                    ? new Date(sub.last_charge_at).toLocaleDateString()
+                    : "—"}
+                </span>
+              </div>
+            </div>
+            <div className="mt-2">
+              <ResponsiveContainer width="100%" height={60}>
+                <LineChart
+                  data={(sub.trend || []).map((value, idx) => ({
+                    idx,
+                    value: Number(value),
+                  }))}
+                  margin={{ left: 0, right: 0, top: 0, bottom: 0 }}
+                >
+                  <Line
+                    type="monotone"
+                    dataKey="value"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        ))}
+        {!topSubscriptions.length && !subsLoading ? (
+          <p className="text-sm text-slate-500">No subscription data yet.</p>
+        ) : null}
+        {subsLoading && !topSubscriptions.length ? (
+          <Skeleton className="h-24 w-full" />
+        ) : null}
+      </CardContent>
+    </Card>
 
       <Card className="border-slate-200 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">

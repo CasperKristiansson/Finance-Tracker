@@ -86,6 +86,22 @@ class ImportRow(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
         sa_column=Column(Numeric(5, 2), nullable=True),
     )
     suggested_reason: Optional[str] = Field(default=None, sa_column=Column(String(500)))
+    suggested_subscription_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(PGUUID(as_uuid=True), nullable=True),
+    )
+    suggested_subscription_name: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(160), nullable=True),
+    )
+    suggested_subscription_confidence: Optional[float] = Field(
+        default=None,
+        sa_column=Column(Numeric(5, 2), nullable=True),
+    )
+    suggested_subscription_reason: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(500), nullable=True),
+    )
     transfer_match: Optional[dict[str, Any]] = Field(
         default=None,
         sa_column=Column(JSON, nullable=True),

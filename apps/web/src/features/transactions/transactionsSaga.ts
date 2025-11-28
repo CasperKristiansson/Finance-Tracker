@@ -73,6 +73,9 @@ function* handleFetchTransactions(
       ...(filters.categoryIds?.length
         ? { category_ids: filters.categoryIds.join(",") }
         : {}),
+      ...(filters.subscriptionIds?.length
+        ? { subscription_ids: filters.subscriptionIds.join(",") }
+        : {}),
       ...(filters.status?.length ? { status: filters.status.join(",") } : {}),
       ...(filters.minAmount ? { min_amount: filters.minAmount } : {}),
       ...(filters.maxAmount ? { max_amount: filters.maxAmount } : {}),

@@ -31,11 +31,13 @@ class ReportingService:
         year: Optional[int] = None,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
+        subscription_ids: Optional[Iterable[UUID]] = None,
     ) -> List[MonthlyTotals]:
         return self.repository.get_monthly_totals(
             year=year,
             account_ids=account_ids,
             category_ids=category_ids,
+            subscription_ids=subscription_ids,
         )
 
     def yearly_report(
@@ -43,10 +45,12 @@ class ReportingService:
         *,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
+        subscription_ids: Optional[Iterable[UUID]] = None,
     ) -> List[YearlyTotals]:
         return self.repository.get_yearly_totals(
             account_ids=account_ids,
             category_ids=category_ids,
+            subscription_ids=subscription_ids,
         )
 
     def total_report(
@@ -54,12 +58,14 @@ class ReportingService:
         *,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
+        subscription_ids: Optional[Iterable[UUID]] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> LifetimeTotals:
         return self.repository.get_total_summary(
             account_ids=account_ids,
             category_ids=category_ids,
+            subscription_ids=subscription_ids,
             start_date=start_date,
             end_date=end_date,
         )
@@ -88,11 +94,13 @@ class ReportingService:
         year: Optional[int] = None,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
+        subscription_ids: Optional[Iterable[UUID]] = None,
     ) -> List[QuarterlyTotals]:
         return self.repository.get_quarterly_totals(
             year=year,
             account_ids=account_ids,
             category_ids=category_ids,
+            subscription_ids=subscription_ids,
         )
 
     def date_range_report(
@@ -102,12 +110,14 @@ class ReportingService:
         end_date: date,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
+        subscription_ids: Optional[Iterable[UUID]] = None,
     ) -> List[MonthlyTotals]:
         return self.repository.get_range_monthly_totals(
             start_date=start_date,
             end_date=end_date,
             account_ids=account_ids,
             category_ids=category_ids,
+            subscription_ids=subscription_ids,
         )
 
 

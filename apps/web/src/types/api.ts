@@ -194,6 +194,7 @@ export interface TransactionLegCreate {
 
 export interface TransactionCreate {
   category_id?: string | null;
+  subscription_id?: string | null;
   description?: string | null;
   notes?: string | null;
   external_id?: string | null;
@@ -210,12 +211,14 @@ export interface TransactionUpdateRequest {
   occurred_at?: string;
   posted_at?: string;
   category_id?: string | null;
+  subscription_id?: string | null;
   status?: TransactionStatus;
 }
 
 export interface TransactionRead {
   id: string;
   category_id?: string | null;
+  subscription_id?: string | null;
   transaction_type: TransactionType;
   description?: string | null;
   notes?: string | null;
@@ -325,7 +328,7 @@ export interface ImportFileRead {
   error_count: number;
   status: string;
   template_id?: string;
-  preview_rows?: Record<string, string>[];
+  preview_rows?: Record<string, unknown>[];
   errors?: ImportError[];
 }
 
@@ -333,10 +336,14 @@ export interface ImportRowRead {
   id: string;
   file_id: string;
   row_index: number;
-  data: Record<string, string>;
+  data: Record<string, unknown>;
   suggested_category?: string | null;
   suggested_confidence?: number | null;
   suggested_reason?: string | null;
+  suggested_subscription_id?: string | null;
+  suggested_subscription_name?: string | null;
+  suggested_subscription_confidence?: number | null;
+  suggested_subscription_reason?: string | null;
   transfer_match?: Record<string, string> | null;
 }
 
@@ -391,11 +398,41 @@ export interface ImportCommitRow {
   description?: string | null;
   amount?: string | null;
   occurred_at?: string | null;
+  subscription_id?: string | null;
   delete?: boolean;
 }
 
 export interface ImportCommitRequest {
   rows: ImportCommitRow[];
+}
+
+export interface SubscriptionRead {
+  id: string;
+  name: string;
+  matcher_text: string;
+  matcher_amount_tolerance?: string | null;
+  matcher_day_of_month?: number | null;
+  category_id?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SubscriptionListResponse {
+  subscriptions: SubscriptionRead[];
+}
+
+export interface SubscriptionSummaryRead extends SubscriptionRead {
+  current_month_spend: string | number;
+  trailing_three_month_spend: string | number;
+  trailing_twelve_month_spend: string | number;
+  trend: Array<string | number>;
+  last_charge_at?: string | null;
+  category_name?: string | null;
+}
+
+export interface SubscriptionSummaryResponse {
+  subscriptions: SubscriptionSummaryRead[];
 }
 
 export interface AccountListResponse {

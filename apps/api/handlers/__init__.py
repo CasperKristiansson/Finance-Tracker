@@ -47,6 +47,15 @@ from .reporting import (
     total_report,
     yearly_report,
 )
+from .subscriptions import (
+    attach_subscription,
+    create_subscription,
+    detach_subscription,
+    list_subscriptions,
+    list_subscription_summaries,
+    update_subscription,
+)
+from .subscriptions import reset_handler_state as reset_subscription_handler_state
 from .transactions import (
     create_transaction,
     delete_transaction,
@@ -87,10 +96,17 @@ __all__ = [
     "update_budget",
     "delete_budget",
     "list_budget_progress",
+    "list_subscriptions",
+    "create_subscription",
+    "update_subscription",
+    "attach_subscription",
+    "detach_subscription",
+    "list_subscription_summaries",
     "reset_account_handler_state",
     "reset_category_handler_state",
     "reset_loan_handler_state",
     "reset_reporting_handler_state",
     "reset_transaction_handler_state",
     "reset_budget_handler_state",
+    "reset_subscription_handler_state",
 ]

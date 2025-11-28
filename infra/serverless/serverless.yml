@@ -226,6 +226,78 @@ functions:
           method: POST
           authorizer: cognitoJwt
 
+  listSubscriptions:
+    handler: apps/api/handlers/subscriptions.list_subscriptions
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /subscriptions
+          method: GET
+          authorizer: cognitoJwt
+
+  createSubscription:
+    handler: apps/api/handlers/subscriptions.create_subscription
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /subscriptions
+          method: POST
+          authorizer: cognitoJwt
+
+  updateSubscription:
+    handler: apps/api/handlers/subscriptions.update_subscription
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /subscriptions/{subscriptionId}
+          method: PATCH
+          authorizer: cognitoJwt
+
+  attachSubscription:
+    handler: apps/api/handlers/subscriptions.attach_subscription
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /transactions/{transactionId}/subscription
+          method: PUT
+          authorizer: cognitoJwt
+
+  detachSubscription:
+    handler: apps/api/handlers/subscriptions.detach_subscription
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /transactions/{transactionId}/subscription
+          method: DELETE
+          authorizer: cognitoJwt
+
+  listSubscriptionSummaries:
+    handler: apps/api/handlers/subscriptions.list_subscription_summaries
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /subscriptions/summary
+          method: GET
+          authorizer: cognitoJwt
+
   createLoan:
     handler: apps/api/handlers/loans.create_loan
     timeout: 29

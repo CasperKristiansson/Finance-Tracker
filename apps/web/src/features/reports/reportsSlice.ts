@@ -15,6 +15,7 @@ export interface ReportFilters {
   year?: number;
   accountIds?: string[];
   categoryIds?: string[];
+  subscriptionIds?: string[];
 }
 
 type CacheKeyedState<T> = {
@@ -58,6 +59,7 @@ export const buildReportKey = (filters: ReportFilters | undefined): string =>
     year: filters?.year ?? null,
     accountIds: [...(filters?.accountIds ?? [])].sort(),
     categoryIds: [...(filters?.categoryIds ?? [])].sort(),
+    subscriptionIds: [...(filters?.subscriptionIds ?? [])].sort(),
   });
 
 const reportsSlice = createSlice({

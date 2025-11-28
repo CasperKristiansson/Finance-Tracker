@@ -1,5 +1,7 @@
 import { Check, Loader2, Plus, Trash2, UploadCloud } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+import { useAppSelector } from "@/app/hooks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,12 +19,16 @@ import {
   useImportsApi,
   useSettings,
 } from "@/hooks/use-api";
+import { selectToken } from "@/features/auth/authSlice";
+import { apiFetch } from "@/lib/apiClient";
 import { cn } from "@/lib/utils";
 import type {
   ImportCommitRow,
   ImportCreateRequest,
   ImportRowRead,
   ImportSession,
+  SubscriptionListResponse,
+  SubscriptionRead,
 } from "@/types/api";
 
 type LocalFile = {
@@ -40,6 +46,7 @@ type RowOverride = {
   description?: string;
   amount?: string;
   occurredAt?: string;
+  subscriptionId?: string;
   delete?: boolean;
 };
 
@@ -59,6 +66,15 @@ const badgeTone: Record<string, string> = {
   committed: "bg-emerald-100 text-emerald-800",
 };
 
+const toStringValue = (value: unknown): string =>
+  value === null || value === undefined ? "" : String(value);
+
+const dayFromDateText = (value?: string | null) => {
+  if (!value) return undefined;
+  const day = Number.parseInt(value.slice(8, 10), 10);
+  return Number.isFinite(day) && day >= 1 && day <= 31 ? day : undefined;
+};
+
 export const Imports: React.FC = () => {
   const {
     loading,
@@ -73,17 +89,42 @@ export const Imports: React.FC = () => {
   const { items: accounts, fetchAccounts } = useAccountsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
   const { templates } = useSettings();
+  const token = useAppSelector(selectToken);
   const [localFiles, setLocalFiles] = useState<LocalFile[]>([]);
   const [note, setNote] = useState("");
   const [uploading, setUploading] = useState(false);
   const dropRef = useRef<HTMLLabelElement | null>(null);
   const [overrides, setOverrides] = useState<Record<string, RowOverride>>({});
+  const [subscriptions, setSubscriptions] = useState<SubscriptionRead[]>([]);
+  const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
 
   useEffect(() => {
     fetchAccounts({});
     fetchCategories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const loadSubscriptions = async () => {
+      if (!token) return;
+      setSubscriptionsLoading(true);
+      try {
+        const { data } = await apiFetch<SubscriptionListResponse>({
+          path: "/subscriptions",
+          token,
+        });
+        setSubscriptions(data.subscriptions ?? []);
+      } catch (error) {
+        toast.error("Unable to load subscriptions", {
+          description:
+            error instanceof Error ? error.message : "Please try again shortly.",
+        });
+      } finally {
+        setSubscriptionsLoading(false);
+      }
+    };
+    void loadSubscriptions();
+  }, [token]);
 
   const currentSession: ImportSession | undefined = session;
 
@@ -151,6 +192,60 @@ export const Imports: React.FC = () => {
 
   const clearOverrides = () => setOverrides({});
 
+  const createSubscriptionForRow = async (row: ImportRowRead) => {
+    const base = (row.data || {}) as Record<string, unknown>;
+    const override = overrides[row.id];
+    const descriptionText =
+      (override?.description ??
+        toStringValue(base["description"] ?? base["memo"] ?? base["text"]))?.trim() ||
+      "";
+    const dateValue =
+      override?.occurredAt ||
+      toStringValue(base["date"] ?? base["occurred_at"] ?? base["posted_at"]);
+
+    if (!descriptionText) {
+      toast.error("Add a description first", {
+        description: "Use a description to seed the subscription matcher.",
+      });
+      return;
+    }
+
+    if (!token) {
+      toast.error("Missing session", {
+        description: "Sign in again to create a subscription.",
+      });
+      return;
+    }
+
+    setSubscriptionsLoading(true);
+    try {
+      const payload = {
+        name: descriptionText.slice(0, 120),
+        matcher_text: descriptionText.slice(0, 255),
+        matcher_day_of_month: dayFromDateText(dateValue),
+        is_active: true,
+      };
+      const { data } = await apiFetch<SubscriptionRead>({
+        path: "/subscriptions",
+        method: "POST",
+        body: payload,
+        token,
+      });
+      setSubscriptions((prev) => [data, ...prev.filter((s) => s.id !== data.id)]);
+      applyOverride(row.id, { subscriptionId: data.id });
+      toast.success("Subscription created", {
+        description: data.name,
+      });
+    } catch (error) {
+      toast.error("Unable to create subscription", {
+        description:
+          error instanceof Error ? error.message : "Please try again shortly.",
+      });
+    } finally {
+      setSubscriptionsLoading(false);
+    }
+  };
+
   const rows: ImportRowRead[] = useMemo(
     () => currentSession?.rows ?? [],
     [currentSession],
@@ -160,14 +255,16 @@ export const Imports: React.FC = () => {
     if (!currentSession?.id || !rows.length) return;
     const commitRows: ImportCommitRow[] = rows.map((row) => {
       const override = overrides[row.id];
-      const baseData = row.data || {};
+      const baseData = (row.data || {}) as Record<string, unknown>;
       const dateValue =
         override?.occurredAt ||
-        baseData.date ||
-        baseData.occurred_at ||
-        baseData.posted_at ||
+        toStringValue(
+          baseData["date"] ?? baseData["occurred_at"] ?? baseData["posted_at"],
+        ) ||
         "";
-      const amountValue = override?.amount || baseData.amount || baseData.value;
+      const amountValue =
+        override?.amount ||
+        toStringValue(baseData["amount"] ?? baseData["value"] ?? "");
 
       return {
         row_id: row.id,
@@ -176,6 +273,7 @@ export const Imports: React.FC = () => {
         description: override?.description,
         amount: amountValue ? String(amountValue) : undefined,
         occurred_at: dateValue ? String(dateValue) : undefined,
+        subscription_id: override?.subscriptionId,
         delete: override?.delete || false,
       };
     });
@@ -441,6 +539,7 @@ export const Imports: React.FC = () => {
                   <TableHead>Description</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>Suggested</TableHead>
+                  <TableHead>Subscription</TableHead>
                   <TableHead>Account</TableHead>
                   <TableHead>Delete</TableHead>
                 </TableRow>
@@ -448,24 +547,28 @@ export const Imports: React.FC = () => {
               <TableBody>
                 {rows.map((row) => {
                   const override = overrides[row.id] || {};
-                  const base = row.data || {};
+                  const base = (row.data || {}) as Record<string, unknown>;
                   const dateValue =
                     override.occurredAt ||
-                    base.date ||
-                    base.occurred_at ||
-                    base.posted_at ||
-                    "";
+                    toStringValue(
+                      base["date"] ?? base["occurred_at"] ?? base["posted_at"],
+                    );
                   const descriptionValue =
                     override.description ??
-                    base.description ??
-                    base.memo ??
-                    base.text ??
-                    "";
+                    toStringValue(
+                      base["description"] ?? base["memo"] ?? base["text"],
+                    );
                   const amountValue =
-                    override.amount ?? base.amount ?? base.value ?? "";
+                    override.amount ??
+                    toStringValue(base["amount"] ?? base["value"] ?? "");
                   const fileAccountId = summaryFiles.find(
                     (f) => f.id === row.file_id,
                   )?.account_id;
+                  const suggestedSubName = row.suggested_subscription_name;
+                  const suggestedSubId = row.suggested_subscription_id;
+                  const suggestedSubConfidence =
+                    row.suggested_subscription_confidence;
+                  const suggestedSubReason = row.suggested_subscription_reason;
 
                   return (
                     <TableRow key={row.id}>
@@ -542,6 +645,63 @@ export const Imports: React.FC = () => {
                           {row.transfer_match ? (
                             <span className="text-xs text-slate-500">
                               Transfer? {row.transfer_match.reason}
+                            </span>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell className="min-w-[200px]">
+                        <div className="flex flex-col gap-1">
+                          <select
+                            className="rounded border border-slate-200 px-2 py-1 text-sm"
+                            value={override.subscriptionId || ""}
+                            onChange={async (e) => {
+                              const value = e.target.value;
+                              if (value === "__create__") {
+                                await createSubscriptionForRow(row);
+                                return;
+                              }
+                              applyOverride(row.id, {
+                                subscriptionId: value || undefined,
+                              });
+                            }}
+                          >
+                            <option value="">
+                              {suggestedSubName
+                                ? `Suggested: ${suggestedSubName}`
+                                : "No subscription"}
+                            </option>
+                            {suggestedSubId ? (
+                              <option value={suggestedSubId}>
+                                Use suggested{" "}
+                                {suggestedSubConfidence
+                                  ? `(${Math.round(
+                                      suggestedSubConfidence * 100,
+                                    )}%)`
+                                  : ""}
+                              </option>
+                            ) : null}
+                            {subscriptions.map((sub) => (
+                              <option key={sub.id} value={sub.id}>
+                                {sub.name}
+                              </option>
+                            ))}
+                            <option value="__create__">
+                              Create new from description
+                            </option>
+                          </select>
+                          {suggestedSubReason ? (
+                            <span className="text-xs text-slate-500">
+                              Suggestion: {suggestedSubReason}
+                            </span>
+                          ) : null}
+                          {override.subscriptionId && suggestedSubId === override.subscriptionId ? (
+                            <span className="text-xs text-emerald-600">
+                              Suggested applied
+                            </span>
+                          ) : null}
+                          {subscriptionsLoading ? (
+                            <span className="text-xs text-slate-500">
+                              Loading subscriptions…
                             </span>
                           ) : null}
                         </div>

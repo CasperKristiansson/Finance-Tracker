@@ -8,6 +8,7 @@ export interface TransactionFilters {
   limit?: number;
   offset?: number;
   categoryIds?: string[];
+  subscriptionIds?: string[];
   status?: string[];
   minAmount?: string;
   maxAmount?: string;

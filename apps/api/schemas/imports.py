@@ -92,6 +92,10 @@ class ImportRowRead(BaseModel):
     suggested_category: Optional[str] = None
     suggested_confidence: Optional[float] = None
     suggested_reason: Optional[str] = None
+    suggested_subscription_id: Optional[UUID] = None
+    suggested_subscription_name: Optional[str] = None
+    suggested_subscription_confidence: Optional[float] = None
+    suggested_subscription_reason: Optional[str] = None
     transfer_match: Optional[dict[str, Any]] = None
 
 
@@ -143,6 +147,7 @@ class ImportCommitRow(BaseModel):
     description: Optional[str] = None
     amount: Optional[str] = None
     occurred_at: Optional[datetime] = None
+    subscription_id: Optional[UUID] = None
     delete: bool = False
 
 

@@ -57,6 +57,11 @@ const data = {
       icon: Upload,
     },
     {
+      title: "Subscriptions",
+      url: PageRoutes.subscriptions,
+      icon: Layers,
+    },
+    {
       title: "Transactions",
       url: PageRoutes.transactions,
       icon: BookOpen,

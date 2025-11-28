@@ -32,6 +32,7 @@ class TransactionRepository:
         end_date: Optional[datetime] = None,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
+        subscription_ids: Optional[Iterable[UUID]] = None,
         status: Optional[Iterable[TransactionStatus]] = None,
         min_amount: Optional[Decimal] = None,
         max_amount: Optional[Decimal] = None,
@@ -55,6 +56,10 @@ class TransactionRepository:
             )
         if category_ids:
             statement = statement.where(cast(Any, Transaction.category_id).in_(list(category_ids)))
+        if subscription_ids:
+            statement = statement.where(
+                cast(Any, Transaction.subscription_id).in_(list(subscription_ids))
+            )
         if status:
             statement = statement.where(cast(Any, Transaction.status).in_(list(status)))
         if search:
@@ -141,6 +146,8 @@ class TransactionRepository:
         posted_at: Optional[datetime] = None,
         category_id: Optional[UUID] = None,
         status: Optional[TransactionStatus] = None,
+        subscription_id: Optional[UUID] = None,
+        update_subscription: bool = False,
     ) -> Transaction:
         if description is not None:
             transaction.description = description
@@ -154,7 +161,18 @@ class TransactionRepository:
             transaction.category_id = category_id
         if status is not None:
             transaction.status = status
+        if update_subscription:
+            transaction.subscription_id = subscription_id
 
+        self.session.add(transaction)
+        self.session.commit()
+        self.session.refresh(transaction)
+        return transaction
+
+    def set_subscription(
+        self, transaction: Transaction, subscription_id: Optional[UUID]
+    ) -> Transaction:
+        transaction.subscription_id = subscription_id
         self.session.add(transaction)
         self.session.commit()
         self.session.refresh(transaction)

@@ -33,6 +33,7 @@ class TransactionCreate(BaseModel):
     """Transaction creation payload."""
 
     category_id: Optional[UUID] = None
+    subscription_id: Optional[UUID] = None
     description: Optional[str] = Field(default=None, max_length=250)
     notes: Optional[str] = None
     external_id: Optional[str] = Field(default=None, max_length=180)
@@ -58,6 +59,7 @@ class TransactionRead(BaseModel):
 
     id: UUID
     category_id: Optional[UUID] = None
+    subscription_id: Optional[UUID] = None
     transaction_type: TransactionType
     description: Optional[str] = None
     notes: Optional[str] = None
@@ -77,6 +79,7 @@ class TransactionListQuery(BaseModel):
     end_date: Optional[datetime] = Field(default=None, alias="end_date")
     account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
     category_ids: Optional[List[UUID]] = Field(default=None, alias="category_ids")
+    subscription_ids: Optional[List[UUID]] = Field(default=None, alias="subscription_ids")
     status: Optional[List[TransactionStatus]] = None
     min_amount: Optional[Decimal] = Field(default=None, alias="min_amount")
     max_amount: Optional[Decimal] = Field(default=None, alias="max_amount")
@@ -129,6 +132,27 @@ class TransactionListQuery(BaseModel):
                         ) from exc
                 values["category_ids"] = converted_categories
 
+        if isinstance(values, dict) and "subscription_ids" in values:
+            subscription_ids = values.get("subscription_ids")
+            if isinstance(subscription_ids, str):
+                parts = [part.strip() for part in subscription_ids.split(",") if part.strip()]
+                converted_subscriptions: List[UUID] = []
+                for part in parts:
+                    try:
+                        converted_subscriptions.append(UUID(part))
+                    except ValueError as exc:  # pragma: no cover - validation
+                        raise ValidationError(
+                            [
+                                {
+                                    "loc": ("subscription_ids",),
+                                    "msg": "Invalid UUID in subscription_ids",
+                                    "type": "value_error",
+                                }
+                            ],
+                            cls,
+                        ) from exc
+                values["subscription_ids"] = converted_subscriptions
+
         if isinstance(values, dict) and "status" in values and isinstance(values["status"], str):
             statuses = [part.strip() for part in str(values["status"]).split(",") if part.strip()]
             converted_status: List[TransactionStatus] = []
@@ -166,20 +190,11 @@ class TransactionUpdate(BaseModel):
     posted_at: Optional[datetime] = None
     category_id: Optional[UUID] = None
     status: Optional[TransactionStatus] = None
+    subscription_id: Optional[UUID] = None
 
     @model_validator(mode="after")
     def ensure_updates_present(self) -> "TransactionUpdate":
-        if not any(
-            value is not None
-            for value in (
-                self.description,
-                self.notes,
-                self.occurred_at,
-                self.posted_at,
-                self.category_id,
-                self.status,
-            )
-        ):
+        if not self.model_fields_set:
             raise ValueError("At least one field must be provided for update")
         return self
 

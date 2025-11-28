@@ -11,12 +11,14 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+import re
 from typing import Any, Dict, Iterable, List, Optional, Tuple, cast
 from uuid import UUID
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from openpyxl import load_workbook
+from sqlalchemy import func
 from sqlmodel import Session, select
 
 from ..models import (
@@ -25,6 +27,7 @@ from ..models import (
     ImportErrorRecord,
     ImportFile,
     ImportRow,
+    Subscription,
     Transaction,
     TransactionImportBatch,
     TransactionLeg,
@@ -67,8 +70,19 @@ class CategorySuggestion:
     reason: Optional[str] = None
 
 
+@dataclass
+class SubscriptionSuggestion:
+    """Represents a suggested subscription for a transaction row."""
+
+    subscription_id: UUID
+    subscription_name: str
+    confidence: float
+    reason: Optional[str] = None
+
+
 BEDROCK_REGION = "eu-north-1"
 BEDROCK_MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
+SUBSCRIPTION_SUGGESTION_THRESHOLD = 0.8
 
 
 class ImportService:
@@ -95,17 +109,29 @@ class ImportService:
             suggestions = self._suggest_rows(
                 parsed.rows, parsed.column_map or {}, payload.examples or []
             )
+            subscription_suggestions = self._suggest_subscriptions(
+                parsed.rows, parsed.column_map or {}
+            )
             transfers = self._match_transfers(parsed.rows, parsed.column_map or {})
 
             # decorate preview rows
             for idx, row in enumerate(parsed.preview_rows):
                 suggestion = suggestions.get(idx)
+                subscription_hint = subscription_suggestions.get(idx)
                 transfer = transfers.get(idx)
                 if suggestion:
                     row["suggested_category"] = suggestion.category
                     row["suggested_confidence"] = round(suggestion.confidence, 2)
                     if suggestion.reason:
                         row["suggested_reason"] = suggestion.reason
+                if subscription_hint:
+                    row["suggested_subscription_id"] = str(subscription_hint.subscription_id)
+                    row["suggested_subscription_name"] = subscription_hint.subscription_name
+                    row["suggested_subscription_confidence"] = round(
+                        subscription_hint.confidence, 2
+                    )
+                    if subscription_hint.reason:
+                        row["suggested_subscription_reason"] = subscription_hint.reason
                 if transfer:
                     row["transfer_match"] = transfer
 
@@ -129,6 +155,7 @@ class ImportService:
             for idx, row in enumerate(parsed.rows, start=1):
                 suggestion = suggestions.get(idx - 1)
                 transfer = transfers.get(idx - 1)
+                subscription_hint = subscription_suggestions.get(idx - 1)
                 row_models.append(
                     ImportRow(
                         file_id=parsed.model.id,
@@ -137,6 +164,18 @@ class ImportService:
                         suggested_category=suggestion.category if suggestion else None,
                         suggested_confidence=suggestion.confidence if suggestion else None,
                         suggested_reason=suggestion.reason if suggestion else None,
+                        suggested_subscription_id=subscription_hint.subscription_id
+                        if subscription_hint
+                        else None,
+                        suggested_subscription_name=subscription_hint.subscription_name
+                        if subscription_hint
+                        else None,
+                        suggested_subscription_confidence=subscription_hint.confidence
+                        if subscription_hint
+                        else None,
+                        suggested_subscription_reason=subscription_hint.reason
+                        if subscription_hint
+                        else None,
                         transfer_match=transfer,
                     )
                 )
@@ -237,6 +276,7 @@ class ImportService:
                     category = category_map.get(row.suggested_category.lower())
                     if category:
                         category_id = category.id
+                subscription_id = override.subscription_id if override else None
 
                 target_account_id = (
                     override.account_id
@@ -258,6 +298,7 @@ class ImportService:
                     occurred_at=occurred_at,
                     posted_at=occurred_at,
                     status=TransactionStatus.RECORDED,
+                    subscription_id=subscription_id,
                     created_source=CreatedSource.IMPORT,
                     import_batch_id=batch.id,
                 )
@@ -307,16 +348,28 @@ class ImportService:
 
         for parsed in parsed_files:
             suggestions = self._suggest_rows(parsed.rows, parsed.column_map or {}, examples or [])
+            subscription_suggestions = self._suggest_subscriptions(
+                parsed.rows, parsed.column_map or {}
+            )
             transfers = self._match_transfers(parsed.rows, parsed.column_map or {})
 
             for idx, row in enumerate(parsed.preview_rows):
                 suggestion = suggestions.get(idx)
+                subscription_hint = subscription_suggestions.get(idx)
                 transfer = transfers.get(idx)
                 if suggestion:
                     row["suggested_category"] = suggestion.category
                     row["suggested_confidence"] = round(suggestion.confidence, 2)
                     if suggestion.reason:
                         row["suggested_reason"] = suggestion.reason
+                if subscription_hint:
+                    row["suggested_subscription_id"] = str(subscription_hint.subscription_id)
+                    row["suggested_subscription_name"] = subscription_hint.subscription_name
+                    row["suggested_subscription_confidence"] = round(
+                        subscription_hint.confidence, 2
+                    )
+                    if subscription_hint.reason:
+                        row["suggested_subscription_reason"] = subscription_hint.reason
                 if transfer:
                     row["transfer_match"] = transfer
 
@@ -342,6 +395,7 @@ class ImportService:
 
             for idx, row in enumerate(parsed.rows, start=1):
                 suggestion = suggestions.get(idx - 1)
+                subscription_hint = subscription_suggestions.get(idx - 1)
                 transfer = transfers.get(idx - 1)
                 row_models.append(
                     ImportRow(
@@ -351,6 +405,18 @@ class ImportService:
                         suggested_category=suggestion.category if suggestion else None,
                         suggested_confidence=suggestion.confidence if suggestion else None,
                         suggested_reason=suggestion.reason if suggestion else None,
+                        suggested_subscription_id=subscription_hint.subscription_id
+                        if subscription_hint
+                        else None,
+                        suggested_subscription_name=subscription_hint.subscription_name
+                        if subscription_hint
+                        else None,
+                        suggested_subscription_confidence=subscription_hint.confidence
+                        if subscription_hint
+                        else None,
+                        suggested_subscription_reason=subscription_hint.reason
+                        if subscription_hint
+                        else None,
                         transfer_match=transfer,
                     )
                 )
@@ -598,6 +664,131 @@ class ImportService:
         return CategorySuggestion(
             category=None, confidence=0.3, reason=f"No signal for {amount_text}"
         )
+
+    def _suggest_subscriptions(
+        self, rows: List[dict], column_map: Dict[str, str]
+    ) -> Dict[int, SubscriptionSuggestion]:
+        if not rows:
+            return {}
+        description_header = column_map.get("description")
+        amount_header = column_map.get("amount")
+        date_header = column_map.get("date")
+        if not description_header:
+            return {}
+
+        subscriptions = self._active_subscriptions()
+        if not subscriptions:
+            return {}
+        last_amounts = self._subscription_amount_lookup()
+
+        suggestions: Dict[int, SubscriptionSuggestion] = {}
+        for idx, row in enumerate(rows):
+            description = str(row.get(description_header, "") or "")
+            amount = self._safe_decimal(row.get(amount_header)) if amount_header else None
+            occurred_at = (
+                self._parse_date(str(row.get(date_header, ""))) if date_header else None
+            )
+
+            best: SubscriptionSuggestion | None = None
+            for subscription in subscriptions:
+                candidate = self._score_subscription(
+                    subscription, description, amount, occurred_at, last_amounts.get(subscription.id)
+                )
+                if candidate is None:
+                    continue
+                if best is None or candidate.confidence > best.confidence:
+                    best = candidate
+            if best and best.confidence >= SUBSCRIPTION_SUGGESTION_THRESHOLD:
+                suggestions[idx] = best
+        return suggestions
+
+    def _score_subscription(
+        self,
+        subscription: Subscription,
+        description: str,
+        amount: Optional[Decimal],
+        occurred_at: Optional[datetime],
+        last_amount: Optional[Decimal],
+    ) -> Optional[SubscriptionSuggestion]:
+        text_match, text_reason = self._match_subscription_text(subscription.matcher_text, description)
+        if not text_match:
+            return None
+
+        confidence = 0.82 if text_reason == "regex" else 0.8
+        reasons = [f"{text_reason} match"]
+
+        if subscription.matcher_day_of_month and occurred_at:
+            if occurred_at.day == subscription.matcher_day_of_month:
+                confidence += 0.1
+                reasons.append("day-of-month aligns")
+            else:
+                confidence -= 0.05
+
+        if subscription.matcher_amount_tolerance is not None and amount is not None:
+            if last_amount is not None:
+                delta = (abs(amount) - abs(last_amount)).copy_abs()
+                if delta <= subscription.matcher_amount_tolerance:
+                    confidence += 0.08
+                    reasons.append("amount within tolerance of last charge")
+                else:
+                    return None
+            else:
+                reasons.append("tolerance provided but no history; skipping amount check")
+
+        confidence = min(confidence, 0.98)
+
+        return SubscriptionSuggestion(
+            subscription_id=subscription.id,
+            subscription_name=subscription.name,
+            confidence=confidence,
+            reason="; ".join(reasons),
+        )
+
+    def _match_subscription_text(self, pattern: str, description: str) -> tuple[bool, str]:
+        normalized = description.lower()
+        try:
+            if re.search(pattern, description, flags=re.IGNORECASE):
+                return True, "regex"
+        except re.error:
+            pass
+        if pattern.lower() in normalized:
+            return True, "substring"
+        return False, ""
+
+    def _active_subscriptions(self) -> List[Subscription]:
+        statement = select(Subscription).where(cast(Any, Subscription.is_active).is_(True))
+        return list(self.session.exec(statement).all())
+
+    def _subscription_amount_lookup(self) -> dict[UUID, Decimal]:
+        latest = (
+            select(
+                Transaction.id.label("txn_id"),
+                Transaction.subscription_id.label("subscription_id"),
+                func.row_number()
+                .over(partition_by=Transaction.subscription_id, order_by=Transaction.occurred_at.desc())
+                .label("rn"),
+            )
+            .where(Transaction.subscription_id.isnot(None))
+        ).subquery()
+
+        amounts = (
+            select(
+                latest.c.subscription_id,
+                func.max(func.abs(TransactionLeg.amount)).label("amount"),
+            )
+            .join(TransactionLeg, TransactionLeg.transaction_id == latest.c.txn_id)
+            .where(latest.c.rn == 1)
+            .group_by(latest.c.subscription_id)
+        )
+        results = self.session.exec(amounts).all()
+        lookup: dict[UUID, Decimal] = {}
+        for row in results:
+            sub_id = row.subscription_id
+            amount = row.amount
+            if sub_id is None or amount is None:
+                continue
+            lookup[sub_id] = Decimal(str(amount))
+        return lookup
 
     def _get_bedrock_client(self):
         try:
@@ -885,6 +1076,12 @@ class ImportService:
         except Exception:
             return False
         return True
+
+    def _safe_decimal(self, value: Any) -> Optional[Decimal]:
+        try:
+            return Decimal(str(value))
+        except Exception:
+            return None
 
     def _is_date_like(self, value: str) -> bool:
         if not value:

@@ -59,6 +59,7 @@ export const FetchCustomReport = createAction<{
   end_date: string;
   accountIds?: string[];
   categoryIds?: string[];
+  subscriptionIds?: string[];
 }>("reports/fetchCustom");
 export const ExportReport = createAction<{
   granularity: "monthly" | "yearly" | "quarterly" | "total" | "net_worth";
@@ -68,6 +69,7 @@ export const ExportReport = createAction<{
   end_date?: string;
   accountIds?: string[];
   categoryIds?: string[];
+  subscriptionIds?: string[];
 }>("reports/export");
 
 const toCsv = (values?: string[]) => {
@@ -89,6 +91,9 @@ function* handleFetchMonthly(action: ReturnType<typeof FetchMonthlyReport>) {
         : {}),
       ...(toCsv(filters.categoryIds)
         ? { category_ids: toCsv(filters.categoryIds) }
+        : {}),
+      ...(toCsv(filters.subscriptionIds)
+        ? { subscription_ids: toCsv(filters.subscriptionIds) }
         : {}),
     };
 
@@ -126,6 +131,9 @@ function* handleFetchYearly(action: ReturnType<typeof FetchYearlyReport>) {
       ...(toCsv(filters.categoryIds)
         ? { category_ids: toCsv(filters.categoryIds) }
         : {}),
+      ...(toCsv(filters.subscriptionIds)
+        ? { subscription_ids: toCsv(filters.subscriptionIds) }
+        : {}),
     };
 
     const response: { results: YearlyReportEntry[] } = yield call(
@@ -160,6 +168,9 @@ function* handleFetchTotal(action: ReturnType<typeof FetchTotalReport>) {
       ...(toCsv(filters.categoryIds)
         ? { category_ids: toCsv(filters.categoryIds) }
         : {}),
+      ...(toCsv(filters.subscriptionIds)
+        ? { subscription_ids: toCsv(filters.subscriptionIds) }
+        : {}),
     };
 
     const response: TotalReportRead = yield call(
@@ -190,6 +201,9 @@ function* handleFetchNetWorth(action: ReturnType<typeof FetchNetWorthHistory>) {
     const query = {
       ...(toCsv(filters.accountIds)
         ? { account_ids: toCsv(filters.accountIds) }
+        : {}),
+      ...(toCsv(filters.subscriptionIds)
+        ? { subscription_ids: toCsv(filters.subscriptionIds) }
         : {}),
     };
 
@@ -266,6 +280,9 @@ function* handleFetchCustom(action: ReturnType<typeof FetchCustomReport>) {
       ...(toCsv(params.categoryIds)
         ? { category_ids: toCsv(params.categoryIds) }
         : {}),
+      ...(toCsv(params.subscriptionIds)
+        ? { subscription_ids: toCsv(params.subscriptionIds) }
+        : {}),
     };
     const response: { results: MonthlyReportEntry[] } = yield call(
       callApiWithAuth,
@@ -298,6 +315,9 @@ function* handleExportReport(action: ReturnType<typeof ExportReport>) {
         : {}),
       ...(toCsv(action.payload.categoryIds)
         ? { category_ids: toCsv(action.payload.categoryIds) }
+        : {}),
+      ...(toCsv(action.payload.subscriptionIds)
+        ? { subscription_ids: toCsv(action.payload.subscriptionIds) }
         : {}),
     };
     const response: {

@@ -26,6 +26,7 @@ import { Redirect } from "./pages/redirect/redirect.tsx";
 import { Reports } from "./pages/reports/reports.tsx";
 import { Settings } from "./pages/settings/settings.tsx";
 import { Transactions } from "./pages/transactions/transactions.tsx";
+import { Subscriptions } from "./pages/subscriptions/subscriptions.tsx";
 
 export const App: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -120,6 +121,14 @@ export const App: React.FC = () => {
           element={
             <NavigationWrapper title="Imports">
               <Imports />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.subscriptions}
+          element={
+            <NavigationWrapper title="Subscriptions">
+              <Subscriptions />
             </NavigationWrapper>
           }
         />

@@ -27,6 +27,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from .account import Account, Loan
     from .category import Category
     from .imports import TransactionImportBatch
+    from .subscription import Subscription
 
 
 class Transaction(
@@ -73,6 +74,14 @@ class Transaction(
             nullable=True,
         ),
     )
+    subscription_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("subscriptions.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
     status: TransactionStatus = Field(
         default=TransactionStatus.RECORDED,
         sa_column=Column(SAEnum(TransactionStatus), nullable=False),
@@ -83,6 +92,7 @@ class Transaction(
         legs: List["TransactionLeg"]
         loan_events: List["LoanEvent"]
         import_batch: Optional["TransactionImportBatch"]
+        subscription: Optional["Subscription"]
 
     __table_args__ = (
         UniqueConstraint(
@@ -105,6 +115,10 @@ class Transaction(
             back_populates="transaction",
             cascade="all, delete-orphan",
         ),
+    )
+    subscription: Optional["Subscription"] = Relationship(
+        back_populates="transactions",
+        sa_relationship=relationship("Subscription", back_populates="transactions"),
     )
 
 

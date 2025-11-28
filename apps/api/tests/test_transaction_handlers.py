@@ -17,7 +17,7 @@ from apps.api.handlers import (
     reset_transaction_handler_state,
     update_transaction,
 )
-from apps.api.models import Account, Loan, LoanEvent
+from apps.api.models import Account, Loan, LoanEvent, Subscription
 from apps.api.shared import (
     AccountType,
     InterestCompound,
@@ -91,6 +91,59 @@ def test_create_and_list_transactions():
     transactions = body["transactions"]
     assert any(item["id"] == transaction_id for item in transactions)
     assert isinstance(body.get("running_balances"), dict)
+
+
+def test_create_transaction_with_subscription():
+    engine = get_engine()
+    with Session(engine) as session:
+        source = _create_account(session)
+        destination = _create_account(session)
+        subscription = Subscription(name="Streaming", matcher_text="StreamCo")
+        session.add(subscription)
+        session.commit()
+        session.refresh(subscription)
+        source_id = source.id
+        destination_id = destination.id
+        subscription_id = subscription.id
+
+    occurred = datetime(2024, 1, 5, tzinfo=timezone.utc)
+    payload = {
+        "occurred_at": occurred.isoformat(),
+        "posted_at": occurred.isoformat(),
+        "subscription_id": str(subscription_id),
+        "legs": [
+            {"account_id": str(source_id), "amount": "-15.00"},
+            {"account_id": str(destination_id), "amount": "15.00"},
+        ],
+    }
+
+    response = create_transaction({"body": json.dumps(payload), "isBase64Encoded": False}, None)
+    assert response["statusCode"] == 201
+    created = _json_body(response)
+    assert created["subscription_id"] == str(subscription_id)
+
+
+def test_create_transaction_rejects_missing_subscription():
+    engine = get_engine()
+    with Session(engine) as session:
+        source = _create_account(session)
+        destination = _create_account(session)
+        source_id = source.id
+        destination_id = destination.id
+
+    occurred = datetime(2024, 1, 6, tzinfo=timezone.utc)
+    payload = {
+        "occurred_at": occurred.isoformat(),
+        "posted_at": occurred.isoformat(),
+        "subscription_id": str(UUID(int=999)),
+        "legs": [
+            {"account_id": str(source_id), "amount": "-10.00"},
+            {"account_id": str(destination_id), "amount": "10.00"},
+        ],
+    }
+
+    response = create_transaction({"body": json.dumps(payload), "isBase64Encoded": False}, None)
+    assert response["statusCode"] == 400
 
 
 def test_create_transaction_validation_error():

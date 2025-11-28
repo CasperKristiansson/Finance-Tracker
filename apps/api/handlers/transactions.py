@@ -50,6 +50,7 @@ def list_transactions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             end_date=query.end_date,
             account_ids=query.account_ids,
             category_ids=query.category_ids,
+            subscription_ids=query.subscription_ids,
             status=query.status,
             min_amount=query.min_amount,
             max_amount=query.max_amount,
@@ -77,6 +78,7 @@ def create_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
     transaction = Transaction(
         category_id=data.category_id,
+        subscription_id=data.subscription_id,
         transaction_type=data.transaction_type,
         description=data.description,
         notes=data.notes,
@@ -119,17 +121,18 @@ def update_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
+    updates = data.model_dump(exclude_unset=True)
+    subscription_in_payload = "subscription_id" in data.model_fields_set
+    subscription_id = updates.pop("subscription_id", None)
+
     with session_scope() as session:
         service = TransactionService(session)
         try:
             updated = service.update_transaction(
                 transaction_id,
-                description=data.description,
-                notes=data.notes,
-                occurred_at=data.occurred_at,
-                posted_at=data.posted_at,
-                category_id=data.category_id,
-                status=data.status,
+                update_subscription=subscription_in_payload,
+                subscription_id=subscription_id,
+                **updates,
             )
         except LookupError:
             return json_response(404, {"error": "Transaction not found"})
