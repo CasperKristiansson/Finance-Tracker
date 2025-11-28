@@ -14,6 +14,7 @@ from ..schemas import (
     ImportCommitRequest,
     ImportErrorRead,
     ImportFileRead,
+    ImportRowRead,
     ImportSessionRead,
     ImportSessionResponse,
 )
@@ -38,11 +39,10 @@ def create_import_batch(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     with session_scope() as session:
         service = ImportService(session)
         batch, parsed_files = service.create_batch_with_files(data)
-        payload = ImportSessionResponse(
-            import_session=_to_session_read(batch, parsed_files, include_preview=True)
-        )
+        session_read = _to_session_read(batch, parsed_files, include_preview=True)
+        payload: Dict[str, Any] = {"imports": [session_read.model_dump(mode="json")]}
 
-    return json_response(201, payload.model_dump(mode="json"))
+    return json_response(201, payload)
 
 
 def list_import_batches(_event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
@@ -66,7 +66,9 @@ def get_import_session(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         batch = service.get_import_session(UUID(str(batch_id)))
         if batch is None:
             return json_response(404, {"error": "Import session not found"})
-        payload = ImportSessionResponse(import_session=_to_session_read(batch, include_preview=True))
+        payload = ImportSessionResponse(
+            import_session=_to_session_read(batch, include_preview=True)
+        )
 
     return json_response(200, payload.model_dump(mode="json"))
 
@@ -90,7 +92,9 @@ def commit_import_session(event: Dict[str, Any], _context: Any) -> Dict[str, Any
             batch = service.commit_session(UUID(str(batch_id)), commit_payload)
         except LookupError:
             return json_response(404, {"error": "Import session not found"})
-        payload = ImportSessionResponse(import_session=_to_session_read(batch, include_preview=True))
+        payload = ImportSessionResponse(
+            import_session=_to_session_read(batch, include_preview=True)
+        )
 
     return json_response(200, payload.model_dump(mode="json"))
 
@@ -115,7 +119,9 @@ def append_import_files(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         except LookupError:
             return json_response(404, {"error": "Import session not found"})
 
-        payload = ImportSessionResponse(import_session=_to_session_read(batch, include_preview=True))
+        payload = ImportSessionResponse(
+            import_session=_to_session_read(batch, include_preview=True)
+        )
 
     return json_response(200, payload.model_dump(mode="json"))
 
@@ -170,21 +176,23 @@ def _to_session_read(
     batch, parsed_files: List[Any] | None = None, include_preview: bool = False
 ) -> ImportSessionRead:
     base = _to_batch_read(batch, parsed_files, include_preview)
-    rows = []
+    rows: list[ImportRowRead] = []
     file_models = batch.files or []
     for file_model in file_models:
         for row_model in getattr(file_model, "rows", []) or []:
             rows.append(
-                {
-                    "id": row_model.id,
-                    "file_id": file_model.id,
-                    "row_index": row_model.row_index,
-                    "data": row_model.data,
-                    "suggested_category": row_model.suggested_category,
-                    "suggested_confidence": row_model.suggested_confidence,
-                    "suggested_reason": row_model.suggested_reason,
-                    "transfer_match": row_model.transfer_match,
-                }
+                ImportRowRead.model_validate(
+                    {
+                        "id": row_model.id,
+                        "file_id": file_model.id,
+                        "row_index": row_model.row_index,
+                        "data": row_model.data,
+                        "suggested_category": row_model.suggested_category,
+                        "suggested_confidence": row_model.suggested_confidence,
+                        "suggested_reason": row_model.suggested_reason,
+                        "transfer_match": row_model.transfer_match,
+                    }
+                )
             )
 
     return ImportSessionRead(

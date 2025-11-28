@@ -33,9 +33,7 @@ class Budget(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
     amount: Decimal = Field(sa_column=Column(Numeric(18, 2), nullable=False))
     note: str | None = Field(default=None, sa_column=Column(String(255), nullable=True))
 
-    __table_args__ = (
-        UniqueConstraint("category_id", "period", name="uq_budget_category_period"),
-    )
+    __table_args__ = (UniqueConstraint("category_id", "period", name="uq_budget_category_period"),)
 
     if TYPE_CHECKING:  # pragma: no cover
         category: Category

@@ -14,8 +14,8 @@ from apps.api.handlers import (
     create_transaction,
     delete_transaction,
     list_transactions,
-    update_transaction,
     reset_transaction_handler_state,
+    update_transaction,
 )
 from apps.api.models import Account, Loan, LoanEvent
 from apps.api.shared import (

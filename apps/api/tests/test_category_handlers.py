@@ -11,8 +11,8 @@ from sqlmodel import SQLModel, select
 
 from apps.api.handlers import (
     create_category,
-    merge_categories,
     list_categories,
+    merge_categories,
     reset_category_handler_state,
     update_category,
 )
@@ -181,12 +181,8 @@ def test_merge_categories_moves_transactions_and_budgets():
         session.add(txn)
         session.flush()
         txn_id = txn.id
-        session.add(
-            Budget(category_id=source_id, period=BudgetPeriod.MONTHLY, amount=100)
-        )
-        session.add(
-            Budget(category_id=target_id, period=BudgetPeriod.MONTHLY, amount=20)
-        )
+        session.add(Budget(category_id=source_id, period=BudgetPeriod.MONTHLY, amount=100))
+        session.add(Budget(category_id=target_id, period=BudgetPeriod.MONTHLY, amount=20))
         session.commit()
 
     merge_response = merge_categories(
@@ -209,9 +205,7 @@ def test_merge_categories_moves_transactions_and_budgets():
         assert moved_txn is not None
         assert moved_txn.category_id == target_id
 
-        budgets = list(
-            session.exec(select(Budget).where(Budget.category_id == target_id))
-        )
+        budgets = list(session.exec(select(Budget).where(Budget.category_id == target_id)))
         assert len(budgets) == 1
         assert float(budgets[0].amount) == 120.0
 

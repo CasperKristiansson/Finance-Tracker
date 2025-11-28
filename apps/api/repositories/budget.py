@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 from uuid import UUID
 
 from sqlalchemy import func
@@ -61,9 +61,7 @@ class BudgetRepository:
         if not budgets:
             return []
 
-        categories = dict(
-            self.session.exec(select(Category.id, Category.category_type)).all()
-        )
+        categories = dict(self.session.exec(select(Category.id, Category.category_type)).all())
 
         results: List[tuple[Budget, Decimal]] = []
         for budget in budgets:
@@ -74,8 +72,11 @@ class BudgetRepository:
             start, end = _period_bounds(budget.period, as_of)
             stmt = (
                 select(func.sum(TransactionLeg.amount))
-                .join(Transaction, TransactionLeg.transaction_id == Transaction.id)
-                .where(Transaction.category_id == budget.category_id)
+                .join(
+                    Transaction,
+                    cast(Any, TransactionLeg.transaction_id == Transaction.id),
+                )
+                .where(cast(Any, Transaction.category_id == budget.category_id))
                 .where(Transaction.occurred_at >= start)
                 .where(Transaction.occurred_at < end)
             )

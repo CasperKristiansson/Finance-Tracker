@@ -2,11 +2,11 @@
 
 from .enums import (
     AccountType,
+    BudgetPeriod,
     CategoryType,
     CreatedSource,
     InterestCompound,
     LoanEventType,
-    BudgetPeriod,
     SystemAccountCode,
     TransactionStatus,
     TransactionType,

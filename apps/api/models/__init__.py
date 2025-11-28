@@ -1,8 +1,8 @@
 """ORM models for Finance Tracker."""
 
 from .account import Account, BalanceSnapshot, Loan, LoanRateChange
-from .category import Category, SystemAccount
 from .budget import Budget
+from .category import Category, SystemAccount
 from .imports import ImportErrorRecord, ImportFile, ImportRow, TransactionImportBatch
 from .transaction import LoanEvent, Transaction, TransactionLeg
 

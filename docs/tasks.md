@@ -77,16 +77,16 @@
 - [ ] Bedrock usage: model selection for classification/cleanup; limit tokens; surface confidence; allow user override. Consider fallback to rules when AI unavailable.
 - [ ] Loading/empty: skeletons and guided “paste your report” empty state.
 
-### Milestone 8 – Tooling & DX
-
-- [ ] Document env vars for web (Cognito pool/client, API URL) and backend (DB settings, DATABASE_URL for SQLite dev); add sample `.env` files.
-- [ ] Add API client mocks/fixtures and saga/hook integration tests.
-- [ ] Align lint/format scripts across workspace; CI steps for web build/test and api tests.
-
-### Milestone 9 – Subscriptions (label + insights, no auto-apply)
+### Milestone 8 – Subscriptions (label + insights, no auto-apply)
 
 - [ ] Backend model/API: add `subscriptions` table with fields (id, name, matcher_text, matcher_amount_tolerance?, matcher_day_of_month?, category_id optional, is_active, created_at/updated_at). Transactions gain optional `subscription_id`. Endpoints to create/update/list subscriptions and to attach/detach a transaction from a subscription.
 - [ ] Matching heuristic (suggest-only): reuse matcher_text (substring/regex) + optional day-of-month + amount tolerance. Never auto-apply; only surface suggestions with high confidence in import UI.
 - [ ] Import UI: in staged rows table, add a “Subscription” picker (select existing or “Create new”). Creating new captures matcher_text from the transaction description (date optional). Suggestions appear per row; user must confirm before commit.
 - [ ] Subscription page: list active/past subscriptions, show spend per subscription (current month + trailing 3/12 months), trend sparkline, last charge date, linked category. Controls to archive/reactivate and edit matchers.
 - [ ] Reports integration: surface top subscriptions by spend in Reports/Analytics page (tile + list) and allow filter by subscription in transactions/report queries.
+
+### Milestone 9 – Tooling & DX
+
+- [ ] Document env vars for web (Cognito pool/client, API URL) and backend (DB settings, DATABASE_URL for SQLite dev); add sample `.env` files.
+- [ ] Add API client mocks/fixtures and saga/hook integration tests.
+- [ ] Align lint/format scripts across workspace; CI steps for web build/test and api tests.

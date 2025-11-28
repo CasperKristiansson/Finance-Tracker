@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List
+from typing import Any, List, cast
 from uuid import UUID
 
 from sqlalchemy import update
@@ -57,15 +57,13 @@ class CategoryService:
         # Re-point transactions
         self.session.exec(
             update(Transaction)
-            .where(Transaction.category_id == source_category_id)
+            .where(cast(Any, Transaction.category_id == source_category_id))
             .values(category_id=target_category_id)
         )
 
         # Merge budgets for the same period
         source_budgets = list(
-            self.session.exec(
-                select(Budget).where(Budget.category_id == source_category_id)
-            ).all()
+            self.session.exec(select(Budget).where(Budget.category_id == source_category_id)).all()
         )
         for budget in source_budgets:
             existing = self.session.exec(

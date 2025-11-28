@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, Dict
 
 from pydantic import ValidationError
@@ -12,6 +12,7 @@ from ..schemas import (
     BudgetCreate,
     BudgetListResponse,
     BudgetProgressListResponse,
+    BudgetProgressRead,
     BudgetRead,
     BudgetUpdate,
 )
@@ -34,7 +35,7 @@ def _budget_to_schema(budget) -> BudgetRead:
     return BudgetRead.model_validate(budget)
 
 
-def list_budgets(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+def list_budgets(_event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
     with session_scope() as session:
         service = BudgetService(session)
@@ -124,7 +125,7 @@ def list_budget_progress(event: Dict[str, Any], _context: Any) -> Dict[str, Any]
     with session_scope() as session:
         service = BudgetService(session)
         progress = service.list_budget_progress(as_of)
-        items = []
+        items: list[BudgetProgressRead] = []
         for budget, spent in progress:
             percent = Decimal("0")
             try:
@@ -135,12 +136,14 @@ def list_budget_progress(event: Dict[str, Any], _context: Any) -> Dict[str, Any]
                 percent = Decimal("0")
 
             items.append(
-                {
-                    **_budget_to_schema(budget).model_dump(),
-                    "spent": str(spent),
-                    "remaining": str(budget.amount - spent),
-                    "percent_used": str(percent),
-                }
+                BudgetProgressRead.model_validate(
+                    {
+                        **_budget_to_schema(budget).model_dump(),
+                        "spent": spent,
+                        "remaining": budget.amount - spent,
+                        "percent_used": percent,
+                    }
+                )
             )
 
         response = BudgetProgressListResponse(budgets=items)

@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 from datetime import datetime
 from typing import Any, List, Optional
 from uuid import UUID
-
-import base64
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_core import PydanticCustomError

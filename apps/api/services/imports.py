@@ -1,4 +1,5 @@
 """Service layer for imports."""
+
 # pylint: disable=broad-exception-caught
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple, cast
 from uuid import UUID
 
 import boto3
@@ -31,9 +32,8 @@ from ..models import (
 from ..repositories.imports import ImportRepository
 from ..schemas import ExampleTransaction, ImportBatchCreate, ImportCommitRequest
 from ..schemas import ImportFile as ImportFilePayload
-from .transaction import TransactionService
 from ..shared import AccountType, CreatedSource, TransactionStatus, TransactionType
-
+from .transaction import TransactionService
 
 REQUIRED_FIELDS = ("date", "description", "amount")
 DATE_FIELDS = {"date", "transaction_date", "occurred_at", "posted_at"}
@@ -92,7 +92,9 @@ class ImportService:
         error_models: List[ImportErrorRecord] = []
 
         for parsed in parsed_files:
-            suggestions = self._suggest_rows(parsed.rows, parsed.column_map or {}, payload.examples or [])
+            suggestions = self._suggest_rows(
+                parsed.rows, parsed.column_map or {}, payload.examples or []
+            )
             transfers = self._match_transfers(parsed.rows, parsed.column_map or {})
 
             # decorate preview rows
@@ -118,10 +120,10 @@ class ImportService:
 
             parsed.model.row_count = len(parsed.rows)
             parsed.model.error_count = len(parsed.errors)
-            parsed.model.status = "staged"
+            parsed.model.status = "ready"
             if parsed.errors:
                 parsed.model.status = "error"
-            if not parsed.rows:
+            elif not parsed.rows:
                 parsed.model.status = "empty"
 
             for idx, row in enumerate(parsed.rows, start=1):
@@ -149,7 +151,9 @@ class ImportService:
         return saved_batch, parsed_files
 
     def list_imports(self) -> List[TransactionImportBatch]:
-        return self.repository.list_batches(include_files=True, include_errors=True, include_rows=True)
+        return self.repository.list_batches(
+            include_files=True, include_errors=True, include_rows=True
+        )
 
     def get_import_session(self, batch_id: UUID) -> Optional[TransactionImportBatch]:
         return self.repository.get_batch(
@@ -191,7 +195,11 @@ class ImportService:
                 if override and override.occurred_at is not None:
                     payload_data["occurred_at"] = override.occurred_at.isoformat()
 
-                date_value = payload_data.get("date") or payload_data.get("occurred_at") or payload_data.get("posted_at")
+                date_value = (
+                    payload_data.get("date")
+                    or payload_data.get("occurred_at")
+                    or payload_data.get("posted_at")
+                )
                 occurred_at = (
                     override.occurred_at
                     if override and override.occurred_at is not None
@@ -233,8 +241,7 @@ class ImportService:
                 target_account_id = (
                     override.account_id
                     if override and override.account_id is not None
-                    else file.account_id
-                    or unassigned_account.id
+                    else file.account_id or unassigned_account.id
                 )
 
                 legs = [
@@ -349,8 +356,8 @@ class ImportService:
                 )
 
         self.session.flush()
-        for row in row_models:
-            self.session.add(row)
+        for row_model in row_models:
+            self.session.add(row_model)
 
         if error_models:
             self.session.add_all(error_models)
@@ -430,6 +437,9 @@ class ImportService:
             return ([], [(0, f"Unable to read XLSX file: {exc}")])
 
         sheet = workbook.active
+        if sheet is None:
+            return ([], [(0, "XLSX workbook has no active sheet")])
+
         header_row = next(sheet.iter_rows(values_only=True), None)
         if not header_row:
             return ([], [(0, "XLSX is missing a header row")])
@@ -709,7 +719,9 @@ class ImportService:
         if hasattr(self, "_offset_account"):
             return getattr(self, "_offset_account")
 
-        statement = select(Account).where(Account.is_active.is_(False), Account.display_order == 9999)
+        statement = select(Account).where(
+            cast(Any, Account.is_active).is_(False), Account.display_order == 9999
+        )
         account = self.session.exec(statement).one_or_none()
         if account is None:
             account = Account(account_type=AccountType.NORMAL, is_active=False, display_order=9999)
@@ -723,7 +735,9 @@ class ImportService:
         if hasattr(self, "_unassigned_account"):
             return getattr(self, "_unassigned_account")
 
-        statement = select(Account).where(Account.is_active.is_(False), Account.display_order == 9998)
+        statement = select(Account).where(
+            cast(Any, Account.is_active).is_(False), Account.display_order == 9998
+        )
         account = self.session.exec(statement).one_or_none()
         if account is None:
             account = Account(account_type=AccountType.NORMAL, is_active=False, display_order=9998)
@@ -758,7 +772,9 @@ class ImportService:
             added_errors = 0
 
             for idx, row in enumerate(parsed.rows, start=1):
-                target_account_id = saved_file.account_id or self._get_or_create_unassigned_account().id
+                target_account_id = (
+                    saved_file.account_id or self._get_or_create_unassigned_account().id
+                )
                 date_value = row.get(parsed.column_map["date"], "")
                 occurred_at = self._parse_date(str(date_value))
                 if occurred_at is None:

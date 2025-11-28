@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import base64
+import csv
 from datetime import datetime, timezone
 from io import BytesIO, StringIO
-import base64
 from typing import Any, Dict, Iterable
-import csv
 
 from pydantic import ValidationError
 
 from ..schemas import (
+    DateRangeReportQuery,
+    DateRangeReportResponse,
     ExportReportRequest,
     ExportReportResponse,
     MonthlyReportEntry,
@@ -22,8 +24,6 @@ from ..schemas import (
     QuarterlyReportEntry,
     QuarterlyReportQuery,
     QuarterlyReportResponse,
-    DateRangeReportQuery,
-    DateRangeReportResponse,
     TotalReportQuery,
     TotalReportRead,
     YearlyReportEntry,
@@ -184,12 +184,16 @@ def export_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
+    headers: list[str] = []
+    rows: list[list[str]] = []
+    filename = f"report.{request.format}"
+
     with session_scope() as session:
         service = ReportingService(session)
         granularity = request.granularity
 
         if granularity == "monthly":
-            data = service.monthly_report(
+            monthly_data = service.monthly_report(
                 year=request.year,
                 account_ids=request.account_ids,
                 category_ids=request.category_ids,
@@ -197,27 +201,36 @@ def export_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             headers = ["period", "income", "expense", "net"]
             rows = [
                 [item.period.isoformat(), str(item.income), str(item.expense), str(item.net)]
-                for item in data
+                for item in monthly_data
             ]
             filename = f"monthly-report-{request.year or 'all'}.{request.format}"
         elif granularity == "yearly":
-            data = service.yearly_report(
+            yearly_data = service.yearly_report(
                 account_ids=request.account_ids,
                 category_ids=request.category_ids,
             )
             headers = ["year", "income", "expense", "net"]
-            rows = [[item.year, str(item.income), str(item.expense), str(item.net)] for item in data]
+            rows = [
+                [str(item.year), str(item.income), str(item.expense), str(item.net)]
+                for item in yearly_data
+            ]
             filename = f"yearly-report.{request.format}"
         elif granularity == "quarterly":
-            data = service.quarterly_report(
+            quarterly_data = service.quarterly_report(
                 year=request.year,
                 account_ids=request.account_ids,
                 category_ids=request.category_ids,
             )
             headers = ["year", "quarter", "income", "expense", "net"]
             rows = [
-                [item.year, item.quarter, str(item.income), str(item.expense), str(item.net)]
-                for item in data
+                [
+                    str(item.year),
+                    str(item.quarter),
+                    str(item.income),
+                    str(item.expense),
+                    str(item.net),
+                ]
+                for item in quarterly_data
             ]
             filename = f"quarterly-report-{request.year or 'all'}.{request.format}"
         elif granularity == "total":
@@ -231,19 +244,21 @@ def export_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             rows = [[str(item.income), str(item.expense), str(item.net)]]
             filename = f"totals-report.{request.format}"
         else:  # net_worth
-            data = service.net_worth_history(account_ids=request.account_ids)
+            net_worth_rows = service.net_worth_history(account_ids=request.account_ids)
             headers = ["period", "net_worth"]
-            rows = [[point.period.isoformat(), str(point.net_worth)] for point in data]
+            rows = [[point.period.isoformat(), str(point.net_worth)] for point in net_worth_rows]
             filename = f"net-worth-history.{request.format}"
 
     if request.format == "csv":
         content = _to_csv(headers, rows).encode()
         content_type = "text/csv"
     else:
-        from openpyxl import Workbook
+        from openpyxl import Workbook  # pylint: disable=import-outside-toplevel
 
         wb = Workbook()
         ws = wb.active
+        if ws is None:
+            return json_response(500, {"error": "Unable to open workbook sheet"})
         ws.append(list(headers))
         for row in rows:
             ws.append(list(row))

@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Iterable, List, Optional
 from uuid import UUID
 
 from sqlmodel import Session
 
 from ..repositories.reporting import (
-    QuarterlyTotals,
     LifetimeTotals,
     MonthlyTotals,
+    NetWorthPoint,
+    QuarterlyTotals,
     ReportingRepository,
     YearlyTotals,
 )
-from ..repositories.reporting import NetWorthPoint
 
 
 class ReportingService:

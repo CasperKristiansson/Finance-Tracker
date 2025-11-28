@@ -241,7 +241,7 @@ class ReportingRepository:
             buckets[key] = (income, expense)
 
         results: List[QuarterlyTotals] = []
-        for (yr, qtr) in sorted(buckets.keys()):
+        for yr, qtr in sorted(buckets.keys()):
             income, expense = buckets[(yr, qtr)]
             net = income - expense
             results.append(

@@ -112,10 +112,10 @@ class TransactionListQuery(BaseModel):
             category_ids = values.get("category_ids")
             if isinstance(category_ids, str):
                 parts = [part.strip() for part in category_ids.split(",") if part.strip()]
-                converted: List[UUID] = []
+                converted_categories: List[UUID] = []
                 for part in parts:
                     try:
-                        converted.append(UUID(part))
+                        converted_categories.append(UUID(part))
                     except ValueError as exc:  # pragma: no cover - validation
                         raise ValidationError(
                             [
@@ -127,7 +127,7 @@ class TransactionListQuery(BaseModel):
                             ],
                             cls,
                         ) from exc
-                values["category_ids"] = converted
+                values["category_ids"] = converted_categories
 
         if isinstance(values, dict) and "status" in values and isinstance(values["status"], str):
             statuses = [part.strip() for part in str(values["status"]).split(",") if part.strip()]

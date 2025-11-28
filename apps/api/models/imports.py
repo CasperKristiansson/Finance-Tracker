@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, List, Optional
 from uuid import UUID
 
-from sqlalchemy import Column, ForeignKey, Integer, String, JSON, Numeric
+from sqlalchemy import JSON, Column, ForeignKey, Integer, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlmodel import Field, Relationship, SQLModel

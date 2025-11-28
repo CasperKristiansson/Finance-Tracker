@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import List, Optional
 from uuid import UUID
 
@@ -25,7 +25,9 @@ class BudgetService:
     def list_budgets(self) -> List[Budget]:
         return self.repository.list()
 
-    def list_budget_progress(self, as_of: Optional[datetime] = None) -> List[tuple[Budget, Decimal]]:
+    def list_budget_progress(
+        self, as_of: Optional[datetime] = None
+    ) -> List[tuple[Budget, Decimal]]:
         as_of = as_of or datetime.now(timezone.utc)
         return self.repository.list_with_spend(as_of=as_of)
 

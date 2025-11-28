@@ -10,7 +10,14 @@ from sqlmodel import Session, SQLModel
 
 from apps.api.models import Account, Budget, Category, Transaction, TransactionLeg
 from apps.api.repositories.budget import BudgetRepository
-from apps.api.shared import AccountType, BudgetPeriod, CategoryType, TransactionType, configure_engine, get_engine
+from apps.api.shared import (
+    AccountType,
+    BudgetPeriod,
+    CategoryType,
+    TransactionType,
+    configure_engine,
+    get_engine,
+)
 
 
 @pytest.fixture(autouse=True)

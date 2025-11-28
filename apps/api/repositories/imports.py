@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterable, List, Optional
+from typing import Any, Iterable, List, Optional, cast
 from uuid import UUID
 
 from sqlalchemy.orm import selectinload
@@ -72,18 +72,18 @@ class ImportRepository:
     ) -> Optional[TransactionImportBatch]:
         statement = select(TransactionImportBatch).where(TransactionImportBatch.id == batch_id)
         if include_files:
-            statement = statement.options(
-                selectinload(TransactionImportBatch.files)  # type: ignore[arg-type]
-            )
+            statement = statement.options(selectinload(cast(Any, TransactionImportBatch).files))
             if include_errors:
                 statement = statement.options(
-                    selectinload(TransactionImportBatch.files)  # type: ignore[arg-type]
-                    .selectinload(ImportFile.errors)  # type: ignore[arg-type]
+                    selectinload(cast(Any, TransactionImportBatch).files).selectinload(
+                        cast(Any, ImportFile).errors
+                    )
                 )
             if include_rows:
                 statement = statement.options(
-                    selectinload(TransactionImportBatch.files)  # type: ignore[arg-type]
-                    .selectinload(ImportFile.rows)  # type: ignore[arg-type]
+                    selectinload(cast(Any, TransactionImportBatch).files).selectinload(
+                        cast(Any, ImportFile).rows
+                    )
                 )
 
         result = self.session.exec(statement).one_or_none()
@@ -98,18 +98,18 @@ class ImportRepository:
     ) -> List[TransactionImportBatch]:
         statement = select(TransactionImportBatch)
         if include_files:
-            statement = statement.options(
-                selectinload(TransactionImportBatch.files)  # type: ignore[arg-type]
-            )
+            statement = statement.options(selectinload(cast(Any, TransactionImportBatch).files))
             if include_errors:
                 statement = statement.options(
-                    selectinload(TransactionImportBatch.files)  # type: ignore[arg-type]
-                    .selectinload(ImportFile.errors)  # type: ignore[arg-type]
+                    selectinload(cast(Any, TransactionImportBatch).files).selectinload(
+                        cast(Any, ImportFile).errors
+                    )
                 )
             if include_rows:
                 statement = statement.options(
-                    selectinload(TransactionImportBatch.files)  # type: ignore[arg-type]
-                    .selectinload(ImportFile.rows)  # type: ignore[arg-type]
+                    selectinload(cast(Any, TransactionImportBatch).files).selectinload(
+                        cast(Any, ImportFile).rows
+                    )
                 )
 
         result = self.session.exec(statement)
