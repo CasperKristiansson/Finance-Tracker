@@ -44,39 +44,6 @@ type Goal = {
   status: GoalStatus;
 };
 
-const sampleGoals: Goal[] = [
-  {
-    id: "home-upgrade",
-    name: "Home upgrade reserve",
-    description: "Set aside for renovation and safety buffer.",
-    target: 15000,
-    current: 6200,
-    dueDate: "2025-12-31",
-    monthlyContribution: 600,
-    status: "on_track",
-  },
-  {
-    id: "emergency",
-    name: "Emergency fund",
-    description: "Six months of expenses for resilience.",
-    target: 12000,
-    current: 4800,
-    dueDate: "2025-08-30",
-    monthlyContribution: 500,
-    status: "at_risk",
-  },
-  {
-    id: "travel",
-    name: "Summer travel",
-    description: "Keep it fun without touching investments.",
-    target: 4000,
-    current: 1100,
-    dueDate: "2025-06-15",
-    monthlyContribution: 350,
-    status: "behind",
-  },
-];
-
 const statusTone: Record<GoalStatus, string> = {
   on_track: "bg-emerald-100 text-emerald-800",
   at_risk: "bg-amber-100 text-amber-800",
@@ -90,7 +57,7 @@ const statusLabel: Record<GoalStatus, string> = {
 };
 
 export const Goals: React.FC = () => {
-  const goals = sampleGoals;
+  const goals = useMemo<Goal[]>(() => [], []);
   const totals = useMemo(() => {
     const totalTarget = goals.reduce((sum, goal) => sum + goal.target, 0);
     const totalCurrent = goals.reduce((sum, goal) => sum + goal.current, 0);

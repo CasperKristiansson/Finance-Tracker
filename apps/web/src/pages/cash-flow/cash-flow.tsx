@@ -35,15 +35,6 @@ type ChartPoint = {
   net: number;
 };
 
-const sampleFlow: ChartPoint[] = [
-  { label: "Jan", inflow: 5400, outflow: 4200, net: 1200 },
-  { label: "Feb", inflow: 5100, outflow: 4300, net: 800 },
-  { label: "Mar", inflow: 5600, outflow: 4700, net: 900 },
-  { label: "Apr", inflow: 5900, outflow: 5200, net: 700 },
-  { label: "May", inflow: 6200, outflow: 5100, net: 1100 },
-  { label: "Jun", inflow: 6400, outflow: 5300, net: 1100 },
-];
-
 export const CashFlow: React.FC = () => {
   const { items: accounts, fetchAccounts } = useAccountsApi();
   const { monthly, quarterly, fetchMonthlyReport, fetchQuarterlyReport } =
@@ -77,7 +68,6 @@ export const CashFlow: React.FC = () => {
   const chartData: ChartPoint[] = useMemo(() => {
     if (granularity === "monthly") {
       const rows = (monthly.data as MonthlyReportEntry[]) || [];
-      if (rows.length === 0) return sampleFlow;
       return rows.map((row) => ({
         label: new Date(row.period).toLocaleString("en-US", { month: "short" }),
         inflow: Number(row.income),
@@ -86,12 +76,6 @@ export const CashFlow: React.FC = () => {
       }));
     }
     const rows = (quarterly.data as QuarterlyReportEntry[]) || [];
-    if (rows.length === 0) {
-      return [
-        { label: "Q1", inflow: 16000, outflow: 13500, net: 2500 },
-        { label: "Q2", inflow: 17200, outflow: 14000, net: 3200 },
-      ];
-    }
     return rows.map((row) => ({
       label: `Q${row.quarter} ${row.year}`,
       inflow: Number(row.income),

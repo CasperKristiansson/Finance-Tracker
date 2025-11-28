@@ -175,16 +175,12 @@ export const Dashboard: React.FC = () => {
       (acc, item) => acc + Number(item.expense),
       0,
     );
-    if (!income && !expense) {
-      return [
-        { name: "Income", value: 60 },
-        { name: "Expenses", value: 40 },
-      ];
-    }
-    return [
-      { name: "Income", value: income },
-      { name: "Expenses", value: expense },
-    ];
+    return income || expense
+      ? [
+          { name: "Income", value: income },
+          { name: "Expenses", value: expense },
+        ]
+      : [];
   }, [yearly.data]);
 
   const savingsRateData = useMemo(() => {
