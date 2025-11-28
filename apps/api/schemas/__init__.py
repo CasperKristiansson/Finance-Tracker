@@ -42,6 +42,14 @@ from .imports import (
     ImportSessionRead,
     ImportSessionResponse,
 )
+from .investments import (
+    NordnetSnapshotCreate,
+    NordnetSnapshotListResponse,
+    NordnetSnapshotRead,
+    NordnetSnapshotResponse,
+    NordnetParseRequest,
+    NordnetParseResponse,
+)
 from .loan import (
     LoanCreateRequest,
     LoanEventListQuery,
@@ -116,6 +124,12 @@ __all__ = [
     "ImportCommitRow",
     "ImportCommitRequest",
     "ExampleTransaction",
+    "NordnetSnapshotCreate",
+    "NordnetSnapshotRead",
+    "NordnetSnapshotResponse",
+    "NordnetSnapshotListResponse",
+    "NordnetParseRequest",
+    "NordnetParseResponse",
     "LoanCreateRequest",
     "LoanUpdate",
     "LoanScheduleQuery",

@@ -4,6 +4,7 @@ import { AuthSaga } from "@/features/auth/authSaga";
 import { BudgetsSaga } from "@/features/budgets/budgetsSaga";
 import { CategoriesSaga } from "@/features/categories/categoriesSaga";
 import { ImportsSaga } from "@/features/imports/importsSaga";
+import { InvestmentsSaga } from "@/features/investments/investmentsSaga";
 import { LoansSaga } from "@/features/loans/loansSaga";
 import { ReportsSaga } from "@/features/reports/reportsSaga";
 import { SettingsSaga } from "@/features/settings/settingsSaga";
@@ -31,5 +32,6 @@ export function* RootSaga() {
     fork(ImportsSaga),
     fork(BudgetsSaga),
     fork(SettingsSaga),
+    fork(InvestmentsSaga),
   ]);
 }

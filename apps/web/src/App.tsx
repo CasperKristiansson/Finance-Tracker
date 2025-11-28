@@ -18,6 +18,7 @@ import { Cover } from "./pages/cover/cover.tsx";
 import { Dashboard } from "./pages/dashboard/dashboard.tsx";
 import { Goals } from "./pages/goals/goals.tsx";
 import { Imports } from "./pages/imports/imports.tsx";
+import { Investments } from "./pages/investments/investments.tsx";
 import { Login } from "./pages/login/login.tsx";
 import { Navigation } from "./pages/navigation/navigation.tsx";
 import { NotFound } from "./pages/notFound/notFound.tsx";
@@ -119,6 +120,14 @@ export const App: React.FC = () => {
           element={
             <NavigationWrapper title="Imports">
               <Imports />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.investments}
+          element={
+            <NavigationWrapper title="Investments">
+              <Investments />
             </NavigationWrapper>
           }
         />

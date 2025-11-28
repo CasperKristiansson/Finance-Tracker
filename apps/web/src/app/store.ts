@@ -6,6 +6,7 @@ import { AuthReducer } from "@/features/auth/authSlice";
 import { BudgetsReducer } from "@/features/budgets/budgetsSlice";
 import { CategoriesReducer } from "@/features/categories/categoriesSlice";
 import { ImportsReducer } from "@/features/imports/importsSlice";
+import { InvestmentsReducer } from "@/features/investments/investmentsSlice";
 import { LoansReducer } from "@/features/loans/loansSlice";
 import { ReportsReducer } from "@/features/reports/reportsSlice";
 import { SettingsReducer } from "@/features/settings/settingsSlice";
@@ -26,6 +27,7 @@ export const Store = configureStore({
     reports: ReportsReducer,
     loans: LoansReducer,
     imports: ImportsReducer,
+    investments: InvestmentsReducer,
     budgets: BudgetsReducer,
     settings: SettingsReducer,
   },

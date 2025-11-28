@@ -71,10 +71,10 @@
 
 ### Milestone 8 – Investments (Nordnet text uploads; sample data in `docs/data/nordnet/`)
 
-- [ ] Backend: endpoint to accept raw text + parsed payload from Nordnet monthly exports (see samples in `docs/data/nordnet/transactioner.md`, `docs/data/nordnet/portfolio-rapport.md`, `docs/data/nordnet/portfolio-repport-2.md`); persist dated snapshots; optional Bedrock assist to clean/classify rows.
-- [ ] Parsing: lightweight pre-parser (section split, date/number extraction, currency handling) before AI; handle Swedish formatting; allow manual edits.
-- [ ] UI flow: paste/upload multiple files in one session; show parsed holdings/value over time; chart portfolio value trend; holdings delta table. Inline edits and approvals before saving.
-- [ ] Bedrock usage: model selection for classification/cleanup; limit tokens; surface confidence; allow user override. Consider fallback to rules when AI unavailable.
+- [x] Backend: endpoint to accept raw text + parsed payload from Nordnet monthly exports (see samples in `docs/data/nordnet/transactioner.md`, `docs/data/nordnet/portfolio-rapport.md`, `docs/data/nordnet/portfolio-repport-2.md`); persist dated snapshots; optional Bedrock assist to clean/classify rows.
+- [x] Parsing: lightweight pre-parser (section split, date/number extraction, currency handling) before AI; handle Swedish formatting; allow manual edits.
+- [x] UI flow: paste/upload multiple files in one session; show parsed holdings/value over time; chart portfolio value trend; holdings delta table. Inline edits and approvals before saving.
+- [x] Bedrock usage: model selection for classification/cleanup; limit tokens; surface confidence; allow user override.
 - [ ] Loading/empty: skeletons and guided “paste your report” empty state.
 
 ### Milestone 8 – Subscriptions (label + insights, no auto-apply)

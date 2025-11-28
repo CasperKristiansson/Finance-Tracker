@@ -47,6 +47,54 @@ export enum LoanEventType {
   FEE = "fee",
 }
 
+export interface InvestmentSnapshot {
+  id: string;
+  provider: string;
+  report_type?: string | null;
+  account_name?: string | null;
+  snapshot_date: string;
+  portfolio_value?: string | number | null;
+  raw_text: string;
+  parsed_payload: Record<string, unknown>;
+  cleaned_payload?: Record<string, unknown> | null;
+  bedrock_metadata?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InvestmentSnapshotResponse {
+  snapshot: InvestmentSnapshot;
+}
+
+export interface InvestmentSnapshotListResponse {
+  snapshots: InvestmentSnapshot[];
+}
+
+export interface NordnetParseRequest {
+  raw_text: string;
+  manual_payload?: Record<string, unknown>;
+}
+
+export interface NordnetParseResponse {
+  report_type?: string | null;
+  snapshot_date?: string | null;
+  portfolio_value?: number | string | null;
+  parsed_payload: Record<string, unknown>;
+}
+
+export interface NordnetSnapshotCreateRequest {
+  raw_text: string;
+  parsed_payload?: Record<string, unknown>;
+  manual_payload?: Record<string, unknown>;
+  snapshot_date?: string;
+  account_name?: string | null;
+  report_type?: string | null;
+  portfolio_value?: number | string | null;
+  use_bedrock?: boolean;
+  bedrock_model_id?: string | null;
+  bedrock_max_tokens?: number | null;
+}
+
 export interface LoanRead {
   id: string;
   account_id: string;

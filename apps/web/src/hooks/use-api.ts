@@ -49,6 +49,18 @@ import {
   selectImportsLoading,
   selectImportsSaving,
 } from "@/features/imports/importsSlice";
+import {
+  FetchInvestmentSnapshots,
+  ParseNordnetExport,
+  SaveNordnetSnapshot,
+  ClearDraft as ClearInvestmentDraft,
+} from "@/features/investments/investmentsSaga";
+import {
+  selectInvestmentsState,
+  selectParsedResults,
+  selectParseLoading,
+  selectLastSavedClientId,
+} from "@/features/investments/investmentsSlice";
 import { FetchLoanEvents, FetchLoanSchedule } from "@/features/loans/loansSaga";
 import {
   selectLoanError,
@@ -121,6 +133,7 @@ import type {
   TransactionStatus,
   TransactionUpdateRequest,
   ThemePreference,
+  NordnetSnapshotCreateRequest,
 } from "@/types/api";
 
 export const useAccountsApi = () => {
@@ -268,6 +281,57 @@ export const useTransactionsApi = () => {
     updateTransaction,
     updateTransactionStatus,
     deleteTransaction,
+  };
+};
+
+export const useInvestmentsApi = () => {
+  const dispatch = useAppDispatch();
+  const state = useAppSelector(selectInvestmentsState);
+  const parseLoading = useAppSelector(selectParseLoading);
+  const parsedResults = useAppSelector(selectParsedResults);
+  const lastSavedClientId = useAppSelector(selectLastSavedClientId);
+
+  const fetchSnapshots = useCallback(
+    () => dispatch(FetchInvestmentSnapshots()),
+    [dispatch],
+  );
+
+  const parseExport = useCallback(
+    (
+      clientId: string,
+      raw_text: string,
+      manual_payload?: Record<string, unknown>,
+    ) =>
+      dispatch(
+        ParseNordnetExport({
+          clientId,
+          raw_text,
+          manual_payload,
+        }),
+      ),
+    [dispatch],
+  );
+
+  const saveSnapshot = useCallback(
+    (payload: NordnetSnapshotCreateRequest & { clientId?: string }) =>
+      dispatch(SaveNordnetSnapshot(payload)),
+    [dispatch],
+  );
+
+  const clearDraft = useCallback(
+    (clientId: string) => dispatch(ClearInvestmentDraft({ clientId })),
+    [dispatch],
+  );
+
+  return {
+    ...state,
+    parseLoading,
+    parsedResults,
+    lastSavedClientId,
+    fetchSnapshots,
+    parseExport,
+    saveSnapshot,
+    clearDraft,
   };
 };
 
