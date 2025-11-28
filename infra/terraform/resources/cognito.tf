@@ -1,3 +1,36 @@
+data "aws_ssm_parameter" "google_client_id" {
+  name = "/finance-tracker/${var.environment}/auth/google_client_id"
+}
+
+data "aws_ssm_parameter" "google_client_secret" {
+  name            = "/finance-tracker/${var.environment}/auth/google_client_secret"
+  with_decryption = true
+}
+
+locals {
+  google_client_id      = data.aws_ssm_parameter.google_client_id.value
+  google_client_secret  = data.aws_ssm_parameter.google_client_secret.value
+  google_enabled        = local.google_client_id != "" && local.google_client_secret != ""
+  cognito_domain_prefix = substr(
+    replace(lower("${local.name_prefix}-${var.account_id}"), "_", "-"),
+    0,
+    62,
+  )
+  cognito_custom_domain = "auth.finance-tracker.${var.root_domain_name}"
+  oauth_callback_urls = [
+    "https://${local.static_site_domain}/login",
+    "http://localhost:5173/login",
+  ]
+  oauth_logout_urls = [
+    "https://${local.static_site_domain}/login",
+    "http://localhost:5173/login",
+  ]
+  supported_identity_providers = compact([
+    "COGNITO",
+    local.google_enabled ? "Google" : "",
+  ])
+}
+
 resource "aws_cognito_user_pool" "finance_tracker" {
   name = "${local.name_prefix}-user-pool"
 
@@ -35,13 +68,20 @@ resource "aws_cognito_user_pool_client" "finance_tracker_web" {
   name         = "${local.name_prefix}-web-client"
   user_pool_id = aws_cognito_user_pool.finance_tracker.id
 
-  generate_secret               = false
-  prevent_user_existence_errors = "ENABLED"
-  supported_identity_providers  = ["COGNITO"]
-  enable_token_revocation       = true
-  refresh_token_validity        = 30
-  access_token_validity         = 60
-  id_token_validity             = 60
+  depends_on = [aws_cognito_identity_provider.google]
+
+  generate_secret                        = false
+  prevent_user_existence_errors          = "ENABLED"
+  supported_identity_providers           = local.supported_identity_providers
+  enable_token_revocation                = true
+  allowed_oauth_flows_user_pool_client   = true
+  allowed_oauth_flows                    = ["code"]
+  allowed_oauth_scopes                   = ["email", "openid", "profile"]
+  callback_urls                          = local.oauth_callback_urls
+  logout_urls                            = local.oauth_logout_urls
+  refresh_token_validity                 = 30
+  access_token_validity                  = 60
+  id_token_validity                      = 60
 
   token_validity_units {
     refresh_token = "days"
@@ -67,6 +107,81 @@ resource "aws_cognito_user_pool_client" "finance_tracker_web" {
     "name",
     "preferred_username",
   ]
+}
+
+resource "aws_acm_certificate" "cognito_custom_domain" {
+  provider          = aws.us_east_1
+  domain_name       = local.cognito_custom_domain
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(
+    local.common_tags,
+    { Name = "${local.name_prefix}-cognito-custom-domain-cert" },
+  )
+}
+
+resource "aws_route53_record" "cognito_custom_domain_validation" {
+  for_each = {
+    for option in aws_acm_certificate.cognito_custom_domain.domain_validation_options : option.domain_name => {
+      name   = option.resource_record_name
+      type   = option.resource_record_type
+      record = option.resource_record_value
+    }
+  }
+
+  name    = each.value.name
+  type    = each.value.type
+  zone_id = data.aws_route53_zone.root.zone_id
+  ttl     = 300
+  records = [each.value.record]
+}
+
+resource "aws_route53_record" "cognito_custom_domain" {
+  zone_id = data.aws_route53_zone.root.zone_id
+  name    = local.cognito_custom_domain
+  type    = "CNAME"
+  ttl     = 300
+  records = [aws_cognito_user_pool_domain.finance_tracker.cloudfront_distribution]
+
+  depends_on = [aws_cognito_user_pool_domain.finance_tracker]
+}
+
+resource "aws_acm_certificate_validation" "cognito_custom_domain" {
+  provider                = aws.us_east_1
+  certificate_arn         = aws_acm_certificate.cognito_custom_domain.arn
+  validation_record_fqdns = [for record in aws_route53_record.cognito_custom_domain_validation : record.fqdn]
+}
+
+resource "aws_cognito_user_pool_domain" "finance_tracker" {
+  domain          = local.cognito_custom_domain
+  certificate_arn = aws_acm_certificate.cognito_custom_domain.arn
+  user_pool_id    = aws_cognito_user_pool.finance_tracker.id
+
+  depends_on = [aws_acm_certificate_validation.cognito_custom_domain]
+}
+
+resource "aws_cognito_identity_provider" "google" {
+  count        = local.google_enabled ? 1 : 0
+  user_pool_id = aws_cognito_user_pool.finance_tracker.id
+  provider_name = "Google"
+  provider_type = "Google"
+
+  attribute_mapping = {
+    email    = "email"
+    username = "sub"
+    given_name = "given_name"
+    family_name = "family_name"
+  }
+
+  provider_details = {
+    client_id        = local.google_client_id
+    client_secret    = local.google_client_secret
+    authorize_scopes = "openid email profile"
+  }
 }
 
 resource "aws_cognito_user_group" "finance_tracker_users" {
@@ -120,6 +235,16 @@ resource "aws_ssm_parameter" "finance_tracker_user_pool_issuer" {
   tags = local.common_tags
 }
 
+resource "aws_ssm_parameter" "finance_tracker_user_pool_domain" {
+  name        = "/finance-tracker/${var.environment}/auth/user_pool_domain"
+  description = "Hosted UI domain for the Finance Tracker Cognito user pool."
+  type        = "String"
+  value       = aws_cognito_user_pool_domain.finance_tracker.domain
+  overwrite   = true
+
+  tags = local.common_tags
+}
+
 output "user_pool_id_parameter_name" {
   description = "SSM parameter storing the Cognito user pool identifier."
   value       = aws_ssm_parameter.finance_tracker_user_pool_id.name
@@ -138,4 +263,18 @@ output "user_group_parameter_name" {
 output "user_pool_issuer_parameter_name" {
   description = "SSM parameter storing the Cognito issuer URL."
   value       = aws_ssm_parameter.finance_tracker_user_pool_issuer.name
+}
+
+output "user_pool_domain_parameter_name" {
+  description = "SSM parameter storing the Cognito hosted UI domain."
+  value       = aws_ssm_parameter.finance_tracker_user_pool_domain.name
+}
+
+output "oauth_settings" {
+  description = "OAuth configuration for the Cognito hosted UI."
+  value = {
+    domain        = aws_cognito_user_pool_domain.finance_tracker.domain
+    callback_urls = local.oauth_callback_urls
+    logout_urls   = local.oauth_logout_urls
+  }
 }

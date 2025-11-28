@@ -5,15 +5,15 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Iterable, List, Optional
+from typing import Any, Iterable, List, Optional, cast
 from uuid import UUID
 
-from sqlalchemy import desc
+from sqlalchemy import desc, func, or_
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from ..models import LoanEvent, Transaction, TransactionImportBatch, TransactionLeg
-from ..shared import LoanEventType, coerce_decimal, ensure_balanced_legs
+from ..shared import LoanEventType, TransactionStatus, coerce_decimal, ensure_balanced_legs
 
 
 class TransactionRepository:
@@ -31,6 +31,14 @@ class TransactionRepository:
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         account_ids: Optional[Iterable[UUID]] = None,
+        category_ids: Optional[Iterable[UUID]] = None,
+        subscription_ids: Optional[Iterable[UUID]] = None,
+        status: Optional[Iterable[TransactionStatus]] = None,
+        min_amount: Optional[Decimal] = None,
+        max_amount: Optional[Decimal] = None,
+        search: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> List[Transaction]:
         statement = (
             select(Transaction)
@@ -46,6 +54,44 @@ class TransactionRepository:
             statement = statement.join(TransactionLeg).where(
                 TransactionLeg.account_id.in_(list(account_ids))  # type: ignore[attr-defined]
             )
+        if category_ids:
+            statement = statement.where(cast(Any, Transaction.category_id).in_(list(category_ids)))
+        if subscription_ids:
+            statement = statement.where(
+                cast(Any, Transaction.subscription_id).in_(list(subscription_ids))
+            )
+        if status:
+            statement = statement.where(cast(Any, Transaction.status).in_(list(status)))
+        if search:
+            pattern = f"%{search}%"
+            statement = statement.where(
+                or_(
+                    cast(Any, Transaction.description).ilike(pattern),
+                    cast(Any, Transaction.notes).ilike(pattern),
+                    cast(Any, Transaction.external_id).ilike(pattern),
+                )
+            )
+
+        if min_amount is not None or max_amount is not None:
+            leg_amounts = (
+                select(
+                    TransactionLeg.transaction_id,
+                    func.max(func.abs(TransactionLeg.amount)).label("max_abs_amount"),
+                )
+                .group_by(cast(Any, TransactionLeg.transaction_id))
+                .subquery()
+            )
+            statement = statement.join(
+                leg_amounts, cast(Any, Transaction.id == leg_amounts.c.transaction_id)
+            )
+            if min_amount is not None:
+                statement = statement.where(leg_amounts.c.max_abs_amount >= min_amount)
+            if max_amount is not None:
+                statement = statement.where(leg_amounts.c.max_abs_amount <= max_amount)
+        if limit is not None:
+            statement = statement.limit(limit)
+        if offset:
+            statement = statement.offset(offset)
 
         result = self.session.exec(statement)
         transactions = list(result.unique().all())
@@ -90,6 +136,52 @@ class TransactionRepository:
         self.session.refresh(transaction)
         return transaction
 
+    def update(
+        self,
+        transaction: Transaction,
+        *,
+        description: Optional[str] = None,
+        notes: Optional[str] = None,
+        occurred_at: Optional[datetime] = None,
+        posted_at: Optional[datetime] = None,
+        category_id: Optional[UUID] = None,
+        status: Optional[TransactionStatus] = None,
+        subscription_id: Optional[UUID] = None,
+        update_subscription: bool = False,
+    ) -> Transaction:
+        if description is not None:
+            transaction.description = description
+        if notes is not None:
+            transaction.notes = notes
+        if occurred_at is not None:
+            transaction.occurred_at = occurred_at
+        if posted_at is not None:
+            transaction.posted_at = posted_at
+        if category_id is not None:
+            transaction.category_id = category_id
+        if status is not None:
+            transaction.status = status
+        if update_subscription:
+            transaction.subscription_id = subscription_id
+
+        self.session.add(transaction)
+        self.session.commit()
+        self.session.refresh(transaction)
+        return transaction
+
+    def set_subscription(
+        self, transaction: Transaction, subscription_id: Optional[UUID]
+    ) -> Transaction:
+        transaction.subscription_id = subscription_id
+        self.session.add(transaction)
+        self.session.commit()
+        self.session.refresh(transaction)
+        return transaction
+
+    def delete(self, transaction: Transaction) -> None:
+        self.session.delete(transaction)
+        self.session.commit()
+
     def add_leg(self, transaction: Transaction, leg: TransactionLeg) -> TransactionLeg:
         leg.transaction_id = transaction.id
         self.session.add(leg)
@@ -116,6 +208,18 @@ class TransactionRepository:
         legs = self.session.exec(statement).all()
         total = sum(coerce_decimal(leg.amount) for leg in legs)
         return coerce_decimal(total)
+
+    def calculate_account_balances(self, account_ids: Iterable[UUID]) -> dict[UUID, Decimal]:
+        ids = list(account_ids)
+        if not ids:
+            return {}
+        statement = (
+            select(TransactionLeg.account_id, func.sum(TransactionLeg.amount))
+            .where(cast(Any, TransactionLeg.account_id).in_(ids))
+            .group_by(cast(Any, TransactionLeg.account_id))
+        )
+        result = self.session.exec(statement).all()
+        return {row[0]: coerce_decimal(row[1]) for row in result}
 
     def list_loan_events(self, loan_id: UUID) -> List[LoanEvent]:
         statement = (

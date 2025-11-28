@@ -12,3 +12,7 @@ infra/terraform/*.tfvars
 infra/layers/layer-backend.zip
 *.serverless
 docs/data
+apps/web/build
+apps/web/dist
+apps/web/.env.production
+apps/web/.env.local

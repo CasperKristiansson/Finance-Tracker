@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from ..shared import TransactionType
+from ..shared import TransactionStatus, TransactionType
 
 
 class TransactionLegCreate(BaseModel):
@@ -33,12 +33,14 @@ class TransactionCreate(BaseModel):
     """Transaction creation payload."""
 
     category_id: Optional[UUID] = None
+    subscription_id: Optional[UUID] = None
     description: Optional[str] = Field(default=None, max_length=250)
     notes: Optional[str] = None
     external_id: Optional[str] = Field(default=None, max_length=180)
     occurred_at: datetime
     posted_at: Optional[datetime] = None
     transaction_type: TransactionType = TransactionType.TRANSFER
+    status: TransactionStatus = TransactionStatus.RECORDED
     legs: List[TransactionLegCreate]
 
     @model_validator(mode="after")
@@ -57,6 +59,7 @@ class TransactionRead(BaseModel):
 
     id: UUID
     category_id: Optional[UUID] = None
+    subscription_id: Optional[UUID] = None
     transaction_type: TransactionType
     description: Optional[str] = None
     notes: Optional[str] = None
@@ -65,6 +68,7 @@ class TransactionRead(BaseModel):
     posted_at: datetime
     created_at: datetime
     updated_at: datetime
+    status: TransactionStatus
     legs: List[TransactionLegRead]
 
 
@@ -74,6 +78,14 @@ class TransactionListQuery(BaseModel):
     start_date: Optional[datetime] = Field(default=None, alias="start_date")
     end_date: Optional[datetime] = Field(default=None, alias="end_date")
     account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
+    category_ids: Optional[List[UUID]] = Field(default=None, alias="category_ids")
+    subscription_ids: Optional[List[UUID]] = Field(default=None, alias="subscription_ids")
+    status: Optional[List[TransactionStatus]] = None
+    min_amount: Optional[Decimal] = Field(default=None, alias="min_amount")
+    max_amount: Optional[Decimal] = Field(default=None, alias="max_amount")
+    search: Optional[str] = None
+    limit: int = Field(default=50, ge=1, le=200)
+    offset: int = Field(default=0, ge=0)
 
     @model_validator(mode="before")
     @classmethod
@@ -98,6 +110,67 @@ class TransactionListQuery(BaseModel):
                             cls,
                         ) from exc
                 values["account_ids"] = converted
+
+        if isinstance(values, dict) and "category_ids" in values:
+            category_ids = values.get("category_ids")
+            if isinstance(category_ids, str):
+                parts = [part.strip() for part in category_ids.split(",") if part.strip()]
+                converted_categories: List[UUID] = []
+                for part in parts:
+                    try:
+                        converted_categories.append(UUID(part))
+                    except ValueError as exc:  # pragma: no cover - validation
+                        raise ValidationError(
+                            [
+                                {
+                                    "loc": ("category_ids",),
+                                    "msg": "Invalid UUID in category_ids",
+                                    "type": "value_error",
+                                }
+                            ],
+                            cls,
+                        ) from exc
+                values["category_ids"] = converted_categories
+
+        if isinstance(values, dict) and "subscription_ids" in values:
+            subscription_ids = values.get("subscription_ids")
+            if isinstance(subscription_ids, str):
+                parts = [part.strip() for part in subscription_ids.split(",") if part.strip()]
+                converted_subscriptions: List[UUID] = []
+                for part in parts:
+                    try:
+                        converted_subscriptions.append(UUID(part))
+                    except ValueError as exc:  # pragma: no cover - validation
+                        raise ValidationError(
+                            [
+                                {
+                                    "loc": ("subscription_ids",),
+                                    "msg": "Invalid UUID in subscription_ids",
+                                    "type": "value_error",
+                                }
+                            ],
+                            cls,
+                        ) from exc
+                values["subscription_ids"] = converted_subscriptions
+
+        if isinstance(values, dict) and "status" in values and isinstance(values["status"], str):
+            statuses = [part.strip() for part in str(values["status"]).split(",") if part.strip()]
+            converted_status: List[TransactionStatus] = []
+            for status in statuses:
+                try:
+                    converted_status.append(TransactionStatus(status))
+                except ValueError as exc:  # pragma: no cover - validation
+                    raise ValidationError(
+                        [
+                            {
+                                "loc": ("status",),
+                                "msg": "Invalid status provided",
+                                "type": "value_error",
+                            }
+                        ],
+                        cls,
+                    ) from exc
+            values["status"] = converted_status
         return values
 
 
@@ -105,6 +178,29 @@ class TransactionListResponse(BaseModel):
     """Response payload for transaction listings."""
 
     transactions: List[TransactionRead]
+    running_balances: dict[UUID, Decimal]
+
+
+class TransactionUpdate(BaseModel):
+    """Partial update payload for transactions."""
+
+    description: Optional[str] = Field(default=None, max_length=250)
+    notes: Optional[str] = None
+    occurred_at: Optional[datetime] = None
+    posted_at: Optional[datetime] = None
+    category_id: Optional[UUID] = None
+    status: Optional[TransactionStatus] = None
+    subscription_id: Optional[UUID] = None
+
+    @model_validator(mode="after")
+    def ensure_updates_present(self) -> "TransactionUpdate":
+        if not self.model_fields_set:
+            raise ValueError("At least one field must be provided for update")
+        return self
+
+
+class TransactionPathParams(BaseModel):
+    transaction_id: UUID
 
 
 __all__ = [

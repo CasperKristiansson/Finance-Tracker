@@ -17,6 +17,7 @@ provider:
     DB_NAME: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/name}
     DB_USER: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/user}
     DB_PASSWORD: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/password}
+    AWS_BEARER_TOKEN_BEDROCK: ${aws:ssm:/finance-tracker/${self:provider.stage}/bedrock/bearer_token}
   iam:
     role:
       statements:
@@ -25,6 +26,11 @@ provider:
             - ssm:GetParameter
             - ssm:GetParameters
           Resource: arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/finance-tracker/${self:provider.stage}/db/*
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+            - ssm:GetParameters
+          Resource: arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/finance-tracker/${self:provider.stage}/bedrock/*
   domain:
     name: api.finance-tracker.casperkristiansson.com
     apiType: HTTP
@@ -42,10 +48,30 @@ provider:
         audience:
           - ${aws:ssm:/finance-tracker/${self:provider.stage}/auth/user_pool_client_id}
 
+package:
+  patterns:
+    - ../../apps/api/**
+    - "!../../apps/api/**/__pycache__/**"
+    - "!../../apps/api/**/*.pyc"
+    - "!node_modules/**"
+    - "!package-lock.json"
+    - "!venv/**"
+
 custom:
   backendLayerArn: ${cf:finance-tracker-layer-service-${self:provider.stage}.BackendDepsLambdaLayerQualifiedArn}
 
 functions:
+  warmDatabase:
+    handler: apps/api/handlers/warmup.warm_database
+    timeout: 12
+    memorySize: 256
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /warmup
+          method: GET
+
   listAccounts:
     handler: apps/api/handlers/accounts.list_accounts
     timeout: 29
@@ -80,6 +106,102 @@ functions:
       - httpApi:
           path: /accounts/{accountId}
           method: PATCH
+          authorizer: cognitoJwt
+
+  reconcileAccount:
+    handler: apps/api/handlers/accounts.reconcile_account
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /accounts/{accountId}/reconcile
+          method: POST
+          authorizer: cognitoJwt
+
+  listImports:
+    handler: apps/api/handlers/imports.list_import_batches
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /imports
+          method: GET
+          authorizer: cognitoJwt
+
+  createImportBatch:
+    handler: apps/api/handlers/imports.create_import_batch
+    timeout: 60
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /imports
+          method: POST
+          authorizer: cognitoJwt
+
+  getImportSession:
+    handler: apps/api/handlers/imports.get_import_session
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /imports/{batch_id}
+          method: GET
+          authorizer: cognitoJwt
+
+  appendImportFiles:
+    handler: apps/api/handlers/imports.append_import_files
+    timeout: 60
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /imports/{batch_id}/files
+          method: POST
+          authorizer: cognitoJwt
+
+  commitImportSession:
+    handler: apps/api/handlers/imports.commit_import_session
+    timeout: 60
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /imports/{batch_id}/commit
+          method: POST
+          authorizer: cognitoJwt
+
+  getSettings:
+    handler: apps/api/handlers/settings.get_settings
+    timeout: 10
+    memorySize: 256
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /settings
+          method: GET
+          authorizer: cognitoJwt
+
+  saveSettings:
+    handler: apps/api/handlers/settings.save_settings
+    timeout: 10
+    memorySize: 256
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /settings
+          method: PUT
           authorizer: cognitoJwt
 
   listCategories:
@@ -118,6 +240,126 @@ functions:
           method: PATCH
           authorizer: cognitoJwt
 
+  mergeCategories:
+    handler: apps/api/handlers/categories.merge_categories
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /categories/merge
+          method: POST
+          authorizer: cognitoJwt
+
+  listBudgets:
+    handler: apps/api/handlers/budgets.list_budgets
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /budgets
+          method: GET
+          authorizer: cognitoJwt
+
+  createBudget:
+    handler: apps/api/handlers/budgets.create_budget
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /budgets
+          method: POST
+          authorizer: cognitoJwt
+
+  updateBudget:
+    handler: apps/api/handlers/budgets.update_budget
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /budgets/{budgetId}
+          method: PATCH
+          authorizer: cognitoJwt
+
+  deleteBudget:
+    handler: apps/api/handlers/budgets.delete_budget
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /budgets/{budgetId}
+          method: DELETE
+          authorizer: cognitoJwt
+
+  listBudgetProgress:
+    handler: apps/api/handlers/budgets.list_budget_progress
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /budgets/progress
+          method: GET
+          authorizer: cognitoJwt
+
+  listGoals:
+    handler: apps/api/handlers/goals.list_goals
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /goals
+          method: GET
+          authorizer: cognitoJwt
+
+  createGoal:
+    handler: apps/api/handlers/goals.create_goal
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /goals
+          method: POST
+          authorizer: cognitoJwt
+
+  updateGoal:
+    handler: apps/api/handlers/goals.update_goal
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /goals/{goalId}
+          method: PATCH
+          authorizer: cognitoJwt
+
+  deleteGoal:
+    handler: apps/api/handlers/goals.delete_goal
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /goals/{goalId}
+          method: DELETE
+          authorizer: cognitoJwt
+
   listTransactions:
     handler: apps/api/handlers/transactions.list_transactions
     timeout: 29
@@ -140,6 +382,78 @@ functions:
       - httpApi:
           path: /transactions
           method: POST
+          authorizer: cognitoJwt
+
+  listSubscriptions:
+    handler: apps/api/handlers/subscriptions.list_subscriptions
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /subscriptions
+          method: GET
+          authorizer: cognitoJwt
+
+  createSubscription:
+    handler: apps/api/handlers/subscriptions.create_subscription
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /subscriptions
+          method: POST
+          authorizer: cognitoJwt
+
+  updateSubscription:
+    handler: apps/api/handlers/subscriptions.update_subscription
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /subscriptions/{subscriptionId}
+          method: PATCH
+          authorizer: cognitoJwt
+
+  attachSubscription:
+    handler: apps/api/handlers/subscriptions.attach_subscription
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /transactions/{transactionId}/subscription
+          method: PUT
+          authorizer: cognitoJwt
+
+  detachSubscription:
+    handler: apps/api/handlers/subscriptions.detach_subscription
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /transactions/{transactionId}/subscription
+          method: DELETE
+          authorizer: cognitoJwt
+
+  listSubscriptionSummaries:
+    handler: apps/api/handlers/subscriptions.list_subscription_summaries
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /subscriptions/summary
+          method: GET
           authorizer: cognitoJwt
 
   createLoan:
@@ -214,6 +528,30 @@ functions:
           method: GET
           authorizer: cognitoJwt
 
+  quarterlyReport:
+    handler: apps/api/handlers/reporting.quarterly_report
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/quarterly
+          method: GET
+          authorizer: cognitoJwt
+
+  dateRangeReport:
+    handler: apps/api/handlers/reporting.date_range_report
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/custom
+          method: GET
+          authorizer: cognitoJwt
+
   totalReport:
     handler: apps/api/handlers/reporting.total_report
     timeout: 29
@@ -224,4 +562,124 @@ functions:
       - httpApi:
           path: /reports/total
           method: GET
+          authorizer: cognitoJwt
+
+  netWorthHistory:
+    handler: apps/api/handlers/reporting.net_worth_history
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/net-worth
+          method: GET
+          authorizer: cognitoJwt
+
+  cashflowForecast:
+    handler: apps/api/handlers/reporting.cashflow_forecast
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/forecast/cashflow
+          method: GET
+          authorizer: cognitoJwt
+
+  netWorthProjection:
+    handler: apps/api/handlers/reporting.net_worth_projection
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/forecast/net-worth
+          method: GET
+          authorizer: cognitoJwt
+
+  exportReport:
+    handler: apps/api/handlers/reporting.export_report
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/export
+          method: POST
+          authorizer: cognitoJwt
+
+  createNordnetSnapshot:
+    handler: apps/api/handlers/investments.create_nordnet_snapshot
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /investments/nordnet/snapshots
+          method: POST
+          authorizer: cognitoJwt
+
+  listNordnetSnapshots:
+    handler: apps/api/handlers/investments.list_nordnet_snapshots
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /investments/nordnet/snapshots
+          method: GET
+          authorizer: cognitoJwt
+
+  parseNordnetExport:
+    handler: apps/api/handlers/investments.parse_nordnet_export
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /investments/nordnet/parse
+          method: POST
+          authorizer: cognitoJwt
+
+  listInvestmentTransactions:
+    handler: apps/api/handlers/investments.list_investment_transactions
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /investments/transactions
+          method: GET
+          authorizer: cognitoJwt
+
+  investmentMetrics:
+    handler: apps/api/handlers/investments.investment_metrics
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /investments/metrics
+          method: GET
+          authorizer: cognitoJwt
+
+  syncInvestmentLedger:
+    handler: apps/api/handlers/investments.sync_investment_ledger
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /investments/sync-ledger
+          method: POST
           authorizer: cognitoJwt

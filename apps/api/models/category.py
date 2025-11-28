@@ -28,6 +28,7 @@ class Category(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
     name: str = Field(sa_column=Column(String(120), unique=True, nullable=False))
     category_type: CategoryType = Field(sa_column=Column(SAEnum(CategoryType), nullable=False))
     color_hex: str | None = Field(default=None, sa_column=Column(String(7), nullable=True))
+    icon: str | None = Field(default=None, sa_column=Column(String(16), nullable=True))
     is_archived: bool = Field(
         default=False,
         sa_column=Column(Boolean, nullable=False, server_default="false"),

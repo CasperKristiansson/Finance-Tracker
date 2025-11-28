@@ -11,6 +11,7 @@ from sqlmodel import Session, SQLModel
 
 from apps.api.handlers import (
     monthly_report,
+    net_worth_history,
     reset_reporting_handler_state,
     total_report,
     yearly_report,
@@ -154,3 +155,25 @@ def test_total_report_respects_filters():
     assert response["statusCode"] == 200
     body = _json_body(response)
     assert Decimal(body["net"]) == Decimal("300.00")
+
+
+def test_net_worth_history_returns_running_balance():
+    engine = get_engine()
+    with Session(engine) as session:
+        tracked = _create_account(session)
+        balancing = _create_account(session)
+    _seed_transactions(engine, tracked, balancing)
+
+    params = {
+        "queryStringParameters": {
+            "account_ids": str(tracked.id),
+        }
+    }
+    response = net_worth_history(params, None)
+    assert response["statusCode"] == 200
+    body = _json_body(response)
+    points = body["points"]
+    assert len(points) == 2
+    assert points[0]["period"] == "2024-01-10"
+    assert Decimal(points[0]["net_worth"]) == Decimal("500.00")
+    assert Decimal(points[1]["net_worth"]) == Decimal("300.00")

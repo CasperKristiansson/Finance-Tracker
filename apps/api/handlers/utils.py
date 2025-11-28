@@ -14,6 +14,8 @@ from sqlalchemy.pool import StaticPool
 from ..shared import configure_engine, configure_engine_from_env, get_engine
 
 _JSON_HEADERS = {"Content-Type": "application/json"}
+_DEFAULT_CONNECT_TIMEOUT = 10
+_CONNECT_TIMEOUT_ENV = "DB_CONNECT_TIMEOUT_SECONDS"
 
 
 def json_response(status_code: int, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -87,6 +89,16 @@ __all__ = [
 _ENGINE_INITIALIZED = False
 
 
+def _read_connect_timeout() -> int:
+    try:
+        raw = os.environ.get(_CONNECT_TIMEOUT_ENV)
+        if not raw:
+            return _DEFAULT_CONNECT_TIMEOUT
+        return max(3, int(raw))
+    except ValueError:
+        return _DEFAULT_CONNECT_TIMEOUT
+
+
 def reset_engine_state() -> None:
     """Reset cached engine initialization state (primarily for tests)."""
 
@@ -109,12 +121,15 @@ def ensure_engine() -> None:
         pass
 
     database_url = os.environ.get("DATABASE_URL")
+    connect_timeout = _read_connect_timeout()
     if database_url:
         kwargs: Dict[str, Any] = {}
         if database_url.startswith("sqlite"):
             kwargs["connect_args"] = {"check_same_thread": False}
             kwargs["poolclass"] = StaticPool
+        else:
+            kwargs["connect_args"] = {"connect_timeout": connect_timeout}
         configure_engine(database_url, **kwargs)
     else:
-        configure_engine_from_env()
+        configure_engine_from_env(connect_args={"connect_timeout": connect_timeout})
     _ENGINE_INITIALIZED = True

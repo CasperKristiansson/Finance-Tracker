@@ -1,13 +1,3 @@
-output "bastion_public_dns" {
-  description = "Public DNS name for the bastion host when enabled."
-  value       = module.resources.bastion_public_dns
-}
-
-output "bastion_instance_id" {
-  description = "Instance ID of the bastion host when enabled."
-  value       = module.resources.bastion_instance_id
-}
-
 output "lambda_security_group_id" {
   description = "Security group assigned to Lambda functions running inside the VPC."
   value       = module.resources.lambda_sg
@@ -49,6 +39,16 @@ output "auth_parameter_paths" {
     user_pool_client = module.resources.user_pool_client_id_parameter_name
     user_group       = module.resources.user_group_parameter_name
     user_pool_issuer = module.resources.user_pool_issuer_parameter_name
+    user_pool_domain = module.resources.user_pool_domain_parameter_name
+  }
+}
+
+output "auth_oauth_settings" {
+  description = "Cognito hosted UI domain and OAuth redirect settings."
+  value = {
+    domain        = module.resources.oauth_settings.domain
+    callback_urls = module.resources.oauth_settings.callback_urls
+    logout_urls   = module.resources.oauth_settings.logout_urls
   }
 }
 

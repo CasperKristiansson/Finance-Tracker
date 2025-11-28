@@ -42,6 +42,13 @@ class TransactionType(StrEnum):
     INVESTMENT_EVENT = "investment_event"
 
 
+class TransactionStatus(StrEnum):
+    RECORDED = "recorded"
+    IMPORTED = "imported"
+    REVIEWED = "reviewed"
+    FLAGGED = "flagged"
+
+
 class SystemAccountCode(StrEnum):
     RETAINED_EARNINGS = "retained_earnings"
     INTEREST_EXPENSE = "interest_expense"
@@ -62,6 +69,18 @@ class LoanEventType(StrEnum):
     FEE = "fee"
 
 
+class BudgetPeriod(StrEnum):
+    MONTHLY = "monthly"
+    QUARTERLY = "quarterly"
+    YEARLY = "yearly"
+
+
+class BankImportType(StrEnum):
+    CIRCLE_K_MASTERCARD = "circle_k_mastercard"
+    SEB = "seb"
+    SWEDBANK = "swedbank"
+
+
 __all__ = [
     "StrEnum",
     "CreatedSource",
@@ -71,4 +90,6 @@ __all__ = [
     "SystemAccountCode",
     "InterestCompound",
     "LoanEventType",
+    "BudgetPeriod",
+    "BankImportType",
 ]

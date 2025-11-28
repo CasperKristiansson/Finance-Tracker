@@ -1,20 +1,31 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Iterator
 from uuid import UUID
 
 import pytest
 from sqlalchemy.pool import StaticPool
-from sqlmodel import SQLModel
+from sqlmodel import SQLModel, select
 
 from apps.api.handlers import (
     create_category,
     list_categories,
+    merge_categories,
     reset_category_handler_state,
     update_category,
 )
-from apps.api.shared import configure_engine, get_engine
+from apps.api.models import Account, Budget, Category, Transaction, TransactionLeg
+from apps.api.shared import (
+    AccountType,
+    BudgetPeriod,
+    TransactionStatus,
+    TransactionType,
+    configure_engine,
+    get_engine,
+    session_scope,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -50,6 +61,8 @@ def test_create_category_and_list():
             {
                 "name": "Groceries",
                 "category_type": "expense",
+                "color_hex": "#00ff00",
+                "icon": "🛒",
             }
         ),
         "isBase64Encoded": False,
@@ -76,7 +89,7 @@ def test_update_category():
 
     update_response = update_category(
         {
-            "body": json.dumps({"name": "Utilities", "is_archived": True}),
+            "body": json.dumps({"name": "Utilities", "is_archived": True, "icon": "💡"}),
             "isBase64Encoded": False,
             "pathParameters": {"category_id": category_id},
         },
@@ -86,6 +99,30 @@ def test_update_category():
     updated = _json_body(update_response)
     assert updated["name"] == "Utilities"
     assert updated["is_archived"] is True
+    assert updated["icon"] == "💡"
+
+
+def test_update_category_icon_only():
+    create_response = create_category(
+        {
+            "body": json.dumps({"name": "Travel", "category_type": "expense"}),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    category_id = _json_body(create_response)["id"]
+
+    update_response = update_category(
+        {
+            "body": json.dumps({"icon": "✈️"}),
+            "isBase64Encoded": False,
+            "pathParameters": {"category_id": category_id},
+        },
+        None,
+    )
+    assert update_response["statusCode"] == 200
+    updated = _json_body(update_response)
+    assert updated["icon"] == "✈️"
 
 
 def test_create_category_validation_error():
@@ -103,3 +140,76 @@ def test_update_category_not_found():
         None,
     )
     assert response["statusCode"] == 404
+
+
+def test_merge_categories_moves_transactions_and_budgets():
+    # Create source and target categories
+    src_resp = create_category(
+        {
+            "body": json.dumps({"name": "Old", "category_type": "expense"}),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    tgt_resp = create_category(
+        {
+            "body": json.dumps({"name": "New", "category_type": "expense"}),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    source_id = UUID(_json_body(src_resp)["id"])
+    target_id = UUID(_json_body(tgt_resp)["id"])
+
+    with session_scope() as session:
+        account = Account(account_type=AccountType.NORMAL, is_active=True)
+        session.add(account)
+        session.commit()
+        session.refresh(account)
+
+        txn = Transaction(
+            category_id=source_id,
+            transaction_type=TransactionType.EXPENSE,
+            description="Coffee",
+            occurred_at=datetime.now(timezone.utc),
+            posted_at=datetime.now(timezone.utc),
+            status=TransactionStatus.RECORDED,
+        )
+        txn.legs = [
+            TransactionLeg(account_id=account.id, amount=-50),
+        ]
+        session.add(txn)
+        session.flush()
+        txn_id = txn.id
+        session.add(Budget(category_id=source_id, period=BudgetPeriod.MONTHLY, amount=100))
+        session.add(Budget(category_id=target_id, period=BudgetPeriod.MONTHLY, amount=20))
+        session.commit()
+
+    merge_response = merge_categories(
+        {
+            "body": json.dumps(
+                {
+                    "source_category_id": str(source_id),
+                    "target_category_id": str(target_id),
+                    "rename_target_to": "Consolidated",
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert merge_response["statusCode"] == 200
+
+    with session_scope() as session:
+        moved_txn = session.get(Transaction, txn_id)
+        assert moved_txn is not None
+        assert moved_txn.category_id == target_id
+
+        budgets = list(session.exec(select(Budget).where(Budget.category_id == target_id)))
+        assert len(budgets) == 1
+        assert float(budgets[0].amount) == 120.0
+
+        source = session.get(Category, source_id)
+        target = session.get(Category, target_id)
+        assert source is not None and source.is_archived
+        assert target is not None and target.name == "Consolidated"

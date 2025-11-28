@@ -13,6 +13,7 @@ from ..schemas import (
     CategoryRead,
     CategoryUpdate,
     ListCategoriesQuery,
+    MergeCategoriesRequest,
 )
 from ..services import CategoryService
 from ..shared import session_scope
@@ -65,6 +66,7 @@ def create_category(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         name=data.name,
         category_type=data.category_type,
         color_hex=data.color_hex,
+        icon=data.icon,
     )
 
     with session_scope() as session:
@@ -93,6 +95,8 @@ def update_category(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         updates["category_type"] = data.category_type
     if data.color_hex is not None:
         updates["color_hex"] = data.color_hex
+    if data.icon is not None:
+        updates["icon"] = data.icon
     if data.is_archived is not None:
         updates["is_archived"] = data.is_archived
 
@@ -106,9 +110,35 @@ def update_category(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     return json_response(200, response)
 
 
+def merge_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    payload = parse_body(event)
+
+    try:
+        data = MergeCategoriesRequest.model_validate(payload)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope() as session:
+        service = CategoryService(session)
+        try:
+            merged = service.merge_categories(
+                data.source_category_id,
+                data.target_category_id,
+                rename_target_to=data.rename_target_to,
+            )
+        except LookupError:
+            return json_response(404, {"error": "Category not found"})
+        except ValueError as exc:
+            return json_response(400, {"error": str(exc)})
+        response = _category_to_schema(merged).model_dump(mode="json")
+    return json_response(200, response)
+
+
 __all__ = [
     "list_categories",
     "create_category",
     "update_category",
+    "merge_categories",
     "reset_handler_state",
 ]

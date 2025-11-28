@@ -30,3 +30,22 @@ def session() -> Iterator[Session]:
 
     SQLModel.metadata.drop_all(engine)
     engine.dispose()
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Skip integration tests unless they are explicitly targeted."""
+    integration_dir = Path(__file__).parent / "integration"
+    explicit_targets = {Path(arg).resolve() for arg in config.invocation_params.args}
+    run_integration = any(
+        target == integration_dir or integration_dir in target.parents
+        for target in explicit_targets
+    )
+    if run_integration:
+        return
+
+    skip_integration = pytest.mark.skip(
+        reason="Integration tests run only when explicitly targeted."
+    )
+    for item in items:
+        if integration_dir in Path(item.fspath).parents:
+            item.add_marker(skip_integration)

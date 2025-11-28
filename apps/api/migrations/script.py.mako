@@ -1,6 +1,6 @@
 """${message}"""
 
-revision = ${repr(revision)}
+revision = ${repr(up_revision)}
 down_revision = ${repr(down_revision)}
 branch_labels = ${repr(branch_labels)}
 depends_on = ${repr(depends_on)}
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 def upgrade() -> None:
-    pass
+    ${upgrades if upgrades else "pass"}
 
 
 def downgrade() -> None:
-    pass
+    ${downgrades if downgrades else "pass"}

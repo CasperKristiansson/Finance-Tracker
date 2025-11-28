@@ -3,8 +3,8 @@ variable "account_id" {
   type        = string
 }
 
-variable "enable_bastion" {
-  description = "Set to true to provision the bastion host for direct Aurora access."
+variable "enable_public_db_access" {
+  description = "Set to true to expose the Aurora cluster publicly for local development."
   type        = bool
   default     = false
 }

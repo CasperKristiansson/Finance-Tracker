@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from decimal import Decimal
+from uuid import UUID
 
 import pytest
 from sqlmodel import select
 
-from apps.api.models import Account, Loan, Transaction, TransactionLeg
+from apps.api.models import Account, Loan, Subscription, Transaction, TransactionLeg
 from apps.api.repositories.transaction import TransactionRepository
 from apps.api.services.transaction import TransactionService
 from apps.api.shared import (
@@ -94,6 +95,28 @@ def test_repository_rejects_unbalanced_transaction(repo, session):
         repo.create(tx, legs)
 
 
+def test_set_and_clear_subscription(repo, session):
+    asset = _create_account(session)
+    counter = _create_account(session)
+    subscription = Subscription(name="Gym", matcher_text="GymCo")
+    session.add(subscription)
+    session.commit()
+    session.refresh(subscription)
+
+    tx = _build_transaction("Membership")
+    legs = [
+        TransactionLeg(account_id=asset.id, amount=Decimal("-30.00")),
+        TransactionLeg(account_id=counter.id, amount=Decimal("30.00")),
+    ]
+
+    created = repo.create(tx, legs)
+    updated = repo.set_subscription(created, subscription.id)
+    assert updated.subscription_id == subscription.id
+
+    cleared = repo.set_subscription(updated, None)
+    assert cleared.subscription_id is None
+
+
 def test_service_rejects_single_leg_transaction(session):
     service = TransactionService(session)
     asset = _create_account(session)
@@ -113,6 +136,22 @@ def test_service_rejects_transfer_without_distinct_accounts(session):
     legs = [
         TransactionLeg(account_id=account.id, amount=Decimal("100")),
         TransactionLeg(account_id=account.id, amount=Decimal("-100")),
+    ]
+
+    with pytest.raises(ValueError):
+        service.create_transaction(tx, legs)
+
+
+def test_service_rejects_unknown_subscription(session):
+    service = TransactionService(session)
+    asset = _create_account(session)
+    counter = _create_account(session)
+
+    tx = _build_transaction("Mystery sub")
+    tx.subscription_id = UUID(int=123)
+    legs = [
+        TransactionLeg(account_id=asset.id, amount=Decimal("25.00")),
+        TransactionLeg(account_id=counter.id, amount=Decimal("-25.00")),
     ]
 
     with pytest.raises(ValueError):

@@ -2,9 +2,8 @@ import { Amplify } from "aws-amplify";
 import {
   fetchAuthSession as amplifyFetchAuthSession,
   getCurrentUser as amplifyGetCurrentUser,
-  signIn as amplifySignIn,
   signOut as amplifySignOut,
-  type SignInOutput,
+  signInWithRedirect,
 } from "aws-amplify/auth";
 
 export interface AuthTokens {
@@ -21,11 +20,47 @@ const authEnvKeys = {
   region: "VITE_AWS_REGION",
   userPoolId: "VITE_USER_POOL_ID",
   userPoolClientId: "VITE_USER_POOL_CLIENT_ID",
+  cognitoDomain: "VITE_COGNITO_DOMAIN",
+  redirectSignIn: "VITE_OAUTH_REDIRECT_SIGNIN",
+  redirectSignOut: "VITE_OAUTH_REDIRECT_SIGNOUT",
 } as const;
 
 let amplifyConfigured = false;
+let lastConfiguredAuth: {
+  region?: string;
+  userPoolId?: string;
+  userPoolClientId?: string;
+  oauthDomain?: string;
+  redirectSignIn?: string[];
+  redirectSignOut?: string[];
+} = {};
 
 const isBrowser = () => typeof window !== "undefined";
+
+const normalizeCognitoDomain = (
+  domain: string | undefined,
+  region: string,
+): string => {
+  if (!domain) return domain ?? "";
+  const trimmed = domain.trim().replace(/^https?:\/\//i, "");
+  if (trimmed.includes("amazoncognito.com")) return trimmed;
+  // If the env already provides a custom domain (contains a dot), keep it as-is.
+  if (trimmed.includes(".")) return trimmed;
+  if (region) return `${trimmed}.auth.${region}.amazoncognito.com`;
+  return trimmed;
+};
+
+const normalizeRedirect = (value: string | undefined): string => {
+  const fallback = `${window.location.origin}/login`;
+  if (!value) return fallback;
+  const trimmed = value.trim();
+  const hasProtocol = /^https?:\/\//i.test(trimmed);
+  if (hasProtocol) return trimmed;
+  const isLocal =
+    /^localhost(?::\d+)?/.test(trimmed) || /^127\.0\.0\.1/.test(trimmed);
+  const protocol = isLocal ? "http://" : "https://";
+  return `${protocol}${trimmed}`;
+};
 
 const ensureAmplifyConfigured = () => {
   if (amplifyConfigured || !isBrowser()) return;
@@ -33,10 +68,20 @@ const ensureAmplifyConfigured = () => {
   const region = import.meta.env[authEnvKeys.region] ?? "";
   const userPoolId = import.meta.env[authEnvKeys.userPoolId];
   const userPoolClientId = import.meta.env[authEnvKeys.userPoolClientId];
+  const cognitoDomain = normalizeCognitoDomain(
+    import.meta.env[authEnvKeys.cognitoDomain],
+    region,
+  );
+  const redirectSignIn = [
+    normalizeRedirect(import.meta.env[authEnvKeys.redirectSignIn]),
+  ];
+  const redirectSignOut = [
+    normalizeRedirect(import.meta.env[authEnvKeys.redirectSignOut]),
+  ];
 
-  if (!userPoolId || !userPoolClientId) {
+  if (!userPoolId || !userPoolClientId || !cognitoDomain) {
     throw new Error(
-      "Amplify Auth environment variables VITE_USER_POOL_ID and VITE_USER_POOL_CLIENT_ID must be set.",
+      "Amplify Auth environment variables VITE_USER_POOL_ID, VITE_USER_POOL_CLIENT_ID, and VITE_COGNITO_DOMAIN must be set.",
     );
   }
 
@@ -46,9 +91,27 @@ const ensureAmplifyConfigured = () => {
         userPoolId,
         userPoolClientId,
         ...(region ? { region } : {}),
+        loginWith: {
+          oauth: {
+            domain: cognitoDomain,
+            redirectSignIn,
+            redirectSignOut,
+            responseType: "code",
+            scopes: ["email", "openid", "profile"],
+          },
+        },
       },
     },
   });
+
+  lastConfiguredAuth = {
+    region,
+    userPoolId,
+    userPoolClientId,
+    oauthDomain: cognitoDomain,
+    redirectSignIn,
+    redirectSignOut,
+  };
 
   amplifyConfigured = true;
 };
@@ -81,7 +144,12 @@ const toAuthTokens = (
   return {
     accessToken: tokens.accessToken.toString(),
     idToken,
-    refreshToken: tokens.refreshToken?.toString() ?? "",
+    refreshToken:
+      (
+        tokens as {
+          refreshToken?: { toString(): string };
+        }
+      ).refreshToken?.toString() ?? "",
   };
 };
 
@@ -110,32 +178,23 @@ class AmplifyAuthService {
     }
   }
 
-  async signIn(email: string, password: string): Promise<AuthenticatedUser> {
-    ensureAmplifyConfigured();
-
-    const output: SignInOutput = await amplifySignIn({
-      username: email,
-      password,
-    });
-
-    if (!output.isSignedIn) {
-      throw new Error(
-        output.nextStep.signInStep
-          ? `Unsupported sign-in step: ${output.nextStep.signInStep}`
-          : "Sign-in was not completed.",
-      );
+  async signInWithGoogle(): Promise<void> {
+    try {
+      ensureAmplifyConfigured();
+      await signInWithRedirect({ provider: "Google" });
+    } catch (error) {
+      // Surface configuration details to help debug OAuth issues (avoids tokens)
+      console.error("Amplify signInWithRedirect failed", {
+        error,
+        authConfig: lastConfiguredAuth,
+      });
+      throw error;
     }
-
-    const session = await this.buildAuthenticatedUser(true);
-    if (!session) {
-      throw new Error("Unable to load Cognito session after sign-in.");
-    }
-    return session;
   }
 
   async signOut(): Promise<void> {
     ensureAmplifyConfigured();
-    await amplifySignOut();
+    await amplifySignOut({ global: true });
   }
 
   async fetchAuthenticatedUser(
@@ -143,6 +202,17 @@ class AmplifyAuthService {
   ): Promise<AuthenticatedUser | null> {
     ensureAmplifyConfigured();
     return this.buildAuthenticatedUser(forceRefresh);
+  }
+
+  async completeRedirectIfPresent(): Promise<void> {
+    ensureAmplifyConfigured();
+    try {
+      await amplifyFetchAuthSession();
+    } catch (error) {
+      if (!isUnauthenticatedError(error)) {
+        throw error;
+      }
+    }
   }
 }
 

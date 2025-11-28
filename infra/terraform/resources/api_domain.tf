@@ -1,6 +1,6 @@
 locals {
-  api_domain_name             = "api.finance-tracker.${var.root_domain_name}"
-  api_certificate_parameter   = "/finance-tracker/${var.environment}/api/custom_domain/certificate_arn"
+  api_domain_name           = "api.finance-tracker.${var.root_domain_name}"
+  api_certificate_parameter = "/finance-tracker/${var.environment}/api/custom_domain/certificate_arn"
 }
 
 resource "aws_acm_certificate" "api_gateway" {

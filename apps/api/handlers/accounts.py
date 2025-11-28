@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+from typing import Any, Dict, cast
+from uuid import UUID
 
 from pydantic import ValidationError
 
@@ -13,6 +16,8 @@ from ..schemas import (
     AccountWithBalance,
     ListAccountsQuery,
     ListAccountsResponse,
+    ReconcileAccountRequest,
+    ReconcileAccountResponse,
 )
 from ..services import AccountService
 from ..shared import session_scope
@@ -32,10 +37,18 @@ def reset_handler_state() -> None:
     reset_engine_state()
 
 
-def _account_to_schema(account: Account, balance: Any) -> AccountWithBalance:
+def _account_to_schema(
+    account: Account,
+    balance: Any,
+    reconciliation: dict[str, Any] | None = None,
+) -> AccountWithBalance:
     payload = account.model_dump(mode="python")
     payload["loan"] = getattr(account, "loan", None)
     payload["balance"] = balance
+    if reconciliation:
+        payload["last_reconciled_at"] = reconciliation.get("last_captured_at")
+        payload["reconciliation_gap"] = reconciliation.get("delta_since_snapshot")
+        payload["needs_reconciliation"] = reconciliation.get("needs_reconciliation")
     return AccountWithBalance.model_validate(payload)
 
 
@@ -57,7 +70,26 @@ def list_accounts(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             as_of=query.as_of_date,
         )
 
-        data = [_account_to_schema(account, balance) for account, balance in accounts_with_balances]
+        data = []
+        for account, balance in accounts_with_balances:
+            reconciliation = service.reconciliation_state(account.id)
+            # Flag recon needed if delta significant (>1) or snapshot older than 35 days.
+            needs = False
+            delta = cast(Decimal, reconciliation.get("delta_since_snapshot") or Decimal(0))
+            last_captured = reconciliation.get("last_captured_at")
+            if delta is not None and abs(delta) > 1:
+                needs = True
+            if last_captured is None:
+                needs = True
+            else:
+                if isinstance(last_captured, datetime):
+                    age = datetime.now(timezone.utc) - last_captured
+                    if age > timedelta(days=35):
+                        needs = True
+                else:
+                    needs = True
+            reconciliation["needs_reconciliation"] = needs
+            data.append(_account_to_schema(account, balance, reconciliation))
     response = ListAccountsResponse(accounts=data)
     return json_response(200, response.model_dump(mode="json"))
 
@@ -120,3 +152,49 @@ def update_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         response = _account_to_schema(updated, balance).model_dump(mode="json")
 
     return json_response(200, response)
+
+
+def reconcile_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    """HTTP POST /accounts/{accountId}/reconcile."""
+
+    ensure_engine()
+    payload = parse_body(event)
+    account_id = extract_path_uuid(event, param_names=("account_id", "accountId"))
+    if account_id is None:
+        return json_response(400, {"error": "Account ID missing from path"})
+
+    try:
+        data = ReconcileAccountRequest.model_validate(payload)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope() as session:
+        service = AccountService(session)
+        try:
+            result = service.reconcile_account(
+                account_id,
+                captured_at=data.captured_at,
+                reported_balance=data.reported_balance,
+                description=data.description,
+                category_id=data.category_id,
+            )
+        except LookupError:
+            return json_response(404, {"error": "Account not found"})
+
+        ledger_balance = cast(Decimal, result.get("ledger_balance", Decimal(0)))
+        delta_posted = cast(Decimal, result.get("delta", Decimal(0)))
+        snapshot = cast(Any, result.get("snapshot"))
+        transaction = cast(Any, result.get("transaction"))
+        snapshot_id = cast(UUID, getattr(snapshot, "id", None))
+        transaction_id = cast(UUID | None, getattr(transaction, "id", None))
+
+    response = ReconcileAccountResponse(
+        account_id=account_id,
+        reported_balance=data.reported_balance,
+        ledger_balance=ledger_balance,
+        delta_posted=delta_posted,
+        snapshot_id=snapshot_id,
+        transaction_id=transaction_id,
+        captured_at=data.captured_at,
+    )
+    return json_response(201, response.model_dump(mode="json"))

@@ -1,5 +1,5 @@
 .PHONY: tf-init tf-plan tf-apply tf-destroy tf-fmt tf-validate tf-write-web-env \
-        tf-enable-bastion tf-disable-bastion bastion-copy bastion-shell \
+        tf-enable-public-db tf-disable-public-db \
         type-check format test deploy-layer deploy-api deploy
 
 TF_DIR ?= infra/terraform
@@ -36,34 +36,26 @@ tf-write-web-env:
 		--aws-region "$(AWS_REGION)" \
 		--aws-profile "$(AWS_PROFILE)"
 
-# Toggle bastion host provisioning
+# Toggle public database exposure (for local development)
 
-tf-enable-bastion:
-	$(TF_CMD) apply -var 'enable_bastion=true'
+tf-enable-public-db:
+	$(TF_CMD) apply -var 'enable_public_db_access=true'
 
-tf-disable-bastion:
-	$(TF_CMD) apply -var 'enable_bastion=false'
-
-bastion-copy:
-	@test -n "$(FILE)" || { echo "Usage: make bastion-copy FILE=path [REMOTE=/remote/dir]"; exit 1; }
-	REMOTE_DIR=$${REMOTE:-/home/ec2-user}; \
-	$(PYTHON) scripts/bastion_copy.py "$(FILE)" --remote-dir "$$REMOTE_DIR" --tf-dir "$(TF_DIR)" --profile "$(AWS_PROFILE)" --region "$(AWS_REGION)"
-
-bastion-shell:
-	$(PYTHON) scripts/bastion_shell.py --tf-dir "$(TF_DIR)" --profile "$(AWS_PROFILE)" --region "$(AWS_REGION)"
+tf-disable-public-db:
+	$(TF_CMD) apply -var 'enable_public_db_access=false'
 
 # Quality gates
 
 type-check:
-	black --check .
-	isort --check-only .
+	black --check apps/api
+	isort --check-only apps/api
 	PYTHONPATH=. pylint apps/api
-	pyright
+	pyright apps/api
 	mypy apps/api
 
 format:
-	isort .
-	black .
+	isort apps/api
+	black apps/api
 
 test:
 	pytest apps/api/tests

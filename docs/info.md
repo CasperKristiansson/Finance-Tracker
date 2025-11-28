@@ -32,7 +32,7 @@
 ## Tech Snapshot
 - Frontend: Vite + React 19 + TS + Tailwind + Redux Toolkit/Saga; shadcn + Radix UI; Recharts.
 - Backend: Python (SQLModel/SQLAlchemy), Pydantic schemas, REST handlers for accounts/categories/transactions/loans/reporting; materialized views for reporting; loan accrual job.
-- Infra: Terraform for Aurora + bastion; Cognito for auth.
+- Infra: Terraform for Aurora (private by default with optional public toggle for local dev) and Cognito for auth.
 
 ## Privacy & Security Posture
 - Single-tenant; bank files are user-provided. Avoid storing more than needed; document retention for imports.
@@ -41,5 +41,5 @@
 
 ## UX Notes
 - Modern, data-forward UI (see brand.md): high legibility, chart-driven dashboards, strong empty/loading states, toasts for feedback.
-- Imports: guided stepper; clear mapping preview; downloadable error report; status badges in tables.
+- Imports: guided stepper with bank choice (Circle K Mastercard, SEB, Swedbank), XLSX-only; clear mapping preview; downloadable error report; status badges in tables.
 - Accessibility: keyboard reachability, focus outlines, contrast targets (WCAG AA).

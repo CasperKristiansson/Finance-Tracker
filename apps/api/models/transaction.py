@@ -18,6 +18,7 @@ from ..shared import (
     AuditSourceMixin,
     LoanEventType,
     TimestampMixin,
+    TransactionStatus,
     TransactionType,
     UUIDPrimaryKeyMixin,
 )
@@ -25,24 +26,8 @@ from ..shared import (
 if TYPE_CHECKING:  # pragma: no cover
     from .account import Account, Loan
     from .category import Category
-
-
-class TransactionImportBatch(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
-    """Groups transactions imported together for auditing."""
-
-    __tablename__ = "transaction_import_batches"
-
-    source_name: Optional[str] = Field(
-        default=None,
-        sa_column=Column(String(160), nullable=True),
-    )
-    note: Optional[str] = Field(
-        default=None,
-        sa_column=Column(String(255), nullable=True),
-    )
-
-    if TYPE_CHECKING:  # pragma: no cover
-        transactions: List["Transaction"]
+    from .imports import TransactionImportBatch
+    from .subscription import Subscription
 
 
 class Transaction(
@@ -89,12 +74,25 @@ class Transaction(
             nullable=True,
         ),
     )
+    subscription_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("subscriptions.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
+    status: TransactionStatus = Field(
+        default=TransactionStatus.RECORDED,
+        sa_column=Column(SAEnum(TransactionStatus), nullable=False),
+    )
 
     if TYPE_CHECKING:  # pragma: no cover
         category: Optional["Category"]
         legs: List["TransactionLeg"]
         loan_events: List["LoanEvent"]
         import_batch: Optional["TransactionImportBatch"]
+        subscription: Optional["Subscription"]
 
     __table_args__ = (
         UniqueConstraint(
@@ -117,6 +115,10 @@ class Transaction(
             back_populates="transaction",
             cascade="all, delete-orphan",
         ),
+    )
+    subscription: Optional["Subscription"] = Relationship(
+        back_populates="transactions",
+        sa_relationship=relationship("Subscription", back_populates="transactions"),
     )
 
 
@@ -216,11 +218,9 @@ __all__ = [
     "Transaction",
     "TransactionLeg",
     "LoanEvent",
-    "TransactionImportBatch",
 ]
 
 
 Transaction.model_rebuild()
 TransactionLeg.model_rebuild()
 LoanEvent.model_rebuild()
-TransactionImportBatch.model_rebuild()

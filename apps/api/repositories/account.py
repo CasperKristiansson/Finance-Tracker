@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session
 
-from ..models import Account, Loan, Transaction, TransactionLeg
+from ..models import Account, BalanceSnapshot, Loan, Transaction, TransactionLeg
 from ..shared import AccountType, coerce_decimal
 
 
@@ -54,6 +54,21 @@ class AccountRepository:
 
         result = self.session.exec(statement).scalar_one()
         return coerce_decimal(result)
+
+    def latest_snapshot(self, account_id: UUID) -> Optional[BalanceSnapshot]:
+        statement = (
+            select(BalanceSnapshot)
+            .where(BalanceSnapshot.account_id == account_id)
+            .order_by(BalanceSnapshot.captured_at.desc())
+            .limit(1)
+        )
+        return self.session.exec(statement).scalars().one_or_none()
+
+    def create_snapshot(self, snapshot: BalanceSnapshot) -> BalanceSnapshot:
+        self.session.add(snapshot)
+        self.session.commit()
+        self.session.refresh(snapshot)
+        return snapshot
 
     def attach_loan(self, account_id: UUID, loan: Loan) -> Loan:
         account = self.get(account_id)

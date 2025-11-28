@@ -11,6 +11,7 @@ from apps.api.models import Account, Transaction, TransactionLeg
 from apps.api.repositories.reporting import (
     LifetimeTotals,
     MonthlyTotals,
+    NetWorthPoint,
     ReportingRepository,
     YearlyTotals,
 )
@@ -179,6 +180,19 @@ def test_reporting_service_wraps_repository(session):
     assert len(monthly) == 3
     assert yearly[-1].net == Decimal("4600.00")
     assert totals.net == Decimal("8600.00")
+
+
+def test_net_worth_history(reporting_repo, session):
+    bank_account, _transactions = _seed_sample_transactions(session)
+    history = reporting_repo.get_net_worth_history(account_ids=[bank_account.id])
+
+    assert history == [
+        NetWorthPoint(period=date(2023, 11, 15), net_worth=Decimal("4000.00")),
+        NetWorthPoint(period=date(2024, 1, 10), net_worth=Decimal("9000.00")),
+        NetWorthPoint(period=date(2024, 1, 12), net_worth=Decimal("8800.00")),
+        NetWorthPoint(period=date(2024, 2, 5), net_worth=Decimal("9800.00")),
+        NetWorthPoint(period=date(2024, 3, 1), net_worth=Decimal("8600.00")),
+    ]
 
 
 def test_materialized_view_refresh_noop_on_sqlite(reporting_repo):
