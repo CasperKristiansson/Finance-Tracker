@@ -28,6 +28,7 @@ import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { selectIsAuthenticated } from "@/features/auth/authSlice";
+import { useAccountsApi } from "@/hooks/use-api";
 import { useReportsApi, useTransactionsApi } from "@/hooks/use-api";
 
 type KPI = {
@@ -92,6 +93,8 @@ export const Dashboard: React.FC = () => {
     fetchNetWorthReport,
   } = useReportsApi();
   const { recent, fetchRecentTransactions } = useTransactionsApi();
+  const { items: accounts, loading: accountsLoading, fetchAccounts } =
+    useAccountsApi();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const hasFetched = useRef(false);
 
@@ -105,12 +108,14 @@ export const Dashboard: React.FC = () => {
     fetchTotalReport();
     fetchNetWorthReport();
     fetchRecentTransactions({ limit: 5 });
+    fetchAccounts();
   }, [
     fetchMonthlyReport,
     fetchYearlyReport,
     fetchTotalReport,
     fetchNetWorthReport,
     fetchRecentTransactions,
+    fetchAccounts,
     isAuthenticated,
   ]);
 
@@ -187,34 +192,74 @@ export const Dashboard: React.FC = () => {
 
   const netWorthData = useMemo(() => {
     const points = netWorth.data || [];
-    if (points.length === 0) {
-      return [
-        { date: "2024-01-01", net: 12000 },
-        { date: "2024-02-01", net: 13200 },
-        { date: "2024-03-01", net: 14100 },
-        { date: "2024-04-01", net: 15050 },
-      ];
-    }
     return points.map((point) => ({
       date: point.period,
       net: Number(point.net_worth),
     }));
   }, [netWorth.data]);
 
-  const recentTransactions = useMemo(() => {
-    if (recent.items.length === 0) {
-      return [
-        {
-          id: "placeholder-1",
-          description: "Demo transaction",
-          amount: 120.5,
-          occurred_at: "2024-01-10",
-          account_id: "",
-          category: "Groceries",
-          status: "imported",
-        },
-      ];
+  const activeAccounts = useMemo(
+    () => accounts.filter((account) => account.is_active !== false),
+    [accounts],
+  );
+
+  const cashOnHand = useMemo(
+    () =>
+      activeAccounts.reduce((sum, account) => {
+        const bal = Number(account.balance);
+        return sum + (Number.isFinite(bal) ? bal : 0);
+      }, 0),
+    [activeAccounts],
+  );
+
+  const runwayMetrics = useMemo(() => {
+    const entries = monthly.data ? [...monthly.data] : [];
+    if (!entries.length) {
+      return {
+        avgBurn: 0,
+        avgIncome: 0,
+        months: null as number | null,
+        trend: "neutral" as "up" | "down" | "neutral",
+        lastNet: 0,
+        prevNet: 0,
+        sparkline: [] as { month: string; balance: number }[],
+      };
     }
+
+    const sorted = entries.sort(
+      (a, b) => new Date(a.period).getTime() - new Date(b.period).getTime(),
+    );
+
+    const avgBurn =
+      sorted.reduce((sum, entry) => sum + Math.max(Number(entry.expense), 0), 0) /
+      sorted.length;
+    const avgIncome =
+      sorted.reduce((sum, entry) => sum + Math.max(Number(entry.income), 0), 0) /
+      sorted.length;
+    const nets = sorted.map(
+      (entry) => Number(entry.income) - Number(entry.expense),
+    );
+    const lastNet = nets[nets.length - 1] ?? 0;
+    const prevNet = nets[nets.length - 2] ?? lastNet;
+    const trend = lastNet > prevNet ? "up" : lastNet < prevNet ? "down" : "neutral";
+
+    let running = 0;
+    const sparkline = sorted
+      .slice(-6)
+      .map((entry) => {
+        running += Number(entry.income) - Number(entry.expense);
+        return {
+          month: new Date(entry.period).toLocaleString("en-US", { month: "short" }),
+          balance: running,
+        };
+      });
+
+    const months = avgBurn > 0 ? cashOnHand / avgBurn : null;
+
+    return { avgBurn, avgIncome, months, trend, lastNet, prevNet, sparkline };
+  }, [cashOnHand, monthly.data]);
+
+  const recentTransactions = useMemo(() => {
     return recent.items.map((tx) => ({
       id: tx.id,
       description: tx.description || "Transaction",
@@ -268,7 +313,7 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-3">
         {kpis.map((kpi) => (
           <Card
             key={kpi.title}
@@ -309,7 +354,7 @@ export const Dashboard: React.FC = () => {
         ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[2fr_1fr]">
+      <div className="grid gap-4 md:grid-cols-2">
         <ChartCard
           title="Income vs Expense"
           description="Stacked by month"
@@ -330,11 +375,23 @@ export const Dashboard: React.FC = () => {
           >
             <AreaChart data={incomeExpenseChart}>
               <defs>
-                <linearGradient id="incomeFill" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient
+                  id="incomeFill"
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
                   <stop offset="5%" stopColor="#22c55e" stopOpacity={0.25} />
                   <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                 </linearGradient>
-                <linearGradient id="expenseFill" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient
+                  id="expenseFill"
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
                   <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
                   <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
                 </linearGradient>
@@ -549,6 +606,87 @@ export const Dashboard: React.FC = () => {
         </Card>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)]">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold text-slate-900">
+              Cash on hand
+            </CardTitle>
+            <p className="text-sm text-slate-500">Active accounts combined</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {accountsLoading ? (
+              <Skeleton className="h-10 w-40" />
+            ) : (
+              <div className="text-3xl font-semibold text-slate-900">
+                {currency(cashOnHand)}
+              </div>
+            )}
+            <p className="text-sm text-slate-500">
+              {activeAccounts.length} active {activeAccounts.length === 1 ? "account" : "accounts"}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)]">
+          <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+            <div>
+              <CardTitle className="text-base font-semibold text-slate-900">
+                Cash runway
+              </CardTitle>
+              <p className="text-sm text-slate-500">Based on average burn</p>
+            </div>
+            {runwayMetrics.trend === "up" ? (
+              <ArrowUpRight className="h-5 w-5 text-emerald-500" />
+            ) : runwayMetrics.trend === "down" ? (
+              <ArrowDownRight className="h-5 w-5 text-rose-500" />
+            ) : null}
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {monthly.loading || accountsLoading ? (
+              <Skeleton className="h-10 w-48" />
+            ) : runwayMetrics.months === null ? (
+              <p className="text-sm text-slate-500">Add expense history to estimate runway.</p>
+            ) : (
+              <div className="text-3xl font-semibold text-slate-900">
+                {`${runwayMetrics.months.toFixed(1)} months`}
+              </div>
+            )}
+            <div className="text-sm text-slate-600">
+              Avg burn: {currency(runwayMetrics.avgBurn)} · Avg income: {currency(runwayMetrics.avgIncome)}
+            </div>
+            {runwayMetrics.sparkline.length ? (
+              <ChartContainer
+                className="h-20"
+                config={{ balance: { label: "Cash trend", color: "#0ea5e9" } }}
+              >
+                <AreaChart data={runwayMetrics.sparkline}>
+                  <defs>
+                    <linearGradient id="cashSpark" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="month" hide />
+                  <YAxis hide />
+                  <Tooltip content={<ChartTooltipContent />} />
+                  <Area
+                    type="monotone"
+                    dataKey="balance"
+                    stroke="#0ea5e9"
+                    fill="url(#cashSpark)"
+                    strokeWidth={2}
+                    name="Cash trend"
+                  />
+                </AreaChart>
+              </ChartContainer>
+            ) : (
+              <Skeleton className="h-16 w-full" />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
       <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.25)]">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
           <div>
@@ -574,6 +712,8 @@ export const Dashboard: React.FC = () => {
                 <Skeleton key={idx} className="h-12 w-full" />
               ))}
             </div>
+          ) : recentTransactions.length === 0 ? (
+            <p className="text-sm text-slate-500">No recent transactions yet.</p>
           ) : (
             <div className="space-y-2">
               {recentTransactions.map((tx) => (

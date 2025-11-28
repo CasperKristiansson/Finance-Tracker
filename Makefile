@@ -68,3 +68,6 @@ deploy-api:
 	cd infra/serverless && npx serverless deploy
 
 deploy: deploy-layer deploy-api
+
+startdev:
+	npm run dev -w apps/web

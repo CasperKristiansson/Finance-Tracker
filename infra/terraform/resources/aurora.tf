@@ -91,6 +91,38 @@ resource "aws_subnet" "finance_tracker_private_b" {
   )
 }
 
+resource "aws_subnet" "finance_tracker_public_a" {
+  count                   = var.enable_public_db_access ? 1 : 0
+  vpc_id                  = aws_vpc.finance_tracker.id
+  cidr_block              = "10.10.10.0/24"
+  availability_zone       = "eu-north-1a"
+  map_public_ip_on_launch = true
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.name_prefix}-public-a"
+      Tier = "public"
+    },
+  )
+}
+
+resource "aws_subnet" "finance_tracker_public_b" {
+  count                   = var.enable_public_db_access ? 1 : 0
+  vpc_id                  = aws_vpc.finance_tracker.id
+  cidr_block              = "10.10.11.0/24"
+  availability_zone       = "eu-north-1b"
+  map_public_ip_on_launch = true
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.name_prefix}-public-b"
+      Tier = "public"
+    },
+  )
+}
+
 resource "aws_default_route_table" "finance_tracker" {
   default_route_table_id = aws_vpc.finance_tracker.default_route_table_id
 
@@ -110,10 +142,33 @@ resource "aws_route" "finance_tracker_public_default" {
   gateway_id             = aws_internet_gateway.finance_tracker[0].id
 }
 
+resource "aws_route_table_association" "finance_tracker_public_a" {
+  count = var.enable_public_db_access ? 1 : 0
+
+  subnet_id      = aws_subnet.finance_tracker_public_a[0].id
+  route_table_id = aws_default_route_table.finance_tracker.id
+}
+
+resource "aws_route_table_association" "finance_tracker_public_b" {
+  count = var.enable_public_db_access ? 1 : 0
+
+  subnet_id      = aws_subnet.finance_tracker_public_b[0].id
+  route_table_id = aws_default_route_table.finance_tracker.id
+}
+
 resource "aws_db_subnet_group" "finance_tracker_aurora" {
   name        = "${local.name_prefix}-aurora-subnets"
   description = "Private subnets for the Finance Tracker Aurora cluster."
-  subnet_ids = [
+  subnet_ids = var.enable_public_db_access ? concat(
+    [
+      aws_subnet.finance_tracker_private_a.id,
+      aws_subnet.finance_tracker_private_b.id,
+    ],
+    [
+      aws_subnet.finance_tracker_public_a[0].id,
+      aws_subnet.finance_tracker_public_b[0].id,
+    ],
+  ) : [
     aws_subnet.finance_tracker_private_a.id,
     aws_subnet.finance_tracker_private_b.id,
   ]

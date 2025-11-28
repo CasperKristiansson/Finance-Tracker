@@ -104,18 +104,33 @@ const data = {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { state } = useSidebar();
   const select = useAppSelector(selectUser);
+  const [animating, setAnimating] = React.useState(false);
+  const hasMounted = React.useRef(false);
+
+  React.useEffect(() => {
+    if (!hasMounted.current) {
+      hasMounted.current = true;
+      return;
+    }
+
+    setAnimating(true);
+    const timeout = window.setTimeout(() => setAnimating(false), 220);
+    return () => window.clearTimeout(timeout);
+  }, [state]);
+
+  const showLargeLogo = state === "expanded" && !animating;
+  const showSmallLogo = state === "collapsed" && !animating;
 
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <img
-          src={state === "collapsed" ? LogoSmall : LogoLarge}
-          alt="Logo"
-          className={clsx(
-            "mt-2",
-            state === "collapsed" ? "h-6 px-1" : "h-6 px-2",
-          )}
-        />
+        {showLargeLogo ? (
+          <img src={LogoLarge} alt="Logo" className="mt-2 h-6 px-2" />
+        ) : showSmallLogo ? (
+          <img src={LogoSmall} alt="Logo" className="mt-2 h-6 px-1" />
+        ) : (
+          <div className="h-6" />
+        )}
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} title="Core" />

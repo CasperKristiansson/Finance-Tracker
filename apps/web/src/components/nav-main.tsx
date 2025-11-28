@@ -5,6 +5,7 @@ import {
   SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,8 @@ export function NavMain({
   title: string;
 }) {
   const location = useLocation();
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
 
   return (
     <SidebarGroup>
@@ -32,16 +35,27 @@ export function NavMain({
               <Link
                 to={item.url}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-md p-2 text-sm",
+                  "group flex w-full items-center rounded-md p-2 text-sm transition-[color,padding,justify-content,gap] hover:text-slate-900",
+                  collapsed ? "justify-center gap-0" : "gap-2",
                   isActive && "bg-muted font-medium text-foreground",
                 )}
               >
                 {item.icon && (
                   <item.icon
-                    className={cn("h-4 w-4", isActive && "text-primary")}
+                    className={cn(
+                      "h-4 w-4 transition-colors group-hover:text-slate-900",
+                      isActive && "text-primary",
+                    )}
                   />
                 )}
-                <span className="truncate">{item.title}</span>
+                <span
+                  className={cn(
+                    "truncate transition-colors group-hover:text-slate-900",
+                    collapsed && "hidden",
+                  )}
+                >
+                  {item.title}
+                </span>
               </Link>
             </SidebarMenuItem>
           );

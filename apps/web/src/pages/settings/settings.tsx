@@ -10,7 +10,6 @@ import {
   XCircle,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import * as Dialog from "@radix-ui/react-dialog";
 import React, { useEffect, useMemo, useState } from "react";
 import { useAppSelector } from "@/app/hooks";
 import { Badge } from "@/components/ui/badge";
@@ -78,7 +77,6 @@ export const Settings: React.FC = () => {
     changeLastName,
   } = useSettings();
   const { setTheme, resolvedTheme } = useTheme();
-  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -86,12 +84,6 @@ export const Settings: React.FC = () => {
   }, [setTheme, theme]);
 
   const missingProfile = !firstName || !lastName;
-
-  useEffect(() => {
-    if (!loading && !saving && !isDemo && missingProfile) {
-      setProfileDialogOpen(true);
-    }
-  }, [loading, missingProfile, saving, isDemo]);
 
   const handleThemeChange = (next: ThemePreference) => {
     setTheme(next);
@@ -347,55 +339,6 @@ export const Settings: React.FC = () => {
         </Card>
       </div>
 
-      <Dialog.Root open={profileDialogOpen} onOpenChange={setProfileDialogOpen}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 w-[90vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-            <Dialog.Title className="text-lg font-semibold text-slate-900">
-              Add your name
-            </Dialog.Title>
-            <Dialog.Description className="mt-1 text-sm text-slate-600">
-              We currently show your Cognito user id. Set your first and last name to personalize the app.
-            </Dialog.Description>
-            <form className="mt-4 space-y-4" onSubmit={handleProfileSubmit}>
-              <div className="space-y-2">
-                <Label htmlFor="modal-first-name">First name</Label>
-                <Input
-                  id="modal-first-name"
-                  value={firstName ?? ""}
-                  onChange={(e) => changeFirstName(e.target.value)}
-                  placeholder="Ada"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="modal-last-name">Last name</Label>
-                <Input
-                  id="modal-last-name"
-                  value={lastName ?? ""}
-                  onChange={(e) => changeLastName(e.target.value)}
-                  placeholder="Lovelace"
-                  required
-                />
-              </div>
-              {profileError ? (
-                <p className="text-sm text-rose-600">{profileError}</p>
-              ) : null}
-              <div className="flex justify-end gap-2">
-                <Dialog.Close asChild>
-                  <Button variant="outline" type="button">
-                    Maybe later
-                  </Button>
-                </Dialog.Close>
-                <Button type="submit" className="gap-2" disabled={saving}>
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Save and continue
-                </Button>
-              </div>
-            </form>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
     </div>
   );
 };

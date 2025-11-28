@@ -18,12 +18,20 @@ locals {
   )
   cognito_custom_domain = "auth.finance-tracker.${var.root_domain_name}"
   oauth_callback_urls = [
+    "https://${local.static_site_domain}",
+    "https://${local.static_site_domain}/",
     "https://${local.static_site_domain}/login",
     "http://localhost:5173/login",
+    "http://localhost:5173",
+    "http://localhost:5173/",
   ]
   oauth_logout_urls = [
+    "https://${local.static_site_domain}",
+    "https://${local.static_site_domain}/",
     "https://${local.static_site_domain}/login",
     "http://localhost:5173/login",
+    "http://localhost:5173",
+    "http://localhost:5173/",
   ]
   supported_identity_providers = compact([
     "COGNITO",

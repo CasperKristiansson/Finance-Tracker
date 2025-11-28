@@ -1,4 +1,4 @@
-import { LogOut } from "lucide-react";
+import { Loader2, LogOut } from "lucide-react";
 import React from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -19,6 +19,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   SidebarInset,
   SidebarProvider,
@@ -26,6 +28,118 @@ import {
 } from "@/components/ui/sidebar";
 import { AuthLogout } from "@/features/auth/authSaga";
 import { selectIsDemo, selectUser } from "@/features/auth/authSlice";
+import { useSettings } from "@/hooks/use-api";
+
+const ProfileGate: React.FC = () => {
+  const {
+    firstName,
+    lastName,
+    loading,
+    saving,
+    error,
+    lastSavedAt,
+    changeFirstName,
+    changeLastName,
+    saveSettings,
+  } = useSettings();
+  const isDemo = useAppSelector(selectIsDemo);
+  const [formError, setFormError] = React.useState<string | null>(null);
+  const [submitted, setSubmitted] = React.useState(() => {
+    const hasProfile = !!firstName?.trim() && !!lastName?.trim();
+    return hasProfile;
+  });
+
+  const missingProfile = !firstName?.trim() || !lastName?.trim();
+  const shouldBlock = !isDemo && (loading || saving || missingProfile || !submitted);
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const trimmedFirst = (firstName || "").trim();
+    const trimmedLast = (lastName || "").trim();
+    if (!trimmedFirst || !trimmedLast) {
+      setFormError("Please add both first and last name.");
+      return;
+    }
+    changeFirstName(trimmedFirst);
+    changeLastName(trimmedLast);
+    setFormError(null);
+    setSubmitted(true);
+    saveSettings();
+  };
+
+  // If settings were already saved and profile is complete, allow passing through
+  React.useEffect(() => {
+    if (!missingProfile && lastSavedAt) {
+      setSubmitted(true);
+    }
+  }, [lastSavedAt, missingProfile]);
+
+  if (!shouldBlock) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-8 backdrop-blur-sm">
+      <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Profile required
+            </p>
+            <h2 className="text-xl font-semibold text-slate-900">Finish your details</h2>
+            <p className="text-sm text-slate-600">
+              Add your first and last name to personalize your workspace.
+            </p>
+          </div>
+          {saving ? <Loader2 className="h-5 w-5 animate-spin text-slate-400" /> : null}
+        </div>
+
+        {loading ? (
+          <div className="mt-6 flex items-center gap-2 text-sm text-slate-600">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading your profile…
+          </div>
+        ) : (
+          <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="gate-first-name">First name</Label>
+                <Input
+                  id="gate-first-name"
+                  value={firstName ?? ""}
+                  onChange={(e) => changeFirstName(e.target.value)}
+                  placeholder="Ada"
+                  autoComplete="given-name"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="gate-last-name">Last name</Label>
+                <Input
+                  id="gate-last-name"
+                  value={lastName ?? ""}
+                  onChange={(e) => changeLastName(e.target.value)}
+                  placeholder="Lovelace"
+                  autoComplete="family-name"
+                  required
+                />
+              </div>
+            </div>
+            {formError || error ? (
+              <p className="text-sm text-rose-600">{formError || error}</p>
+            ) : null}
+            <div className="flex justify-end">
+              <Button type="submit" className="gap-2" disabled={saving}>
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
+                Save and continue
+              </Button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const Navigation: React.FC<{
   title: string;
@@ -34,19 +148,35 @@ export const Navigation: React.FC<{
   const dispatch = useAppDispatch();
   const user = useAppSelector(selectUser);
   const isDemo = useAppSelector(selectIsDemo);
+  const { firstName, lastName } = useSettings();
+
+  const displayName = React.useMemo(() => {
+    const name = [firstName, lastName].filter(Boolean).join(" ");
+    if (name) return name;
+    const parts = user.email.split("@")[0].split(/[._]/);
+    if (parts.length >= 2) {
+      return `${parts[0].charAt(0).toUpperCase()}${parts[1].charAt(0).toUpperCase()}`;
+    }
+    return user.email.slice(0, 2).toUpperCase();
+  }, [firstName, lastName, user.email]);
 
   const initials = React.useMemo(() => {
+    const name = [firstName, lastName].filter(Boolean);
+    if (name.length) {
+      return name.map((part) => part.charAt(0)).join("").slice(0, 2).toUpperCase();
+    }
     const parts = user.email.split("@")[0].split(/[._]/);
     if (parts.length >= 2) {
       return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
     }
     return user.email.slice(0, 2).toUpperCase();
-  }, [user.email]);
+  }, [firstName, lastName, user.email]);
 
   return (
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
+        <ProfileGate />
         <header className="flex h-16 shrink-0 items-center justify-between gap-2 px-4 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12">
           <div className="flex items-center gap-2 px-4">
             <SidebarTrigger className="-ml-1" />
@@ -65,24 +195,24 @@ export const Navigation: React.FC<{
                 Demo mode
               </span>
             ) : null}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="flex items-center gap-2 px-2"
-                >
-                  <Avatar className="h-8 w-8">
-                    <AvatarFallback>{initials}</AvatarFallback>
-                  </Avatar>
-                  <div className="hidden flex-col text-left sm:flex">
-                    <span className="text-sm leading-none font-medium">
-                      {user.email || "User"}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      Account
-                    </span>
-                  </div>
-                </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="flex items-center gap-2 px-2"
+              >
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback>{initials}</AvatarFallback>
+                </Avatar>
+                <div className="hidden flex-col text-left sm:flex">
+                  <span className="text-sm leading-none font-medium">
+                    {displayName || "User"}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    Account
+                  </span>
+                </div>
+              </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuLabel>Session</DropdownMenuLabel>
