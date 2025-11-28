@@ -291,13 +291,19 @@ export const Settings: React.FC = () => {
 
         <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)] lg:col-span-3">
           <CardHeader>
-            <CardTitle className="text-sm text-slate-700">Profile details</CardTitle>
+            <CardTitle className="text-sm text-slate-700">
+              Profile details
+            </CardTitle>
             <p className="text-sm text-slate-500">
-              Add a friendly name to replace the Cognito user id shown across the app.
+              Add a friendly name to replace the Cognito user id shown across
+              the app.
             </p>
           </CardHeader>
           <CardContent>
-            <form className="grid gap-4 md:grid-cols-2" onSubmit={handleProfileSubmit}>
+            <form
+              className="grid gap-4 md:grid-cols-2"
+              onSubmit={handleProfileSubmit}
+            >
               <div className="space-y-2">
                 <Label htmlFor="first-name">First name</Label>
                 <Input
@@ -319,15 +325,24 @@ export const Settings: React.FC = () => {
                 />
               </div>
               {profileError ? (
-                <div className="md:col-span-2 text-sm text-rose-600">{profileError}</div>
+                <div className="text-sm text-rose-600 md:col-span-2">
+                  {profileError}
+                </div>
               ) : null}
-              <div className="md:col-span-2 flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 md:col-span-2">
                 <Button type="submit" disabled={saving} className="gap-2">
-                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
                   Save profile
                 </Button>
                 {missingProfile ? (
-                  <Badge variant="outline" className="border-amber-300 text-amber-700">
+                  <Badge
+                    variant="outline"
+                    className="border-amber-300 text-amber-700"
+                  >
                     Incomplete
                   </Badge>
                 ) : (
@@ -338,7 +353,6 @@ export const Settings: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-
     </div>
   );
 };

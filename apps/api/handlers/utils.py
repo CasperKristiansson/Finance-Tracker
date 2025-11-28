@@ -46,7 +46,7 @@ def get_query_params(event: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_user_id(event: Dict[str, Any]) -> str:
-    """Extract the Cognito user id (sub) from the request context."""
+    """Extract the Cognito user id, preferring username over sub."""
 
     request_context = event.get("requestContext") or {}
     authorizer = request_context.get("authorizer") or {}
@@ -55,7 +55,7 @@ def get_user_id(event: Dict[str, Any]) -> str:
 
     user_id = None
     if isinstance(claims, dict):
-        user_id = claims.get("sub") or claims.get("username") or claims.get("cognito:username")
+        user_id = claims.get("username") or claims.get("cognito:username") or claims.get("sub")
 
     return str(user_id or get_default_user_id())
 
