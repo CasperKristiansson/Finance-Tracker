@@ -7,6 +7,12 @@ This directory stores database migrations for the Finance Tracker backend. Migra
 - Set `DATABASE_URL` to a valid SQLAlchemy connection string (e.g. `postgresql+psycopg2://user:pass@host:5432/dbname`).
 - Install dependencies: `pip install -r requirements.txt` (ensure `alembic` is included).
 
+Alternatively, Alembic can build the `DATABASE_URL` from AWS SSM:
+
+- Set `DB_SSM_ENV` (defaults to `ENV` or `default`) to choose the `/finance-tracker/{env}/db` prefix.
+- Optionally set `DB_SSM_PREFIX` to override the full prefix (up to `/db`).
+- Optionally set `DB_AWS_PROFILE` and `DB_AWS_REGION` (default `eu-north-1`) for the boto3 session.
+
 ## Common Commands
 
 Generate a new migration:
