@@ -66,6 +66,12 @@ const coerceNumber = (value: unknown): number | undefined => {
 };
 
 const extractHoldings = (payload?: Record<string, unknown>): Holding[] => {
+  if ((payload as { holdings?: unknown })?.holdings) {
+    const list = (payload as { holdings: unknown }).holdings;
+    if (Array.isArray(list)) {
+      return list as Holding[];
+    }
+  }
   if (!payload) return [];
   const fromHoldings = (payload as { holdings?: unknown }).holdings;
   const fromRows = (payload as { rows?: unknown }).rows;
@@ -90,11 +96,43 @@ const sumHoldings = (payload?: Record<string, unknown>): number => {
   );
 };
 
+const exportCsv = (rows: Record<string, unknown>[], filename: string) => {
+  if (!rows.length) return;
+  const headers = Object.keys(rows[0]);
+  const csv = [
+    headers.join(","),
+    ...rows.map((row) =>
+      headers
+        .map((h) => {
+          const val = row[h];
+          if (val === null || val === undefined) return "";
+          const text = String(val).replace(/"/g, '""');
+          return `"${text}"`;
+        })
+        .join(","),
+    ),
+  ].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
 const deriveSnapshotValue = (snapshot: InvestmentSnapshot): number => {
   const val =
     coerceNumber(snapshot.portfolio_value) ??
     coerceNumber((snapshot as { portfolio_value?: string }).portfolio_value);
   if (val !== undefined) return val;
+  if (snapshot.holdings?.length) {
+    return snapshot.holdings.reduce(
+      (sum, h) => sum + (coerceNumber(h.value_sek) ?? 0),
+      0,
+    );
+  }
   const payload =
     (snapshot.cleaned_payload as Record<string, unknown>) ??
     (snapshot.parsed_payload as Record<string, unknown>);
@@ -102,6 +140,9 @@ const deriveSnapshotValue = (snapshot: InvestmentSnapshot): number => {
 };
 
 const getSnapshotHoldings = (snapshot: InvestmentSnapshot): Holding[] => {
+  if (snapshot.holdings?.length) {
+    return snapshot.holdings as Holding[];
+  }
   const payload =
     (snapshot.cleaned_payload as { cleaned_rows?: unknown; holdings?: unknown })
       ?.cleaned_rows ??
@@ -119,12 +160,16 @@ const getSnapshotHoldings = (snapshot: InvestmentSnapshot): Holding[] => {
 export const Investments: React.FC = () => {
   const {
     snapshots,
+    transactions,
+    metrics,
     loading,
     saving,
     parseLoading,
     parsedResults,
     lastSavedClientId,
     fetchSnapshots,
+    fetchTransactions,
+    fetchMetrics,
     parseExport,
     saveSnapshot,
     clearDraft,
@@ -134,10 +179,13 @@ export const Investments: React.FC = () => {
   const [pasteValue, setPasteValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [range, setRange] = useState<"3M" | "6M" | "1Y" | "ALL">("6M");
 
   useEffect(() => {
     fetchSnapshots();
-  }, [fetchSnapshots]);
+    fetchTransactions();
+    fetchMetrics();
+  }, [fetchSnapshots, fetchTransactions, fetchMetrics]);
 
   useEffect(() => {
     setDrafts((prev) =>
@@ -261,11 +309,22 @@ export const Investments: React.FC = () => {
         new Date(a.snapshot_date).getTime() -
         new Date(b.snapshot_date).getTime(),
     );
-    return sorted.map((snap) => ({
+    const cutoff = (() => {
+      const now = new Date();
+      if (range === "3M") return new Date(now.setMonth(now.getMonth() - 3));
+      if (range === "6M") return new Date(now.setMonth(now.getMonth() - 6));
+      if (range === "1Y")
+        return new Date(now.setFullYear(now.getFullYear() - 1));
+      return null;
+    })();
+    const filtered = cutoff
+      ? sorted.filter((snap) => new Date(snap.snapshot_date) >= cutoff)
+      : sorted;
+    return filtered.map((snap) => ({
       date: snap.snapshot_date,
       value: deriveSnapshotValue(snap),
     }));
-  }, [snapshots]);
+  }, [snapshots, range]);
 
   const holdingsDelta = useMemo(() => {
     if (snapshots.length < 2) return [];
@@ -607,6 +666,80 @@ export const Investments: React.FC = () => {
           ) : null}
         </div>
       </div>
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <Card className="border-slate-200">
+          <CardContent className="space-y-1 py-4">
+            <p className="text-xs text-slate-500 uppercase">Total value</p>
+            <p className="text-2xl font-semibold text-slate-900">
+              {(
+                metrics?.total_value ??
+                valueSeries.at(-1)?.value ??
+                0
+              ).toLocaleString("sv-SE", { maximumFractionDigits: 0 })}{" "}
+              SEK
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200">
+          <CardContent className="space-y-1 py-4">
+            <p className="text-xs text-slate-500 uppercase">Invested</p>
+            <p className="text-lg font-semibold text-slate-900">
+              {(metrics?.invested ?? 0).toLocaleString("sv-SE", {
+                maximumFractionDigits: 0,
+              })}{" "}
+              SEK
+            </p>
+            <p className="text-xs text-slate-500">
+              Realized P/L:{" "}
+              {(metrics?.realized_pl ?? 0).toLocaleString("sv-SE", {
+                maximumFractionDigits: 0,
+              })}{" "}
+              SEK
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200">
+          <CardContent className="space-y-1 py-4">
+            <p className="text-xs text-slate-500 uppercase">Unrealized P/L</p>
+            <p
+              className={cn(
+                "text-lg font-semibold",
+                (metrics?.unrealized_pl ?? 0) >= 0
+                  ? "text-emerald-700"
+                  : "text-rose-700",
+              )}
+            >
+              {(metrics?.unrealized_pl ?? 0).toLocaleString("sv-SE", {
+                maximumFractionDigits: 0,
+              })}{" "}
+              SEK
+            </p>
+            <p className="text-xs text-slate-500">
+              TWR:{" "}
+              {metrics?.twr !== undefined && metrics?.twr !== null
+                ? `${(metrics.twr * 100).toFixed(1)}%`
+                : "—"}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-slate-200">
+          <CardContent className="space-y-1 py-4">
+            <p className="text-xs text-slate-500 uppercase">IRR</p>
+            <p className="text-lg font-semibold text-slate-900">
+              {metrics?.irr !== undefined && metrics?.irr !== null
+                ? `${(metrics.irr * 100).toFixed(1)}%`
+                : "—"}
+            </p>
+            <p className="text-xs text-slate-500">
+              Benchmark:{" "}
+              {metrics?.benchmark_change_pct !== undefined &&
+              metrics?.benchmark_change_pct !== null
+                ? `${(metrics.benchmark_change_pct * 100).toFixed(1)}%`
+                : "—"}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)] lg:col-span-2">
@@ -726,9 +859,23 @@ export const Investments: React.FC = () => {
         <div className="space-y-4">
           <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-800">
-                Portfolio value trend
-              </CardTitle>
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-sm text-slate-800">
+                  Portfolio value trend
+                </CardTitle>
+                <div className="flex items-center gap-2 text-xs text-slate-600">
+                  {["3M", "6M", "1Y", "ALL"].map((opt) => (
+                    <Button
+                      key={opt}
+                      size="sm"
+                      variant={range === opt ? "secondary" : "ghost"}
+                      onClick={() => setRange(opt as typeof range)}
+                    >
+                      {opt}
+                    </Button>
+                  ))}
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="h-[220px]">
               {valueSeries.length ? (
@@ -898,6 +1045,72 @@ export const Investments: React.FC = () => {
               ) : (
                 <p className="text-sm text-slate-500">
                   Save a snapshot to see holdings here.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
+            <CardHeader className="flex items-center justify-between pb-2">
+              <CardTitle className="text-sm text-slate-800">
+                Recent investment transactions
+              </CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  exportCsv(
+                    transactions.slice(0, 200) as Record<string, unknown>[],
+                    "investment-transactions.csv",
+                  )
+                }
+                disabled={!transactions.length}
+              >
+                Export CSV
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {transactions.length ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead className="text-right">Amount (SEK)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {transactions.slice(0, 10).map((tx) => (
+                      <TableRow key={tx.id}>
+                        <TableCell className="text-slate-600">
+                          {tx.occurred_at.slice(0, 10)}
+                        </TableCell>
+                        <TableCell className="text-slate-700 capitalize">
+                          {tx.transaction_type}
+                        </TableCell>
+                        <TableCell className="text-slate-800">
+                          {tx.description || tx.holding_name || "—"}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            "text-right",
+                            (Number(tx.amount_sek) || 0) >= 0
+                              ? "text-emerald-700"
+                              : "text-rose-700",
+                          )}
+                        >
+                          {Number(tx.amount_sek).toLocaleString("sv-SE", {
+                            maximumFractionDigits: 0,
+                          })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  Save a snapshot with transactions to see them here.
                 </p>
               )}
             </CardContent>

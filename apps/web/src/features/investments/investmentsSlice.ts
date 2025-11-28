@@ -1,8 +1,15 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { InvestmentSnapshot, NordnetParseResponse } from "@/types/api";
+import type {
+  InvestmentSnapshot,
+  InvestmentTransactionRead,
+  InvestmentMetricsResponse,
+  NordnetParseResponse,
+} from "@/types/api";
 
 export interface InvestmentsState {
   snapshots: InvestmentSnapshot[];
+  transactions: InvestmentTransactionRead[];
+  metrics?: InvestmentMetricsResponse["performance"];
   loading: boolean;
   saving: boolean;
   parseLoading: Record<string, boolean>;
@@ -13,6 +20,7 @@ export interface InvestmentsState {
 
 const initialState: InvestmentsState = {
   snapshots: [],
+  transactions: [],
   loading: false,
   saving: false,
   parseLoading: {},
@@ -26,6 +34,18 @@ const investmentsSlice = createSlice({
     setSnapshots(state, action: PayloadAction<InvestmentSnapshot[]>) {
       state.snapshots = action.payload;
       state.error = undefined;
+    },
+    setTransactions(state, action: PayloadAction<InvestmentTransactionRead[]>) {
+      state.transactions = action.payload;
+      state.error = undefined;
+    },
+    setMetrics(
+      state,
+      action: PayloadAction<
+        InvestmentMetricsResponse["performance"] | undefined
+      >,
+    ) {
+      state.metrics = action.payload;
     },
     upsertSnapshot(state, action: PayloadAction<InvestmentSnapshot>) {
       const existingIndex = state.snapshots.findIndex(
@@ -72,6 +92,8 @@ const investmentsSlice = createSlice({
   selectors: {
     selectInvestmentsState: (state) => state,
     selectInvestmentSnapshots: (state) => state.snapshots,
+    selectInvestmentTransactions: (state) => state.transactions,
+    selectInvestmentMetrics: (state) => state.metrics,
     selectInvestmentsLoading: (state) => state.loading,
     selectInvestmentsSaving: (state) => state.saving,
     selectInvestmentsError: (state) => state.error,
@@ -83,6 +105,8 @@ const investmentsSlice = createSlice({
 
 export const {
   setSnapshots,
+  setTransactions,
+  setMetrics,
   upsertSnapshot,
   setInvestmentsLoading,
   setInvestmentsSaving,
@@ -96,6 +120,8 @@ export const {
 export const {
   selectInvestmentsState,
   selectInvestmentSnapshots,
+  selectInvestmentTransactions,
+  selectInvestmentMetrics,
   selectInvestmentsLoading,
   selectInvestmentsSaving,
   selectInvestmentsError,

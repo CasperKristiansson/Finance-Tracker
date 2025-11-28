@@ -393,3 +393,27 @@ functions:
           path: /investments/nordnet/parse
           method: POST
           authorizer: cognitoJwt
+
+  listInvestmentTransactions:
+    handler: apps/api/handlers/investments.list_investment_transactions
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /investments/transactions
+          method: GET
+          authorizer: cognitoJwt
+
+  investmentMetrics:
+    handler: apps/api/handlers/investments.investment_metrics
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /investments/metrics
+          method: GET
+          authorizer: cognitoJwt

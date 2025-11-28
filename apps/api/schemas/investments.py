@@ -51,6 +51,7 @@ class NordnetSnapshotRead(BaseModel):
     bedrock_metadata: Optional[dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
+    holdings: Optional[list["InvestmentHoldingRead"]] = None
 
 
 class NordnetSnapshotResponse(BaseModel):
@@ -79,6 +80,84 @@ class NordnetParseResponse(BaseModel):
     snapshot_date: Optional[date] = None
     portfolio_value: Optional[Decimal] = None
     parsed_payload: dict[str, Any]
+
+
+class InvestmentHoldingRead(BaseModel):
+    """Holding row from a snapshot."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    snapshot_id: UUID
+    snapshot_date: date
+    account_name: Optional[str] = None
+    name: str
+    isin: Optional[str] = None
+    holding_type: Optional[str] = None
+    currency: Optional[str] = None
+    quantity: Optional[Decimal] = None
+    price: Optional[Decimal] = None
+    value_sek: Optional[Decimal] = None
+    notes: Optional[str] = None
+
+
+class InvestmentTransactionRead(BaseModel):
+    """Investment transaction entry."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    snapshot_id: Optional[UUID] = None
+    occurred_at: datetime
+    transaction_type: str
+    description: Optional[str] = None
+    holding_name: Optional[str] = None
+    isin: Optional[str] = None
+    account_name: Optional[str] = None
+    quantity: Optional[Decimal] = None
+    amount_sek: Decimal
+    currency: Optional[str] = None
+    fee_sek: Optional[Decimal] = None
+    notes: Optional[str] = None
+
+
+class InvestmentTransactionListResponse(BaseModel):
+    """Response for listing investment transactions."""
+
+    transactions: list[InvestmentTransactionRead]
+
+
+class InvestmentPerformanceRead(BaseModel):
+    """Aggregated performance metrics."""
+
+    total_value: Decimal
+    invested: Decimal
+    realized_pl: Decimal
+    unrealized_pl: Decimal
+    twr: Optional[float] = None
+    irr: Optional[float] = None
+    as_of: date
+    benchmarks: list["BenchmarkRead"] = Field(default_factory=list)
+
+
+class BenchmarkRead(BaseModel):
+    """Benchmark comparison."""
+
+    symbol: str
+    change_pct: Optional[float] = None
+    series: list[tuple[str, float]] = Field(
+        default_factory=list,
+        description="List of (date, close) tuples",
+    )
+
+
+class InvestmentMetricsResponse(BaseModel):
+    """Performance payload with holdings and totals."""
+
+    performance: InvestmentPerformanceRead
+    holdings: list[InvestmentHoldingRead]
+    snapshots: list[NordnetSnapshotRead]
+    transactions: list[InvestmentTransactionRead]
 
 
 __all__ = [

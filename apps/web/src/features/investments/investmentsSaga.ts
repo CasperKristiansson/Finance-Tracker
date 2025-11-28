@@ -10,10 +10,14 @@ import {
   setLastSavedClientId,
   setParseLoading,
   setParseResult,
+  setTransactions,
+  setMetrics,
   setSnapshots,
   upsertSnapshot,
 } from "@/features/investments/investmentsSlice";
 import type {
+  InvestmentMetricsResponse,
+  InvestmentTransactionListResponse,
   InvestmentSnapshotListResponse,
   InvestmentSnapshotResponse,
   NordnetParseRequest,
@@ -22,6 +26,10 @@ import type {
 } from "@/types/api";
 
 export const FetchInvestmentSnapshots = createAction("investments/fetch");
+export const FetchInvestmentTransactions = createAction(
+  "investments/fetchTransactions",
+);
+export const FetchInvestmentMetrics = createAction("investments/fetchMetrics");
 export const ParseNordnetExport = createAction<
   NordnetParseRequest & { clientId: string }
 >("investments/parse");
@@ -55,6 +63,59 @@ function* handleFetchSnapshots() {
     );
   } finally {
     yield put(setInvestmentsLoading(false));
+  }
+}
+
+function* handleFetchTransactions() {
+  try {
+    const response: InvestmentTransactionListResponse = yield call(
+      callApiWithAuth,
+      {
+        path: "/investments/transactions",
+      },
+      { loadingKey: "investments", silent: true },
+    );
+    if (response?.transactions) {
+      yield put(setTransactions(response.transactions));
+    }
+  } catch (error) {
+    yield put(
+      setInvestmentsError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load investment transactions.",
+      ),
+    );
+  }
+}
+
+function* handleFetchMetrics() {
+  try {
+    const response: InvestmentMetricsResponse = yield call(
+      callApiWithAuth,
+      {
+        path: "/investments/metrics",
+      },
+      { loadingKey: "investments", silent: true },
+    );
+    if (response?.performance) {
+      yield put(setMetrics(response.performance));
+    }
+    if (response?.snapshots) {
+      yield put(setSnapshots(response.snapshots));
+    }
+    if (response?.holdings) {
+      // holdings already embedded in snapshots; no-op
+    }
+    if (response?.transactions) {
+      yield put(setTransactions(response.transactions));
+    }
+  } catch (error) {
+    yield put(
+      setInvestmentsError(
+        error instanceof Error ? error.message : "Unable to load metrics.",
+      ),
+    );
   }
 }
 
@@ -135,6 +196,8 @@ function* handleClearDraft(action: ReturnType<typeof ClearDraft>) {
 
 export function* InvestmentsSaga() {
   yield takeLatest(FetchInvestmentSnapshots.type, handleFetchSnapshots);
+  yield takeLatest(FetchInvestmentTransactions.type, handleFetchTransactions);
+  yield takeLatest(FetchInvestmentMetrics.type, handleFetchMetrics);
   yield takeLatest(ParseNordnetExport.type, handleParseNordnetExport);
   yield takeLatest(SaveNordnetSnapshot.type, handleSaveSnapshot);
   yield takeLatest(ClearDraft.type, handleClearDraft);

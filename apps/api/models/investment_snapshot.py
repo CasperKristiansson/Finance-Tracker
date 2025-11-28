@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import Column, Date, JSON, Numeric, String, Text
-from sqlmodel import Field, SQLModel
+from sqlalchemy.orm import relationship
+from sqlmodel import Field, Relationship, SQLModel
 
 from ..shared import TimestampMixin, UUIDPrimaryKeyMixin
+
+if TYPE_CHECKING:  # pragma: no cover
+    from .investment_holding import InvestmentHolding
 
 
 class InvestmentSnapshot(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
@@ -37,6 +41,11 @@ class InvestmentSnapshot(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=Tr
     bedrock_metadata: Optional[dict[str, Any]] = Field(
         default=None,
         sa_column=Column(JSON, nullable=True),
+    )
+    holdings: list["InvestmentHolding"] = Relationship(
+        sa_relationship=relationship(
+            "InvestmentHolding", back_populates="snapshot", cascade="all, delete-orphan"
+        )
     )
 
 

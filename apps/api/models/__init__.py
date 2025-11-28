@@ -3,6 +3,8 @@
 from .account import Account, BalanceSnapshot, Loan, LoanRateChange
 from .budget import Budget
 from .category import Category, SystemAccount
+from .investment_holding import InvestmentHolding
+from .investment_transaction import InvestmentTransaction
 from .investment_snapshot import InvestmentSnapshot
 from .imports import ImportErrorRecord, ImportFile, ImportRow, TransactionImportBatch
 from .transaction import LoanEvent, Transaction, TransactionLeg
@@ -22,4 +24,6 @@ __all__ = [
     "ImportErrorRecord",
     "ImportRow",
     "InvestmentSnapshot",
+    "InvestmentHolding",
+    "InvestmentTransaction",
 ]

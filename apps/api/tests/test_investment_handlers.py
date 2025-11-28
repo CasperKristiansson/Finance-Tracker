@@ -68,6 +68,8 @@ def test_create_snapshot_and_list():
     assert created["provider"] == "nordnet"
     assert created["report_type"] == "portfolio_report"
     assert created["parsed_payload"]["holdings"][0]["name"].startswith("iShares Core MSCI World")
+    # holdings persisted
+    assert created["holdings"][0]["name"].startswith("iShares Core MSCI World")
 
     list_response = list_nordnet_snapshots({"queryStringParameters": None}, None)
     assert list_response["statusCode"] == 200

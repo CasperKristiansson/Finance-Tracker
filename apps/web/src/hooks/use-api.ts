@@ -51,6 +51,8 @@ import {
 } from "@/features/imports/importsSlice";
 import {
   FetchInvestmentSnapshots,
+  FetchInvestmentTransactions,
+  FetchInvestmentMetrics,
   ParseNordnetExport,
   SaveNordnetSnapshot,
   ClearDraft as ClearInvestmentDraft,
@@ -60,6 +62,8 @@ import {
   selectParsedResults,
   selectParseLoading,
   selectLastSavedClientId,
+  selectInvestmentTransactions,
+  selectInvestmentMetrics,
 } from "@/features/investments/investmentsSlice";
 import { FetchLoanEvents, FetchLoanSchedule } from "@/features/loans/loansSaga";
 import {
@@ -290,9 +294,21 @@ export const useInvestmentsApi = () => {
   const parseLoading = useAppSelector(selectParseLoading);
   const parsedResults = useAppSelector(selectParsedResults);
   const lastSavedClientId = useAppSelector(selectLastSavedClientId);
+  const transactions = useAppSelector(selectInvestmentTransactions);
+  const metrics = useAppSelector(selectInvestmentMetrics);
 
   const fetchSnapshots = useCallback(
     () => dispatch(FetchInvestmentSnapshots()),
+    [dispatch],
+  );
+
+  const fetchTransactions = useCallback(
+    () => dispatch(FetchInvestmentTransactions()),
+    [dispatch],
+  );
+
+  const fetchMetrics = useCallback(
+    () => dispatch(FetchInvestmentMetrics()),
     [dispatch],
   );
 
@@ -328,7 +344,11 @@ export const useInvestmentsApi = () => {
     parseLoading,
     parsedResults,
     lastSavedClientId,
+    transactions,
+    metrics,
     fetchSnapshots,
+    fetchTransactions,
+    fetchMetrics,
     parseExport,
     saveSnapshot,
     clearDraft,

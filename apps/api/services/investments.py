@@ -9,10 +9,13 @@ from typing import Any, Optional, Tuple
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
+import urllib.request
+import urllib.error
 from sqlmodel import Session
 
-from ..models import InvestmentSnapshot
-from ..repositories.investments import InvestmentSnapshotRepository
+from ..models import InvestmentHolding, InvestmentSnapshot, InvestmentTransaction
+from ..repositories.investment_snapshots import InvestmentSnapshotRepository
+from ..repositories.investment_transactions import InvestmentTransactionRepository
 from ..schemas import NordnetSnapshotCreate
 from .nordnet_parser import NordnetPreParser
 
@@ -29,6 +32,7 @@ class InvestmentSnapshotService:
     def __init__(self, session: Session):
         self.session = session
         self.repository = InvestmentSnapshotRepository(session)
+        self.tx_repository = InvestmentTransactionRepository(session)
         self.pre_parser = NordnetPreParser()
 
     def create_nordnet_snapshot(self, payload: NordnetSnapshotCreate) -> InvestmentSnapshot:
@@ -73,10 +77,86 @@ class InvestmentSnapshotService:
             cleaned_payload=cleaned_payload,
             bedrock_metadata=bedrock_metadata,
         )
-        return self.repository.create(snapshot)
+        holdings_payload = cleaned_payload.get("cleaned_rows") if cleaned_payload else None
+        holdings = self._to_holdings(
+            holdings_payload or parsed_payload,
+            snapshot_date=snapshot_date,
+            account=payload.account_name,
+        )
+        snapshot_saved = self.repository.create_with_holdings(snapshot, holdings)
+
+        tx_rows = self._extract_transactions(parsed_payload)
+        tx_models = self._to_transactions(tx_rows, snapshot_saved)
+        if tx_models:
+            self.tx_repository.bulk_insert(tx_models)
+
+        return snapshot_saved
 
     def list_snapshots(self, limit: Optional[int] = None) -> list[InvestmentSnapshot]:
-        return self.repository.list(limit=limit)
+        return self.repository.list_snapshots(limit=limit)
+
+    def list_transactions(
+        self,
+        *,
+        start: Optional[datetime] = None,
+        end: Optional[datetime] = None,
+        holding: Optional[str] = None,
+        tx_type: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> list[InvestmentTransaction]:
+        return self.tx_repository.list_transactions(
+            start=start, end=end, holding=holding, tx_type=tx_type, limit=limit
+        )
+
+    def benchmark_change_pct(
+        self, symbol: str, start_date: date, end_date: date, return_series: bool = False
+    ) -> Tuple[Optional[float], Optional[list[tuple[str, float]]]]:
+        """Fetch benchmark percentage change (and optional series) from Yahoo."""
+        try:
+            delta_days = max(1, (end_date - start_date).days)
+            range_param = "1mo"
+            if delta_days > 365:
+                range_param = "2y"
+            elif delta_days > 180:
+                range_param = "1y"
+            elif delta_days > 90:
+                range_param = "6mo"
+            elif delta_days > 30:
+                range_param = "3mo"
+
+            url = (
+                f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+                f"?range={range_param}&interval=1d"
+            )
+            with urllib.request.urlopen(url, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            result = (
+                data.get("chart", {})
+                .get("result", [{}])[0]
+                .get("indicators", {})
+                .get("quote", [{}])[0]
+                .get("close", [])
+            )
+            timestamps = (
+                data.get("chart", {}).get("result", [{}])[0].get("timestamp", []) or []
+            )
+            closes = [v for v in result if isinstance(v, (int, float))]
+            if len(closes) < 2:
+                return None, None
+            # Align to date range
+            series: list[tuple[str, float]] = []
+            for ts, close in zip(timestamps, closes):
+                dt = datetime.utcfromtimestamp(ts).date()
+                if dt < start_date or dt > end_date:
+                    continue
+                series.append((dt.isoformat(), float(close)))
+            start_price, end_price = closes[0], closes[-1]
+            if start_price == 0:
+                return None, series if return_series else None
+            change = float((end_price - start_price) / start_price)
+            return (change, series) if return_series else (change, None)
+        except Exception:
+            return (None, None)
 
     def parse_nordnet_export(
         self, raw_text: str, manual_payload: Optional[dict[str, Any]] = None
@@ -225,6 +305,98 @@ class InvestmentSnapshotService:
             if isinstance(value, list):
                 return [row for row in value if isinstance(row, dict)]
         return []
+
+    def _extract_transactions(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
+        txs = payload.get("transactions") or payload.get("rows") or []
+        return [row for row in txs if isinstance(row, dict) and row.get("transaction_type")]
+
+    def _to_holdings(
+        self,
+        payload: dict[str, Any] | list[dict[str, Any]],
+        *,
+        snapshot_date,
+        account: Optional[str],
+    ) -> list[InvestmentHolding]:
+        rows: list[dict[str, Any]] = []
+        if isinstance(payload, list):
+            rows = payload
+        elif isinstance(payload, dict):
+            if isinstance(payload.get("cleaned_rows"), list):
+                rows = payload.get("cleaned_rows")  # type: ignore[assignment]
+            elif isinstance(payload.get("holdings"), list):
+                rows = payload.get("holdings")  # type: ignore[assignment]
+            elif isinstance(payload.get("rows"), list):
+                rows = payload.get("rows")  # type: ignore[assignment]
+        holdings: list[InvestmentHolding] = []
+        for row in rows:
+            holdings.append(
+                InvestmentHolding(
+                    snapshot_date=snapshot_date,
+                    account_name=account,
+                    name=str(row.get("name") or "Unknown"),
+                    isin=row.get("isin"),
+                    holding_type=row.get("type") or row.get("holding_type"),
+                    currency=row.get("currency"),
+                    quantity=self._coerce_decimal(row.get("quantity")),
+                    price=self._coerce_decimal(row.get("price")),
+                    value_sek=self._coerce_decimal(
+                        row.get("value_sek") or row.get("market_value_sek") or row.get("value")
+                    ),
+                    notes=row.get("notes") or row.get("remarks"),
+                )
+            )
+        return holdings
+
+    def _coerce_decimal(self, value: Any) -> Optional[Decimal]:
+        if value is None or value == "":
+            return None
+        try:
+            return Decimal(str(value))
+        except Exception:
+            return None
+
+    def _to_transactions(
+        self, rows: list[dict[str, Any]], snapshot: InvestmentSnapshot
+    ) -> list[InvestmentTransaction]:
+        txs: list[InvestmentTransaction] = []
+        seen: set[tuple] = set()
+        for row in rows:
+            occurred_at = self._extract_snapshot_date(
+                {"snapshot_date": row.get("date") or row.get("occurred_at")}
+            )
+            if occurred_at is None:
+                continue
+            ttype = str(row.get("transaction_type") or row.get("type") or "other")
+            amount = self._coerce_decimal(row.get("amount_sek") or row.get("amount"))
+            if amount is None:
+                continue
+            identity = (
+                occurred_at,
+                ttype,
+                row.get("description"),
+                float(amount),
+                float(self._coerce_decimal(row.get("quantity")) or 0),
+            )
+            if identity in seen:
+                continue
+            seen.add(identity)
+            txs.append(
+                InvestmentTransaction(
+                    snapshot_id=snapshot.id,
+                    occurred_at=datetime.combine(occurred_at, datetime.min.time()),
+                    transaction_type=ttype,
+                    description=row.get("description"),
+                    holding_name=row.get("holding") or row.get("name"),
+                    isin=row.get("isin"),
+                    account_name=row.get("account"),
+                    quantity=self._coerce_decimal(row.get("quantity")),
+                    amount_sek=amount,
+                    currency=row.get("currency"),
+                    fee_sek=self._coerce_decimal(row.get("fee")),
+                    notes=row.get("notes") or row.get("remarks"),
+                )
+            )
+        return txs
 
 
 __all__ = ["InvestmentSnapshotService"]

@@ -60,6 +60,7 @@ export interface InvestmentSnapshot {
   bedrock_metadata?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
+  holdings?: InvestmentHoldingRead[] | null;
 }
 
 export interface InvestmentSnapshotResponse {
@@ -93,6 +94,21 @@ export interface NordnetSnapshotCreateRequest {
   use_bedrock?: boolean;
   bedrock_model_id?: string | null;
   bedrock_max_tokens?: number | null;
+}
+
+export interface InvestmentHoldingRead {
+  id: string;
+  snapshot_id: string;
+  snapshot_date: string;
+  account_name?: string | null;
+  name: string;
+  isin?: string | null;
+  holding_type?: string | null;
+  currency?: string | null;
+  quantity?: string | number | null;
+  price?: string | number | null;
+  value_sek?: string | number | null;
+  notes?: string | null;
 }
 
 export interface LoanRead {
