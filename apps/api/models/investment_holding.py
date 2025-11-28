@@ -9,8 +9,8 @@ from uuid import UUID
 
 from sqlalchemy import Column, Date, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlmodel import Field, Relationship, SQLModel
 from sqlalchemy.orm import relationship
+from sqlmodel import Field, Relationship, SQLModel
 
 from ..shared import TimestampMixin, UUIDPrimaryKeyMixin
 from .investment_snapshot import InvestmentSnapshot

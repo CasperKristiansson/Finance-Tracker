@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 from uuid import UUID
 
 from sqlmodel import Session, select
@@ -177,7 +177,9 @@ class AccountService:
         if hasattr(self, "_offset_account"):
             return getattr(self, "_offset_account")
         account = self.repository.session.exec(
-            select(Account).where(Account.is_active.is_(False), Account.display_order == 9999)
+            select(Account).where(
+                cast(Any, Account.is_active).is_(False), Account.display_order == 9999
+            )
         ).one_or_none()
         if account is None:
             account = Account(account_type=AccountType.NORMAL, is_active=False, display_order=9999)

@@ -1,18 +1,17 @@
 """Service layer for imports."""
 
-# pylint: disable=broad-exception-caught
+# pylint: disable=broad-exception-caught,too-many-lines
 
 from __future__ import annotations
 
 import base64
-import csv
 import io
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-import re
-from typing import Any, Dict, Iterable, List, Optional, Tuple, cast
+from typing import Any, Dict, List, Optional, Tuple, cast
 from uuid import UUID
 
 import boto3
@@ -35,19 +34,14 @@ from ..models import (
 from ..repositories.imports import ImportRepository
 from ..schemas import ExampleTransaction, ImportBatchCreate, ImportCommitRequest
 from ..schemas import ImportFile as ImportFilePayload
-from ..shared import AccountType, CreatedSource, TransactionStatus, TransactionType
+from ..shared import (
+    AccountType,
+    BankImportType,
+    CreatedSource,
+    TransactionStatus,
+    TransactionType,
+)
 from .transaction import TransactionService
-
-REQUIRED_FIELDS = ("date", "description", "amount")
-DATE_FIELDS = {"date", "transaction_date", "occurred_at", "posted_at"}
-DESCRIPTION_FIELDS = {"description", "memo", "payee", "text"}
-AMOUNT_FIELDS = {"amount", "amt", "transaction_amount", "value"}
-
-TEMPLATE_MAPPINGS: dict[str, Dict[str, str]] = {
-    "default": {"date": "date", "description": "description", "amount": "amount"},
-    "nordea": {"date": "bokforingsdatum", "description": "text", "amount": "belopp"},
-    "revolut": {"date": "completed_date", "description": "description", "amount": "amount"},
-}
 
 
 @dataclass
@@ -164,18 +158,18 @@ class ImportService:
                         suggested_category=suggestion.category if suggestion else None,
                         suggested_confidence=suggestion.confidence if suggestion else None,
                         suggested_reason=suggestion.reason if suggestion else None,
-                        suggested_subscription_id=subscription_hint.subscription_id
-                        if subscription_hint
-                        else None,
-                        suggested_subscription_name=subscription_hint.subscription_name
-                        if subscription_hint
-                        else None,
-                        suggested_subscription_confidence=subscription_hint.confidence
-                        if subscription_hint
-                        else None,
-                        suggested_subscription_reason=subscription_hint.reason
-                        if subscription_hint
-                        else None,
+                        suggested_subscription_id=(
+                            subscription_hint.subscription_id if subscription_hint else None
+                        ),
+                        suggested_subscription_name=(
+                            subscription_hint.subscription_name if subscription_hint else None
+                        ),
+                        suggested_subscription_confidence=(
+                            subscription_hint.confidence if subscription_hint else None
+                        ),
+                        suggested_subscription_reason=(
+                            subscription_hint.reason if subscription_hint else None
+                        ),
                         transfer_match=transfer,
                     )
                 )
@@ -405,18 +399,18 @@ class ImportService:
                         suggested_category=suggestion.category if suggestion else None,
                         suggested_confidence=suggestion.confidence if suggestion else None,
                         suggested_reason=suggestion.reason if suggestion else None,
-                        suggested_subscription_id=subscription_hint.subscription_id
-                        if subscription_hint
-                        else None,
-                        suggested_subscription_name=subscription_hint.subscription_name
-                        if subscription_hint
-                        else None,
-                        suggested_subscription_confidence=subscription_hint.confidence
-                        if subscription_hint
-                        else None,
-                        suggested_subscription_reason=subscription_hint.reason
-                        if subscription_hint
-                        else None,
+                        suggested_subscription_id=(
+                            subscription_hint.subscription_id if subscription_hint else None
+                        ),
+                        suggested_subscription_name=(
+                            subscription_hint.subscription_name if subscription_hint else None
+                        ),
+                        suggested_subscription_confidence=(
+                            subscription_hint.confidence if subscription_hint else None
+                        ),
+                        suggested_subscription_reason=(
+                            subscription_hint.reason if subscription_hint else None
+                        ),
                         transfer_match=transfer,
                     )
                 )
@@ -437,8 +431,12 @@ class ImportService:
 
     def _parse_file(self, file: ImportFilePayload) -> ParsedImportFile:
         decoded = self._decode_base64(file.content_base64)
-        rows, parse_errors = self._extract_rows(file.filename, decoded)
-        column_map = self._build_column_map(rows, file.template_id)
+        rows, parse_errors = self._extract_bank_rows(
+            filename=file.filename, content=decoded, bank_type=file.bank_type
+        )
+        column_map: Optional[Dict[str, str]] = (
+            {"date": "date", "description": "description", "amount": "amount"} if rows else None
+        )
         validation_errors = self._validate_rows(rows, column_map)
         errors = parse_errors + validation_errors
 
@@ -451,7 +449,11 @@ class ImportService:
         model = ImportFile(
             filename=file.filename,
             account_id=file.account_id,
-            template_id=file.template_id,
+            bank_type=(
+                file.bank_type.value
+                if isinstance(file.bank_type, BankImportType)
+                else str(file.bank_type)
+            ),
             row_count=len(rows),
             error_count=len(errors),
             status=status,
@@ -472,31 +474,13 @@ class ImportService:
         except Exception as exc:  # pragma: no cover - validated earlier
             raise ValueError("Unable to decode file content") from exc
 
-    def _extract_rows(
-        self, filename: str, content: bytes
+    def _extract_bank_rows(
+        self, *, filename: str, content: bytes, bank_type: BankImportType
     ) -> tuple[List[dict[str, Any]], List[Tuple[int, str]]]:
         name = filename.lower()
-        if name.endswith(".xlsx"):
-            return self._parse_xlsx(content)
-        if name.endswith(".csv"):
-            return self._parse_csv(content)
-        return ([], [(0, "Unsupported file type; use CSV or XLSX")])
+        if not name.endswith(".xlsx"):
+            return ([], [(0, "Unsupported file type; only XLSX exports are accepted")])
 
-    def _parse_csv(self, content: bytes) -> tuple[List[dict[str, Any]], List[Tuple[int, str]]]:
-        text = content.decode("utf-8-sig", errors="replace")
-        reader = csv.DictReader(io.StringIO(text))
-        if reader.fieldnames is None:
-            return ([], [(0, "CSV is missing a header row")])
-
-        rows: List[dict[str, Any]] = []
-        for row in reader:
-            cleaned = {self._clean_header(k): self._clean_value(v) for k, v in row.items() if k}
-            if not any(cleaned.values()):
-                continue
-            rows.append(cleaned)
-        return rows, []
-
-    def _parse_xlsx(self, content: bytes) -> tuple[List[dict[str, Any]], List[Tuple[int, str]]]:
         try:
             workbook = load_workbook(filename=io.BytesIO(content), read_only=True, data_only=True)
         except Exception as exc:
@@ -506,53 +490,145 @@ class ImportService:
         if sheet is None:
             return ([], [(0, "XLSX workbook has no active sheet")])
 
-        header_row = next(sheet.iter_rows(values_only=True), None)
-        if not header_row:
-            return ([], [(0, "XLSX is missing a header row")])
+        if bank_type == BankImportType.CIRCLE_K_MASTERCARD:
+            return self._parse_circle_k_mastercard(sheet)
+        if bank_type == BankImportType.SEB:
+            return self._parse_seb(sheet)
+        if bank_type == BankImportType.SWEDBANK:
+            return self._parse_swedbank(sheet)
+        return ([], [(0, "Unknown bank type")])
 
-        headers = [self._clean_header(cell) for cell in header_row if cell is not None]
-        if not headers:
-            return ([], [(0, "XLSX is missing a header row")])
-
+    def _parse_circle_k_mastercard(
+        self, sheet
+    ) -> tuple[List[dict[str, Any]], List[Tuple[int, str]]]:
+        headers = None
         rows: List[dict[str, Any]] = []
-        for row in sheet.iter_rows(min_row=2, values_only=True):
-            mapped = {}
-            for header, cell in zip(headers, row):
-                if not header:
-                    continue
-                mapped[header] = self._clean_value(cell)
-            if not any(mapped.values()):
+        errors: List[Tuple[int, str]] = []
+
+        for idx, row in enumerate(sheet.iter_rows(values_only=True), start=1):
+            cleaned = [self._clean_value(cell) for cell in row]
+            if headers is None:
+                if {"datum", "belopp"}.issubset({self._clean_header(cell) for cell in row}):
+                    headers = [self._clean_header(cell) for cell in row]
                 continue
-            rows.append(mapped)
-        return rows, []
+            if not any(cleaned):
+                continue
+            if isinstance(cleaned[0], str) and "totalt belopp" in cleaned[0].lower():
+                continue
 
-    def _build_column_map(
-        self, rows: List[dict[str, Any]], template_id: Optional[str] = None
-    ) -> Optional[Dict[str, str]]:
-        if not rows:
-            return None
-        header_keys: set[str] = set(rows[0].keys())
+            try:
+                date_text = cleaned[0] or cleaned[1] or ""
+                occurred_at = self._parse_date(date_text)
+                if occurred_at is None:
+                    raise ValueError("invalid date")
+                description = cleaned[2] or ""
+                if cleaned[3]:
+                    description = (
+                        f"{description} ({cleaned[3]})" if description else str(cleaned[3])
+                    )
+                amount_raw = cleaned[6] if len(cleaned) > 6 else None
+                amount = Decimal(str(amount_raw))
+                amount = -abs(amount)
+                rows.append(
+                    {
+                        "date": occurred_at.isoformat(),
+                        "description": description,
+                        "amount": str(amount),
+                    }
+                )
+            except Exception as exc:
+                errors.append((idx, f"Unable to parse row: {exc}"))
 
-        if template_id:
-            template = TEMPLATE_MAPPINGS.get(template_id)
-            if template and all(template.get(field) in header_keys for field in REQUIRED_FIELDS):
-                return {
-                    "date": str(template["date"]),
-                    "description": str(template["description"]),
-                    "amount": str(template["amount"]),
-                }
-        column_map: Dict[str, Optional[str]] = {
-            "date": self._resolve_header(header_keys, DATE_FIELDS),
-            "description": self._resolve_header(header_keys, DESCRIPTION_FIELDS),
-            "amount": self._resolve_header(header_keys, AMOUNT_FIELDS),
-        }
-        if any(value is None for value in column_map.values()):
-            return None
-        return {
-            "date": str(column_map["date"]),
-            "description": str(column_map["description"]),
-            "amount": str(column_map["amount"]),
-        }
+        if headers is None:
+            errors.append((0, "Circle K Mastercard export is missing the expected headers"))
+
+        return rows, errors
+
+    def _parse_seb(self, sheet) -> tuple[List[dict[str, Any]], List[Tuple[int, str]]]:
+        header_index = None
+        headers: Dict[str, int] = {}
+        rows: List[dict[str, Any]] = []
+        errors: List[Tuple[int, str]] = []
+
+        for idx, row in enumerate(sheet.iter_rows(values_only=True), start=1):
+            header_map = {self._clean_header(val): pos for pos, val in enumerate(row) if val}
+            if not header_index and {"bokförd", "insättningar/uttag"}.issubset(header_map.keys()):
+                header_index = idx
+                headers = header_map
+                continue
+            if header_index is None or idx <= header_index:
+                continue
+            cleaned = [self._clean_value(cell) for cell in row]
+            if not any(cleaned):
+                continue
+            try:
+                date_text = cleaned[headers.get("bokförd", 0)] if headers else cleaned[0]
+                occurred_at = self._parse_date(str(date_text))
+                if occurred_at is None:
+                    raise ValueError("invalid date")
+                description = cleaned[headers.get("text", 2)] if headers else ""
+                if not description:
+                    description = cleaned[headers.get("typ", 3)] if headers else ""
+                amount_raw = cleaned[headers.get("insättningar/uttag", 5)] if headers else ""
+                amount = Decimal(str(amount_raw))
+                rows.append(
+                    {
+                        "date": occurred_at.isoformat(),
+                        "description": str(description),
+                        "amount": str(amount),
+                    }
+                )
+            except Exception as exc:
+                errors.append((idx, f"Unable to parse row: {exc}"))
+
+        if header_index is None:
+            errors.append((0, "SEB export is missing the expected headers"))
+
+        return rows, errors
+
+    def _parse_swedbank(self, sheet) -> tuple[List[dict[str, Any]], List[Tuple[int, str]]]:
+        header_index = None
+        headers: Dict[str, int] = {}
+        rows: List[dict[str, Any]] = []
+        errors: List[Tuple[int, str]] = []
+
+        for idx, row in enumerate(sheet.iter_rows(values_only=True), start=1):
+            header_map = {self._clean_header(val): pos for pos, val in enumerate(row) if val}
+            if not header_index and {"radnummer", "bokföringsdag", "belopp"}.issubset(
+                header_map.keys()
+            ):
+                header_index = idx
+                headers = header_map
+                continue
+            if header_index is None or idx <= header_index:
+                continue
+            cleaned = [self._clean_value(cell) for cell in row]
+            if not any(cleaned):
+                continue
+            try:
+                date_text = cleaned[headers.get("bokföringsdag", 1)]
+                occurred_at = self._parse_date(str(date_text))
+                if occurred_at is None:
+                    raise ValueError("invalid date")
+                ref = cleaned[headers.get("referens", 4)] if headers else ""
+                desc = cleaned[headers.get("beskrivning", 5)] if headers else ""
+                description = f"{ref} {desc}".strip() or desc or ref
+                amount_raw = cleaned[headers.get("belopp", 6)] if headers else ""
+                amount = Decimal(str(amount_raw))
+                rows.append(
+                    {
+                        "date": occurred_at.isoformat(),
+                        "description": description,
+                        "amount": str(amount),
+                    }
+                )
+            except Exception as exc:
+                errors.append((idx, f"Unable to parse row: {exc}"))
+
+        if header_index is None:
+            errors.append((0, "Swedbank export is missing the expected headers"))
+
+        return rows, errors
 
     def _validate_rows(
         self, rows: List[dict[str, Any]], column_map: Optional[Dict[str, str]]
@@ -685,14 +761,16 @@ class ImportService:
         for idx, row in enumerate(rows):
             description = str(row.get(description_header, "") or "")
             amount = self._safe_decimal(row.get(amount_header)) if amount_header else None
-            occurred_at = (
-                self._parse_date(str(row.get(date_header, ""))) if date_header else None
-            )
+            occurred_at = self._parse_date(str(row.get(date_header, ""))) if date_header else None
 
             best: SubscriptionSuggestion | None = None
             for subscription in subscriptions:
                 candidate = self._score_subscription(
-                    subscription, description, amount, occurred_at, last_amounts.get(subscription.id)
+                    subscription,
+                    description,
+                    amount,
+                    occurred_at,
+                    last_amounts.get(subscription.id),
                 )
                 if candidate is None:
                     continue
@@ -702,7 +780,7 @@ class ImportService:
                 suggestions[idx] = best
         return suggestions
 
-    def _score_subscription(
+    def _score_subscription(  # pylint: disable=too-many-positional-arguments
         self,
         subscription: Subscription,
         description: str,
@@ -710,7 +788,9 @@ class ImportService:
         occurred_at: Optional[datetime],
         last_amount: Optional[Decimal],
     ) -> Optional[SubscriptionSuggestion]:
-        text_match, text_reason = self._match_subscription_text(subscription.matcher_text, description)
+        text_match, text_reason = self._match_subscription_text(
+            subscription.matcher_text, description
+        )
         if not text_match:
             return None
 
@@ -762,13 +842,15 @@ class ImportService:
     def _subscription_amount_lookup(self) -> dict[UUID, Decimal]:
         latest = (
             select(
-                Transaction.id.label("txn_id"),
-                Transaction.subscription_id.label("subscription_id"),
+                cast(Any, Transaction.id).label("txn_id"),
+                cast(Any, Transaction.subscription_id).label("subscription_id"),
                 func.row_number()
-                .over(partition_by=Transaction.subscription_id, order_by=Transaction.occurred_at.desc())
+                .over(
+                    partition_by=cast(Any, Transaction.subscription_id),
+                    order_by=cast(Any, Transaction.occurred_at).desc(),
+                )
                 .label("rn"),
-            )
-            .where(Transaction.subscription_id.isnot(None))
+            ).where(cast(Any, Transaction.subscription_id).isnot(None))
         ).subquery()
 
         amounts = (
@@ -776,15 +858,13 @@ class ImportService:
                 latest.c.subscription_id,
                 func.max(func.abs(TransactionLeg.amount)).label("amount"),
             )
-            .join(TransactionLeg, TransactionLeg.transaction_id == latest.c.txn_id)
+            .join(TransactionLeg, cast(Any, TransactionLeg.transaction_id == latest.c.txn_id))
             .where(latest.c.rn == 1)
             .group_by(latest.c.subscription_id)
         )
         results = self.session.exec(amounts).all()
         lookup: dict[UUID, Decimal] = {}
-        for row in results:
-            sub_id = row.subscription_id
-            amount = row.amount
+        for sub_id, amount in results:
             if sub_id is None or amount is None:
                 continue
             lookup[sub_id] = Decimal(str(amount))
@@ -796,7 +876,7 @@ class ImportService:
         except (BotoCoreError, ClientError):  # pragma: no cover - environment dependent
             return None
 
-    def _bedrock_suggest_batch(
+    def _bedrock_suggest_batch(  # pylint: disable=too-many-positional-arguments
         self,
         client,
         rows: List[dict],
@@ -1062,13 +1142,6 @@ class ImportService:
         if isinstance(value, (int, float, Decimal)):
             return str(value)
         return str(value).strip()
-
-    def _resolve_header(self, headers: Iterable[str], candidates: set[str]) -> str | None:
-        for header in headers:
-            normalized = self._clean_header(header)
-            if normalized in candidates:
-                return header
-        return None
 
     def _is_decimal(self, value: str) -> bool:
         try:

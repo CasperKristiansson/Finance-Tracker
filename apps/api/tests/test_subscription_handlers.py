@@ -217,8 +217,12 @@ def test_subscription_summary_includes_spend_and_last_charge():
             session.add(txn)
             session.flush()
             legs = [
-                TransactionLeg(transaction_id=txn.id, account_id=account_a.id, amount=Decimal("-50")),
-                TransactionLeg(transaction_id=txn.id, account_id=account_b.id, amount=Decimal("50")),
+                TransactionLeg(
+                    transaction_id=txn.id, account_id=account_a.id, amount=Decimal("-50")
+                ),
+                TransactionLeg(
+                    transaction_id=txn.id, account_id=account_b.id, amount=Decimal("50")
+                ),
             ]
             session.add_all(legs)
         session.commit()

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 from uuid import UUID
 
 from sqlmodel import Session, select
@@ -24,7 +24,7 @@ class SubscriptionRepository:
     def list(self, *, include_inactive: bool = False) -> List[Subscription]:
         statement = select(Subscription).order_by(Subscription.name)
         if not include_inactive:
-            statement = statement.where(Subscription.is_active.is_(True))
+            statement = statement.where(cast(Any, Subscription.is_active).is_(True))
         result = self.session.exec(statement)
         return list(result.all())
 

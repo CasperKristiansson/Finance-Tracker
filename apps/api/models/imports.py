@@ -33,7 +33,7 @@ class ImportFile(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
     row_count: int = Field(default=0, sa_column=Column(Integer, nullable=False))
     error_count: int = Field(default=0, sa_column=Column(Integer, nullable=False))
     status: str = Field(default="received", sa_column=Column(String(32), nullable=False))
-    template_id: Optional[str] = Field(default=None, sa_column=Column(String(120), nullable=True))
+    bank_type: str = Field(sa_column=Column(String(64), nullable=False))
     errors: List["ImportErrorRecord"] = Relationship(
         sa_relationship=relationship(
             "ImportErrorRecord",

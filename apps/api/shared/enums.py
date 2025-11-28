@@ -75,6 +75,12 @@ class BudgetPeriod(StrEnum):
     YEARLY = "yearly"
 
 
+class BankImportType(StrEnum):
+    CIRCLE_K_MASTERCARD = "circle_k_mastercard"
+    SEB = "seb"
+    SWEDBANK = "swedbank"
+
+
 __all__ = [
     "StrEnum",
     "CreatedSource",
@@ -85,4 +91,5 @@ __all__ = [
     "InterestCompound",
     "LoanEventType",
     "BudgetPeriod",
+    "BankImportType",
 ]

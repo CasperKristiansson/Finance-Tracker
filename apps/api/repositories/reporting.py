@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple, cast
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 from uuid import UUID
 
 from sqlalchemy import Table, desc, func, text
@@ -230,15 +230,19 @@ class ReportingRepository:
         statement = select(func.coalesce(func.sum(leg_table.c.amount), 0))
         if account_ids:
             statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
-        result = self.session.exec(statement).scalar_one()
+        scalar = cast(Any, self.session.exec(statement))
+        result = scalar.scalar_one()
         return coerce_decimal(result)
 
     def latest_investment_value(self) -> Decimal:
         """Best-effort latest investment portfolio value."""
 
         statement = (
-            select(InvestmentSnapshot.snapshot_date, InvestmentSnapshot.portfolio_value)
-            .order_by(InvestmentSnapshot.snapshot_date.desc())
+            select(
+                cast(Any, InvestmentSnapshot.snapshot_date),
+                cast(Any, InvestmentSnapshot.portfolio_value),
+            )
+            .order_by(cast(Any, InvestmentSnapshot.snapshot_date).desc())
             .limit(1)
         )
         row = self.session.exec(statement).first()
@@ -347,7 +351,9 @@ class ReportingRepository:
         if category_ids:
             statement = statement.where(transaction_table.c.category_id.in_(list(category_ids)))
         if subscription_ids:
-            statement = statement.where(transaction_table.c.subscription_id.in_(list(subscription_ids)))
+            statement = statement.where(
+                transaction_table.c.subscription_id.in_(list(subscription_ids))
+            )
         if start_date:
             statement = statement.where(transaction_table.c.occurred_at >= start_date)
         if end_date:

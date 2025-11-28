@@ -13,16 +13,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { selectToken } from "@/features/auth/authSlice";
 import {
   useAccountsApi,
   useCategoriesApi,
   useImportsApi,
-  useSettings,
 } from "@/hooks/use-api";
-import { selectToken } from "@/features/auth/authSlice";
 import { apiFetch } from "@/lib/apiClient";
 import { cn } from "@/lib/utils";
 import type {
+  BankImportType,
   ImportCommitRow,
   ImportCreateRequest,
   ImportRowRead,
@@ -36,7 +36,7 @@ type LocalFile = {
   file?: File;
   filename: string;
   accountId?: string;
-  templateId?: string;
+  bankType?: BankImportType;
   contentBase64?: string;
 };
 
@@ -75,6 +75,12 @@ const dayFromDateText = (value?: string | null) => {
   return Number.isFinite(day) && day >= 1 && day <= 31 ? day : undefined;
 };
 
+const bankOptions: { id: BankImportType; label: string }[] = [
+  { id: "circle_k_mastercard", label: "Circle K Mastercard" },
+  { id: "seb", label: "SEB" },
+  { id: "swedbank", label: "Swedbank" },
+];
+
 export const Imports: React.FC = () => {
   const {
     loading,
@@ -88,7 +94,6 @@ export const Imports: React.FC = () => {
   } = useImportsApi();
   const { items: accounts, fetchAccounts } = useAccountsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
-  const { templates } = useSettings();
   const token = useAppSelector(selectToken);
   const [localFiles, setLocalFiles] = useState<LocalFile[]>([]);
   const [note, setNote] = useState("");
@@ -117,7 +122,9 @@ export const Imports: React.FC = () => {
       } catch (error) {
         toast.error("Unable to load subscriptions", {
           description:
-            error instanceof Error ? error.message : "Please try again shortly.",
+            error instanceof Error
+              ? error.message
+              : "Please try again shortly.",
         });
       } finally {
         setSubscriptionsLoading(false);
@@ -155,6 +162,13 @@ export const Imports: React.FC = () => {
     if (!localFiles.length) return;
     setUploading(true);
     try {
+      const missingBank = localFiles.find((lf) => !lf.bankType);
+      if (missingBank) {
+        toast.error("Choose a bank for each file", {
+          description: missingBank.filename,
+        });
+        return;
+      }
       const filesPayload = await Promise.all(
         localFiles.map(async (lf) => {
           const content =
@@ -163,7 +177,7 @@ export const Imports: React.FC = () => {
             filename: lf.filename,
             content_base64: content,
             account_id: lf.accountId,
-            template_id: lf.templateId,
+            bank_type: lf.bankType!,
           };
         }),
       );
@@ -196,9 +210,10 @@ export const Imports: React.FC = () => {
     const base = (row.data || {}) as Record<string, unknown>;
     const override = overrides[row.id];
     const descriptionText =
-      (override?.description ??
-        toStringValue(base["description"] ?? base["memo"] ?? base["text"]))?.trim() ||
-      "";
+      (
+        override?.description ??
+        toStringValue(base["description"] ?? base["memo"] ?? base["text"])
+      )?.trim() || "";
     const dateValue =
       override?.occurredAt ||
       toStringValue(base["date"] ?? base["occurred_at"] ?? base["posted_at"]);
@@ -231,7 +246,10 @@ export const Imports: React.FC = () => {
         body: payload,
         token,
       });
-      setSubscriptions((prev) => [data, ...prev.filter((s) => s.id !== data.id)]);
+      setSubscriptions((prev) => [
+        data,
+        ...prev.filter((s) => s.id !== data.id),
+      ]);
       applyOverride(row.id, { subscriptionId: data.id });
       toast.success("Subscription created", {
         description: data.name,
@@ -341,16 +359,16 @@ export const Imports: React.FC = () => {
             >
               <UploadCloud className="h-8 w-8 text-slate-500" />
               <p className="mt-2 text-sm font-medium text-slate-800">
-                Drop CSV or XLSX files
+                Drop bank XLSX files
               </p>
               <p className="text-xs text-slate-500">
-                Assign accounts/templates per file. You can upload more after
+                Assign the bank type per file. You can upload more after
                 staging.
               </p>
               <input
                 type="file"
                 multiple
-                accept=".csv, .xlsx"
+                accept=".xlsx"
                 className="hidden"
                 onChange={(e) => handleFiles(e.target.files)}
               />
@@ -386,14 +404,19 @@ export const Imports: React.FC = () => {
                     </select>
                     <select
                       className="rounded border border-slate-200 px-2 py-1 text-sm"
-                      value={lf.templateId || "default"}
+                      value={lf.bankType || ""}
                       onChange={(e) =>
-                        updateLocal(lf.id, { templateId: e.target.value })
+                        updateLocal(lf.id, {
+                          bankType: (e.target.value || undefined) as
+                            | BankImportType
+                            | undefined,
+                        })
                       }
                     >
-                      {templates.map((tpl) => (
-                        <option key={tpl.id} value={tpl.id}>
-                          {tpl.name}
+                      <option value="">Select bank</option>
+                      {bankOptions.map((option) => (
+                        <option key={option.id} value={option.id}>
+                          {option.label}
                         </option>
                       ))}
                     </select>
@@ -694,7 +717,8 @@ export const Imports: React.FC = () => {
                               Suggestion: {suggestedSubReason}
                             </span>
                           ) : null}
-                          {override.subscriptionId && suggestedSubId === override.subscriptionId ? (
+                          {override.subscriptionId &&
+                          suggestedSubId === override.subscriptionId ? (
                             <span className="text-xs text-emerald-600">
                               Suggested applied
                             </span>

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
-from typing import Any, Dict
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+from typing import Any, Dict, cast
+from uuid import UUID
 
 from pydantic import ValidationError
 
@@ -73,15 +75,18 @@ def list_accounts(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             reconciliation = service.reconciliation_state(account.id)
             # Flag recon needed if delta significant (>1) or snapshot older than 35 days.
             needs = False
-            delta = reconciliation.get("delta_since_snapshot")
+            delta = cast(Decimal, reconciliation.get("delta_since_snapshot") or Decimal(0))
             last_captured = reconciliation.get("last_captured_at")
             if delta is not None and abs(delta) > 1:
                 needs = True
             if last_captured is None:
                 needs = True
             else:
-                age = datetime.now(timezone.utc) - last_captured
-                if age > timedelta(days=35):
+                if isinstance(last_captured, datetime):
+                    age = datetime.now(timezone.utc) - last_captured
+                    if age > timedelta(days=35):
+                        needs = True
+                else:
                     needs = True
             reconciliation["needs_reconciliation"] = needs
             data.append(_account_to_schema(account, balance, reconciliation))
@@ -176,13 +181,18 @@ def reconcile_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         except LookupError:
             return json_response(404, {"error": "Account not found"})
 
+    ledger_balance = cast(Decimal, result.get("ledger_balance", Decimal(0)))
+    delta_posted = cast(Decimal, result.get("delta", Decimal(0)))
+    snapshot = cast(Any, result.get("snapshot"))
+    transaction = cast(Any, result.get("transaction"))
+
     response = ReconcileAccountResponse(
         account_id=account_id,
         reported_balance=data.reported_balance,
-        ledger_balance=result["ledger_balance"],
-        delta_posted=result["delta"],
-        snapshot_id=result["snapshot"].id,
-        transaction_id=getattr(result["transaction"], "id", None),
+        ledger_balance=ledger_balance,
+        delta_posted=delta_posted,
+        snapshot_id=cast(UUID, getattr(snapshot, "id")),
+        transaction_id=getattr(transaction, "id", None),
         captured_at=data.captured_at,
     )
     return json_response(201, response.model_dump(mode="json"))

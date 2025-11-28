@@ -51,9 +51,7 @@ class MonthlyReportQuery(_CsvUUIDMixin):
             if "category_ids" in values:
                 values["category_ids"] = cls._parse_uuid_list(values.get("category_ids"))
             if "subscription_ids" in values:
-                values["subscription_ids"] = cls._parse_uuid_list(
-                    values.get("subscription_ids")
-                )
+                values["subscription_ids"] = cls._parse_uuid_list(values.get("subscription_ids"))
         return values
 
 
@@ -73,9 +71,7 @@ class YearlyReportQuery(_CsvUUIDMixin):
             if "category_ids" in values:
                 values["category_ids"] = cls._parse_uuid_list(values.get("category_ids"))
             if "subscription_ids" in values:
-                values["subscription_ids"] = cls._parse_uuid_list(
-                    values.get("subscription_ids")
-                )
+                values["subscription_ids"] = cls._parse_uuid_list(values.get("subscription_ids"))
         return values
 
 
@@ -105,9 +101,7 @@ class DateRangeReportQuery(_CsvUUIDMixin):
             if "category_ids" in values:
                 values["category_ids"] = cls._parse_uuid_list(values.get("category_ids"))
             if "subscription_ids" in values:
-                values["subscription_ids"] = cls._parse_uuid_list(
-                    values.get("subscription_ids")
-                )
+                values["subscription_ids"] = cls._parse_uuid_list(values.get("subscription_ids"))
         return values
 
 

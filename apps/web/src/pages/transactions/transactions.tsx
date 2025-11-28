@@ -385,7 +385,8 @@ export const Transactions: React.FC = () => {
           <div>
             <div className="font-semibold">Accounts need reconciliation</div>
             <p className="text-amber-800">
-              Balances may be stale. Reconcile from Accounts to keep running balances accurate.
+              Balances may be stale. Reconcile from Accounts to keep running
+              balances accurate.
             </p>
           </div>
         </div>

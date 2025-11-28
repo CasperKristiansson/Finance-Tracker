@@ -10,6 +10,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_core import PydanticCustomError
 
+from ..shared import BankImportType
+
 
 class ImportFile(BaseModel):
     """Single file payload for import."""
@@ -17,7 +19,7 @@ class ImportFile(BaseModel):
     filename: str = Field(min_length=1, max_length=160)
     content_base64: str = Field(min_length=1)
     account_id: Optional[UUID] = None
-    template_id: Optional[str] = Field(default=None, max_length=120)
+    bank_type: BankImportType
 
     @field_validator("content_base64")
     @classmethod
@@ -75,7 +77,7 @@ class ImportFileRead(BaseModel):
     row_count: int
     error_count: int
     status: str
-    template_id: Optional[str] = None
+    bank_type: BankImportType
     preview_rows: List[dict[str, Any]] = Field(default_factory=list)
     errors: List["ImportErrorRead"] = Field(default_factory=list)
 

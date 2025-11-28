@@ -13,15 +13,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useAppSelector } from "@/app/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageRoutes } from "@/data/routes";
-import { useAppSelector } from "@/app/hooks";
 import { selectToken } from "@/features/auth/authSlice";
-import { apiFetch } from "@/lib/apiClient";
 import { useAccountsApi, useReportsApi } from "@/hooks/use-api";
+import { apiFetch } from "@/lib/apiClient";
 import type {
   CashflowForecastResponse,
   NetWorthProjectionResponse,
@@ -407,89 +407,96 @@ export const Reports: React.FC = () => {
         </Card>
       </div>
 
-  <Card className="border-slate-200 shadow-[0_12px_36px_-26px_rgba(15,23,42,0.35)]">
-    <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-      <div>
-          <CardTitle className="text-sm text-slate-700">Top subscriptions</CardTitle>
-          <p className="text-sm text-slate-500">
-            Highest spend subscriptions by trailing 3 months.
-          </p>
-        </div>
-        <Link
-          to={PageRoutes.subscriptions}
-          className="text-xs font-semibold text-emerald-700"
-        >
-          Manage subscriptions →
-        </Link>
-      </CardHeader>
-      <CardContent className="grid gap-3 md:grid-cols-3">
-        {topSubscriptions.map((sub) => (
-          <div
-            key={sub.id}
-            className="rounded-lg border border-slate-200 bg-white p-3 shadow-[0_10px_24px_-20px_rgba(16,185,129,0.6)]"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500">
-                  {sub.category_name || "Uncategorized"}
-                </p>
-                <p className="text-sm font-semibold text-slate-900">{sub.name}</p>
-              </div>
-              <Badge variant="secondary" className="bg-emerald-50 text-emerald-700">
-                {sub.is_active ? "Active" : "Archived"}
-              </Badge>
-            </div>
-            <div className="mt-2 text-sm text-slate-600">
-              <div className="flex items-center justify-between">
-                <span>Current month</span>
-                <span className="font-semibold">
-                  {currency(Number(sub.current_month_spend))}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Trailing 3 mo</span>
-                <span className="font-semibold">
-                  {currency(Number(sub.trailing_three_month_spend))}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Last charge</span>
-                <span className="font-semibold">
-                  {sub.last_charge_at
-                    ? new Date(sub.last_charge_at).toLocaleDateString()
-                    : "—"}
-                </span>
-              </div>
-            </div>
-            <div className="mt-2">
-              <ResponsiveContainer width="100%" height={60}>
-                <LineChart
-                  data={(sub.trend || []).map((value, idx) => ({
-                    idx,
-                    value: Number(value),
-                  }))}
-                  margin={{ left: 0, right: 0, top: 0, bottom: 0 }}
-                >
-                  <Line
-                    type="monotone"
-                    dataKey="value"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+      <Card className="border-slate-200 shadow-[0_12px_36px_-26px_rgba(15,23,42,0.35)]">
+        <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <CardTitle className="text-sm text-slate-700">
+              Top subscriptions
+            </CardTitle>
+            <p className="text-sm text-slate-500">
+              Highest spend subscriptions by trailing 3 months.
+            </p>
           </div>
-        ))}
-        {!topSubscriptions.length && !subsLoading ? (
-          <p className="text-sm text-slate-500">No subscription data yet.</p>
-        ) : null}
-        {subsLoading && !topSubscriptions.length ? (
-          <Skeleton className="h-24 w-full" />
-        ) : null}
-      </CardContent>
-    </Card>
+          <Link
+            to={PageRoutes.subscriptions}
+            className="text-xs font-semibold text-emerald-700"
+          >
+            Manage subscriptions →
+          </Link>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          {topSubscriptions.map((sub) => (
+            <div
+              key={sub.id}
+              className="rounded-lg border border-slate-200 bg-white p-3 shadow-[0_10px_24px_-20px_rgba(16,185,129,0.6)]"
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    {sub.category_name || "Uncategorized"}
+                  </p>
+                  <p className="text-sm font-semibold text-slate-900">
+                    {sub.name}
+                  </p>
+                </div>
+                <Badge
+                  variant="secondary"
+                  className="bg-emerald-50 text-emerald-700"
+                >
+                  {sub.is_active ? "Active" : "Archived"}
+                </Badge>
+              </div>
+              <div className="mt-2 text-sm text-slate-600">
+                <div className="flex items-center justify-between">
+                  <span>Current month</span>
+                  <span className="font-semibold">
+                    {currency(Number(sub.current_month_spend))}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Trailing 3 mo</span>
+                  <span className="font-semibold">
+                    {currency(Number(sub.trailing_three_month_spend))}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Last charge</span>
+                  <span className="font-semibold">
+                    {sub.last_charge_at
+                      ? new Date(sub.last_charge_at).toLocaleDateString()
+                      : "—"}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-2">
+                <ResponsiveContainer width="100%" height={60}>
+                  <LineChart
+                    data={(sub.trend || []).map((value, idx) => ({
+                      idx,
+                      value: Number(value),
+                    }))}
+                    margin={{ left: 0, right: 0, top: 0, bottom: 0 }}
+                  >
+                    <Line
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#10b981"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          ))}
+          {!topSubscriptions.length && !subsLoading ? (
+            <p className="text-sm text-slate-500">No subscription data yet.</p>
+          ) : null}
+          {subsLoading && !topSubscriptions.length ? (
+            <Skeleton className="h-24 w-full" />
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Card className="border-slate-200 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">

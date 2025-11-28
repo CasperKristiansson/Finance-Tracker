@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from typing import Any, Dict
-from uuid import UUID
 
 from pydantic import ValidationError
 
@@ -19,11 +18,7 @@ def list_goals(_event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     with session_scope() as session:
         service = GoalService(session)
         goals = service.list()
-        payload = GoalListResponse(
-            goals=[
-                _to_schema(service, goal) for goal in goals  # type: ignore[arg-type]
-            ]
-        )
+        payload = GoalListResponse(goals=[_to_schema(service, goal) for goal in goals])
     return json_response(200, payload.model_dump(mode="json"))
 
 

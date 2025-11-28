@@ -47,6 +47,8 @@ export enum LoanEventType {
   FEE = "fee",
 }
 
+export type BankImportType = "circle_k_mastercard" | "seb" | "swedbank";
+
 export interface InvestmentSnapshot {
   id: string;
   provider: string;
@@ -330,7 +332,7 @@ export interface ImportFileRead {
   row_count: number;
   error_count: number;
   status: string;
-  template_id?: string;
+  bank_type: BankImportType;
   preview_rows?: Record<string, unknown>[];
   errors?: ImportError[];
 }
@@ -379,7 +381,7 @@ export interface ImportFileUpload {
   filename: string;
   content_base64: string;
   account_id?: string;
-  template_id?: string;
+  bank_type: BankImportType;
 }
 
 export interface ImportExampleTransaction {
@@ -488,23 +490,8 @@ export interface BudgetUpdateRequest {
 
 export type ThemePreference = "light" | "dark" | "system";
 
-export interface BankTemplateMapping {
-  date: string;
-  description: string;
-  amount: string;
-}
-
-export interface BankTemplateSetting {
-  id: string;
-  name: string;
-  description?: string | null;
-  mapping: BankTemplateMapping;
-  is_default?: boolean;
-}
-
 export interface SettingsPayload {
   theme?: ThemePreference;
-  bank_templates?: BankTemplateSetting[];
 }
 
 export interface SettingsResponse {
@@ -543,7 +530,7 @@ export interface GoalCreateRequest {
   note?: string | null;
 }
 
-export interface GoalUpdateRequest extends Partial<GoalCreateRequest> {}
+export type GoalUpdateRequest = Partial<GoalCreateRequest>;
 
 export interface GoalListResponse {
   goals: GoalRead[];

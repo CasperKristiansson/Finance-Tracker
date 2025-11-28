@@ -12,9 +12,9 @@ from ..schemas import (
     SubscriptionCreate,
     SubscriptionListQuery,
     SubscriptionListResponse,
+    SubscriptionRead,
     SubscriptionSummaryRead,
     SubscriptionSummaryResponse,
-    SubscriptionRead,
     SubscriptionUpdate,
     TransactionRead,
 )
@@ -67,9 +67,7 @@ def list_subscription_summaries(event: Dict[str, Any], _context: Any) -> Dict[st
 
     with session_scope() as session:
         service = SubscriptionService(session)
-        summaries = service.list_subscription_summaries(
-            include_inactive=query.include_inactive
-        )
+        summaries = service.list_subscription_summaries(include_inactive=query.include_inactive)
         payload = SubscriptionSummaryResponse(
             subscriptions=[
                 SubscriptionSummaryRead.model_validate(
@@ -117,9 +115,7 @@ def create_subscription(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 def update_subscription(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
     payload = parse_body(event)
-    subscription_id = extract_path_uuid(
-        event, param_names=("subscription_id", "subscriptionId")
-    )
+    subscription_id = extract_path_uuid(event, param_names=("subscription_id", "subscriptionId"))
     if subscription_id is None:
         return json_response(400, {"error": "Subscription ID missing from path"})
 

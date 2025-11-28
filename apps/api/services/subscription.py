@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import List
-from uuid import UUID
-
+from collections import defaultdict
 from datetime import datetime, timezone
 from decimal import Decimal
-from collections import defaultdict
+from typing import Any, List, cast
+from uuid import UUID
+
 from sqlalchemy import func
 from sqlmodel import Session, select
 
@@ -47,7 +47,9 @@ class SubscriptionService:
                 year -= 1
             return base.replace(year=year, month=month, day=1)
 
-        month_starts: list[datetime] = [month_start(start_month, offset) for offset in range(11, -1, -1)]
+        month_starts: list[datetime] = [
+            month_start(start_month, offset) for offset in range(11, -1, -1)
+        ]
         oldest_start = month_starts[0]
 
         sub_ids = [sub.id for sub in subscriptions]
@@ -59,7 +61,7 @@ class SubscriptionService:
                 TransactionLeg.transaction_id,
                 func.max(func.abs(TransactionLeg.amount)).label("amount"),
             )
-            .group_by(TransactionLeg.transaction_id)
+            .group_by(cast(Any, TransactionLeg.transaction_id))
             .subquery()
         )
 
@@ -69,8 +71,8 @@ class SubscriptionService:
                 Transaction.occurred_at,
                 max_leg.c.amount,
             )
-            .join(max_leg, Transaction.id == max_leg.c.transaction_id)
-            .where(Transaction.subscription_id.in_(sub_ids))
+            .join(max_leg, cast(Any, Transaction.id == max_leg.c.transaction_id))
+            .where(cast(Any, Transaction.subscription_id).in_(sub_ids))
             .where(Transaction.occurred_at >= oldest_start)
         )
 
@@ -105,9 +107,9 @@ class SubscriptionService:
                     "trailing_twelve_month_spend": coerce_decimal(trailing_twelve),
                     "trend": [coerce_decimal(val) for val in monthly],
                     "last_charge_at": last_charge,
-                    "category_name": getattr(sub.category, "name", None)
-                    if hasattr(sub, "category")
-                    else None,
+                    "category_name": (
+                        getattr(sub.category, "name", None) if hasattr(sub, "category") else None
+                    ),
                 }
             )
 

@@ -9,9 +9,9 @@ from .account import (
     ListAccountsResponse,
     LoanCreate,
     LoanRead,
-    UpdateAccountPath,
     ReconcileAccountRequest,
     ReconcileAccountResponse,
+    UpdateAccountPath,
 )
 from .budget import (
     BudgetCreate,
@@ -30,6 +30,7 @@ from .category import (
     ListCategoriesQuery,
     MergeCategoriesRequest,
 )
+from .goal import GoalCreate, GoalListResponse, GoalRead, GoalUpdate
 from .imports import (
     ExampleTransaction,
     ImportBatchCreate,
@@ -44,19 +45,19 @@ from .imports import (
     ImportSessionRead,
     ImportSessionResponse,
 )
-from .goal import GoalCreate, GoalListResponse, GoalRead, GoalUpdate
 from .investments import (
     BenchmarkRead,
     InvestmentHoldingRead,
+    InvestmentMetricsResponse,
+    InvestmentPerformanceRead,
     InvestmentTransactionListResponse,
     InvestmentTransactionRead,
-    InvestmentMetricsResponse,
+    NordnetParseRequest,
+    NordnetParseResponse,
     NordnetSnapshotCreate,
     NordnetSnapshotListResponse,
     NordnetSnapshotRead,
     NordnetSnapshotResponse,
-    NordnetParseRequest,
-    NordnetParseResponse,
 )
 from .loan import (
     LoanCreateRequest,
@@ -67,6 +68,7 @@ from .loan import (
     LoanUpdate,
 )
 from .reporting import (
+    CashflowForecastResponse,
     DateRangeReportQuery,
     DateRangeReportResponse,
     ExportReportRequest,
@@ -77,7 +79,6 @@ from .reporting import (
     NetWorthHistoryQuery,
     NetWorthHistoryResponse,
     NetWorthPoint,
-    CashflowForecastResponse,
     NetWorthProjectionResponse,
     QuarterlyReportEntry,
     QuarterlyReportQuery,
@@ -88,6 +89,16 @@ from .reporting import (
     YearlyReportQuery,
     YearlyReportResponse,
 )
+from .subscription import (
+    AttachSubscriptionRequest,
+    SubscriptionCreate,
+    SubscriptionListQuery,
+    SubscriptionListResponse,
+    SubscriptionRead,
+    SubscriptionSummaryRead,
+    SubscriptionSummaryResponse,
+    SubscriptionUpdate,
+)
 from .transaction import (
     TransactionCreate,
     TransactionLegCreate,
@@ -96,16 +107,6 @@ from .transaction import (
     TransactionListResponse,
     TransactionRead,
     TransactionUpdate,
-)
-from .subscription import (
-    AttachSubscriptionRequest,
-    SubscriptionCreate,
-    SubscriptionListQuery,
-    SubscriptionListResponse,
-    SubscriptionSummaryRead,
-    SubscriptionSummaryResponse,
-    SubscriptionRead,
-    SubscriptionUpdate,
 )
 
 __all__ = [
@@ -150,6 +151,7 @@ __all__ = [
     "InvestmentTransactionListResponse",
     "InvestmentMetricsResponse",
     "BenchmarkRead",
+    "InvestmentPerformanceRead",
     "NordnetSnapshotCreate",
     "NordnetSnapshotRead",
     "NordnetSnapshotResponse",

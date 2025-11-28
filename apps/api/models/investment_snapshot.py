@@ -6,7 +6,7 @@ from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, Optional
 
-from sqlalchemy import Column, Date, JSON, Numeric, String, Text
+from sqlalchemy import JSON, Column, Date, Numeric, String, Text
 from sqlalchemy.orm import relationship
 from sqlmodel import Field, Relationship, SQLModel
 

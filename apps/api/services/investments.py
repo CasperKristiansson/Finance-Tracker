@@ -1,17 +1,19 @@
 """Service layer for investment snapshots (Nordnet exports)."""
 
+# pylint: disable=broad-exception-caught
+
 from __future__ import annotations
 
 import json
+import urllib.error
+import urllib.request
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Optional, Tuple
+from typing import Any, Optional, Tuple, cast
 from uuid import UUID
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
-import urllib.request
-import urllib.error
 from sqlmodel import Session, select
 
 from ..models import (
@@ -148,9 +150,7 @@ class InvestmentSnapshotService:
                 .get("quote", [{}])[0]
                 .get("close", [])
             )
-            timestamps = (
-                data.get("chart", {}).get("result", [{}])[0].get("timestamp", []) or []
-            )
+            timestamps = data.get("chart", {}).get("result", [{}])[0].get("timestamp", []) or []
             closes = [v for v in result if isinstance(v, (int, float))]
             if len(closes) < 2:
                 return None, None
@@ -175,7 +175,7 @@ class InvestmentSnapshotService:
         parsed = self.pre_parser.parse(raw_text)
         if manual_payload:
             parsed = self._deep_merge(parsed, manual_payload)
-        return self._coerce_json_safe(parsed)
+        return cast(dict[str, Any], self._coerce_json_safe(parsed))
 
     def sync_transactions_to_ledger(
         self,
@@ -228,7 +228,9 @@ class InvestmentSnapshotService:
         if key in self._account_cache:
             return self._account_cache[key]
         account = self.session.exec(
-            select(Account).where(Account.is_active.is_(False), Account.display_order == 9999)
+            select(Account).where(
+                cast(Any, Account.is_active).is_(False), Account.display_order == 9999
+            )
         ).one_or_none()
         if account is None:
             account = Account(account_type=AccountType.NORMAL, is_active=False, display_order=9999)
@@ -246,7 +248,9 @@ class InvestmentSnapshotService:
             select(Account).where(Account.account_type == AccountType.INVESTMENT)
         ).first()
         if account is None:
-            account = Account(account_type=AccountType.INVESTMENT, is_active=False, display_order=9997)
+            account = Account(
+                account_type=AccountType.INVESTMENT, is_active=False, display_order=9997
+            )
             self.session.add(account)
             self.session.commit()
             self.session.refresh(account)
@@ -281,7 +285,7 @@ class InvestmentSnapshotService:
         merged = dict(base)
         for key, value in overrides.items():
             if isinstance(value, dict) and isinstance(merged.get(key), dict):
-                merged[key] = self._deep_merge(merged[key], value)  # type: ignore[arg-type]
+                merged[key] = self._deep_merge(merged[key], value)
             else:
                 merged[key] = value
         return merged

@@ -10,19 +10,15 @@ import type {
   ThemePreference,
 } from "@/types/api";
 import {
-  DEFAULT_BANK_TEMPLATES,
   SETTINGS_STORAGE_KEY,
   THEME_STORAGE_KEY,
   hydrateSettings,
-  removeBankTemplate,
   selectSettingsState,
   setLastSavedAt,
   setSettingsError,
   setSettingsLoading,
   setSettingsSaving,
   setThemePreference,
-  upsertBankTemplate,
-  type BankTemplate,
   type SettingsState,
 } from "./settingsSlice";
 
@@ -48,7 +44,6 @@ const persistLocalSettings = (
   if (typeof window === "undefined") return;
   const payload: Partial<SettingsState> = {
     theme: state.theme,
-    bankTemplates: state.bankTemplates,
     envInfo: state.envInfo,
     lastSavedAt: overrideTimestamp ?? state.lastSavedAt,
   };
@@ -61,30 +56,6 @@ const persistThemeSelection = (theme: ThemePreference) => {
   localStorage.setItem("theme", theme);
 };
 
-const mapTemplatesFromApi = (
-  templates?: SettingsPayload["bank_templates"],
-): BankTemplate[] => {
-  const mapped = (templates ?? []).map((template) => ({
-    id: template.id,
-    name: template.name,
-    description: template.description ?? undefined,
-    mapping: template.mapping,
-    isDefault: template.is_default,
-  }));
-  return mapped.length ? mapped : DEFAULT_BANK_TEMPLATES;
-};
-
-const mapTemplatesToApi = (
-  templates: BankTemplate[],
-): SettingsPayload["bank_templates"] =>
-  templates.map((template) => ({
-    id: template.id,
-    name: template.name,
-    description: template.description,
-    mapping: template.mapping,
-    is_default: template.isDefault,
-  }));
-
 function* handleLoadSettings() {
   yield put(setSettingsLoading(true));
   try {
@@ -93,9 +64,6 @@ function* handleLoadSettings() {
       yield put(
         hydrateSettings({
           ...cached,
-          bankTemplates: cached.bankTemplates?.length
-            ? cached.bankTemplates
-            : DEFAULT_BANK_TEMPLATES,
         }),
       );
     }
@@ -107,12 +75,8 @@ function* handleLoadSettings() {
         { loadingKey: "settings", silent: true },
       );
       if (response?.settings) {
-        const mappedTemplates = mapTemplatesFromApi(
-          response.settings.bank_templates,
-        );
         const payload: Partial<SettingsState> = {
           theme: response.settings.theme,
-          bankTemplates: mappedTemplates,
         };
         yield put(hydrateSettings(payload));
         const currentState: SettingsState =
@@ -144,7 +108,6 @@ function* handleSaveSettings() {
     try {
       const payload: SettingsPayload = {
         theme: state.theme,
-        bank_templates: mapTemplatesToApi(state.bankTemplates),
       };
       yield call(
         callApiWithAuth,
@@ -189,11 +152,4 @@ export function* SettingsSaga() {
   yield takeLatest(LoadSettings.type, handleLoadSettings);
   yield takeLatest(SaveSettings.type, handleSaveSettings);
   yield takeLatest(setThemePreference.type, handleThemeChange);
-  yield takeLatest(
-    [upsertBankTemplate.type, removeBankTemplate.type],
-    function* () {
-      const state: SettingsState = yield* TypedSelect(selectSettingsState);
-      persistLocalSettings(state);
-    },
-  );
 }

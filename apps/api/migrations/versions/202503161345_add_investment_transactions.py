@@ -31,9 +31,7 @@ def upgrade() -> None:
         sa.Column("currency", sa.String(length=8), nullable=True),
         sa.Column("fee_sek", sa.Numeric(18, 2), nullable=True),
         sa.Column("notes", sa.String(length=255), nullable=True),
-        sa.ForeignKeyConstraint(
-            ["snapshot_id"], ["investment_snapshots.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["snapshot_id"], ["investment_snapshots.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "occurred_at",

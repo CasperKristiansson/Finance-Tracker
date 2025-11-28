@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 
 from sqlmodel import Session, select
 
@@ -24,7 +24,10 @@ class InvestmentSnapshotRepository:
     def list(self, limit: Optional[int] = None) -> List[InvestmentSnapshot]:
         statement = (
             select(InvestmentSnapshot)
-            .order_by(InvestmentSnapshot.snapshot_date.desc(), InvestmentSnapshot.created_at.desc())
+            .order_by(
+                cast(Any, InvestmentSnapshot.snapshot_date).desc(),
+                cast(Any, InvestmentSnapshot.created_at).desc(),
+            )
             .execution_options(populate_existing=True)
         )
         if limit:

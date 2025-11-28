@@ -6,28 +6,16 @@ import {
   RefreshCw,
   Save,
   SunMedium,
-  UploadCloud,
   Wand2,
   XCircle,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import React, { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import React, { useEffect, useMemo } from "react";
 import { useAppSelector } from "@/app/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { selectIsDemo, selectUser } from "@/features/auth/authSlice";
-import type { BankTemplate } from "@/features/settings/settingsSlice";
 import { useSettings } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
 import type { ThemePreference } from "@/types/api";
@@ -58,13 +46,6 @@ const themeOptions: {
   },
 ];
 
-const emptyTemplate = (): BankTemplate => ({
-  id: "",
-  name: "",
-  description: "",
-  mapping: { date: "", description: "", amount: "" },
-});
-
 const formatTimestamp = (value?: string) => {
   if (!value) return "Not synced yet";
   try {
@@ -79,7 +60,6 @@ export const Settings: React.FC = () => {
   const isDemo = useAppSelector(selectIsDemo);
   const {
     theme,
-    templates,
     envInfo,
     apiBaseUrl,
     loading,
@@ -89,80 +69,16 @@ export const Settings: React.FC = () => {
     loadSettings,
     saveSettings,
     changeTheme,
-    upsertTemplate,
-    deleteTemplate,
   } = useSettings();
   const { setTheme, resolvedTheme } = useTheme();
-
-  const [editingId, setEditingId] = useState<string | null>(
-    templates[0]?.id ?? null,
-  );
-  const [draft, setDraft] = useState<BankTemplate>(
-    templates[0]
-      ? { ...templates[0], mapping: { ...templates[0].mapping } }
-      : emptyTemplate(),
-  );
 
   useEffect(() => {
     setTheme(theme);
   }, [setTheme, theme]);
 
-  useEffect(() => {
-    if (editingId === null) return;
-    const current = templates.find((tpl) => tpl.id === editingId);
-    if (current) {
-      setDraft({ ...current, mapping: { ...current.mapping } });
-    } else if (templates.length) {
-      setEditingId(templates[0].id);
-      setDraft({
-        ...templates[0],
-        mapping: { ...templates[0].mapping },
-      });
-    }
-  }, [editingId, templates]);
-
   const handleThemeChange = (next: ThemePreference) => {
     setTheme(next);
     changeTheme(next);
-  };
-
-  const handleTemplateSave = () => {
-    if (!draft.id.trim() || !draft.name.trim()) {
-      toast.error("Template needs an id and name");
-      return;
-    }
-    if (
-      !draft.mapping.date ||
-      !draft.mapping.description ||
-      !draft.mapping.amount
-    ) {
-      toast.error("Please map date, description, and amount columns.");
-      return;
-    }
-
-    const payload: BankTemplate = {
-      ...draft,
-      id: draft.id.trim(),
-      name: draft.name.trim(),
-      description: draft.description?.trim() || undefined,
-      mapping: {
-        date: draft.mapping.date.trim(),
-        description: draft.mapping.description.trim(),
-        amount: draft.mapping.amount.trim(),
-      },
-      isDefault: draft.isDefault,
-    };
-
-    upsertTemplate(payload);
-    setEditingId(payload.id);
-    toast.success("Template saved", {
-      description: "Cached locally. Sync to API when ready.",
-    });
-  };
-
-  const startNewTemplate = () => {
-    setEditingId(null);
-    setDraft(emptyTemplate());
   };
 
   const headerStatus = useMemo(() => {
@@ -183,7 +99,7 @@ export const Settings: React.FC = () => {
             Personalize your workspace
           </h1>
           <p className="text-sm text-slate-500">
-            Theme, profile context, bank templates, and environment diagnostics.
+            Theme, profile context, and environment diagnostics.
           </p>
           <p className="mt-1 text-xs text-slate-500">
             Status: {headerStatus} · Last saved: {formatTimestamp(lastSavedAt)}
@@ -343,253 +259,6 @@ export const Settings: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-
-      <Card className="border-slate-200 shadow-[0_18px_48px_-24px_rgba(15,23,42,0.35)]">
-        <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2 text-slate-800">
-              <UploadCloud className="h-5 w-5 text-slate-600" />
-              Bank templates
-            </CardTitle>
-            <p className="text-sm text-slate-500">
-              Map bank export columns once and reuse them in the imports
-              stepper.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={startNewTemplate}
-            >
-              <Wand2 className="h-4 w-4" />
-              New template
-            </Button>
-            <Button
-              variant="ghost"
-              className="gap-2"
-              onClick={saveSettings}
-              disabled={saving}
-            >
-              {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              Sync now
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 lg:grid-cols-3">
-            <div className="overflow-hidden rounded-xl border border-slate-100 bg-slate-50 lg:col-span-2">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-100/80">
-                    <TableHead className="text-slate-600">Template</TableHead>
-                    <TableHead className="text-slate-600">
-                      Date column
-                    </TableHead>
-                    <TableHead className="text-slate-600">
-                      Description column
-                    </TableHead>
-                    <TableHead className="text-slate-600">
-                      Amount column
-                    </TableHead>
-                    <TableHead className="text-right text-slate-600">
-                      Actions
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {templates.map((template) => (
-                    <TableRow key={template.id} className="hover:bg-white">
-                      <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-slate-900">
-                            {template.name}
-                          </span>
-                          <span className="text-xs text-slate-500">
-                            {template.id}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-slate-800">
-                        {template.mapping.date}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-slate-800">
-                        {template.mapping.description}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-slate-800">
-                        {template.mapping.amount}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={cn(
-                              "border border-transparent text-slate-700",
-                              editingId === template.id && "border-slate-300",
-                            )}
-                            onClick={() => setEditingId(template.id)}
-                          >
-                            Edit
-                          </Button>
-                          {!template.isDefault ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-rose-700"
-                              onClick={() => deleteTemplate(template.id)}
-                            >
-                              Remove
-                            </Button>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-
-            <div className="rounded-xl border border-slate-100 bg-white p-4 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
-              <div className="mb-3 flex items-center justify-between">
-                <div>
-                  <p className="text-xs tracking-wide text-slate-500 uppercase">
-                    Template details
-                  </p>
-                  <p className="text-sm text-slate-700">
-                    {editingId ? "Update mappings" : "Create a template"}
-                  </p>
-                </div>
-                {draft.isDefault ? (
-                  <Badge variant="secondary">Default</Badge>
-                ) : (
-                  <Badge variant="outline">Custom</Badge>
-                )}
-              </div>
-              <div className="space-y-3">
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-600">
-                    Template name
-                  </label>
-                  <Input
-                    value={draft.name}
-                    onChange={(e) =>
-                      setDraft({ ...draft, name: e.target.value })
-                    }
-                    placeholder="Nordea personal"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-600">
-                    Template id
-                  </label>
-                  <Input
-                    value={draft.id}
-                    onChange={(e) => setDraft({ ...draft, id: e.target.value })}
-                    placeholder="nordea"
-                    disabled={draft.isDefault}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-slate-600">
-                    Description
-                  </label>
-                  <Input
-                    value={draft.description || ""}
-                    onChange={(e) =>
-                      setDraft({ ...draft, description: e.target.value })
-                    }
-                    placeholder="CSV export mapping"
-                  />
-                </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-600">
-                      Date column
-                    </label>
-                    <Input
-                      value={draft.mapping.date}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          mapping: { ...draft.mapping, date: e.target.value },
-                        })
-                      }
-                      placeholder="date"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-600">
-                      Description column
-                    </label>
-                    <Input
-                      value={draft.mapping.description}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          mapping: {
-                            ...draft.mapping,
-                            description: e.target.value,
-                          },
-                        })
-                      }
-                      placeholder="text"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-600">
-                      Amount column
-                    </label>
-                    <Input
-                      value={draft.mapping.amount}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          mapping: { ...draft.mapping, amount: e.target.value },
-                        })
-                      }
-                      placeholder="amount"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-600">
-                      Notes
-                    </label>
-                    <Input
-                      value={draft.isDefault ? "Protected" : "Editable"}
-                      disabled
-                    />
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <Button
-                    variant="default"
-                    className="gap-2"
-                    onClick={handleTemplateSave}
-                  >
-                    <Save className="h-4 w-4" />
-                    Save template
-                  </Button>
-                  {!draft.isDefault && draft.id ? (
-                    <Button
-                      variant="ghost"
-                      className="gap-2 text-rose-700"
-                      onClick={() => deleteTemplate(draft.id)}
-                    >
-                      <XCircle className="h-4 w-4" />
-                      Remove
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 };

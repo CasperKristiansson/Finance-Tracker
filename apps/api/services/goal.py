@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, List, cast
 from uuid import UUID
 
 from sqlalchemy import func
@@ -23,8 +22,8 @@ class GoalService:
         self.account_repository = AccountRepository(session)
 
     def list(self) -> List[Goal]:
-        statement = select(Goal).order_by(Goal.created_at.desc())  # type: ignore[arg-type]
-        return list(self.session.exec(statement).scalars())
+        statement = select(Goal).order_by(cast(Any, Goal.created_at).desc())
+        return list(self.session.exec(statement).all())
 
     def create(self, payload: dict[str, object]) -> Goal:
         goal = Goal(**payload)
@@ -70,19 +69,19 @@ class GoalService:
     def _sum_for_category(self, category_id: UUID) -> Decimal:
         statement = (
             select(func.coalesce(func.sum(TransactionLeg.amount), 0))
-            .join(Transaction, Transaction.id == TransactionLeg.transaction_id)
+            .join(Transaction, cast(Any, Transaction.id == TransactionLeg.transaction_id))
             .where(Transaction.category_id == category_id)
         )
-        result = self.session.exec(statement).scalar_one()
+        result = cast(Any, self.session.exec(statement)).scalar_one()
         return coerce_decimal(result)
 
     def _sum_for_subscription(self, subscription_id: UUID) -> Decimal:
         statement = (
             select(func.coalesce(func.sum(TransactionLeg.amount), 0))
-            .join(Transaction, Transaction.id == TransactionLeg.transaction_id)
+            .join(Transaction, cast(Any, Transaction.id == TransactionLeg.transaction_id))
             .where(Transaction.subscription_id == subscription_id)
         )
-        result = self.session.exec(statement).scalar_one()
+        result = cast(Any, self.session.exec(statement)).scalar_one()
         return coerce_decimal(result)
 
 

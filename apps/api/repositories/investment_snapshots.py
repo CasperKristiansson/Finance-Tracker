@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable, List, Optional
+from typing import Any, Iterable, List, Optional, cast
 from uuid import UUID
 
 from sqlalchemy.orm import selectinload
@@ -36,8 +36,11 @@ class InvestmentSnapshotRepository:
     def list_snapshots(self, limit: Optional[int] = None) -> List[InvestmentSnapshot]:
         statement = (
             select(InvestmentSnapshot)
-            .options(selectinload(InvestmentSnapshot.holdings))
-            .order_by(InvestmentSnapshot.snapshot_date.desc(), InvestmentSnapshot.created_at.desc())
+            .options(selectinload(cast(Any, InvestmentSnapshot).holdings))
+            .order_by(
+                cast(Any, InvestmentSnapshot.snapshot_date).desc(),
+                cast(Any, InvestmentSnapshot.created_at).desc(),
+            )
         )
         if limit:
             statement = statement.limit(limit)
@@ -48,15 +51,18 @@ class InvestmentSnapshotRepository:
         statement = (
             select(InvestmentSnapshot)
             .where(InvestmentSnapshot.id == snapshot_id)
-            .options(selectinload(InvestmentSnapshot.holdings))
+            .options(selectinload(cast(Any, InvestmentSnapshot).holdings))
         )
         return self.session.exec(statement).one_or_none()
 
     def latest_snapshot(self) -> Optional[InvestmentSnapshot]:
         statement = (
             select(InvestmentSnapshot)
-            .order_by(InvestmentSnapshot.snapshot_date.desc(), InvestmentSnapshot.created_at.desc())
-            .options(selectinload(InvestmentSnapshot.holdings))
+            .order_by(
+                cast(Any, InvestmentSnapshot.snapshot_date).desc(),
+                cast(Any, InvestmentSnapshot.created_at).desc(),
+            )
+            .options(selectinload(cast(Any, InvestmentSnapshot).holdings))
             .limit(1)
         )
         return self.session.exec(statement).one_or_none()

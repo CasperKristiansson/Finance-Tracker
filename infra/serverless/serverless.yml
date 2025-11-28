@@ -106,6 +106,66 @@ functions:
           method: POST
           authorizer: cognitoJwt
 
+  listImports:
+    handler: apps/api/handlers/imports.list_import_batches
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /imports
+          method: GET
+          authorizer: cognitoJwt
+
+  createImportBatch:
+    handler: apps/api/handlers/imports.create_import_batch
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /imports
+          method: POST
+          authorizer: cognitoJwt
+
+  getImportSession:
+    handler: apps/api/handlers/imports.get_import_session
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /imports/{batch_id}
+          method: GET
+          authorizer: cognitoJwt
+
+  appendImportFiles:
+    handler: apps/api/handlers/imports.append_import_files
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /imports/{batch_id}/files
+          method: POST
+          authorizer: cognitoJwt
+
+  commitImportSession:
+    handler: apps/api/handlers/imports.commit_import_session
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /imports/{batch_id}/commit
+          method: POST
+          authorizer: cognitoJwt
+
   listCategories:
     handler: apps/api/handlers/categories.list_categories
     timeout: 29

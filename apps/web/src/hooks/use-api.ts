@@ -95,7 +95,6 @@ import {
 import { LoadSettings, SaveSettings } from "@/features/settings/settingsSaga";
 import {
   selectApiBaseUrl,
-  selectBankTemplates,
   selectEnvInfo,
   selectSettingsError,
   selectSettingsLastSavedAt,
@@ -104,9 +103,6 @@ import {
   selectSettingsState,
   selectThemePreference,
   setThemePreference,
-  upsertBankTemplate,
-  removeBankTemplate,
-  type BankTemplate,
 } from "@/features/settings/settingsSlice";
 import {
   FetchRecentTransactions,
@@ -551,7 +547,6 @@ export const useSettings = () => {
   const dispatch = useAppDispatch();
   const state = useAppSelector(selectSettingsState);
   const theme = useAppSelector(selectThemePreference);
-  const templates = useAppSelector(selectBankTemplates);
   const envInfo = useAppSelector(selectEnvInfo);
   const apiBaseUrl = useAppSelector(selectApiBaseUrl);
   const loading = useAppSelector(selectSettingsLoading);
@@ -572,20 +567,9 @@ export const useSettings = () => {
     [dispatch],
   );
 
-  const upsertTemplate = useCallback(
-    (template: BankTemplate) => dispatch(upsertBankTemplate(template)),
-    [dispatch],
-  );
-
-  const deleteTemplate = useCallback(
-    (id: string) => dispatch(removeBankTemplate(id)),
-    [dispatch],
-  );
-
   return {
     ...state,
     theme,
-    templates,
     envInfo,
     apiBaseUrl,
     loading,
@@ -595,7 +579,5 @@ export const useSettings = () => {
     loadSettings,
     saveSettings,
     changeTheme,
-    upsertTemplate,
-    deleteTemplate,
   };
 };

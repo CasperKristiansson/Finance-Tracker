@@ -2,6 +2,7 @@
 
 from .enums import (
     AccountType,
+    BankImportType,
     BudgetPeriod,
     CategoryType,
     CreatedSource,
@@ -40,6 +41,7 @@ from .views import create_or_replace_materialized_views
 
 __all__ = [
     "AccountType",
+    "BankImportType",
     "CategoryType",
     "AuditSourceMixin",
     "CreatedSource",

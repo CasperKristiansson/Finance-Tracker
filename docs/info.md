@@ -41,5 +41,5 @@
 
 ## UX Notes
 - Modern, data-forward UI (see brand.md): high legibility, chart-driven dashboards, strong empty/loading states, toasts for feedback.
-- Imports: guided stepper; clear mapping preview; downloadable error report; status badges in tables.
+- Imports: guided stepper with bank choice (Circle K Mastercard, SEB, Swedbank), XLSX-only; clear mapping preview; downloadable error report; status badges in tables.
 - Accessibility: keyboard reachability, focus outlines, contrast targets (WCAG AA).

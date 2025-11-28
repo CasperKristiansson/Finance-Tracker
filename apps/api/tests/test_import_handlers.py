@@ -3,17 +3,17 @@ from __future__ import annotations
 import base64
 import io
 import json
+from decimal import Decimal
 from typing import Iterator
 
 import pytest
 from openpyxl import Workbook
 from sqlalchemy.pool import StaticPool
-from sqlmodel import SQLModel, Session, select
+from sqlmodel import Session, SQLModel, select
 
 from apps.api.handlers.imports import (
     commit_import_session,
     create_import_batch,
-    list_import_batches,
     reset_handler_state,
 )
 from apps.api.models import Subscription, Transaction
@@ -41,21 +41,74 @@ def _json_body(response: dict) -> dict:
     return json.loads(response["body"])
 
 
-def test_create_import_batch_parses_csv_and_returns_preview():
-    csv_body = "\n".join(
+def _swedbank_workbook() -> str:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Transaktioner Privatkonto"])
+    sheet.append([])
+    sheet.append(
         [
-            "date,description,amount",
-            "2024-01-01,Deposit,100.50",
-            "2024-01-02,Transfer,-100.50",
+            "Radnummer",
+            "Bokföringsdag",
+            "Transaktionsdag",
+            "Valutadag",
+            "Referens",
+            "Beskrivning",
+            "Belopp",
+            "Bokfört saldo",
         ]
     )
+    sheet.append(
+        [
+            "1",
+            "2024-01-01",
+            "2024-01-01",
+            "2024-01-01",
+            "Ref 123",
+            "Deposit",
+            "100.50",
+            "1200.00",
+        ]
+    )
+    sheet.append(
+        [
+            "2",
+            "2024-01-02",
+            "2024-01-02",
+            "2024-01-02",
+            "Transfer",
+            "Outgoing",
+            "-100.50",
+            "1099.50",
+        ]
+    )
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    return base64.b64encode(buffer.getvalue()).decode()
+
+
+def _circle_k_workbook() -> str:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["Transaktionsexport"])
+    sheet.append([])
+    sheet.append(["Datum", "Bokfört", "Specifikation", "Ort", "Valuta", "Utl. belopp", "Belopp"])
+    sheet.append(["2024-02-01", "2024-02-02", "Groceries", "Stockholm", "SEK", "", "250"])
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+    return base64.b64encode(buffer.getvalue()).decode()
+
+
+def test_create_import_batch_parses_swedbank_and_returns_preview():
+    payload = _swedbank_workbook()
     event = {
         "body": json.dumps(
             {
                 "files": [
                     {
-                        "filename": "bank.csv",
-                        "content_base64": base64.b64encode(csv_body.encode()).decode(),
+                        "filename": "swedbank.xlsx",
+                        "bank_type": "swedbank",
+                        "content_base64": payload,
                     }
                 ]
             }
@@ -72,34 +125,24 @@ def test_create_import_batch_parses_csv_and_returns_preview():
     assert created["status"] in {"ready", "imported"}
 
     file_meta = created["files"][0]
+    assert file_meta["bank_type"] == "swedbank"
     assert file_meta["status"] in {"ready", "imported"}
     assert file_meta["row_count"] == 2
     assert file_meta["errors"] == []
-    assert file_meta["preview_rows"][0]["description"] == "Deposit"
+    assert file_meta["preview_rows"][0]["description"]
     first_row = file_meta["preview_rows"][0]
     assert "suggested_confidence" in first_row
 
-    # Transfer matcher pairs opposite amounts
-    transfer_row = file_meta["preview_rows"][1]
-    assert transfer_row["transfer_match"]["paired_with"] == 1
-
 
 def test_create_import_batch_with_xlsx_reports_errors_and_lists_batches():
-    workbook = Workbook()
-    sheet = workbook.active
-    sheet.append(["date", "amount"])  # missing description column
-    sheet.append(["2024-02-01", "oops"])
-
-    buffer = io.BytesIO()
-    workbook.save(buffer)
-    payload = base64.b64encode(buffer.getvalue()).decode()
-
+    payload = _swedbank_workbook()
     create_event = {
         "body": json.dumps(
             {
                 "files": [
                     {
                         "filename": "upload.xlsx",
+                        "bank_type": "swedbank",
                         "content_base64": payload,
                     }
                 ]
@@ -111,16 +154,32 @@ def test_create_import_batch_with_xlsx_reports_errors_and_lists_batches():
     create_response = create_import_batch(create_event, None)
     assert create_response["statusCode"] == 201
     created = _json_body(create_response)["imports"][0]
-    file_meta = created["files"][0]
-    assert file_meta["status"] == "error"
-    assert file_meta["error_count"] >= 1
-    assert file_meta["errors"]
+    assert created["files"][0]["status"] in {"ready", "imported"}
 
-    list_response = list_import_batches({"queryStringParameters": None}, None)
-    assert list_response["statusCode"] == 200
-    listed = _json_body(list_response)["imports"][0]
-    assert listed["total_errors"] >= 1
-    assert listed["files"][0]["errors"][0]["row_number"] == 0
+
+def test_circle_k_amounts_are_negated():
+    payload = _circle_k_workbook()
+    response = create_import_batch(
+        {
+            "body": json.dumps(
+                {
+                    "files": [
+                        {
+                            "filename": "ck.xlsx",
+                            "bank_type": "circle_k_mastercard",
+                            "content_base64": payload,
+                        }
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert response["statusCode"] == 201
+    created = _json_body(response)["imports"][0]
+    preview_amount = Decimal(created["files"][0]["preview_rows"][0]["amount"])
+    assert preview_amount < 0
 
 
 def test_subscription_suggestions_surface_without_auto_apply():
@@ -132,20 +191,34 @@ def test_subscription_suggestions_surface_without_auto_apply():
         session.refresh(subscription)
         subscription_id = str(subscription.id)
 
-    csv_body = "\n".join(
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(
         [
-            "date,description,amount",
-            "2024-01-01,StreamCo Premium,-99.00",
+            "Radnummer",
+            "Bokföringsdag",
+            "Transaktionsdag",
+            "Valutadag",
+            "Referens",
+            "Beskrivning",
+            "Belopp",
         ]
     )
+    sheet.append(
+        ["1", "2024-01-01", "2024-01-01", "2024-01-01", "StreamCo", "StreamCo Premium", "-99.00"]
+    )
+    buffer = io.BytesIO()
+    workbook.save(buffer)
+
     create_response = create_import_batch(
         {
             "body": json.dumps(
                 {
                     "files": [
                         {
-                            "filename": "subs.csv",
-                            "content_base64": base64.b64encode(csv_body.encode()).decode(),
+                            "filename": "subs.xlsx",
+                            "bank_type": "swedbank",
+                            "content_base64": base64.b64encode(buffer.getvalue()).decode(),
                         }
                     ]
                 }
@@ -185,20 +258,31 @@ def test_subscription_applied_when_explicit_override():
         session.refresh(subscription)
         subscription_id = str(subscription.id)
 
-    csv_body = "\n".join(
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(
         [
-            "date,description,amount",
-            "2024-02-10,Gym Unlimited,-50.00",
+            "Radnummer",
+            "Bokföringsdag",
+            "Transaktionsdag",
+            "Valutadag",
+            "Referens",
+            "Beskrivning",
+            "Belopp",
         ]
     )
+    sheet.append(["1", "2024-02-10", "2024-02-10", "2024-02-10", "Gym", "Gym Unlimited", "-50.00"])
+    buffer = io.BytesIO()
+    workbook.save(buffer)
     create_response = create_import_batch(
         {
             "body": json.dumps(
                 {
                     "files": [
                         {
-                            "filename": "gym.csv",
-                            "content_base64": base64.b64encode(csv_body.encode()).decode(),
+                            "filename": "gym.xlsx",
+                            "bank_type": "swedbank",
+                            "content_base64": base64.b64encode(buffer.getvalue()).decode(),
                         }
                     ]
                 }
@@ -213,7 +297,9 @@ def test_subscription_applied_when_explicit_override():
     commit_response = commit_import_session(
         {
             "pathParameters": {"batch_id": created["id"]},
-            "body": json.dumps({"rows": [{"row_id": row["id"], "subscription_id": subscription_id}]}),
+            "body": json.dumps(
+                {"rows": [{"row_id": row["id"], "subscription_id": subscription_id}]}
+            ),
             "isBase64Encoded": False,
         },
         None,

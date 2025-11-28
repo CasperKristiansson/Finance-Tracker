@@ -1,14 +1,6 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import { API_BASE_URL } from "@/lib/apiClient";
-import type { BankTemplateMapping, ThemePreference } from "@/types/api";
-
-export interface BankTemplate {
-  id: string;
-  name: string;
-  description?: string;
-  mapping: BankTemplateMapping;
-  isDefault?: boolean;
-}
+import type { ThemePreference } from "@/types/api";
 
 export interface EnvEntry {
   key: string;
@@ -18,7 +10,6 @@ export interface EnvEntry {
 
 export interface SettingsState {
   theme: ThemePreference;
-  bankTemplates: BankTemplate[];
   apiBaseUrl: string;
   envInfo: EnvEntry[];
   loading: boolean;
@@ -29,39 +20,6 @@ export interface SettingsState {
 
 const SETTINGS_STORAGE_KEY = "finance-tracker-settings";
 const THEME_STORAGE_KEY = "finance-tracker-theme";
-
-const DEFAULT_BANK_TEMPLATES: BankTemplate[] = [
-  {
-    id: "default",
-    name: "Auto-detect",
-    description: "Let the parser infer columns when headers are clear.",
-    mapping: { date: "date", description: "description", amount: "amount" },
-    isDefault: true,
-  },
-  {
-    id: "nordea",
-    name: "Nordea CSV",
-    description: "Swedish export with bokföringsdatum/text/belopp columns.",
-    mapping: {
-      date: "bokforingsdatum",
-      description: "text",
-      amount: "belopp",
-    },
-    isDefault: true,
-  },
-  {
-    id: "revolut",
-    name: "Revolut CSV",
-    description:
-      "Standard Revolut export with completed_date/description/amount.",
-    mapping: {
-      date: "completed_date",
-      description: "description",
-      amount: "amount",
-    },
-    isDefault: true,
-  },
-];
 
 const safeParseLocalSettings = (): Partial<SettingsState> | undefined => {
   if (typeof window === "undefined") return undefined;
@@ -120,9 +78,6 @@ const cachedSettings = safeParseLocalSettings();
 
 const initialState: SettingsState = {
   theme: cachedSettings?.theme ?? readStoredTheme(),
-  bankTemplates: cachedSettings?.bankTemplates?.length
-    ? cachedSettings.bankTemplates
-    : DEFAULT_BANK_TEMPLATES,
   apiBaseUrl: API_BASE_URL,
   envInfo: cachedSettings?.envInfo ?? buildEnvEntries(),
   loading: false,
@@ -138,7 +93,6 @@ const settingsSlice = createSlice({
     hydrateSettings(state, action: PayloadAction<Partial<SettingsState>>) {
       const payload = action.payload;
       if (payload.theme) state.theme = payload.theme;
-      if (payload.bankTemplates) state.bankTemplates = payload.bankTemplates;
       if (payload.apiBaseUrl) state.apiBaseUrl = payload.apiBaseUrl;
       if (payload.envInfo) state.envInfo = payload.envInfo;
       if (payload.lastSavedAt) state.lastSavedAt = payload.lastSavedAt;
@@ -147,28 +101,6 @@ const settingsSlice = createSlice({
     setThemePreference(state, action: PayloadAction<ThemePreference>) {
       state.theme = action.payload;
       state.error = undefined;
-    },
-    upsertBankTemplate(state, action: PayloadAction<BankTemplate>) {
-      const index = state.bankTemplates.findIndex(
-        (item) => item.id === action.payload.id,
-      );
-      if (index >= 0) {
-        const existing = state.bankTemplates[index];
-        state.bankTemplates[index] = {
-          ...existing,
-          ...action.payload,
-          isDefault: existing.isDefault,
-        };
-      } else {
-        state.bankTemplates.push(action.payload);
-      }
-      state.error = undefined;
-    },
-    removeBankTemplate(state, action: PayloadAction<string>) {
-      state.bankTemplates = state.bankTemplates.filter((template) => {
-        if (template.isDefault) return true;
-        return template.id !== action.payload;
-      });
     },
     setSettingsLoading(state, action: PayloadAction<boolean>) {
       state.loading = action.payload;
@@ -189,7 +121,6 @@ const settingsSlice = createSlice({
   selectors: {
     selectSettingsState: (state) => state,
     selectThemePreference: (state) => state.theme,
-    selectBankTemplates: (state) => state.bankTemplates,
     selectEnvInfo: (state) => state.envInfo,
     selectApiBaseUrl: (state) => state.apiBaseUrl,
     selectSettingsSaving: (state) => state.saving,
@@ -202,8 +133,6 @@ const settingsSlice = createSlice({
 export const {
   hydrateSettings,
   setThemePreference,
-  upsertBankTemplate,
-  removeBankTemplate,
   setSettingsLoading,
   setSettingsSaving,
   setSettingsError,
@@ -214,7 +143,6 @@ export const {
 export const {
   selectSettingsState,
   selectThemePreference,
-  selectBankTemplates,
   selectEnvInfo,
   selectApiBaseUrl,
   selectSettingsSaving,
@@ -224,4 +152,4 @@ export const {
 } = settingsSlice.selectors;
 
 export const SettingsReducer = settingsSlice.reducer;
-export { DEFAULT_BANK_TEMPLATES, SETTINGS_STORAGE_KEY, THEME_STORAGE_KEY };
+export { SETTINGS_STORAGE_KEY, THEME_STORAGE_KEY };

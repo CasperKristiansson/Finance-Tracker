@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any, Iterable, Optional
 
@@ -28,10 +28,9 @@ class NordnetPreParser:
         lines = self._prep_lines(text)
         snapshot_date = self._extract_latest_date(lines)
         sections = self._split_sections(lines)
-        portfolio_value = (
-            self._find_number_after_keywords(lines, {"marknadsvärde", "total"})
-            or self._find_number_in_section(sections, {"resultat", "marknadsvärde"})
-        )
+        portfolio_value = self._find_number_after_keywords(
+            lines, {"marknadsvärde", "total"}
+        ) or self._find_number_in_section(sections, {"resultat", "marknadsvärde"})
         holdings = self._parse_holdings(lines)
 
         payload: dict[str, Any] = {

@@ -1,5 +1,12 @@
-import { Loader2, RefreshCw, Sparkles, ToggleLeft, ToggleRight } from "lucide-react";
+import {
+  Loader2,
+  RefreshCw,
+  Sparkles,
+  ToggleLeft,
+  ToggleRight,
+} from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,7 +20,6 @@ import type {
   SubscriptionSummaryRead,
   SubscriptionSummaryResponse,
 } from "@/types/api";
-import { toast } from "sonner";
 
 const numberValue = (value: string | number | null | undefined) =>
   value === null || value === undefined ? 0 : Number(value);
@@ -56,7 +62,10 @@ const Sparkline: React.FC<{ data: Array<string | number> }> = ({ data }) => {
 
 type EditableFields = Pick<
   SubscriptionSummaryRead,
-  "matcher_text" | "matcher_amount_tolerance" | "matcher_day_of_month" | "category_id"
+  | "matcher_text"
+  | "matcher_amount_tolerance"
+  | "matcher_day_of_month"
+  | "category_id"
 >;
 
 export const Subscriptions: React.FC = () => {
@@ -64,7 +73,9 @@ export const Subscriptions: React.FC = () => {
   const { items: categories, fetchCategories } = useCategoriesApi();
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [subscriptions, setSubscriptions] = useState<SubscriptionSummaryRead[]>([]);
+  const [subscriptions, setSubscriptions] = useState<SubscriptionSummaryRead[]>(
+    [],
+  );
   const [editing, setEditing] = useState<Record<string, EditableFields>>({});
 
   const load = async () => {
@@ -99,7 +110,10 @@ export const Subscriptions: React.FC = () => {
   }, [subscriptions]);
 
   const onEditChange = (id: string, patch: Partial<EditableFields>) => {
-    setEditing((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), ...patch } }));
+    setEditing((prev) => ({
+      ...prev,
+      [id]: { ...(prev[id] || {}), ...patch },
+    }));
   };
 
   const saveMatcher = async (subscription: SubscriptionSummaryRead) => {
@@ -142,7 +156,9 @@ export const Subscriptions: React.FC = () => {
       });
       await load();
       toast.success(
-        subscription.is_active ? "Subscription archived" : "Subscription reactivated",
+        subscription.is_active
+          ? "Subscription archived"
+          : "Subscription reactivated",
         { description: subscription.name },
       );
     } catch (error) {
@@ -171,8 +187,12 @@ export const Subscriptions: React.FC = () => {
         {list.map((sub) => {
           const edit = editing[sub.id] || {};
           const categoryName =
-            categories.find((c: CategoryRead) => c.id === (edit.category_id ?? sub.category_id))
-              ?.name ?? sub.category_name ?? "Unassigned";
+            categories.find(
+              (c: CategoryRead) =>
+                c.id === (edit.category_id ?? sub.category_id),
+            )?.name ??
+            sub.category_name ??
+            "Unassigned";
 
           return (
             <Card key={sub.id} className="border-slate-200 shadow-sm">
@@ -182,7 +202,7 @@ export const Subscriptions: React.FC = () => {
                     <CardTitle className="text-base text-slate-900">
                       {sub.name}
                     </CardTitle>
-                    <p className="text-xs uppercase tracking-wide text-slate-500">
+                    <p className="text-xs tracking-wide text-slate-500 uppercase">
                       {categoryName}
                     </p>
                   </div>
@@ -230,14 +250,16 @@ export const Subscriptions: React.FC = () => {
                 </div>
 
                 <div className="rounded border border-slate-100 bg-slate-50 p-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  <p className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
                     Matcher
                   </p>
                   <div className="space-y-2">
                     <Input
                       size="sm"
                       value={edit.matcher_text ?? sub.matcher_text}
-                      onChange={(e) => onEditChange(sub.id, { matcher_text: e.target.value })}
+                      onChange={(e) =>
+                        onEditChange(sub.id, { matcher_text: e.target.value })
+                      }
                       placeholder="Matcher text or regex"
                       className="h-8"
                     />
@@ -246,7 +268,9 @@ export const Subscriptions: React.FC = () => {
                         size="sm"
                         type="number"
                         value={
-                          edit.matcher_amount_tolerance ?? sub.matcher_amount_tolerance ?? ""
+                          edit.matcher_amount_tolerance ??
+                          sub.matcher_amount_tolerance ??
+                          ""
                         }
                         onChange={(e) =>
                           onEditChange(sub.id, {
@@ -261,7 +285,11 @@ export const Subscriptions: React.FC = () => {
                       <Input
                         size="sm"
                         type="number"
-                        value={edit.matcher_day_of_month ?? sub.matcher_day_of_month ?? ""}
+                        value={
+                          edit.matcher_day_of_month ??
+                          sub.matcher_day_of_month ??
+                          ""
+                        }
                         onChange={(e) =>
                           onEditChange(sub.id, {
                             matcher_day_of_month: e.target.value
@@ -327,17 +355,29 @@ export const Subscriptions: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-wide text-slate-500">Subscriptions</p>
+          <p className="text-xs tracking-wide text-slate-500 uppercase">
+            Subscriptions
+          </p>
           <h1 className="text-2xl font-semibold text-slate-900">
             Recurring spend and matchers
           </h1>
           <p className="text-sm text-slate-500">
-            Track recurring charges, update matchers, and archive old subscriptions.
+            Track recurring charges, update matchers, and archive old
+            subscriptions.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void load()}
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
             Refresh
           </Button>
         </div>
@@ -345,7 +385,7 @@ export const Subscriptions: React.FC = () => {
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+          <h2 className="text-sm font-semibold tracking-wide text-slate-600 uppercase">
             Active
           </h2>
           <span className="text-xs text-slate-500">
@@ -357,10 +397,12 @@ export const Subscriptions: React.FC = () => {
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-600">
+          <h2 className="text-sm font-semibold tracking-wide text-slate-600 uppercase">
             Archived
           </h2>
-          <span className="text-xs text-slate-500">Reactivate to include in suggestions</span>
+          <span className="text-xs text-slate-500">
+            Reactivate to include in suggestions
+          </span>
         </div>
         {renderGroup("Archived", grouped.archived)}
       </div>

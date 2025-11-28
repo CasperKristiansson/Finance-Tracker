@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useAppSelector } from "@/app/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,10 +23,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
-import { useAppSelector } from "@/app/hooks";
-import { selectToken } from "@/features/auth/authSlice";
 import { AccountType } from "@/types/api";
 import { AccountModal } from "./children/account-modal";
 import { LoanOverview } from "./children/loan-overview";
@@ -135,7 +135,10 @@ export const Accounts: React.FC = () => {
         token,
       });
       toast.success("Reconciled");
-      fetchAccounts({ includeInactive: showInactive, asOfDate: asOfInput || null });
+      fetchAccounts({
+        includeInactive: showInactive,
+        asOfDate: asOfInput || null,
+      });
       setReconcileAmount("");
     } catch (error) {
       toast.error("Reconciliation failed", {
@@ -218,9 +221,9 @@ export const Accounts: React.FC = () => {
             <div className="font-semibold">Needs reconciliation</div>
           </div>
           <p className="text-amber-800">
-            One or more accounts haven’t been reconciled recently or drifted from the
-            last snapshot. Enter the latest end-of-month balance and I’ll post an
-            adjustment.
+            One or more accounts haven’t been reconciled recently or drifted
+            from the last snapshot. Enter the latest end-of-month balance and
+            I’ll post an adjustment.
           </p>
           <div className="grid gap-2 md:grid-cols-5 md:items-center">
             <select
@@ -252,7 +255,11 @@ export const Accounts: React.FC = () => {
               disabled={!reconcileAccountId || !reconcileAmount}
               onClick={submitReconciliation}
             >
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
               Reconcile
             </Button>
           </div>

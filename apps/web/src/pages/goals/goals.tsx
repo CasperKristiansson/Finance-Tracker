@@ -1,14 +1,14 @@
-import { Calendar, CheckCircle, Goal as GoalIcon, Plus } from "lucide-react";
+import { CheckCircle, Goal as GoalIcon, Plus } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
-import { useAccountsApi, useCategoriesApi } from "@/hooks/use-api";
-import { selectToken } from "@/features/auth/authSlice";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { selectToken } from "@/features/auth/authSlice";
+import { useAccountsApi, useCategoriesApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import {
   type GoalRead,
@@ -66,7 +66,8 @@ export const Goals: React.FC = () => {
       setGoals(data.goals ?? []);
     } catch (error) {
       toast.error("Unable to load goals", {
-        description: error instanceof Error ? error.message : "Try again later.",
+        description:
+          error instanceof Error ? error.message : "Try again later.",
       });
     } finally {
       setLoading(false);
@@ -144,7 +145,9 @@ export const Goals: React.FC = () => {
           <Input
             placeholder="Goal name"
             value={form.name}
-            onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, name: e.target.value }))
+            }
             className="w-48"
           />
           <Input
@@ -250,8 +253,8 @@ export const Goals: React.FC = () => {
                 No goals yet
               </p>
               <p className="text-sm text-slate-600">
-                Add a target and link it to a category or account to track progress
-                automatically.
+                Add a target and link it to a category or account to track
+                progress automatically.
               </p>
             </div>
           </CardContent>
@@ -278,7 +281,9 @@ export const Goals: React.FC = () => {
                     </Badge>
                   </div>
                   <p className="text-xs text-slate-500">
-                    {goal.target_date ? `Due ${formatDate(goal.target_date)}` : "No due date"}
+                    {goal.target_date
+                      ? `Due ${formatDate(goal.target_date)}`
+                      : "No due date"}
                   </p>
                 </CardHeader>
                 <CardContent className="flex flex-1 flex-col gap-3">

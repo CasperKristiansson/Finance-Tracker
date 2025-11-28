@@ -12,6 +12,7 @@ from typing import Any, Dict, Iterable
 from pydantic import ValidationError
 
 from ..schemas import (
+    CashflowForecastResponse,
     DateRangeReportQuery,
     DateRangeReportResponse,
     ExportReportRequest,
@@ -22,7 +23,6 @@ from ..schemas import (
     NetWorthHistoryQuery,
     NetWorthHistoryResponse,
     NetWorthPoint,
-    CashflowForecastResponse,
     NetWorthProjectionResponse,
     QuarterlyReportEntry,
     QuarterlyReportQuery,

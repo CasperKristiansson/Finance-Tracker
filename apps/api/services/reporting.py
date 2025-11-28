@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Iterable, List, Optional, Tuple
+from typing import Iterable, List, Optional
 from uuid import UUID
 
 from sqlmodel import Session
@@ -128,7 +127,9 @@ class ReportingService:
         monthly_rate = cagr / Decimal(12) if cagr is not None else Decimal("0")
         for idx in range(1, months + 1):
             projected = current * (Decimal("1") + monthly_rate) ** Decimal(idx)
-            target_date = (datetime.combine(end_date, datetime.min.time()) + timedelta(days=30 * idx)).date()
+            target_date = (
+                datetime.combine(end_date, datetime.min.time()) + timedelta(days=30 * idx)
+            ).date()
             points.append({"date": target_date.isoformat(), "net_worth": projected})
 
         return {

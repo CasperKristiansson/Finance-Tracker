@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional, cast
+from uuid import UUID
 
 from sqlmodel import Session, select
 
@@ -31,7 +32,9 @@ class InvestmentTransactionRepository:
         tx_type: Optional[str] = None,
         limit: Optional[int] = None,
     ) -> List[InvestmentTransaction]:
-        statement = select(InvestmentTransaction).order_by(InvestmentTransaction.occurred_at.desc())
+        statement = select(InvestmentTransaction).order_by(
+            cast(Any, InvestmentTransaction.occurred_at).desc()
+        )
         if start:
             statement = statement.where(InvestmentTransaction.occurred_at >= start)
         if end:
@@ -48,18 +51,20 @@ class InvestmentTransactionRepository:
     def list_unsynced(self, limit: int = 200) -> List[InvestmentTransaction]:
         statement = (
             select(InvestmentTransaction)
-            .where(InvestmentTransaction.ledger_transaction_id.is_(None))
-            .order_by(InvestmentTransaction.occurred_at.asc())
+            .where(cast(Any, InvestmentTransaction.ledger_transaction_id).is_(None))
+            .order_by(cast(Any, InvestmentTransaction.occurred_at).asc())
             .limit(limit)
         )
         return list(self.session.exec(statement))
 
     def mark_linked(self, investment_tx_id: str, ledger_transaction_id: str) -> None:
-        statement = select(InvestmentTransaction).where(InvestmentTransaction.id == investment_tx_id)
+        statement = select(InvestmentTransaction).where(
+            InvestmentTransaction.id == investment_tx_id
+        )
         model = self.session.exec(statement).one_or_none()
         if model is None:  # pragma: no cover - defensive
             return
-        model.ledger_transaction_id = ledger_transaction_id
+        model.ledger_transaction_id = UUID(str(ledger_transaction_id))
         self.session.add(model)
         self.session.commit()
 

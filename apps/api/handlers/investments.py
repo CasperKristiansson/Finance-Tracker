@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
 from datetime import datetime
+from decimal import Decimal
+from typing import Any, Dict, Optional
 from uuid import UUID
 
-from decimal import Decimal
 from pydantic import ValidationError
 
 from ..schemas import (
+    BenchmarkRead,
     InvestmentHoldingRead,
     InvestmentMetricsResponse,
+    InvestmentPerformanceRead,
     InvestmentTransactionListResponse,
     InvestmentTransactionRead,
     NordnetParseRequest,
@@ -124,22 +126,20 @@ def investment_metrics(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         snapshots = service.list_snapshots()
         txs = service.list_transactions()
         if not snapshots:
-            return json_response(200, InvestmentMetricsResponse(
-                performance={
-                    "total_value": 0,
-                    "invested": 0,
-                    "realized_pl": 0,
-                    "unrealized_pl": 0,
-                    "twr": None,
-                    "irr": None,
-                    "as_of": datetime.utcnow().date(),
-                    "benchmark_symbol": None,
-                    "benchmark_change_pct": None,
-                },
-                holdings=[],
-                snapshots=[],
-                transactions=[],
-            ).model_dump(mode="json"))
+            empty_performance = InvestmentPerformanceRead(
+                total_value=Decimal(0),
+                invested=Decimal(0),
+                realized_pl=Decimal(0),
+                unrealized_pl=Decimal(0),
+                twr=None,
+                irr=None,
+                as_of=datetime.utcnow().date(),
+                benchmarks=[],
+            )
+            empty_response = InvestmentMetricsResponse(
+                performance=empty_performance, holdings=[], snapshots=[], transactions=[]
+            ).model_dump(mode="json")
+            return json_response(200, empty_response)
 
         latest = snapshots[0]
         holdings = latest.holdings or []
@@ -155,19 +155,22 @@ def investment_metrics(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                 end_date=metrics_end,
                 return_series=True,
             )
-            benchmarks_payload.append(
-                {"symbol": sym, "change_pct": change, "series": series or []}
-            )
-        performance = {
-            "total_value": sum(_safe_decimal(h.value_sek) for h in holdings),
-            "invested": invested,
-            "realized_pl": realized,
-            "unrealized_pl": unrealized,
-            "twr": _compute_twr(txs, performance_end=_safe_decimal(latest.portfolio_value) or 0),
-            "irr": _compute_irr(txs, performance_end=_safe_decimal(latest.portfolio_value) or 0),
-            "as_of": latest.snapshot_date,
-            "benchmarks": benchmarks_payload,
-        }
+            benchmarks_payload.append({"symbol": sym, "change_pct": change, "series": series or []})
+        benchmarks_models = [BenchmarkRead.model_validate(b) for b in benchmarks_payload]
+        performance = InvestmentPerformanceRead(
+            total_value=sum((_safe_decimal(h.value_sek) for h in holdings), Decimal(0)),
+            invested=invested,
+            realized_pl=realized,
+            unrealized_pl=unrealized,
+            twr=_compute_twr(
+                txs, performance_end=_safe_decimal(latest.portfolio_value) or Decimal(0)
+            ),
+            irr=_compute_irr(
+                txs, performance_end=_safe_decimal(latest.portfolio_value) or Decimal(0)
+            ),
+            as_of=latest.snapshot_date,
+            benchmarks=benchmarks_models,
+        )
 
         response = InvestmentMetricsResponse(
             performance=performance,
@@ -193,11 +196,11 @@ def sync_investment_ledger(event: Dict[str, Any], _context: Any) -> Dict[str, An
 def _safe_decimal(value) -> Decimal:
     try:
         return Decimal(str(value or 0))
-    except Exception:
+    except Exception:  # pylint: disable=broad-exception-caught
         return Decimal(0)
 
 
-def _calculate_pl(holdings, transactions, as_of_date):
+def _calculate_pl(holdings, transactions, _as_of_date):
     total_value = sum(_safe_decimal(h.value_sek) for h in holdings)
     buys = Decimal(0)
     sells = Decimal(0)
@@ -219,13 +222,14 @@ def _calculate_pl(holdings, transactions, as_of_date):
     return invested, realized, unrealized
 
 
-def _compute_twr(transactions, performance_end: Decimal):
+def _compute_twr(transactions, performance_end: Decimal) -> Optional[float]:
     # Simplified: treat all transactions as cash flows, compute holding-period return
-    cashflows = [_safe_decimal(-tx.amount_sek) for tx in transactions]
-    invested = sum(cf for cf in cashflows if cf < 0)
+    cashflows: list[Decimal] = [_safe_decimal(-tx.amount_sek) for tx in transactions]
+    invested = sum((cf for cf in cashflows if cf < 0), Decimal(0))
     if invested == 0:
         return None
-    return float((performance_end + sum(cashflows)) / abs(invested) - 1)
+    total = performance_end + sum(cashflows, Decimal(0))
+    return float(total / abs(invested) - 1)
 
 
 def _compute_irr(transactions, performance_end: Decimal):
@@ -250,13 +254,14 @@ def _compute_irr(transactions, performance_end: Decimal):
     for _ in range(20):
         f = npv(rate)
         f_prime = sum(
-            float(-amt * (day / 365)) / ((1 + rate) ** (day / 365 + 1))
-            for amt, day in days
+            float(-amt * (day / 365)) / ((1 + rate) ** (day / 365 + 1)) for amt, day in days
         )
         if f_prime == 0:
             break
         rate -= f / f_prime
     return float(rate)
+
+
 def parse_nordnet_export(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
     parsed_body = parse_body(event)
