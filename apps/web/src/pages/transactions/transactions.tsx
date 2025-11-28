@@ -10,6 +10,7 @@ import {
   MoreHorizontal,
   Plus,
   Trash2,
+  AlertCircle,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -168,6 +169,10 @@ export const Transactions: React.FC = () => {
   const [endDate, setEndDate] = useState<string>("");
   const [modalOpen, setModalOpen] = useState(false);
   const [bulkCategory, setBulkCategory] = useState<string>("");
+  const needsReconcile = useMemo(
+    () => accounts.some((acc) => acc.needs_reconciliation),
+    [accounts],
+  );
 
   useEffect(() => {
     fetchTransactions({ limit: pagination.limit, offset: 0 });
@@ -373,6 +378,18 @@ export const Transactions: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {needsReconcile ? (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 shadow-[0_8px_24px_-20px_rgba(146,64,14,0.45)]">
+          <AlertCircle className="mt-0.5 h-5 w-5" />
+          <div>
+            <div className="font-semibold">Accounts need reconciliation</div>
+            <p className="text-amber-800">
+              Balances may be stale. Reconcile from Accounts to keep running balances accurate.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
         <CardHeader className="flex flex-col gap-3">

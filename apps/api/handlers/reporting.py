@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import csv
 from datetime import datetime, timezone
+from decimal import Decimal
 from io import BytesIO, StringIO
 from typing import Any, Dict, Iterable
 
@@ -21,6 +22,8 @@ from ..schemas import (
     NetWorthHistoryQuery,
     NetWorthHistoryResponse,
     NetWorthPoint,
+    CashflowForecastResponse,
+    NetWorthProjectionResponse,
     QuarterlyReportEntry,
     QuarterlyReportQuery,
     QuarterlyReportResponse,
@@ -177,6 +180,31 @@ def net_worth_history(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         payload = NetWorthHistoryResponse(
             points=[NetWorthPoint.model_validate(item) for item in results]
         )
+    return json_response(200, payload.model_dump(mode="json"))
+
+
+def cashflow_forecast(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    params = get_query_params(event)
+    days = int(params.get("days", 60) or 60)
+    threshold_raw = params.get("threshold")
+    threshold = Decimal(str(threshold_raw)) if threshold_raw is not None else Decimal("0")
+
+    with session_scope() as session:
+        service = ReportingService(session)
+        result = service.cashflow_forecast(days=days, threshold=threshold)
+        payload = CashflowForecastResponse.model_validate(result)
+    return json_response(200, payload.model_dump(mode="json"))
+
+
+def net_worth_projection(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    params = get_query_params(event)
+    months = int(params.get("months", 36) or 36)
+    with session_scope() as session:
+        service = ReportingService(session)
+        result = service.net_worth_projection(months=months)
+        payload = NetWorthProjectionResponse.model_validate(result)
     return json_response(200, payload.model_dump(mode="json"))
 
 

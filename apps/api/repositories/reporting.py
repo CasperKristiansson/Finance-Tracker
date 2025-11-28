@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, Iterable, List, Optional, Sequence, Tuple, cast
 from uuid import UUID
@@ -13,6 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, select
 
 from ..models import Transaction, TransactionLeg
+from ..models.investment_snapshot import InvestmentSnapshot
 from ..shared import coerce_decimal
 
 DecimalTotals = Tuple[Decimal, Decimal]
@@ -198,6 +199,53 @@ class ReportingRepository:
             history.append(NetWorthPoint(period=period, net_worth=running_total))
 
         return history
+
+    def average_daily_net(self, *, days: int = 90) -> Decimal:
+        """Compute average daily net change over a rolling window."""
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        transaction_table = cast(Table, getattr(Transaction, "__table__"))
+        leg_table = cast(Table, getattr(TransactionLeg, "__table__"))
+        day_column = func.date(transaction_table.c.occurred_at)
+
+        statement = (
+            select(day_column.label("day"), func.sum(leg_table.c.amount).label("delta"))
+            .join_from(
+                leg_table, transaction_table, leg_table.c.transaction_id == transaction_table.c.id
+            )
+            .where(transaction_table.c.occurred_at >= cutoff)
+            .group_by(day_column)
+        )
+
+        rows = self.session.exec(statement).all()
+        if not rows:
+            return Decimal("0")
+        total = sum(coerce_decimal(delta) for _day, delta in rows)
+        return total / Decimal(len(rows))
+
+    def current_balance_total(self, account_ids: Optional[Iterable[UUID]] = None) -> Decimal:
+        """Sum balances across accounts."""
+
+        leg_table = cast(Table, getattr(TransactionLeg, "__table__"))
+        statement = select(func.coalesce(func.sum(leg_table.c.amount), 0))
+        if account_ids:
+            statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
+        result = self.session.exec(statement).scalar_one()
+        return coerce_decimal(result)
+
+    def latest_investment_value(self) -> Decimal:
+        """Best-effort latest investment portfolio value."""
+
+        statement = (
+            select(InvestmentSnapshot.snapshot_date, InvestmentSnapshot.portfolio_value)
+            .order_by(InvestmentSnapshot.snapshot_date.desc())
+            .limit(1)
+        )
+        row = self.session.exec(statement).first()
+        if not row:
+            return Decimal("0")
+        _, value = row
+        return coerce_decimal(value or 0)
 
     def refresh_materialized_views(
         self,

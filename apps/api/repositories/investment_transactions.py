@@ -45,5 +45,23 @@ class InvestmentTransactionRepository:
         result = self.session.exec(statement)
         return list(result.all())
 
+    def list_unsynced(self, limit: int = 200) -> List[InvestmentTransaction]:
+        statement = (
+            select(InvestmentTransaction)
+            .where(InvestmentTransaction.ledger_transaction_id.is_(None))
+            .order_by(InvestmentTransaction.occurred_at.asc())
+            .limit(limit)
+        )
+        return list(self.session.exec(statement))
+
+    def mark_linked(self, investment_tx_id: str, ledger_transaction_id: str) -> None:
+        statement = select(InvestmentTransaction).where(InvestmentTransaction.id == investment_tx_id)
+        model = self.session.exec(statement).one_or_none()
+        if model is None:  # pragma: no cover - defensive
+            return
+        model.ledger_transaction_id = ledger_transaction_id
+        self.session.add(model)
+        self.session.commit()
+
 
 __all__ = ["InvestmentTransactionRepository"]

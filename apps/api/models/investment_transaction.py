@@ -38,6 +38,14 @@ class InvestmentTransaction(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table
     currency: Optional[str] = Field(default=None, sa_column=Column(String(8)))
     fee_sek: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(18, 2)))
     notes: Optional[str] = Field(default=None, sa_column=Column(String(255)))
+    ledger_transaction_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("transactions.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
 
     __table_args__ = (
         UniqueConstraint(

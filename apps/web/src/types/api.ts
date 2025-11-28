@@ -136,6 +136,9 @@ export interface AccountRead {
 
 export interface AccountWithBalance extends AccountRead {
   balance: string;
+  last_reconciled_at?: string | null;
+  reconciliation_gap?: string | null;
+  needs_reconciliation?: boolean | null;
 }
 
 export interface AccountCreateRequest {
@@ -513,4 +516,59 @@ export type WarmupStatus = "ready" | "starting" | "error";
 export interface WarmupResponse {
   status: WarmupStatus;
   message?: string;
+}
+
+export interface GoalRead {
+  id: string;
+  name: string;
+  target_amount: string;
+  target_date?: string | null;
+  category_id?: string | null;
+  account_id?: string | null;
+  subscription_id?: string | null;
+  note?: string | null;
+  created_at: string;
+  updated_at: string;
+  current_amount: string;
+  progress_pct: number;
+}
+
+export interface GoalCreateRequest {
+  name: string;
+  target_amount: string;
+  target_date?: string | null;
+  category_id?: string | null;
+  account_id?: string | null;
+  subscription_id?: string | null;
+  note?: string | null;
+}
+
+export interface GoalUpdateRequest extends Partial<GoalCreateRequest> {}
+
+export interface GoalListResponse {
+  goals: GoalRead[];
+}
+
+export interface CashflowForecastPoint {
+  date: string;
+  balance: string;
+}
+
+export interface CashflowForecastResponse {
+  starting_balance: string;
+  average_daily: string;
+  threshold: string;
+  alert_below_threshold_at?: string | null;
+  points: CashflowForecastPoint[];
+}
+
+export interface NetWorthProjectionPoint {
+  date: string;
+  net_worth: string;
+}
+
+export interface NetWorthProjectionResponse {
+  current: string;
+  cagr?: string | null;
+  points: NetWorthProjectionPoint[];
 }

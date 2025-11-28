@@ -187,6 +187,8 @@ class TransactionService:
         category: Optional[Category],
         fallback: TransactionType,
     ) -> TransactionType:
+        if fallback == TransactionType.ADJUSTMENT:
+            return TransactionType.ADJUSTMENT
         if category is not None:
             category_mapping = {
                 CategoryType.INCOME: TransactionType.INCOME,

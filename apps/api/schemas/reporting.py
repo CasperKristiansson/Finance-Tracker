@@ -207,6 +207,38 @@ class NetWorthHistoryResponse(BaseModel):
     points: List[NetWorthPoint]
 
 
+class CashflowForecastPoint(BaseModel):
+    """Forecast point for cash flow."""
+
+    date: str
+    balance: Decimal
+
+
+class CashflowForecastResponse(BaseModel):
+    """Forecast payload for cash flow."""
+
+    starting_balance: Decimal
+    average_daily: Decimal
+    threshold: Decimal
+    alert_below_threshold_at: Optional[str] = None
+    points: List[CashflowForecastPoint]
+
+
+class NetWorthProjectionPoint(BaseModel):
+    """Projected net worth over time."""
+
+    date: str
+    net_worth: Decimal
+
+
+class NetWorthProjectionResponse(BaseModel):
+    """Projection payload up to N months."""
+
+    current: Decimal
+    cagr: Optional[Decimal] = None
+    points: List[NetWorthProjectionPoint]
+
+
 class ExportReportRequest(BaseModel):
     """Request payload for exporting reports in CSV/XLSX."""
 

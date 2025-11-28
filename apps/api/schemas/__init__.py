@@ -10,6 +10,8 @@ from .account import (
     LoanCreate,
     LoanRead,
     UpdateAccountPath,
+    ReconcileAccountRequest,
+    ReconcileAccountResponse,
 )
 from .budget import (
     BudgetCreate,
@@ -42,6 +44,7 @@ from .imports import (
     ImportSessionRead,
     ImportSessionResponse,
 )
+from .goal import GoalCreate, GoalListResponse, GoalRead, GoalUpdate
 from .investments import (
     BenchmarkRead,
     InvestmentHoldingRead,
@@ -74,6 +77,8 @@ from .reporting import (
     NetWorthHistoryQuery,
     NetWorthHistoryResponse,
     NetWorthPoint,
+    CashflowForecastResponse,
+    NetWorthProjectionResponse,
     QuarterlyReportEntry,
     QuarterlyReportQuery,
     QuarterlyReportResponse,
@@ -112,6 +117,8 @@ __all__ = [
     "ListAccountsResponse",
     "LoanCreate",
     "LoanRead",
+    "ReconcileAccountRequest",
+    "ReconcileAccountResponse",
     "UpdateAccountPath",
     "CategoryCreate",
     "CategoryUpdate",
@@ -169,6 +176,8 @@ __all__ = [
     "NetWorthHistoryQuery",
     "NetWorthHistoryResponse",
     "NetWorthPoint",
+    "CashflowForecastResponse",
+    "NetWorthProjectionResponse",
     "YearlyReportQuery",
     "YearlyReportEntry",
     "YearlyReportResponse",
@@ -188,4 +197,8 @@ __all__ = [
     "SubscriptionSummaryRead",
     "SubscriptionSummaryResponse",
     "AttachSubscriptionRequest",
+    "GoalCreate",
+    "GoalUpdate",
+    "GoalRead",
+    "GoalListResponse",
 ]

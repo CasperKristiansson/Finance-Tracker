@@ -1,6 +1,6 @@
 """Lambda handlers exposed via Serverless."""
 
-from .accounts import create_account, list_accounts
+from .accounts import create_account, list_accounts, reconcile_account
 from .accounts import reset_handler_state as reset_account_handler_state
 from .accounts import update_account
 from .budgets import (
@@ -26,6 +26,8 @@ from .imports import (
     create_import_batch,
     list_import_batches,
 )
+from .goals import create_goal, list_goals, update_goal, delete_goal
+from .investments import sync_investment_ledger
 from .loans import (
     create_loan,
     get_loan_schedule,
@@ -40,6 +42,8 @@ from .reporting import (
     export_report,
     monthly_report,
     net_worth_history,
+    cashflow_forecast,
+    net_worth_projection,
     quarterly_report,
 )
 from .reporting import reset_handler_state as reset_reporting_handler_state
@@ -70,6 +74,7 @@ __all__ = [
     "list_accounts",
     "create_account",
     "update_account",
+    "reconcile_account",
     "create_category",
     "list_categories",
     "update_category",
@@ -85,6 +90,8 @@ __all__ = [
     "yearly_report",
     "total_report",
     "net_worth_history",
+    "cashflow_forecast",
+    "net_worth_projection",
     "create_transaction",
     "list_transactions",
     "update_transaction",
@@ -109,4 +116,9 @@ __all__ = [
     "reset_transaction_handler_state",
     "reset_budget_handler_state",
     "reset_subscription_handler_state",
+    "create_goal",
+    "list_goals",
+    "update_goal",
+    "delete_goal",
+    "sync_investment_ledger",
 ]

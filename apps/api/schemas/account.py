@@ -88,6 +88,30 @@ class AccountWithBalance(AccountRead):
     """Account response extended with current balance information."""
 
     balance: Decimal
+    last_reconciled_at: Optional[datetime] = None
+    reconciliation_gap: Optional[Decimal] = None
+    needs_reconciliation: Optional[bool] = None
+
+
+class ReconcileAccountRequest(BaseModel):
+    """Request body for reconciling an account balance."""
+
+    captured_at: datetime
+    reported_balance: Decimal
+    description: Optional[str] = None
+    category_id: Optional[UUID] = None
+
+
+class ReconcileAccountResponse(BaseModel):
+    """Response for a reconciliation operation."""
+
+    account_id: UUID
+    reported_balance: Decimal
+    ledger_balance: Decimal
+    delta_posted: Decimal
+    snapshot_id: UUID
+    transaction_id: Optional[UUID] = None
+    captured_at: datetime
 
 
 class ListAccountsQuery(BaseModel):
@@ -119,4 +143,6 @@ __all__ = [
     "ListAccountsQuery",
     "ListAccountsResponse",
     "UpdateAccountPath",
+    "ReconcileAccountRequest",
+    "ReconcileAccountResponse",
 ]

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
+from datetime import datetime
+from uuid import UUID
 
 from decimal import Decimal
 from pydantic import ValidationError
@@ -175,6 +177,17 @@ def investment_metrics(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         ).model_dump(mode="json")
 
     return json_response(200, response)
+
+
+def sync_investment_ledger(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    parsed = parse_body(event) if event.get("body") else {}
+    category_id_raw = parsed.get("category_id") if isinstance(parsed, dict) else None
+    category_id = UUID(str(category_id_raw)) if category_id_raw else None
+    with session_scope() as session:
+        service = InvestmentSnapshotService(session)
+        count = service.sync_transactions_to_ledger(default_category_id=category_id)
+    return json_response(200, {"synced": count})
 
 
 def _safe_decimal(value) -> Decimal:

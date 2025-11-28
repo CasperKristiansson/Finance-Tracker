@@ -6,17 +6,27 @@ import json
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Optional, Tuple
+from uuid import UUID
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 import urllib.request
 import urllib.error
-from sqlmodel import Session
+from sqlmodel import Session, select
 
-from ..models import InvestmentHolding, InvestmentSnapshot, InvestmentTransaction
+from ..models import (
+    Account,
+    InvestmentHolding,
+    InvestmentSnapshot,
+    InvestmentTransaction,
+    Transaction,
+    TransactionLeg,
+)
 from ..repositories.investment_snapshots import InvestmentSnapshotRepository
 from ..repositories.investment_transactions import InvestmentTransactionRepository
 from ..schemas import NordnetSnapshotCreate
+from ..services.transaction import TransactionService
+from ..shared import AccountType, TransactionType
 from .nordnet_parser import NordnetPreParser
 
 BEDROCK_REGION = "eu-north-1"
@@ -34,6 +44,7 @@ class InvestmentSnapshotService:
         self.repository = InvestmentSnapshotRepository(session)
         self.tx_repository = InvestmentTransactionRepository(session)
         self.pre_parser = NordnetPreParser()
+        self._account_cache: dict[str, Account] = {}
 
     def create_nordnet_snapshot(self, payload: NordnetSnapshotCreate) -> InvestmentSnapshot:
         parsed_payload = payload.parsed_payload or self.parse_nordnet_export(
@@ -165,6 +176,82 @@ class InvestmentSnapshotService:
         if manual_payload:
             parsed = self._deep_merge(parsed, manual_payload)
         return self._coerce_json_safe(parsed)
+
+    def sync_transactions_to_ledger(
+        self,
+        *,
+        default_category_id: UUID | None = None,
+    ) -> int:
+        """Convert investment transactions into ledger entries.
+
+        Best-effort: maps to a hidden investment account and offset account to keep
+        double-entry balanced. Skips rows already linked.
+        """
+
+        unsynced = self.tx_repository.list_unsynced(limit=500)
+        if not unsynced:
+            return 0
+
+        investment_account = self._get_or_create_investment_account()
+        offset_account = self._get_or_create_offset_account()
+        txn_service = TransactionService(self.session)
+        created = 0
+
+        for tx in unsynced:
+            amount = Decimal(tx.amount_sek)
+            fee = Decimal(tx.fee_sek or 0)
+            legs = [
+                TransactionLeg(account_id=investment_account.id, amount=amount),
+                TransactionLeg(account_id=offset_account.id, amount=-amount),
+            ]
+            if fee:
+                legs.append(TransactionLeg(account_id=offset_account.id, amount=-fee))
+                legs.append(TransactionLeg(account_id=investment_account.id, amount=fee))
+
+            transaction = Transaction(
+                category_id=default_category_id,
+                transaction_type=TransactionType.INVESTMENT_EVENT,
+                description=tx.description or tx.transaction_type,
+                notes=tx.notes,
+                external_id=f"invtx:{tx.id}",
+                occurred_at=tx.occurred_at,
+                posted_at=tx.occurred_at,
+            )
+            saved = txn_service.create_transaction(transaction, legs)
+            self.tx_repository.mark_linked(str(tx.id), str(saved.id))
+            created += 1
+
+        return created
+
+    def _get_or_create_offset_account(self) -> Account:
+        key = "offset"
+        if key in self._account_cache:
+            return self._account_cache[key]
+        account = self.session.exec(
+            select(Account).where(Account.is_active.is_(False), Account.display_order == 9999)
+        ).one_or_none()
+        if account is None:
+            account = Account(account_type=AccountType.NORMAL, is_active=False, display_order=9999)
+            self.session.add(account)
+            self.session.commit()
+            self.session.refresh(account)
+        self._account_cache[key] = account
+        return account
+
+    def _get_or_create_investment_account(self) -> Account:
+        key = "investment"
+        if key in self._account_cache:
+            return self._account_cache[key]
+        account = self.session.exec(
+            select(Account).where(Account.account_type == AccountType.INVESTMENT)
+        ).first()
+        if account is None:
+            account = Account(account_type=AccountType.INVESTMENT, is_active=False, display_order=9997)
+            self.session.add(account)
+            self.session.commit()
+            self.session.refresh(account)
+        self._account_cache[key] = account
+        return account
 
     def _extract_snapshot_date(self, payload: dict[str, Any]):
         date_value = payload.get("snapshot_date")

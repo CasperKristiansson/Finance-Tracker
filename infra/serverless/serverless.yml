@@ -94,6 +94,18 @@ functions:
           method: PATCH
           authorizer: cognitoJwt
 
+  reconcileAccount:
+    handler: apps/api/handlers/accounts.reconcile_account
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /accounts/{accountId}/reconcile
+          method: POST
+          authorizer: cognitoJwt
+
   listCategories:
     handler: apps/api/handlers/categories.list_categories
     timeout: 29
@@ -200,6 +212,54 @@ functions:
       - httpApi:
           path: /budgets/progress
           method: GET
+          authorizer: cognitoJwt
+
+  listGoals:
+    handler: apps/api/handlers/goals.list_goals
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /goals
+          method: GET
+          authorizer: cognitoJwt
+
+  createGoal:
+    handler: apps/api/handlers/goals.create_goal
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /goals
+          method: POST
+          authorizer: cognitoJwt
+
+  updateGoal:
+    handler: apps/api/handlers/goals.update_goal
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /goals/{goalId}
+          method: PATCH
+          authorizer: cognitoJwt
+
+  deleteGoal:
+    handler: apps/api/handlers/goals.delete_goal
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /goals/{goalId}
+          method: DELETE
           authorizer: cognitoJwt
 
   listTransactions:
@@ -418,6 +478,30 @@ functions:
           method: GET
           authorizer: cognitoJwt
 
+  cashflowForecast:
+    handler: apps/api/handlers/reporting.cashflow_forecast
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/forecast/cashflow
+          method: GET
+          authorizer: cognitoJwt
+
+  netWorthProjection:
+    handler: apps/api/handlers/reporting.net_worth_projection
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/forecast/net-worth
+          method: GET
+          authorizer: cognitoJwt
+
   exportReport:
     handler: apps/api/handlers/reporting.export_report
     timeout: 29
@@ -488,4 +572,16 @@ functions:
       - httpApi:
           path: /investments/metrics
           method: GET
+          authorizer: cognitoJwt
+
+  syncInvestmentLedger:
+    handler: apps/api/handlers/investments.sync_investment_ledger
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /investments/sync-ledger
+          method: POST
           authorizer: cognitoJwt

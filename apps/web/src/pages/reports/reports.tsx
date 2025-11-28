@@ -7,6 +7,7 @@ import {
   CartesianGrid,
   Legend,
   Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -21,7 +22,12 @@ import { useAppSelector } from "@/app/hooks";
 import { selectToken } from "@/features/auth/authSlice";
 import { apiFetch } from "@/lib/apiClient";
 import { useAccountsApi, useReportsApi } from "@/hooks/use-api";
-import type { QuarterlyReportEntry, SubscriptionSummaryResponse } from "@/types/api";
+import type {
+  CashflowForecastResponse,
+  NetWorthProjectionResponse,
+  QuarterlyReportEntry,
+  SubscriptionSummaryResponse,
+} from "@/types/api";
 
 type Granularity = "monthly" | "quarterly" | "yearly";
 
@@ -55,6 +61,10 @@ export const Reports: React.FC = () => {
     SubscriptionSummaryResponse["subscriptions"]
   >([]);
   const [subsLoading, setSubsLoading] = useState(false);
+  const [cashflowForecast, setCashflowForecast] =
+    useState<CashflowForecastResponse | null>(null);
+  const [netWorthProjection, setNetWorthProjection] =
+    useState<NetWorthProjectionResponse | null>(null);
 
   const [granularity, setGranularity] = useState<Granularity>("monthly");
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
@@ -80,6 +90,29 @@ export const Reports: React.FC = () => {
       }
     };
     void loadSubscriptions();
+  }, [token]);
+
+  useEffect(() => {
+    const loadForecasts = async () => {
+      if (!token) return;
+      try {
+        const [{ data: cashflow }, { data: netWorth }] = await Promise.all([
+          apiFetch<CashflowForecastResponse>({
+            path: "/reports/forecast/cashflow",
+            token,
+          }),
+          apiFetch<NetWorthProjectionResponse>({
+            path: "/reports/forecast/net-worth",
+            token,
+          }),
+        ]);
+        setCashflowForecast(cashflow);
+        setNetWorthProjection(netWorth);
+      } catch (error) {
+        console.error(error);
+      }
+    };
+    void loadForecasts();
   }, [token]);
 
   useEffect(() => {
@@ -174,6 +207,24 @@ export const Reports: React.FC = () => {
   const loading = activeReport.loading;
   const empty = !loading && chartData.length === 0;
 
+  const forecastChart = useMemo(
+    () =>
+      (cashflowForecast?.points || []).map((p) => ({
+        date: p.date,
+        balance: Number(p.balance),
+      })),
+    [cashflowForecast],
+  );
+
+  const projectionChart = useMemo(
+    () =>
+      (netWorthProjection?.points || []).map((p) => ({
+        date: p.date,
+        net: Number(p.net_worth),
+      })),
+    [netWorthProjection],
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -253,13 +304,13 @@ export const Reports: React.FC = () => {
               </button>
             ))}
           </div>
-      </CardHeader>
-      <CardContent className="grid gap-3 md:grid-cols-3">
-        {[
-          { label: "Income", value: totals.income },
-          { label: "Expense", value: totals.expense },
-          { label: "Net", value: totals.net },
-        ].map((item) => (
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          {[
+            { label: "Income", value: totals.income },
+            { label: "Expense", value: totals.expense },
+            { label: "Net", value: totals.net },
+          ].map((item) => (
             <div
               key={item.label}
               className="space-y-1 rounded-lg border border-slate-100 bg-slate-50 p-4"
@@ -280,13 +331,85 @@ export const Reports: React.FC = () => {
                 </Badge>
               ) : null}
             </div>
-        ))}
-      </CardContent>
-    </Card>
+          ))}
+        </CardContent>
+      </Card>
 
-    <Card className="border-slate-200 shadow-[0_12px_36px_-26px_rgba(15,23,42,0.35)]">
-      <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <Card className="border-slate-200 shadow-[0_12px_36px_-26px_rgba(15,23,42,0.35)]">
+          <CardHeader>
+            <CardTitle className="text-sm text-slate-700">
+              Cash flow forecast (60d)
+            </CardTitle>
+            <p className="text-sm text-slate-500">
+              Based on recent average daily net plus subscriptions.
+            </p>
+          </CardHeader>
+          <CardContent className="h-[240px]">
+            {!cashflowForecast ? (
+              <Skeleton className="h-full w-full" />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={forecastChart}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" hide />
+                  <YAxis hide />
+                  <Tooltip />
+                  <Line
+                    type="monotone"
+                    dataKey="balance"
+                    stroke="#0ea5e9"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+            {cashflowForecast?.alert_below_threshold_at ? (
+              <div className="mt-3 text-xs text-amber-700">
+                Projected to cross threshold on{" "}
+                {cashflowForecast.alert_below_threshold_at}.
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow-[0_12px_36px_-26px_rgba(15,23,42,0.35)]">
+          <CardHeader>
+            <CardTitle className="text-sm text-slate-700">
+              Net worth projection (36 months)
+            </CardTitle>
+            <p className="text-sm text-slate-500">
+              Uses compounded growth from history plus latest investments.
+            </p>
+          </CardHeader>
+          <CardContent className="h-[240px]">
+            {!netWorthProjection ? (
+              <Skeleton className="h-full w-full" />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={projectionChart}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" hide />
+                  <YAxis hide />
+                  <Tooltip />
+                  <Line
+                    type="monotone"
+                    dataKey="net"
+                    stroke="#22c55e"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+  <Card className="border-slate-200 shadow-[0_12px_36px_-26px_rgba(15,23,42,0.35)]">
+    <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div>
           <CardTitle className="text-sm text-slate-700">Top subscriptions</CardTitle>
           <p className="text-sm text-slate-500">
             Highest spend subscriptions by trailing 3 months.

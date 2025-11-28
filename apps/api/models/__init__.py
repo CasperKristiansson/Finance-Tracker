@@ -3,6 +3,7 @@
 from .account import Account, BalanceSnapshot, Loan, LoanRateChange
 from .budget import Budget
 from .category import Category, SystemAccount
+from .goal import Goal
 from .investment_holding import InvestmentHolding
 from .investment_transaction import InvestmentTransaction
 from .investment_snapshot import InvestmentSnapshot
@@ -27,5 +28,6 @@ __all__ = [
     "InvestmentSnapshot",
     "InvestmentHolding",
     "InvestmentTransaction",
+    "Goal",
     "Subscription",
 ]
