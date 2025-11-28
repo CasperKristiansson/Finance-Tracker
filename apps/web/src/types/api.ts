@@ -495,6 +495,8 @@ export type ThemePreference = "light" | "dark" | "system";
 
 export interface SettingsPayload {
   theme?: ThemePreference;
+  first_name?: string | null;
+  last_name?: string | null;
 }
 
 export interface SettingsResponse {

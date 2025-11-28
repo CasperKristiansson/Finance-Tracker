@@ -21,6 +21,7 @@ from ..shared import session_scope
 from .utils import (
     ensure_engine,
     extract_path_uuid,
+    get_user_id,
     json_response,
     parse_body,
     reset_engine_state,
@@ -35,9 +36,10 @@ def _budget_to_schema(budget) -> BudgetRead:
     return BudgetRead.model_validate(budget)
 
 
-def list_budgets(_event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+def list_budgets(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
-    with session_scope() as session:
+    user_id = get_user_id(event)
+    with session_scope(user_id=user_id) as session:
         service = BudgetService(session)
         budgets = service.list_budgets()
         response = BudgetListResponse(budgets=[_budget_to_schema(b) for b in budgets])
@@ -46,13 +48,14 @@ def list_budgets(_event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def create_budget(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
     try:
         data = BudgetCreate.model_validate(payload)
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = BudgetService(session)
         try:
             created = service.create_budget(
@@ -71,6 +74,7 @@ def create_budget(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def update_budget(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
     budget_id = extract_path_uuid(event, param_names=("budget_id", "budgetId"))
     if budget_id is None:
@@ -81,7 +85,7 @@ def update_budget(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = BudgetService(session)
         try:
             updated = service.update_budget(
@@ -100,10 +104,11 @@ def update_budget(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def delete_budget(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     budget_id = extract_path_uuid(event, param_names=("budget_id", "budgetId"))
     if budget_id is None:
         return json_response(400, {"error": "Budget ID missing from path"})
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = BudgetService(session)
         try:
             service.delete_budget(budget_id)
@@ -114,6 +119,7 @@ def delete_budget(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def list_budget_progress(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = event.get("queryStringParameters") or {}
     as_of_raw = params.get("as_of")
     as_of = (
@@ -122,7 +128,7 @@ def list_budget_progress(event: Dict[str, Any], _context: Any) -> Dict[str, Any]
         else datetime.now(timezone.utc)
     )
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = BudgetService(session)
         progress = service.list_budget_progress(as_of)
         items: list[BudgetProgressRead] = []

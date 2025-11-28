@@ -25,7 +25,9 @@ from apps.api.shared import (
     AccountType,
     TransactionType,
     configure_engine,
+    get_default_user_id,
     get_engine,
+    scope_session_to_user,
 )
 
 
@@ -128,6 +130,7 @@ def test_update_subscription_allows_clearing_fields():
 def test_attach_and_detach_subscription():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         source = _create_account(session)
         destination = _create_account(session)
         source_id = source.id
@@ -187,6 +190,7 @@ def test_attach_and_detach_subscription():
 def test_subscription_summary_includes_spend_and_last_charge():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         account_a = _create_account(session)
         account_b = _create_account(session)
         subscription = Subscription(

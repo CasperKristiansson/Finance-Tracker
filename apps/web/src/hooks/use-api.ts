@@ -96,12 +96,16 @@ import { LoadSettings, SaveSettings } from "@/features/settings/settingsSaga";
 import {
   selectApiBaseUrl,
   selectEnvInfo,
+  selectFirstName,
+  selectLastName,
   selectSettingsError,
   selectSettingsLastSavedAt,
   selectSettingsLoading,
   selectSettingsSaving,
   selectSettingsState,
   selectThemePreference,
+  setFirstName,
+  setLastName,
   setThemePreference,
 } from "@/features/settings/settingsSlice";
 import {
@@ -547,6 +551,8 @@ export const useSettings = () => {
   const dispatch = useAppDispatch();
   const state = useAppSelector(selectSettingsState);
   const theme = useAppSelector(selectThemePreference);
+  const firstName = useAppSelector(selectFirstName);
+  const lastName = useAppSelector(selectLastName);
   const envInfo = useAppSelector(selectEnvInfo);
   const apiBaseUrl = useAppSelector(selectApiBaseUrl);
   const loading = useAppSelector(selectSettingsLoading);
@@ -567,9 +573,21 @@ export const useSettings = () => {
     [dispatch],
   );
 
+  const changeFirstName = useCallback(
+    (value: string) => dispatch(setFirstName(value)),
+    [dispatch],
+  );
+
+  const changeLastName = useCallback(
+    (value: string) => dispatch(setLastName(value)),
+    [dispatch],
+  );
+
   return {
     ...state,
     theme,
+    firstName,
+    lastName,
     envInfo,
     apiBaseUrl,
     loading,
@@ -579,5 +597,7 @@ export const useSettings = () => {
     loadSettings,
     saveSettings,
     changeTheme,
+    changeFirstName,
+    changeLastName,
   };
 };

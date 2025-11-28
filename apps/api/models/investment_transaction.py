@@ -11,10 +11,10 @@ from sqlalchemy import Column, DateTime, ForeignKey, Numeric, String, UniqueCons
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlmodel import Field, SQLModel
 
-from ..shared import TimestampMixin, UUIDPrimaryKeyMixin
+from ..shared import TimestampMixin, UserOwnedMixin, UUIDPrimaryKeyMixin
 
 
-class InvestmentTransaction(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+class InvestmentTransaction(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
     """Normalized investment transaction (buy/sell/dividend/fee/transfer)."""
 
     __tablename__ = "investment_transactions"
@@ -49,6 +49,7 @@ class InvestmentTransaction(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table
 
     __table_args__ = (
         UniqueConstraint(
+            "user_id",
             "occurred_at",
             "transaction_type",
             "description",

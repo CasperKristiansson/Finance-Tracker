@@ -11,7 +11,14 @@ from sqlmodel import Session, select
 
 from ..models import Loan, Transaction, TransactionLeg
 from ..services import TransactionService
-from ..shared import CreatedSource, InterestCompound, TransactionType, coerce_decimal
+from ..shared import (
+    CreatedSource,
+    InterestCompound,
+    TransactionType,
+    coerce_decimal,
+    get_default_user_id,
+    scope_session_to_user,
+)
 
 _DECIMAL_CENT = Decimal("0.01")
 
@@ -25,6 +32,8 @@ def accrue_interest(
     loan_ids: Optional[Iterable[UUID]] = None,
 ) -> List[Transaction]:
     """Accrue interest for the supplied loans and post balancing entries."""
+
+    scope_session_to_user(session, session.info.get("user_id") or get_default_user_id())
 
     statement = select(Loan)
     if loan_ids:

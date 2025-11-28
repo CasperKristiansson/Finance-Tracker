@@ -28,6 +28,7 @@ from ..shared import session_scope
 from .utils import (
     ensure_engine,
     get_query_params,
+    get_user_id,
     json_response,
     parse_body,
     reset_engine_state,
@@ -40,6 +41,7 @@ def reset_handler_state() -> None:
 
 def create_nordnet_snapshot(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     parsed_body = parse_body(event)
 
     try:
@@ -47,7 +49,7 @@ def create_nordnet_snapshot(event: Dict[str, Any], _context: Any) -> Dict[str, A
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = InvestmentSnapshotService(session)
         try:
             snapshot = service.create_nordnet_snapshot(payload)
@@ -62,6 +64,7 @@ def create_nordnet_snapshot(event: Dict[str, Any], _context: Any) -> Dict[str, A
 
 def list_nordnet_snapshots(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
 
     limit: Optional[int] = None
@@ -72,7 +75,7 @@ def list_nordnet_snapshots(event: Dict[str, Any], _context: Any) -> Dict[str, An
         except (TypeError, ValueError):
             return json_response(400, {"error": "limit must be an integer"})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = InvestmentSnapshotService(session)
         snapshots = service.list_snapshots(limit=limit)
         response = NordnetSnapshotListResponse(
@@ -84,6 +87,7 @@ def list_nordnet_snapshots(event: Dict[str, Any], _context: Any) -> Dict[str, An
 
 def list_investment_transactions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
     start = params.get("start")
     end = params.get("end")
@@ -100,7 +104,7 @@ def list_investment_transactions(event: Dict[str, Any], _context: Any) -> Dict[s
     start_dt = datetime.fromisoformat(start) if start else None
     end_dt = datetime.fromisoformat(end) if end else None
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = InvestmentSnapshotService(session)
         txs = service.list_transactions(
             start=start_dt, end=end_dt, holding=holding, tx_type=tx_type, limit=limit
@@ -114,6 +118,7 @@ def list_investment_transactions(event: Dict[str, Any], _context: Any) -> Dict[s
 
 def investment_metrics(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
     benchmark_param = params.get("benchmark") or "^OMXS30"
     benchmark_symbols = [sym.strip() for sym in benchmark_param.split(",") if sym.strip()]
@@ -121,7 +126,7 @@ def investment_metrics(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     end_param = params.get("end_date")
     start_date = datetime.fromisoformat(start_param).date() if start_param else None
     end_date = datetime.fromisoformat(end_param).date() if end_param else None
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = InvestmentSnapshotService(session)
         snapshots = service.list_snapshots()
         txs = service.list_transactions()
@@ -184,10 +189,11 @@ def investment_metrics(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def sync_investment_ledger(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     parsed = parse_body(event) if event.get("body") else {}
     category_id_raw = parsed.get("category_id") if isinstance(parsed, dict) else None
     category_id = UUID(str(category_id_raw)) if category_id_raw else None
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = InvestmentSnapshotService(session)
         count = service.sync_transactions_to_ledger(default_category_id=category_id)
     return json_response(200, {"synced": count})

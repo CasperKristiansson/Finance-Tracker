@@ -20,6 +20,7 @@ from ..shared import (
     TimestampMixin,
     TransactionStatus,
     TransactionType,
+    UserOwnedMixin,
     UUIDPrimaryKeyMixin,
 )
 
@@ -34,6 +35,7 @@ class Transaction(
     UUIDPrimaryKeyMixin,
     TimestampMixin,
     AuditSourceMixin,
+    UserOwnedMixin,
     SQLModel,
     table=True,
 ):
@@ -62,7 +64,7 @@ class Transaction(
     )
     external_id: Optional[str] = Field(
         default=None,
-        sa_column=Column(String(180), unique=True, nullable=True),
+        sa_column=Column(String(180), nullable=True),
     )
     occurred_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
     posted_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
@@ -95,8 +97,9 @@ class Transaction(
         subscription: Optional["Subscription"]
 
     __table_args__ = (
+        UniqueConstraint("user_id", "external_id", name="uq_transaction_external_id"),
         UniqueConstraint(
-            "occurred_at", "description", "external_id", name="uq_transaction_identity"
+            "user_id", "occurred_at", "description", "external_id", name="uq_transaction_identity"
         ),
     )
 
@@ -122,7 +125,7 @@ class Transaction(
     )
 
 
-class TransactionLeg(UUIDPrimaryKeyMixin, SQLModel, table=True):
+class TransactionLeg(UUIDPrimaryKeyMixin, UserOwnedMixin, SQLModel, table=True):
     """Individual account impact for a transaction."""
 
     __tablename__ = "transaction_legs"
@@ -164,7 +167,7 @@ class TransactionLeg(UUIDPrimaryKeyMixin, SQLModel, table=True):
     )
 
 
-class LoanEvent(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+class LoanEvent(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
     """Denormalized record of loan-related activity."""
 
     __tablename__ = "loan_events"

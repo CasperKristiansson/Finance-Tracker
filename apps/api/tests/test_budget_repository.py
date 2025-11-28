@@ -16,7 +16,9 @@ from apps.api.shared import (
     CategoryType,
     TransactionType,
     configure_engine,
+    get_default_user_id,
     get_engine,
+    scope_session_to_user,
 )
 
 
@@ -76,6 +78,7 @@ def _seed_transaction(
 def test_list_with_spend_monthly():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         category = Category(name="Food", category_type=CategoryType.EXPENSE)
         budget = Budget(
             category_id=category.id,
@@ -107,6 +110,7 @@ def test_list_with_spend_ignores_out_of_period():
     last_year = now - timedelta(days=370)
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         category = Category(name="Salary", category_type=CategoryType.INCOME)
         budget = Budget(
             category_id=category.id,

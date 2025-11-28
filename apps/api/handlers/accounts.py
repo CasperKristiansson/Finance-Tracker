@@ -25,6 +25,7 @@ from .utils import (
     ensure_engine,
     extract_path_uuid,
     get_query_params,
+    get_user_id,
     json_response,
     parse_body,
     reset_engine_state,
@@ -56,6 +57,7 @@ def list_accounts(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     """HTTP GET /accounts."""
 
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
 
     try:
@@ -63,7 +65,7 @@ def list_accounts(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = AccountService(session)
         accounts_with_balances = service.list_accounts_with_balance(
             include_inactive=query.include_inactive,
@@ -98,6 +100,7 @@ def create_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     """HTTP POST /accounts."""
 
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
 
     try:
@@ -111,7 +114,7 @@ def create_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         is_active=data.is_active,
     )
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = AccountService(session)
         created = service.create_account(
             account,
@@ -127,6 +130,7 @@ def update_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     """HTTP PATCH /accounts/{account_id}."""
 
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
     account_id = extract_path_uuid(event, param_names=("account_id", "accountId"))
     if account_id is None:
@@ -137,7 +141,7 @@ def update_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = AccountService(session)
         try:
             updated = service.update_account(
@@ -158,6 +162,7 @@ def reconcile_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     """HTTP POST /accounts/{accountId}/reconcile."""
 
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
     account_id = extract_path_uuid(event, param_names=("account_id", "accountId"))
     if account_id is None:
@@ -168,7 +173,7 @@ def reconcile_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = AccountService(session)
         try:
             result = service.reconcile_account(

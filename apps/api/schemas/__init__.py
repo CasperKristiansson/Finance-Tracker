@@ -67,6 +67,7 @@ from .loan import (
     LoanScheduleRead,
     LoanUpdate,
 )
+from .settings import SettingsPayload, SettingsRequest, SettingsResponse
 from .reporting import (
     CashflowForecastResponse,
     DateRangeReportQuery,
@@ -165,6 +166,9 @@ __all__ = [
     "LoanScheduleRead",
     "LoanEventRead",
     "LoanEventListQuery",
+    "SettingsPayload",
+    "SettingsRequest",
+    "SettingsResponse",
     "MonthlyReportQuery",
     "MonthlyReportEntry",
     "MonthlyReportResponse",

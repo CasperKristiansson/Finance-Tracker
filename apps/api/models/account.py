@@ -14,13 +14,19 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.types import Enum as SAEnum
 from sqlmodel import Field, Relationship, SQLModel
 
-from ..shared import AccountType, InterestCompound, TimestampMixin, UUIDPrimaryKeyMixin
+from ..shared import (
+    AccountType,
+    InterestCompound,
+    TimestampMixin,
+    UserOwnedMixin,
+    UUIDPrimaryKeyMixin,
+)
 
 if TYPE_CHECKING:  # pragma: no cover
     from .transaction import LoanEvent, TransactionLeg
 
 
-class Account(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+class Account(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
     """Represents a user-visible account (normal, debt, or investment)."""
 
     __tablename__ = "accounts"
@@ -45,7 +51,7 @@ class Account(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
     )
 
 
-class Loan(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+class Loan(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
     """Metadata for debt accounts including interest configuration."""
 
     __tablename__ = "loans"
@@ -88,7 +94,7 @@ class Loan(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
     )
 
 
-class LoanRateChange(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+class LoanRateChange(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
     """Future-dated interest rate changes for loans."""
 
     __tablename__ = "loan_rate_changes"
@@ -107,7 +113,7 @@ class LoanRateChange(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
         loan: Loan
 
 
-class BalanceSnapshot(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+class BalanceSnapshot(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
     """Stores cached balances for an account at a specific moment."""
 
     __tablename__ = "balance_snapshots"

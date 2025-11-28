@@ -8,6 +8,8 @@ import pytest
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, create_engine
 
+from apps.api.shared import get_default_user_id, scope_session_to_user
+
 # pylint: disable=redefined-outer-name
 
 
@@ -26,6 +28,7 @@ def session() -> Iterator[Session]:
     SQLModel.metadata.create_all(engine)
 
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         yield session
 
     SQLModel.metadata.drop_all(engine)

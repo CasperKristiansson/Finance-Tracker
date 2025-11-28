@@ -11,13 +11,13 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.types import Enum as SAEnum
 from sqlmodel import Field, SQLModel
 
-from ..shared import BudgetPeriod, TimestampMixin, UUIDPrimaryKeyMixin
+from ..shared import BudgetPeriod, TimestampMixin, UserOwnedMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:  # pragma: no cover
     from .category import Category
 
 
-class Budget(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+class Budget(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
     """Represents a budget allocation for a category and period."""
 
     __tablename__ = "budgets"

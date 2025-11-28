@@ -17,7 +17,7 @@ from apps.api.handlers.imports import (
     reset_handler_state,
 )
 from apps.api.models import Subscription, Transaction
-from apps.api.shared import configure_engine, get_engine
+from apps.api.shared import configure_engine, get_default_user_id, get_engine, scope_session_to_user
 
 
 @pytest.fixture(autouse=True)
@@ -185,6 +185,7 @@ def test_circle_k_amounts_are_negated():
 def test_subscription_suggestions_surface_without_auto_apply():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         subscription = Subscription(name="StreamCo", matcher_text="stream", matcher_day_of_month=1)
         session.add(subscription)
         session.commit()
@@ -244,6 +245,7 @@ def test_subscription_suggestions_surface_without_auto_apply():
     assert commit_response["statusCode"] == 200
 
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         transactions = list(session.exec(select(Transaction)).all())
         assert len(transactions) == 1
         assert transactions[0].subscription_id is None
@@ -252,6 +254,7 @@ def test_subscription_suggestions_surface_without_auto_apply():
 def test_subscription_applied_when_explicit_override():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         subscription = Subscription(name="Gym", matcher_text="gym")
         session.add(subscription)
         session.commit()
@@ -307,6 +310,7 @@ def test_subscription_applied_when_explicit_override():
     assert commit_response["statusCode"] == 200
 
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         transactions = list(session.exec(select(Transaction)).all())
         assert len(transactions) == 1
         assert transactions[0].subscription_id == subscription.id

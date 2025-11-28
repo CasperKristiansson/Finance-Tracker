@@ -23,7 +23,9 @@ from apps.api.shared import (
     InterestCompound,
     TransactionStatus,
     configure_engine,
+    get_default_user_id,
     get_engine,
+    scope_session_to_user,
 )
 
 
@@ -60,6 +62,7 @@ def _create_account(session: Session, account_type: AccountType = AccountType.NO
 def test_create_and_list_transactions():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         source = _create_account(session)
         destination = _create_account(session)
         source_id = source.id
@@ -96,6 +99,7 @@ def test_create_and_list_transactions():
 def test_create_transaction_with_subscription():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         source = _create_account(session)
         destination = _create_account(session)
         subscription = Subscription(name="Streaming", matcher_text="StreamCo")
@@ -126,6 +130,7 @@ def test_create_transaction_with_subscription():
 def test_create_transaction_rejects_missing_subscription():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         source = _create_account(session)
         destination = _create_account(session)
         source_id = source.id
@@ -165,6 +170,7 @@ def test_create_transaction_validation_error():
 def test_list_transactions_with_filters():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         source = _create_account(session)
         destination = _create_account(session)
         source_id = source.id
@@ -196,6 +202,7 @@ def test_list_transactions_with_filters():
 def test_list_transactions_respects_limit():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         source = _create_account(session)
         destination = _create_account(session)
         source_id = source.id
@@ -229,6 +236,7 @@ def test_list_transactions_respects_limit():
 def test_create_transaction_generates_loan_event():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         debt_account = _create_account(session, AccountType.DEBT)
         funding_account = _create_account(session)
         debt_account_id = debt_account.id
@@ -259,6 +267,7 @@ def test_create_transaction_generates_loan_event():
     assert response["statusCode"] == 201
 
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         events = session.exec(select(LoanEvent)).all()
         assert len(events) == 1
         assert events[0].event_type == "payment_principal"
@@ -267,6 +276,7 @@ def test_create_transaction_generates_loan_event():
 def test_update_and_delete_transaction():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         source = _create_account(session)
         destination = _create_account(session)
         source_id = source.id

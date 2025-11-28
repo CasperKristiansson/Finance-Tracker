@@ -24,7 +24,9 @@ from apps.api.shared import (
     InterestCompound,
     TransactionType,
     configure_engine,
+    get_default_user_id,
     get_engine,
+    scope_session_to_user,
 )
 
 
@@ -61,6 +63,7 @@ def _create_account(session: Session, account_type: AccountType = AccountType.DE
 def test_create_loan_for_debt_account():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         account = _create_account(session)
 
     payload = {
@@ -80,6 +83,7 @@ def test_create_loan_for_debt_account():
     assert body["current_principal"] == "90000.00"
 
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         stored = session.get(Loan, UUID(body["id"]))
         assert stored is not None
         assert stored.minimum_payment == Decimal("1500.00")
@@ -88,6 +92,7 @@ def test_create_loan_for_debt_account():
 def test_create_loan_rejects_non_debt_account():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         account = _create_account(session, AccountType.NORMAL)
 
     payload = {
@@ -105,6 +110,7 @@ def test_create_loan_rejects_non_debt_account():
 def test_update_loan_fields():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         account = _create_account(session)
         loan = Loan(
             account_id=account.id,
@@ -138,6 +144,7 @@ def test_update_loan_fields():
 def test_get_loan_schedule_generates_entries():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         account = _create_account(session)
         loan = Loan(
             account_id=account.id,
@@ -172,6 +179,7 @@ def test_get_loan_schedule_generates_entries():
 def test_list_loan_events_returns_recent_activity():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         debt_account = _create_account(session)
         funding_account = _create_account(session, AccountType.NORMAL)
         loan = Loan(
@@ -235,6 +243,7 @@ def test_endpoints_return_404_for_missing_loan():
 def test_create_loan_rejects_duplicate():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         account = _create_account(session)
         loan = Loan(
             account_id=account.id,

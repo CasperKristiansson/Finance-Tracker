@@ -12,11 +12,11 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlmodel import Field, Relationship, SQLModel
 
-from ..shared import TimestampMixin, UUIDPrimaryKeyMixin
+from ..shared import TimestampMixin, UserOwnedMixin, UUIDPrimaryKeyMixin
 from .investment_snapshot import InvestmentSnapshot
 
 
-class InvestmentHolding(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+class InvestmentHolding(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
     """Denormalized holding from a portfolio snapshot."""
 
     __tablename__ = "investment_holdings"

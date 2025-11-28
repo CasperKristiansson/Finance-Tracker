@@ -17,7 +17,9 @@ from apps.api.shared import (
     InterestCompound,
     TransactionType,
     configure_engine,
+    get_default_user_id,
     get_engine,
+    scope_session_to_user,
 )
 
 
@@ -72,6 +74,7 @@ def _prime_existing_activity(session: Session, debt_id: UUID, offset_id: UUID) -
 def test_accrue_interest_posts_transaction_and_updates_loan():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         debt_id, expense_id, offset_id, category_id = _create_accounts_and_category(session)
         _prime_existing_activity(session, debt_id, offset_id)
 
@@ -86,6 +89,7 @@ def test_accrue_interest_posts_transaction_and_updates_loan():
         session.commit()
 
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         created = accrue_interest(
             session,
             as_of=date(2024, 2, 1),
@@ -116,6 +120,7 @@ def test_accrue_interest_posts_transaction_and_updates_loan():
 def test_accrue_interest_ignores_zero_rate_loans() -> None:
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         debt_id, expense_id, offset_id, category_id = _create_accounts_and_category(session)
         _prime_existing_activity(session, debt_id, offset_id)
 
@@ -130,6 +135,7 @@ def test_accrue_interest_ignores_zero_rate_loans() -> None:
         session.commit()
 
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         created = accrue_interest(
             session,
             as_of=date(2024, 3, 1),

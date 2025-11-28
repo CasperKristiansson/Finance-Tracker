@@ -20,7 +20,7 @@ from ..schemas import (
 )
 from ..services import ImportService
 from ..shared import session_scope
-from .utils import ensure_engine, json_response, parse_body, reset_engine_state
+from .utils import ensure_engine, get_user_id, json_response, parse_body, reset_engine_state
 
 
 def reset_handler_state() -> None:
@@ -29,6 +29,7 @@ def reset_handler_state() -> None:
 
 def create_import_batch(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     parsed_body = parse_body(event)
 
     try:
@@ -36,7 +37,7 @@ def create_import_batch(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = ImportService(session)
         batch, parsed_files = service.create_batch_with_files(data)
         session_read = _to_session_read(batch, parsed_files, include_preview=True)
@@ -45,9 +46,10 @@ def create_import_batch(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     return json_response(201, payload)
 
 
-def list_import_batches(_event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+def list_import_batches(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
-    with session_scope() as session:
+    user_id = get_user_id(event)
+    with session_scope(user_id=user_id) as session:
         service = ImportService(session)
         batches = service.list_imports()
         payload = ImportBatchListResponse(imports=[_to_batch_read(batch) for batch in batches])
@@ -56,12 +58,13 @@ def list_import_batches(_event: Dict[str, Any], _context: Any) -> Dict[str, Any]
 
 def get_import_session(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = event.get("pathParameters") or {}
     batch_id = params.get("batch_id") or params.get("id")
     if not batch_id:
         return json_response(400, {"error": "Missing import session id"})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = ImportService(session)
         batch = service.get_import_session(UUID(str(batch_id)))
         if batch is None:
@@ -75,6 +78,7 @@ def get_import_session(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def commit_import_session(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = event.get("pathParameters") or {}
     batch_id = params.get("batch_id") or params.get("id")
     if not batch_id:
@@ -86,7 +90,7 @@ def commit_import_session(event: Dict[str, Any], _context: Any) -> Dict[str, Any
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = ImportService(session)
         try:
             batch = service.commit_session(UUID(str(batch_id)), commit_payload)
@@ -101,6 +105,7 @@ def commit_import_session(event: Dict[str, Any], _context: Any) -> Dict[str, Any
 
 def append_import_files(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = event.get("pathParameters") or {}
     batch_id = params.get("batch_id") or params.get("id")
     if not batch_id:
@@ -112,7 +117,7 @@ def append_import_files(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = ImportService(session)
         try:
             batch = service.append_files_to_session(UUID(str(batch_id)), data.files, data.examples)

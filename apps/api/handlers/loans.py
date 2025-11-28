@@ -22,6 +22,7 @@ from .utils import (
     ensure_engine,
     extract_path_uuid,
     get_query_params,
+    get_user_id,
     json_response,
     parse_body,
     reset_engine_state,
@@ -34,6 +35,7 @@ def reset_handler_state() -> None:
 
 def create_loan(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
 
     try:
@@ -41,7 +43,7 @@ def create_loan(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = LoanService(session)
         try:
             loan = service.attach_loan(
@@ -59,6 +61,7 @@ def create_loan(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def update_loan(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
     account_id = extract_path_uuid(event, param_names=("account_id", "accountId"))
     if account_id is None:
@@ -71,7 +74,7 @@ def update_loan(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
     update_fields = data.model_dump(exclude_unset=True)
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = LoanService(session)
         try:
             loan = service.update_loan(account_id, update_fields)
@@ -84,6 +87,7 @@ def update_loan(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def list_loan_events(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     account_id = extract_path_uuid(event, param_names=("account_id", "accountId"))
     if account_id is None:
         return json_response(400, {"error": "Account ID missing from path"})
@@ -94,7 +98,7 @@ def list_loan_events(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = LoanService(session)
         try:
             events = service.list_events(
@@ -114,6 +118,7 @@ def list_loan_events(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def get_loan_schedule(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     account_id = extract_path_uuid(event, param_names=("account_id", "accountId"))
     if account_id is None:
         return json_response(400, {"error": "Account ID missing from path"})
@@ -127,7 +132,7 @@ def get_loan_schedule(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     as_of_date = query.as_of_date or datetime.now(timezone.utc).date()
     generated_at = datetime.now(timezone.utc)
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = LoanService(session)
         try:
             loan = service.get_loan(account_id)

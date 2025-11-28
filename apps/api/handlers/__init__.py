@@ -55,6 +55,8 @@ from .reporting import (
     total_report,
     yearly_report,
 )
+from .settings import get_settings, save_settings
+from .settings import reset_handler_state as reset_settings_handler_state
 from .subscriptions import (
     attach_subscription,
     create_subscription,
@@ -98,6 +100,8 @@ __all__ = [
     "net_worth_history",
     "cashflow_forecast",
     "net_worth_projection",
+    "get_settings",
+    "save_settings",
     "create_transaction",
     "list_transactions",
     "update_transaction",
@@ -126,6 +130,7 @@ __all__ = [
     "reset_transaction_handler_state",
     "reset_budget_handler_state",
     "reset_subscription_handler_state",
+    "reset_settings_handler_state",
     "create_goal",
     "list_goals",
     "update_goal",

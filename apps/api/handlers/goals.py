@@ -10,12 +10,13 @@ from ..models import Goal
 from ..schemas import GoalCreate, GoalListResponse, GoalRead, GoalUpdate
 from ..services import GoalService
 from ..shared import session_scope
-from .utils import ensure_engine, extract_path_uuid, json_response, parse_body
+from .utils import ensure_engine, extract_path_uuid, get_user_id, json_response, parse_body
 
 
-def list_goals(_event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+def list_goals(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
-    with session_scope() as session:
+    user_id = get_user_id(event)
+    with session_scope(user_id=user_id) as session:
         service = GoalService(session)
         goals = service.list()
         payload = GoalListResponse(goals=[_to_schema(service, goal) for goal in goals])
@@ -24,13 +25,14 @@ def list_goals(_event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def create_goal(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
     try:
         data = GoalCreate.model_validate(payload)
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = GoalService(session)
         goal = service.create(data.model_dump())
         response = _to_schema(service, goal).model_dump(mode="json")
@@ -39,6 +41,7 @@ def create_goal(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def update_goal(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
     goal_id = extract_path_uuid(event, param_names=("goal_id", "goalId"))
     if goal_id is None:
@@ -49,7 +52,7 @@ def update_goal(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = GoalService(session)
         try:
             goal = service.update(goal_id, data.model_dump(exclude_none=True))
@@ -61,10 +64,11 @@ def update_goal(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def delete_goal(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     goal_id = extract_path_uuid(event, param_names=("goal_id", "goalId"))
     if goal_id is None:
         return json_response(400, {"error": "Goal ID missing from path"})
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = GoalService(session)
         try:
             service.delete(goal_id)

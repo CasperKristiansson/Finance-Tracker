@@ -20,6 +20,7 @@ from .utils import (
     ensure_engine,
     extract_path_uuid,
     get_query_params,
+    get_user_id,
     json_response,
     parse_body,
     reset_engine_state,
@@ -36,6 +37,7 @@ def _transaction_to_schema(transaction: Transaction) -> TransactionRead:
 
 def list_transactions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
 
     try:
@@ -43,7 +45,7 @@ def list_transactions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = TransactionService(session)
         transactions = service.list_transactions(
             start_date=query.start_date,
@@ -69,6 +71,7 @@ def list_transactions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def create_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
 
     try:
@@ -89,7 +92,7 @@ def create_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     )
     legs = [TransactionLeg(account_id=leg.account_id, amount=leg.amount) for leg in data.legs]
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = TransactionService(session)
         try:
             created = service.create_transaction(transaction, legs)
@@ -111,6 +114,7 @@ __all__ = [
 
 def update_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
     transaction_id = extract_path_uuid(event, param_names=("transaction_id", "transactionId"))
     if transaction_id is None:
@@ -125,7 +129,7 @@ def update_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     subscription_in_payload = "subscription_id" in data.model_fields_set
     subscription_id = updates.pop("subscription_id", None)
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = TransactionService(session)
         try:
             updated = service.update_transaction(
@@ -144,11 +148,12 @@ def update_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def delete_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     transaction_id = extract_path_uuid(event, param_names=("transaction_id", "transactionId"))
     if transaction_id is None:
         return json_response(400, {"error": "Transaction ID missing from path"})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = TransactionService(session)
         try:
             service.delete_transaction(transaction_id)

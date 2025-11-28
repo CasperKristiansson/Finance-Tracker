@@ -18,7 +18,14 @@ from apps.api.handlers import (
 )
 from apps.api.models import Account, Transaction, TransactionLeg
 from apps.api.services import TransactionService
-from apps.api.shared import AccountType, TransactionType, configure_engine, get_engine
+from apps.api.shared import (
+    AccountType,
+    TransactionType,
+    configure_engine,
+    get_default_user_id,
+    get_engine,
+    scope_session_to_user,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -53,6 +60,7 @@ def _create_account(session: Session, account_type: AccountType = AccountType.NO
 
 def _seed_transactions(engine, account: Account, balancing: Account) -> None:
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         service = TransactionService(session)
 
         occurred_income = datetime(2024, 1, 10, tzinfo=timezone.utc)
@@ -83,6 +91,7 @@ def _seed_transactions(engine, account: Account, balancing: Account) -> None:
 def test_monthly_report_returns_income_and_expense():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         tracked = _create_account(session)
         balancing = _create_account(session)
     _seed_transactions(engine, tracked, balancing)
@@ -109,6 +118,7 @@ def test_monthly_report_returns_income_and_expense():
 def test_yearly_report_supports_account_filter():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         tracked = _create_account(session)
         balancing = _create_account(session)
     _seed_transactions(engine, tracked, balancing)
@@ -142,6 +152,7 @@ def test_total_report_returns_zero_when_empty():
 def test_total_report_respects_filters():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         tracked = _create_account(session)
         secondary = _create_account(session)
     _seed_transactions(engine, tracked, secondary)
@@ -160,6 +171,7 @@ def test_total_report_respects_filters():
 def test_net_worth_history_returns_running_balance():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         tracked = _create_account(session)
         balancing = _create_account(session)
     _seed_transactions(engine, tracked, balancing)

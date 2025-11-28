@@ -8,6 +8,7 @@ from .imports import ImportErrorRecord, ImportFile, ImportRow, ImportRule, Trans
 from .investment_holding import InvestmentHolding
 from .investment_snapshot import InvestmentSnapshot
 from .investment_transaction import InvestmentTransaction
+from .settings import UserSettings
 from .subscription import Subscription
 from .transaction import LoanEvent, Transaction, TransactionLeg
 
@@ -31,4 +32,5 @@ __all__ = [
     "InvestmentTransaction",
     "Goal",
     "Subscription",
+    "UserSettings",
 ]

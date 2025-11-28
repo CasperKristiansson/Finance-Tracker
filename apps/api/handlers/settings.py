@@ -1,47 +1,70 @@
-"""Lightweight settings endpoints.
-
-These are intentionally minimal and return a stubbed payload so the frontend
-can hydrate without a hard dependency on a stored record. Persisting per-user
-settings can be added later by backing these functions with a repository.
-"""
+"""User settings endpoints backed by persistent storage."""
 
 from __future__ import annotations
 
 from typing import Any, Dict
 
-from .utils import json_response, parse_body
+from pydantic import ValidationError
+
+from ..schemas import SettingsPayload, SettingsRequest, SettingsResponse
+from ..services import SettingsService
+from ..shared import session_scope
+from .utils import ensure_engine, get_user_id, json_response, parse_body, reset_engine_state
 
 
-def get_settings(_event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
-    """Return a default settings payload."""
+def reset_handler_state() -> None:
+    """Reset cached engine state for tests."""
 
-    return json_response(
-        200,
-        {
-            "settings": {
-                "theme": "system",
-            }
-        },
-    )
+    reset_engine_state()
+
+
+def _to_response_payload(payload: SettingsPayload) -> Dict[str, Any]:
+    response = SettingsResponse(settings=payload)
+    return response.model_dump(mode="json")
+
+
+def get_settings(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    """Return stored settings for the requesting user."""
+
+    ensure_engine()
+    user_id = get_user_id(event)
+
+    with session_scope(user_id=user_id) as session:
+        service = SettingsService(session)
+        settings = service.get_settings(user_id)
+        theme = settings.theme
+        first_name = settings.first_name
+        last_name = settings.last_name
+
+    payload = SettingsPayload(theme=theme, first_name=first_name, last_name=last_name)
+    return json_response(200, _to_response_payload(payload))
 
 
 def save_settings(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
-    """Accept and echo settings payload (stub implementation)."""
+    """Persist incoming settings for the requesting user."""
 
+    ensure_engine()
+    user_id = get_user_id(event)
     body = parse_body(event)
-    settings = body.get("settings") or {}
 
-    # Only allow known keys; ignore others for safety.
-    theme = settings.get("theme") if isinstance(settings, dict) else None
-    response_settings: Dict[str, Any] = {}
-    if isinstance(theme, str) and theme in {"light", "dark", "system"}:
-        response_settings["theme"] = theme
-    else:
-        response_settings["theme"] = "system"
+    try:
+        request = SettingsRequest.model_validate(body)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
 
-    return json_response(
-        200,
-        {
-            "settings": response_settings,
-        },
-    )
+    payload = request.settings
+
+    with session_scope(user_id=user_id) as session:
+        service = SettingsService(session)
+        updated = service.update_settings(
+            user_id,
+            theme=payload.theme,
+            first_name=payload.first_name,
+            last_name=payload.last_name,
+        )
+        theme = updated.theme
+        first_name = updated.first_name
+        last_name = updated.last_name
+
+    response_payload = SettingsPayload(theme=theme, first_name=first_name, last_name=last_name)
+    return json_response(200, _to_response_payload(response_payload))

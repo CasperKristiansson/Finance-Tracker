@@ -35,7 +35,14 @@ from ..schemas import (
 )
 from ..services import ReportingService
 from ..shared import session_scope
-from .utils import ensure_engine, get_query_params, json_response, parse_body, reset_engine_state
+from .utils import (
+    ensure_engine,
+    get_query_params,
+    get_user_id,
+    json_response,
+    parse_body,
+    reset_engine_state,
+)
 
 
 def reset_handler_state() -> None:
@@ -53,6 +60,7 @@ def _to_csv(headers: Iterable[str], rows: Iterable[Iterable[str]]) -> str:
 
 def monthly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
 
     try:
@@ -60,7 +68,7 @@ def monthly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = ReportingService(session)
         results = service.monthly_report(
             year=query.year,
@@ -76,6 +84,7 @@ def monthly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def yearly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
 
     try:
@@ -83,7 +92,7 @@ def yearly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = ReportingService(session)
         results = service.yearly_report(
             account_ids=query.account_ids,
@@ -98,6 +107,7 @@ def yearly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def total_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
 
     try:
@@ -105,7 +115,7 @@ def total_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = ReportingService(session)
         result = service.total_report(
             account_ids=query.account_ids,
@@ -120,6 +130,7 @@ def total_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def quarterly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
 
     try:
@@ -127,7 +138,7 @@ def quarterly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = ReportingService(session)
         results = service.quarterly_report(
             year=query.year,
@@ -143,6 +154,7 @@ def quarterly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def date_range_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
 
     try:
@@ -150,7 +162,7 @@ def date_range_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = ReportingService(session)
         results = service.date_range_report(
             start_date=query.start_date,
@@ -167,6 +179,7 @@ def date_range_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def net_worth_history(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
 
     try:
@@ -174,7 +187,7 @@ def net_worth_history(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = ReportingService(session)
         results = service.net_worth_history(account_ids=query.account_ids)
         payload = NetWorthHistoryResponse(
@@ -185,12 +198,13 @@ def net_worth_history(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def cashflow_forecast(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
     days = int(params.get("days", 60) or 60)
     threshold_raw = params.get("threshold")
     threshold = Decimal(str(threshold_raw)) if threshold_raw is not None else Decimal("0")
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = ReportingService(session)
         result = service.cashflow_forecast(days=days, threshold=threshold)
         payload = CashflowForecastResponse.model_validate(result)
@@ -199,9 +213,10 @@ def cashflow_forecast(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def net_worth_projection(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
     months = int(params.get("months", 36) or 36)
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = ReportingService(session)
         result = service.net_worth_projection(months=months)
         payload = NetWorthProjectionResponse.model_validate(result)
@@ -210,6 +225,7 @@ def net_worth_projection(event: Dict[str, Any], _context: Any) -> Dict[str, Any]
 
 def export_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
 
     try:
@@ -221,7 +237,7 @@ def export_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     rows: list[list[str]] = []
     filename = f"report.{request.format}"
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = ReportingService(session)
         granularity = request.granularity
 

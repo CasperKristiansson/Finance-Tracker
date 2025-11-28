@@ -24,7 +24,9 @@ from apps.api.shared import (
     CategoryType,
     TransactionType,
     configure_engine,
+    get_default_user_id,
     get_engine,
+    scope_session_to_user,
 )
 
 
@@ -53,6 +55,7 @@ def _json_body(response) -> dict:
 def _create_category(name: str = "Groceries") -> Category:
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         category = Category(name=name, category_type=CategoryType.EXPENSE)
         session.add(category)
         session.commit()
@@ -63,6 +66,7 @@ def _create_category(name: str = "Groceries") -> Category:
 def _seed_transaction(category_id: UUID, amount: Decimal) -> None:
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         account = Account(account_type=AccountType.NORMAL)
         session.add(account)
         session.flush()

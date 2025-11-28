@@ -43,8 +43,21 @@ class AuditSourceMixin:
     )
 
 
+class UserOwnedMixin:
+    """Adds a Cognito user identifier for multi-tenant scoping."""
+
+    user_id: str = Field(
+        default="",
+        max_length=64,
+        nullable=False,
+        index=True,
+        description="Cognito subject identifier for the record owner",
+    )
+
+
 __all__ = [
     "TimestampMixin",
     "UUIDPrimaryKeyMixin",
     "AuditSourceMixin",
+    "UserOwnedMixin",
 ]

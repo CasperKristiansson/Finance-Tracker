@@ -18,7 +18,14 @@ from apps.api.handlers import (
 )
 from apps.api.models import Account, Transaction, TransactionLeg
 from apps.api.services import TransactionService
-from apps.api.shared import AccountType, TransactionType, configure_engine, get_engine
+from apps.api.shared import (
+    AccountType,
+    TransactionType,
+    configure_engine,
+    get_default_user_id,
+    get_engine,
+    scope_session_to_user,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -122,6 +129,7 @@ def test_update_account_not_found():
 def test_list_accounts_respects_as_of_date():
     engine = get_engine()
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         tracked = Account(account_type=AccountType.NORMAL)
         offset = Account(account_type=AccountType.NORMAL)
         session.add_all([tracked, offset])

@@ -45,6 +45,8 @@ const persistLocalSettings = (
   if (typeof window === "undefined") return;
   const payload: Partial<SettingsState> = {
     theme: state.theme,
+    firstName: state.firstName,
+    lastName: state.lastName,
     envInfo: state.envInfo,
     lastSavedAt: overrideTimestamp ?? state.lastSavedAt,
   };
@@ -85,6 +87,8 @@ function* handleLoadSettings() {
       if (response?.settings) {
         const payload: Partial<SettingsState> = {
           theme: response.settings.theme,
+          firstName: response.settings.first_name || undefined,
+          lastName: response.settings.last_name || undefined,
         };
         yield put(hydrateSettings(payload));
         const currentState: SettingsState =
@@ -116,6 +120,8 @@ function* handleSaveSettings() {
     try {
       const payload: SettingsPayload = {
         theme: state.theme,
+        first_name: state.firstName,
+        last_name: state.lastName,
       };
       yield call(
         callApiWithAuth,

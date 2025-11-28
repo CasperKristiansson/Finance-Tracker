@@ -1,5 +1,5 @@
 import { ChevronsUpDown, LogOut } from "lucide-react";
-import { useAppDispatch } from "@/app/hooks";
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -17,6 +17,10 @@ import {
 } from "@/components/ui/sidebar";
 import { AuthLogout } from "@/features/auth/authSaga";
 import type { AuthState } from "@/features/auth/authSlice";
+import {
+  selectFirstName,
+  selectLastName,
+} from "@/features/settings/settingsSlice";
 
 function getNameFromEmail(email: string): string {
   if (!email) return "";
@@ -40,6 +44,16 @@ function getNameFromEmail(email: string): string {
 export function NavUser({ user }: { user: AuthState["user"] }) {
   const { isMobile } = useSidebar();
   const dispatch = useAppDispatch();
+  const settingsFirstName = useAppSelector(selectFirstName);
+  const settingsLastName = useAppSelector(selectLastName);
+
+  const profileName =
+    [settingsFirstName, settingsLastName].filter(Boolean).join(" ") ||
+    getNameFromEmail(user.email);
+
+  const initials =
+    (settingsFirstName?.charAt(0) || getNameFromEmail(user.email).charAt(0)) +
+    ((settingsLastName || getNameFromEmail(user.email).split(" ")[1] || "").charAt(0) || "");
 
   return (
     <SidebarMenu>
@@ -52,14 +66,11 @@ export function NavUser({ user }: { user: AuthState["user"] }) {
             >
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarFallback className="rounded-lg">
-                  {getNameFromEmail(user.email).charAt(0) +
-                    getNameFromEmail(user.email).split(" ")[1]?.charAt(0)}
+                  {initials}
                 </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">
-                  {getNameFromEmail(user.email)}
-                </span>
+                <span className="truncate font-medium">{profileName}</span>
                 <span className="truncate text-xs">{user.email}</span>
               </div>
               <ChevronsUpDown className="ml-auto size-4" />
@@ -75,14 +86,11 @@ export function NavUser({ user }: { user: AuthState["user"] }) {
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
                   <AvatarFallback className="rounded-lg">
-                    {getNameFromEmail(user.email).charAt(0) +
-                      getNameFromEmail(user.email).split(" ")[1]?.charAt(0)}
+                    {initials}
                   </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">
-                    {getNameFromEmail(user.email)}
-                  </span>
+                  <span className="truncate font-medium">{profileName}</span>
                   <span className="truncate text-xs">{user.email}</span>
                 </div>
               </div>

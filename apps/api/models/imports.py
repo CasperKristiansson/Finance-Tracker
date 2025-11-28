@@ -7,12 +7,22 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, List, Optional
 from uuid import UUID
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, Numeric, String
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    JSON,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlmodel import Field, Relationship, SQLModel
 
-from ..shared import TimestampMixin, UUIDPrimaryKeyMixin
+from ..shared import TimestampMixin, UserOwnedMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:  # pragma: no cover
     from .transaction import Transaction
@@ -20,7 +30,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from .subscription import Subscription
 
 
-class ImportFile(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+class ImportFile(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
     """Stores metadata about files included in an import batch."""
 
     __tablename__ = "import_files"
@@ -54,7 +64,7 @@ class ImportFile(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
     )
 
 
-class ImportErrorRecord(UUIDPrimaryKeyMixin, SQLModel, table=True):
+class ImportErrorRecord(UUIDPrimaryKeyMixin, UserOwnedMixin, SQLModel, table=True):
     """Per-row error details for an import file."""
 
     __tablename__ = "import_errors"
@@ -70,7 +80,7 @@ class ImportErrorRecord(UUIDPrimaryKeyMixin, SQLModel, table=True):
     message: str = Field(sa_column=Column(String(500), nullable=False))
 
 
-class ImportRow(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+class ImportRow(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
     """Parsed row stored for staged import review."""
 
     __tablename__ = "import_rows"
@@ -129,7 +139,7 @@ class ImportRow(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
     )
 
 
-class TransactionImportBatch(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+class TransactionImportBatch(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
     """Groups transactions imported together for auditing."""
 
     __tablename__ = "transaction_import_batches"
@@ -156,12 +166,12 @@ class TransactionImportBatch(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, tabl
     )
 
 
-class ImportRule(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+class ImportRule(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
     """Deterministic import rule learned from user corrections."""
 
     __tablename__ = "import_rules"
 
-    matcher_text: str = Field(sa_column=Column(String(255), unique=True, nullable=False))
+    matcher_text: str = Field(sa_column=Column(String(255), nullable=False))
     matcher_amount: Optional[Decimal] = Field(sa_column=Column(Numeric(18, 2), nullable=True))
     amount_tolerance: Optional[Decimal] = Field(
         default=None, sa_column=Column(Numeric(18, 2), nullable=True)
@@ -196,6 +206,10 @@ class ImportRule(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
     category: Optional["Category"] = Relationship(sa_relationship=relationship("Category"))
     subscription: Optional["Subscription"] = Relationship(
         sa_relationship=relationship("Subscription")
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "matcher_text", name="uq_import_rule_user_matcher_text"),
     )
 
 

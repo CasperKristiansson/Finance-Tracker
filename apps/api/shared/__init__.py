@@ -8,10 +8,12 @@ from .enums import (
     CreatedSource,
     InterestCompound,
     LoanEventType,
+    ThemePreference,
     SystemAccountCode,
     TransactionStatus,
     TransactionType,
 )
+from .auth import INTEGRATION_USER_ID_ENV, get_default_user_id
 from .finance import (
     BASE_CURRENCY,
     DECIMAL_PLACES,
@@ -19,12 +21,13 @@ from .finance import (
     coerce_decimal,
     validate_category_amount,
 )
-from .mixins import AuditSourceMixin, TimestampMixin, UUIDPrimaryKeyMixin
+from .mixins import AuditSourceMixin, TimestampMixin, UserOwnedMixin, UUIDPrimaryKeyMixin
 from .session import (
     configure_engine,
     configure_engine_from_env,
     get_engine,
     get_session,
+    scope_session_to_user,
     init_db,
     session_scope,
 )
@@ -45,12 +48,14 @@ __all__ = [
     "CategoryType",
     "AuditSourceMixin",
     "CreatedSource",
+    "UserOwnedMixin",
     "InterestCompound",
     "LoanEventType",
     "BudgetPeriod",
     "TransactionStatus",
     "SystemAccountCode",
     "TransactionType",
+    "ThemePreference",
     "TimestampMixin",
     "UUIDPrimaryKeyMixin",
     "BASE_CURRENCY",
@@ -60,6 +65,7 @@ __all__ = [
     "configure_engine_from_env",
     "get_engine",
     "get_session",
+    "scope_session_to_user",
     "session_scope",
     "init_db",
     "ensure_balanced_legs",
@@ -72,4 +78,6 @@ __all__ = [
     "DB_PASSWORD_ENV",
     "DB_PORT_ENV",
     "create_or_replace_materialized_views",
+    "get_default_user_id",
+    "INTEGRATION_USER_ID_ENV",
 ]

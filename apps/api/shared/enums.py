@@ -81,6 +81,14 @@ class BankImportType(StrEnum):
     SWEDBANK = "swedbank"
 
 
+class ThemePreference(StrEnum):
+    """UI theme preference scoped per user."""
+
+    LIGHT = "light"
+    DARK = "dark"
+    SYSTEM = "system"
+
+
 __all__ = [
     "StrEnum",
     "CreatedSource",
@@ -92,4 +100,5 @@ __all__ = [
     "LoanEventType",
     "BudgetPeriod",
     "BankImportType",
+    "ThemePreference",
 ]

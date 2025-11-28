@@ -10,6 +10,8 @@ export interface EnvEntry {
 
 export interface SettingsState {
   theme: ThemePreference;
+  firstName?: string;
+  lastName?: string;
   apiBaseUrl: string;
   envInfo: EnvEntry[];
   loading: boolean;
@@ -78,6 +80,8 @@ const cachedSettings = safeParseLocalSettings();
 
 const initialState: SettingsState = {
   theme: cachedSettings?.theme ?? readStoredTheme(),
+  firstName: cachedSettings?.firstName,
+  lastName: cachedSettings?.lastName,
   apiBaseUrl: API_BASE_URL,
   envInfo: cachedSettings?.envInfo ?? buildEnvEntries(),
   loading: false,
@@ -93,6 +97,8 @@ const settingsSlice = createSlice({
     hydrateSettings(state, action: PayloadAction<Partial<SettingsState>>) {
       const payload = action.payload;
       if (payload.theme) state.theme = payload.theme;
+      if (payload.firstName !== undefined) state.firstName = payload.firstName || undefined;
+      if (payload.lastName !== undefined) state.lastName = payload.lastName || undefined;
       if (payload.apiBaseUrl) state.apiBaseUrl = payload.apiBaseUrl;
       if (payload.envInfo) state.envInfo = payload.envInfo;
       if (payload.lastSavedAt) state.lastSavedAt = payload.lastSavedAt;
@@ -117,10 +123,18 @@ const settingsSlice = createSlice({
     setLastSavedAt(state, action: PayloadAction<string | undefined>) {
       state.lastSavedAt = action.payload;
     },
+    setFirstName(state, action: PayloadAction<string>) {
+      state.firstName = action.payload;
+    },
+    setLastName(state, action: PayloadAction<string>) {
+      state.lastName = action.payload;
+    },
   },
   selectors: {
     selectSettingsState: (state) => state,
     selectThemePreference: (state) => state.theme,
+    selectFirstName: (state) => state.firstName,
+    selectLastName: (state) => state.lastName,
     selectEnvInfo: (state) => state.envInfo,
     selectApiBaseUrl: (state) => state.apiBaseUrl,
     selectSettingsSaving: (state) => state.saving,
@@ -138,6 +152,8 @@ export const {
   setSettingsError,
   setEnvInfo,
   setLastSavedAt,
+  setFirstName,
+  setLastName,
 } = settingsSlice.actions;
 
 export const {
@@ -145,6 +161,8 @@ export const {
   selectThemePreference,
   selectEnvInfo,
   selectApiBaseUrl,
+  selectFirstName,
+  selectLastName,
   selectSettingsSaving,
   selectSettingsLoading,
   selectSettingsError,

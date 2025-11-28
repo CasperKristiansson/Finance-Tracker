@@ -10,11 +10,14 @@ import {
   XCircle,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import React, { useEffect, useMemo } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
+import React, { useEffect, useMemo, useState } from "react";
 import { useAppSelector } from "@/app/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { selectIsDemo, selectUser } from "@/features/auth/authSlice";
 import { useSettings } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
@@ -60,6 +63,8 @@ export const Settings: React.FC = () => {
   const isDemo = useAppSelector(selectIsDemo);
   const {
     theme,
+    firstName,
+    lastName,
     envInfo,
     apiBaseUrl,
     loading,
@@ -69,16 +74,43 @@ export const Settings: React.FC = () => {
     loadSettings,
     saveSettings,
     changeTheme,
+    changeFirstName,
+    changeLastName,
   } = useSettings();
   const { setTheme, resolvedTheme } = useTheme();
+  const [profileDialogOpen, setProfileDialogOpen] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
 
   useEffect(() => {
     setTheme(theme);
   }, [setTheme, theme]);
 
+  const missingProfile = !firstName || !lastName;
+
+  useEffect(() => {
+    if (!loading && !saving && !isDemo && missingProfile) {
+      setProfileDialogOpen(true);
+    }
+  }, [loading, missingProfile, saving, isDemo]);
+
   const handleThemeChange = (next: ThemePreference) => {
     setTheme(next);
     changeTheme(next);
+  };
+
+  const handleProfileSubmit = (event?: React.FormEvent) => {
+    event?.preventDefault();
+    const trimmedFirst = (firstName || "").trim();
+    const trimmedLast = (lastName || "").trim();
+    if (!trimmedFirst || !trimmedLast) {
+      setProfileError("Please add both first and last name.");
+      return;
+    }
+    changeFirstName(trimmedFirst);
+    changeLastName(trimmedLast);
+    setProfileError(null);
+    saveSettings();
+    setProfileDialogOpen(false);
   };
 
   const headerStatus = useMemo(() => {
@@ -200,6 +232,12 @@ export const Settings: React.FC = () => {
               </span>
             </div>
             <div className="flex items-center justify-between">
+              <span className="text-slate-500">Name</span>
+              <span className="font-semibold text-slate-900">
+                {[firstName, lastName].filter(Boolean).join(" ") || "Not set"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
               <span className="text-slate-500">Mode</span>
               <Badge variant={isDemo ? "secondary" : "default"}>
                 {isDemo ? "Demo" : "Authenticated"}
@@ -258,7 +296,106 @@ export const Settings: React.FC = () => {
             ) : null}
           </CardContent>
         </Card>
+
+        <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)] lg:col-span-3">
+          <CardHeader>
+            <CardTitle className="text-sm text-slate-700">Profile details</CardTitle>
+            <p className="text-sm text-slate-500">
+              Add a friendly name to replace the Cognito user id shown across the app.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <form className="grid gap-4 md:grid-cols-2" onSubmit={handleProfileSubmit}>
+              <div className="space-y-2">
+                <Label htmlFor="first-name">First name</Label>
+                <Input
+                  id="first-name"
+                  value={firstName ?? ""}
+                  onChange={(e) => changeFirstName(e.target.value)}
+                  placeholder="Ada"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="last-name">Last name</Label>
+                <Input
+                  id="last-name"
+                  value={lastName ?? ""}
+                  onChange={(e) => changeLastName(e.target.value)}
+                  placeholder="Lovelace"
+                  required
+                />
+              </div>
+              {profileError ? (
+                <div className="md:col-span-2 text-sm text-rose-600">{profileError}</div>
+              ) : null}
+              <div className="md:col-span-2 flex flex-wrap gap-2">
+                <Button type="submit" disabled={saving} className="gap-2">
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save profile
+                </Button>
+                {missingProfile ? (
+                  <Badge variant="outline" className="border-amber-300 text-amber-700">
+                    Incomplete
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary">Up to date</Badge>
+                )}
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       </div>
+
+      <Dialog.Root open={profileDialogOpen} onOpenChange={setProfileDialogOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 w-[90vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <Dialog.Title className="text-lg font-semibold text-slate-900">
+              Add your name
+            </Dialog.Title>
+            <Dialog.Description className="mt-1 text-sm text-slate-600">
+              We currently show your Cognito user id. Set your first and last name to personalize the app.
+            </Dialog.Description>
+            <form className="mt-4 space-y-4" onSubmit={handleProfileSubmit}>
+              <div className="space-y-2">
+                <Label htmlFor="modal-first-name">First name</Label>
+                <Input
+                  id="modal-first-name"
+                  value={firstName ?? ""}
+                  onChange={(e) => changeFirstName(e.target.value)}
+                  placeholder="Ada"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="modal-last-name">Last name</Label>
+                <Input
+                  id="modal-last-name"
+                  value={lastName ?? ""}
+                  onChange={(e) => changeLastName(e.target.value)}
+                  placeholder="Lovelace"
+                  required
+                />
+              </div>
+              {profileError ? (
+                <p className="text-sm text-rose-600">{profileError}</p>
+              ) : null}
+              <div className="flex justify-end gap-2">
+                <Dialog.Close asChild>
+                  <Button variant="outline" type="button">
+                    Maybe later
+                  </Button>
+                </Dialog.Close>
+                <Button type="submit" className="gap-2" disabled={saving}>
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save and continue
+                </Button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 };

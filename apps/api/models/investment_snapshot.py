@@ -10,13 +10,13 @@ from sqlalchemy import JSON, Column, Date, Numeric, String, Text
 from sqlalchemy.orm import relationship
 from sqlmodel import Field, Relationship, SQLModel
 
-from ..shared import TimestampMixin, UUIDPrimaryKeyMixin
+from ..shared import TimestampMixin, UserOwnedMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:  # pragma: no cover
     from .investment_holding import InvestmentHolding
 
 
-class InvestmentSnapshot(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+class InvestmentSnapshot(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
     """Stores a dated snapshot of an investment export."""
 
     __tablename__ = "investment_snapshots"

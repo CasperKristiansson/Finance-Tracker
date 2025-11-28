@@ -11,7 +11,7 @@ from uuid import UUID
 
 from sqlalchemy.pool import StaticPool
 
-from ..shared import configure_engine, configure_engine_from_env, get_engine
+from ..shared import configure_engine, configure_engine_from_env, get_default_user_id, get_engine
 
 _JSON_HEADERS = {"Content-Type": "application/json"}
 _DEFAULT_CONNECT_TIMEOUT = 10
@@ -43,6 +43,21 @@ def parse_body(event: Dict[str, Any]) -> Dict[str, Any]:
 
 def get_query_params(event: Dict[str, Any]) -> Dict[str, Any]:
     return event.get("queryStringParameters") or {}
+
+
+def get_user_id(event: Dict[str, Any]) -> str:
+    """Extract the Cognito user id (sub) from the request context."""
+
+    request_context = event.get("requestContext") or {}
+    authorizer = request_context.get("authorizer") or {}
+    jwt = authorizer.get("jwt") or {}
+    claims = jwt.get("claims") or authorizer.get("claims") or {}
+
+    user_id = None
+    if isinstance(claims, dict):
+        user_id = claims.get("sub") or claims.get("username") or claims.get("cognito:username")
+
+    return str(user_id or get_default_user_id())
 
 
 def extract_path_uuid(
@@ -84,6 +99,7 @@ __all__ = [
     "json_response",
     "parse_body",
     "get_query_params",
+    "get_user_id",
     "extract_path_uuid",
 ]
 _ENGINE_INITIALIZED = False

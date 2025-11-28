@@ -11,10 +11,10 @@ from sqlalchemy import Column, Date, ForeignKey, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlmodel import Field, SQLModel
 
-from ..shared import TimestampMixin, UUIDPrimaryKeyMixin
+from ..shared import TimestampMixin, UserOwnedMixin, UUIDPrimaryKeyMixin
 
 
-class Goal(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+class Goal(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
     """Represents a user-defined financial goal."""
 
     __tablename__ = "goals"

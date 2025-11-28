@@ -24,6 +24,7 @@ from .utils import (
     ensure_engine,
     extract_path_uuid,
     get_query_params,
+    get_user_id,
     json_response,
     parse_body,
     reset_engine_state,
@@ -40,6 +41,7 @@ def _subscription_to_schema(subscription: Subscription) -> SubscriptionRead:
 
 def list_subscriptions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
 
     try:
@@ -47,7 +49,7 @@ def list_subscriptions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = SubscriptionService(session)
         subscriptions = service.list_subscriptions(include_inactive=query.include_inactive)
         response = SubscriptionListResponse(
@@ -58,6 +60,7 @@ def list_subscriptions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def list_subscription_summaries(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
 
     try:
@@ -65,7 +68,7 @@ def list_subscription_summaries(event: Dict[str, Any], _context: Any) -> Dict[st
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = SubscriptionService(session)
         summaries = service.list_subscription_summaries(include_inactive=query.include_inactive)
         payload = SubscriptionSummaryResponse(
@@ -89,6 +92,7 @@ def list_subscription_summaries(event: Dict[str, Any], _context: Any) -> Dict[st
 
 def create_subscription(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
 
     try:
@@ -105,7 +109,7 @@ def create_subscription(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         is_active=data.is_active,
     )
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = SubscriptionService(session)
         created = service.create_subscription(subscription)
         response = _subscription_to_schema(created).model_dump(mode="json")
@@ -114,6 +118,7 @@ def create_subscription(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def update_subscription(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
     subscription_id = extract_path_uuid(event, param_names=("subscription_id", "subscriptionId"))
     if subscription_id is None:
@@ -126,7 +131,7 @@ def update_subscription(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
     updates = data.model_dump(exclude_unset=True)
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = SubscriptionService(session)
         try:
             updated = service.update_subscription(subscription_id, **updates)
@@ -138,6 +143,7 @@ def update_subscription(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def attach_subscription(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
     transaction_id = extract_path_uuid(event, param_names=("transaction_id", "transactionId"))
     if transaction_id is None:
@@ -148,7 +154,7 @@ def attach_subscription(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = SubscriptionService(session)
         try:
             updated = service.attach_transaction(transaction_id, data.subscription_id)
@@ -160,11 +166,12 @@ def attach_subscription(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def detach_subscription(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     transaction_id = extract_path_uuid(event, param_names=("transaction_id", "transactionId"))
     if transaction_id is None:
         return json_response(400, {"error": "Transaction ID missing from path"})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = SubscriptionService(session)
         try:
             updated = service.detach_transaction(transaction_id)

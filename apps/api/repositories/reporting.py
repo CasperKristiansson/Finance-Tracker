@@ -14,7 +14,7 @@ from sqlmodel import Session, select
 
 from ..models import Transaction, TransactionLeg
 from ..models.investment_snapshot import InvestmentSnapshot
-from ..shared import coerce_decimal
+from ..shared import coerce_decimal, get_default_user_id
 
 DecimalTotals = Tuple[Decimal, Decimal]
 
@@ -72,6 +72,7 @@ class ReportingRepository:
 
     def __init__(self, session: Session):
         self.session = session
+        self.user_id: str = str(session.info.get("user_id") or get_default_user_id())
 
     def get_monthly_totals(
         self,
@@ -185,6 +186,9 @@ class ReportingRepository:
             .order_by(period_column.asc())
         )
 
+        statement = statement.where(transaction_table.c.user_id == self.user_id)
+        statement = statement.where(leg_table.c.user_id == self.user_id)
+
         if account_ids:
             statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
 
@@ -217,6 +221,9 @@ class ReportingRepository:
             .group_by(day_column)
         )
 
+        statement = statement.where(transaction_table.c.user_id == self.user_id)
+        statement = statement.where(leg_table.c.user_id == self.user_id)
+
         rows = self.session.exec(statement).all()
         if not rows:
             return Decimal("0")
@@ -227,7 +234,9 @@ class ReportingRepository:
         """Sum balances across accounts."""
 
         leg_table = cast(Table, getattr(TransactionLeg, "__table__"))
-        statement = select(func.coalesce(func.sum(leg_table.c.amount), 0))
+        statement = select(func.coalesce(func.sum(leg_table.c.amount), 0)).where(
+            leg_table.c.user_id == self.user_id
+        )
         if account_ids:
             statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
         scalar_result = cast(Any, self.session.exec(statement))
@@ -256,6 +265,7 @@ class ReportingRepository:
             .order_by(cast(Any, InvestmentSnapshot.snapshot_date).desc())
             .limit(1)
         )
+        statement = statement.where(InvestmentSnapshot.user_id == self.user_id)
         row = self.session.exec(statement).first()
         if not row:
             return Decimal("0")
@@ -356,6 +366,9 @@ class ReportingRepository:
             )
             .order_by(desc(transaction_table.c.occurred_at))
         )
+
+        statement = statement.where(transaction_table.c.user_id == self.user_id)
+        statement = statement.where(leg_table.c.user_id == self.user_id)
 
         if account_ids:
             statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))

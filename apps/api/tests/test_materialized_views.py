@@ -18,6 +18,8 @@ from apps.api.shared import (
     configure_engine,
     create_or_replace_materialized_views,
     get_engine,
+    get_default_user_id,
+    scope_session_to_user,
 )
 
 
@@ -94,6 +96,7 @@ def test_create_or_replace_views_on_sqlite() -> None:
     engine = get_engine()
 
     with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
         _seed_sample_data(session)
 
     create_or_replace_materialized_views(engine, replace=True)

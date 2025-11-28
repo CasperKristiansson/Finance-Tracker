@@ -21,6 +21,7 @@ from .utils import (
     ensure_engine,
     extract_path_uuid,
     get_query_params,
+    get_user_id,
     json_response,
     parse_body,
     reset_engine_state,
@@ -37,6 +38,7 @@ def _category_to_schema(category: Category) -> CategoryRead:
 
 def list_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     params = get_query_params(event)
 
     try:
@@ -44,7 +46,7 @@ def list_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = CategoryService(session)
         categories = service.list_categories(include_archived=query.include_archived)
         response = CategoryListResponse(
@@ -55,6 +57,7 @@ def list_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def create_category(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
 
     try:
@@ -69,7 +72,7 @@ def create_category(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         icon=data.icon,
     )
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = CategoryService(session)
         created = service.create_category(category)
         response = _category_to_schema(created).model_dump(mode="json")
@@ -78,6 +81,7 @@ def create_category(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def update_category(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
     raw_id = extract_path_uuid(event, param_names=("category_id", "categoryId"))
     if raw_id is None:
@@ -100,7 +104,7 @@ def update_category(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     if data.is_archived is not None:
         updates["is_archived"] = data.is_archived
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = CategoryService(session)
         try:
             updated = service.update_category(raw_id, **updates)
@@ -112,6 +116,7 @@ def update_category(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 def merge_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
+    user_id = get_user_id(event)
     payload = parse_body(event)
 
     try:
@@ -119,7 +124,7 @@ def merge_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope() as session:
+    with session_scope(user_id=user_id) as session:
         service = CategoryService(session)
         try:
             merged = service.merge_categories(

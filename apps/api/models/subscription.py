@@ -11,14 +11,14 @@ from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlmodel import Field, Relationship, SQLModel
 
-from ..shared import TimestampMixin, UUIDPrimaryKeyMixin
+from ..shared import TimestampMixin, UserOwnedMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:  # pragma: no cover
     from .category import Category
     from .transaction import Transaction
 
 
-class Subscription(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+class Subscription(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
     """Represents a user-defined subscription matcher."""
 
     __tablename__ = "subscriptions"

@@ -25,26 +25,28 @@ _VIEW_DEFINITIONS = (
         CREATE MATERIALIZED VIEW IF NOT EXISTS vw_monthly_account_totals AS
         SELECT
             date_trunc('month', t.occurred_at) AS period,
+            t.user_id,
             l.account_id,
             SUM(CASE WHEN l.amount > 0 THEN l.amount ELSE 0 END) AS income_total,
             SUM(CASE WHEN l.amount < 0 THEN -l.amount ELSE 0 END) AS expense_total,
             SUM(l.amount) AS net_total
         FROM transaction_legs AS l
         JOIN transactions AS t ON t.id = l.transaction_id
-        GROUP BY period, l.account_id
+        GROUP BY period, t.user_id, l.account_id
         WITH DATA;
         """.strip(),
         sqlite_sql="""
         CREATE VIEW IF NOT EXISTS vw_monthly_account_totals AS
         SELECT
             date(t.occurred_at, 'start of month') AS period,
+            t.user_id,
             l.account_id,
             SUM(CASE WHEN l.amount > 0 THEN l.amount ELSE 0 END) AS income_total,
             SUM(CASE WHEN l.amount < 0 THEN -l.amount ELSE 0 END) AS expense_total,
             SUM(l.amount) AS net_total
         FROM transaction_legs AS l
         JOIN transactions AS t ON t.id = l.transaction_id
-        GROUP BY period, l.account_id;
+        GROUP BY period, t.user_id, l.account_id;
         """.strip(),
     ),
     MaterializedViewDefinition(
@@ -53,6 +55,7 @@ _VIEW_DEFINITIONS = (
         CREATE MATERIALIZED VIEW IF NOT EXISTS vw_category_yearly_totals AS
         SELECT
             date_part('year', t.occurred_at)::int AS year,
+            t.user_id,
             t.category_id,
             SUM(CASE WHEN l.amount > 0 THEN l.amount ELSE 0 END) AS income_total,
             SUM(CASE WHEN l.amount < 0 THEN -l.amount ELSE 0 END) AS expense_total,
@@ -60,13 +63,14 @@ _VIEW_DEFINITIONS = (
         FROM transaction_legs AS l
         JOIN transactions AS t ON t.id = l.transaction_id
         WHERE t.category_id IS NOT NULL
-        GROUP BY year, t.category_id
+        GROUP BY year, t.user_id, t.category_id
         WITH DATA;
         """.strip(),
         sqlite_sql="""
         CREATE VIEW IF NOT EXISTS vw_category_yearly_totals AS
         SELECT
             CAST(strftime('%Y', t.occurred_at) AS INTEGER) AS year,
+            t.user_id,
             t.category_id,
             SUM(CASE WHEN l.amount > 0 THEN l.amount ELSE 0 END) AS income_total,
             SUM(CASE WHEN l.amount < 0 THEN -l.amount ELSE 0 END) AS expense_total,
@@ -74,7 +78,7 @@ _VIEW_DEFINITIONS = (
         FROM transaction_legs AS l
         JOIN transactions AS t ON t.id = l.transaction_id
         WHERE t.category_id IS NOT NULL
-        GROUP BY year, t.category_id;
+        GROUP BY year, t.user_id, t.category_id;
         """.strip(),
     ),
     MaterializedViewDefinition(
@@ -82,33 +86,37 @@ _VIEW_DEFINITIONS = (
         postgres_sql="""
         CREATE MATERIALIZED VIEW IF NOT EXISTS vw_net_worth AS
         WITH account_balances AS (
-            SELECT account_id, SUM(amount) AS balance
+            SELECT account_id, user_id, SUM(amount) AS balance
             FROM transaction_legs
-            GROUP BY account_id
+            GROUP BY account_id, user_id
         )
         SELECT
             CURRENT_TIMESTAMP::date AS as_of,
+            a.user_id,
             COALESCE(SUM(CASE WHEN lower(a.account_type) <> 'debt' THEN COALESCE(b.balance, 0) ELSE 0 END), 0) AS total_assets,
             COALESCE(SUM(CASE WHEN lower(a.account_type) = 'debt' THEN -COALESCE(b.balance, 0) ELSE 0 END), 0) AS total_liabilities,
             COALESCE(SUM(COALESCE(b.balance, 0)), 0) AS net_worth
         FROM accounts AS a
-        LEFT JOIN account_balances AS b ON b.account_id = a.id
+        LEFT JOIN account_balances AS b ON b.account_id = a.id AND b.user_id = a.user_id
+        GROUP BY a.user_id
         WITH DATA;
         """.strip(),
         sqlite_sql="""
         CREATE VIEW IF NOT EXISTS vw_net_worth AS
         WITH account_balances AS (
-            SELECT account_id, SUM(amount) AS balance
+            SELECT account_id, user_id, SUM(amount) AS balance
             FROM transaction_legs
-            GROUP BY account_id
+            GROUP BY account_id, user_id
         )
         SELECT
             DATE('now') AS as_of,
+            a.user_id,
             COALESCE(SUM(CASE WHEN lower(a.account_type) <> 'debt' THEN IFNULL(b.balance, 0) ELSE 0 END), 0) AS total_assets,
             COALESCE(SUM(CASE WHEN lower(a.account_type) = 'debt' THEN -IFNULL(b.balance, 0) ELSE 0 END), 0) AS total_liabilities,
             COALESCE(SUM(IFNULL(b.balance, 0)), 0) AS net_worth
         FROM accounts AS a
-        LEFT JOIN account_balances AS b ON b.account_id = a.id;
+        LEFT JOIN account_balances AS b ON b.account_id = a.id AND b.user_id = a.user_id
+        GROUP BY a.user_id;
         """.strip(),
     ),
 )
