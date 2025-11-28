@@ -32,7 +32,7 @@
 ## Tech Snapshot
 - Frontend: Vite + React 19 + TS + Tailwind + Redux Toolkit/Saga; shadcn + Radix UI; Recharts.
 - Backend: Python (SQLModel/SQLAlchemy), Pydantic schemas, REST handlers for accounts/categories/transactions/loans/reporting; materialized views for reporting; loan accrual job.
-- Infra: Terraform for Aurora + bastion; Cognito for auth.
+- Infra: Terraform for Aurora (private by default with optional public toggle for local dev) and Cognito for auth.
 
 ## Privacy & Security Posture
 - Single-tenant; bank files are user-provided. Avoid storing more than needed; document retention for imports.

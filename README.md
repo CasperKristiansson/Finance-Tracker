@@ -31,69 +31,34 @@ A big part of keeping track of personal finance is knowing exactly where all the
 
 Another big thing in managing finance is that it must be easy to create new, edit or delete transactions. The application with help of API endpoints can easily perform all of these actions against the database. A biig functionality added to the application is uploading an excel document. The user can upload an excel document with a list of expenses and income which the application can post to the database. This makes it easy to manage the finance from month to month.
 
-## Infrastructure & Bastion Utilities
+## Infrastructure & Local Database Access
 
-The Terraform configuration under `infra/terraform/` can provision an Aurora PostgreSQL cluster along with an on-demand bastion host for direct database access. The repo ships with a couple of make targets and helper scripts to streamline the workflow.
+Terraform under `infra/terraform/` provisions the Aurora PostgreSQL cluster and supporting AWS resources. The database stays private by default. For local development you can temporarily expose the cluster publicly (port 5432) by applying with `enable_public_db_access=true`; remember to turn it off when you're finished.
 
-### Enable / Disable the Bastion Host
-
-```bash
-# create the bastion (public subnet, security groups, IAM profile, etc.)
-make tf-enable-bastion
-
-# remove the bastion and associated networking resources when you're done
-make tf-disable-bastion
-```
-
-### Open an SSM Shell on the Bastion
+### Expose / Hide the Database
 
 ```bash
-make bastion-shell
+# expose Aurora publicly for local development
+make tf-enable-public-db
+# or: terraform -chdir=infra/terraform apply -var 'enable_public_db_access=true'
+
+# return to private-only access
+make tf-disable-public-db
+# or: terraform -chdir=infra/terraform apply -var 'enable_public_db_access=false'
 ```
 
-This wraps `aws ssm start-session` and automatically resolves the bastion instance ID from Terraform outputs. You need the AWS CLI and Session Manager plugin installed locally (see [AWS docs](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)).
-
-### Copy Files to the Bastion
-
-Use the SSM-based uplink helper to push any local file onto the host:
+### Connect from Your Laptop
 
 ```bash
-# upload temp.py to /home/ec2-user/ on the bastion
-make bastion-copy FILE=temp.py
+ENV=dev                    # matches the terraform workspace
+PROFILE=Personal           # AWS CLI profile
+REGION=eu-north-1
 
-# optionally pick a different destination directory
-make bastion-copy FILE=path/to/data.sql REMOTE=/tmp
+DB_ENDPOINT=$(aws ssm get-parameter --name "/finance-tracker/${ENV}/db/endpoint" --query Parameter.Value --output text --profile "$PROFILE" --region "$REGION")
+DB_USER=$(aws ssm get-parameter --name "/finance-tracker/${ENV}/db/user" --query Parameter.Value --output text --profile "$PROFILE" --region "$REGION")
+DB_PASSWORD=$(aws ssm get-parameter --with-decryption --name "/finance-tracker/${ENV}/db/password" --query Parameter.Value --output text --profile "$PROFILE" --region "$REGION")
+
+psql "host=$DB_ENDPOINT user=$DB_USER password=$DB_PASSWORD dbname=finance_tracker sslmode=require"
 ```
 
-Behind the scenes this calls `scripts/bastion_copy.py`, which base64-encodes the file and posts it via `aws ssm send-command`, so no SSH keys are required.
-
-### Install Python Dependencies on the Bastion
-
-The Amazon Linux 2023 image used for the bastion ships with Python 3 but not `pip`. After connecting via `make bastion-shell`, run:
-
-```bash
-sudo dnf install -y python3-pip postgresql-devel gcc
-python3 -m pip install --user boto3 psycopg2-binary
-```
-
-This installs the packages into the bastion user’s home directory so you can run helper scripts such as `temp.py`.
-
-### Test the Aurora Connection from the Bastion
-
-```bash
-# assumes the Terraform stack has created the SSM parameters under /finance-tracker/<env>/db/*
-python3 temp.py --timeout 30
-
-# fetch credentials without connecting
-python3 temp.py --skip-connection
-```
-
-The script pulls credentials from SSM, prints the resolved endpoint/user/database, and then attempts a simple `SELECT version();` against the Aurora cluster. Errors from PostgreSQL are shown verbatim to simplify troubleshooting (e.g., invalid password, timeout).
-
-### Tear Down When Finished
-
-Always disable the bastion after you are done testing to avoid leaving unnecessary public infrastructure running:
-
-```bash
-make tf-disable-bastion
-```
+The public toggle opens the Aurora security group to `0.0.0.0/0`. Leave it disabled outside of local testing.

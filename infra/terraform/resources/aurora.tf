@@ -8,8 +8,8 @@ variable "environment" {
   type        = string
 }
 
-variable "enable_bastion" {
-  description = "When true a bastion EC2 host is provisioned for direct database access."
+variable "enable_public_db_access" {
+  description = "Expose Aurora publicly for local development. Keep disabled in shared environments."
   type        = bool
   default     = false
 }
@@ -48,6 +48,19 @@ resource "aws_vpc" "finance_tracker" {
   )
 }
 
+resource "aws_internet_gateway" "finance_tracker" {
+  count = var.enable_public_db_access ? 1 : 0
+
+  vpc_id = aws_vpc.finance_tracker.id
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.name_prefix}-igw"
+    },
+  )
+}
+
 resource "aws_subnet" "finance_tracker_private_a" {
   vpc_id                  = aws_vpc.finance_tracker.id
   cidr_block              = "10.10.1.0/24"
@@ -76,6 +89,25 @@ resource "aws_subnet" "finance_tracker_private_b" {
       Tier = "private"
     },
   )
+}
+
+resource "aws_default_route_table" "finance_tracker" {
+  default_route_table_id = aws_vpc.finance_tracker.default_route_table_id
+
+  tags = merge(
+    local.common_tags,
+    {
+      Name = "${local.name_prefix}-main-rt"
+    },
+  )
+}
+
+resource "aws_route" "finance_tracker_public_default" {
+  count = var.enable_public_db_access ? 1 : 0
+
+  route_table_id         = aws_default_route_table.finance_tracker.id
+  destination_cidr_block = "0.0.0.0/0"
+  gateway_id             = aws_internet_gateway.finance_tracker[0].id
 }
 
 resource "aws_db_subnet_group" "finance_tracker_aurora" {
@@ -130,6 +162,18 @@ resource "aws_security_group_rule" "finance_tracker_aurora_ingress_from_lambda" 
   source_security_group_id = aws_security_group.finance_tracker_lambda.id
 }
 
+resource "aws_security_group_rule" "finance_tracker_aurora_public_ingress" {
+  count = var.enable_public_db_access ? 1 : 0
+
+  description       = "Allow public PostgreSQL access for local development."
+  type              = "ingress"
+  from_port         = 5432
+  to_port           = 5432
+  protocol          = "tcp"
+  security_group_id = aws_security_group.finance_tracker_aurora.id
+  cidr_blocks       = ["0.0.0.0/0"]
+}
+
 resource "aws_security_group_rule" "finance_tracker_lambda_egress" {
   description       = "Allow Lambda functions outbound internet access."
   type              = "egress"
@@ -170,10 +214,11 @@ resource "aws_rds_cluster" "finance_tracker" {
 }
 
 resource "aws_rds_cluster_instance" "finance_tracker_primary" {
-  identifier         = "${local.name_prefix}-aurora-1"
-  cluster_identifier = aws_rds_cluster.finance_tracker.id
-  instance_class     = "db.serverless"
-  engine             = aws_rds_cluster.finance_tracker.engine
+  identifier          = "${local.name_prefix}-aurora-1"
+  cluster_identifier  = aws_rds_cluster.finance_tracker.id
+  instance_class      = "db.serverless"
+  engine              = aws_rds_cluster.finance_tracker.engine
+  publicly_accessible = var.enable_public_db_access
 
   tags = merge(
     local.common_tags,

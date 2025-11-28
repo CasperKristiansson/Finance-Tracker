@@ -6,7 +6,7 @@
 
 - Backend (apps/api): SQLModel domain models for accounts, loans, categories, transactions, legs, loan events, import batches. REST-style Lambda handlers for accounts, categories, transactions, loans (events/schedules), and reporting (monthly/yearly/total). Loan interest accrual job exists; materialized view helpers for monthly totals, yearly category totals, and net worth. Extensive pytest coverage for handlers/repos/jobs.
 - Frontend (apps/web): Vite + React 19 + TS + Tailwind v4 + Redux Toolkit + Redux Saga. Auth wired to AWS Cognito via Amplify (env vars required). Routing + protected redirect logic in place. UI kit (shadcn-derived) includes sidebar, tables, charts, tabs, dropdowns, toasts. Pages: Dashboard (hero only), Accounts (static mock data for cash/investments/cc + net-worth chart + summary), Login, Cover, 404. Navigation menu lists additional routes (Transactions, Reports, Cash Flow, Loans, Investments, Goals, Settings) but only Dashboard/Accounts are implemented.
-- Infra/Tooling: Terraform under infra/ for Aurora + bastion; Make targets for bastion lifecycle. Python tooling configured (black/isort/pylint/mypy/pyright). Tailwind/ESLint/Prettier configured for web app.
+- Infra/Tooling: Terraform under infra/ for Aurora (optional public toggle for local access). Make targets for Terraform + env writing. Python tooling configured (black/isort/pylint/mypy/pyright). Tailwind/ESLint/Prettier configured for web app.
 
 ## Milestones & Checklists
 
