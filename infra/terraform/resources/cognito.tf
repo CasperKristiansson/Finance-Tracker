@@ -8,9 +8,9 @@ data "aws_ssm_parameter" "google_client_secret" {
 }
 
 locals {
-  google_client_id      = data.aws_ssm_parameter.google_client_id.value
-  google_client_secret  = data.aws_ssm_parameter.google_client_secret.value
-  google_enabled        = local.google_client_id != "" && local.google_client_secret != ""
+  google_client_id     = data.aws_ssm_parameter.google_client_id.value
+  google_client_secret = data.aws_ssm_parameter.google_client_secret.value
+  google_enabled       = local.google_client_id != "" && local.google_client_secret != ""
   cognito_domain_prefix = substr(
     replace(lower("${local.name_prefix}-${var.account_id}"), "_", "-"),
     0,
@@ -46,7 +46,7 @@ resource "aws_cognito_user_pool" "finance_tracker" {
   }
 
   admin_create_user_config {
-    allow_admin_create_user_only = false
+    allow_admin_create_user_only = true
   }
 
   account_recovery_setting {
@@ -70,18 +70,18 @@ resource "aws_cognito_user_pool_client" "finance_tracker_web" {
 
   depends_on = [aws_cognito_identity_provider.google]
 
-  generate_secret                        = false
-  prevent_user_existence_errors          = "ENABLED"
-  supported_identity_providers           = local.supported_identity_providers
-  enable_token_revocation                = true
-  allowed_oauth_flows_user_pool_client   = true
-  allowed_oauth_flows                    = ["code"]
-  allowed_oauth_scopes                   = ["email", "openid", "profile"]
-  callback_urls                          = local.oauth_callback_urls
-  logout_urls                            = local.oauth_logout_urls
-  refresh_token_validity                 = 30
-  access_token_validity                  = 60
-  id_token_validity                      = 60
+  generate_secret                      = false
+  prevent_user_existence_errors        = "ENABLED"
+  supported_identity_providers         = local.supported_identity_providers
+  enable_token_revocation              = true
+  allowed_oauth_flows_user_pool_client = true
+  allowed_oauth_flows                  = ["code"]
+  allowed_oauth_scopes                 = ["email", "openid", "profile"]
+  callback_urls                        = local.oauth_callback_urls
+  logout_urls                          = local.oauth_logout_urls
+  refresh_token_validity               = 30
+  access_token_validity                = 60
+  id_token_validity                    = 60
 
   token_validity_units {
     refresh_token = "days"
@@ -165,15 +165,15 @@ resource "aws_cognito_user_pool_domain" "finance_tracker" {
 }
 
 resource "aws_cognito_identity_provider" "google" {
-  count        = local.google_enabled ? 1 : 0
-  user_pool_id = aws_cognito_user_pool.finance_tracker.id
+  count         = local.google_enabled ? 1 : 0
+  user_pool_id  = aws_cognito_user_pool.finance_tracker.id
   provider_name = "Google"
   provider_type = "Google"
 
   attribute_mapping = {
-    email    = "email"
-    username = "sub"
-    given_name = "given_name"
+    email       = "email"
+    username    = "sub"
+    given_name  = "given_name"
     family_name = "family_name"
   }
 
