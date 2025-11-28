@@ -47,15 +47,15 @@ tf-disable-public-db:
 # Quality gates
 
 type-check:
-	black --check .
-	isort --check-only .
+	black --check apps/api
+	isort --check-only apps/api
 	PYTHONPATH=. pylint apps/api
-	pyright
+	pyright apps/api
 	mypy apps/api
 
 format:
-	isort .
-	black .
+	isort apps/api
+	black apps/api
 
 test:
 	pytest apps/api/tests

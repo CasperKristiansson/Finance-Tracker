@@ -230,8 +230,19 @@ class ReportingRepository:
         statement = select(func.coalesce(func.sum(leg_table.c.amount), 0))
         if account_ids:
             statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
-        scalar = cast(Any, self.session.exec(statement))
-        result = scalar.scalar_one()
+        scalar_result = cast(Any, self.session.exec(statement))
+
+        if hasattr(scalar_result, "scalar_one"):
+            result = scalar_result.scalar_one()
+        elif hasattr(scalar_result, "one"):
+            row = scalar_result.one()
+            result = row[0] if isinstance(row, tuple) else row
+        elif hasattr(scalar_result, "first"):
+            row = scalar_result.first()
+            result = row[0] if row and isinstance(row, tuple) else (row or 0)
+        else:
+            result = scalar_result or 0
+
         return coerce_decimal(result)
 
     def latest_investment_value(self) -> Decimal:

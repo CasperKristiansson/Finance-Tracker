@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 from uuid import UUID
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 from openpyxl import load_workbook
 from sqlalchemy import func
@@ -872,7 +873,12 @@ class ImportService:
 
     def _get_bedrock_client(self):
         try:
-            return boto3.client("bedrock-runtime", region_name=BEDROCK_REGION)
+            cfg = Config(
+                read_timeout=5,
+                connect_timeout=3,
+                retries={"max_attempts": 1, "mode": "standard"},
+            )
+            return boto3.client("bedrock-runtime", region_name=BEDROCK_REGION, config=cfg)
         except (BotoCoreError, ClientError):  # pragma: no cover - environment dependent
             return None
 
@@ -906,7 +912,7 @@ class ImportService:
                     "content": [{"type": "text", "text": prompt}],
                 }
             ],
-            "max_tokens": 400,
+            "max_tokens": 1200,
             "temperature": 0.2,
             "top_p": 0.9,
         }

@@ -181,18 +181,20 @@ def reconcile_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         except LookupError:
             return json_response(404, {"error": "Account not found"})
 
-    ledger_balance = cast(Decimal, result.get("ledger_balance", Decimal(0)))
-    delta_posted = cast(Decimal, result.get("delta", Decimal(0)))
-    snapshot = cast(Any, result.get("snapshot"))
-    transaction = cast(Any, result.get("transaction"))
+        ledger_balance = cast(Decimal, result.get("ledger_balance", Decimal(0)))
+        delta_posted = cast(Decimal, result.get("delta", Decimal(0)))
+        snapshot = cast(Any, result.get("snapshot"))
+        transaction = cast(Any, result.get("transaction"))
+        snapshot_id = cast(UUID, getattr(snapshot, "id", None))
+        transaction_id = cast(UUID | None, getattr(transaction, "id", None))
 
     response = ReconcileAccountResponse(
         account_id=account_id,
         reported_balance=data.reported_balance,
         ledger_balance=ledger_balance,
         delta_posted=delta_posted,
-        snapshot_id=cast(UUID, getattr(snapshot, "id")),
-        transaction_id=getattr(transaction, "id", None),
+        snapshot_id=snapshot_id,
+        transaction_id=transaction_id,
         captured_at=data.captured_at,
     )
     return json_response(201, response.model_dump(mode="json"))

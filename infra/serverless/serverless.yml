@@ -17,6 +17,7 @@ provider:
     DB_NAME: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/name}
     DB_USER: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/user}
     DB_PASSWORD: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/password}
+    AWS_BEARER_TOKEN_BEDROCK: ${aws:ssm:/finance-tracker/${self:provider.stage}/bedrock/bearer_token}
   iam:
     role:
       statements:
@@ -25,6 +26,11 @@ provider:
             - ssm:GetParameter
             - ssm:GetParameters
           Resource: arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/finance-tracker/${self:provider.stage}/db/*
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+            - ssm:GetParameters
+          Resource: arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/finance-tracker/${self:provider.stage}/bedrock/*
   domain:
     name: api.finance-tracker.casperkristiansson.com
     apiType: HTTP
@@ -41,6 +47,15 @@ provider:
         issuerUrl: ${aws:ssm:/finance-tracker/${self:provider.stage}/auth/user_pool_issuer}
         audience:
           - ${aws:ssm:/finance-tracker/${self:provider.stage}/auth/user_pool_client_id}
+
+package:
+  patterns:
+    - ../../apps/api/**
+    - "!../../apps/api/**/__pycache__/**"
+    - "!../../apps/api/**/*.pyc"
+    - "!node_modules/**"
+    - "!package-lock.json"
+    - "!venv/**"
 
 custom:
   backendLayerArn: ${cf:finance-tracker-layer-service-${self:provider.stage}.BackendDepsLambdaLayerQualifiedArn}
@@ -119,7 +134,7 @@ functions:
 
   createImportBatch:
     handler: apps/api/handlers/imports.create_import_batch
-    timeout: 29
+    timeout: 60
     memorySize: 512
     layers:
       - ${self:custom.backendLayerArn}
@@ -143,7 +158,7 @@ functions:
 
   appendImportFiles:
     handler: apps/api/handlers/imports.append_import_files
-    timeout: 29
+    timeout: 60
     memorySize: 512
     layers:
       - ${self:custom.backendLayerArn}
@@ -155,7 +170,7 @@ functions:
 
   commitImportSession:
     handler: apps/api/handlers/imports.commit_import_session
-    timeout: 29
+    timeout: 60
     memorySize: 512
     layers:
       - ${self:custom.backendLayerArn}

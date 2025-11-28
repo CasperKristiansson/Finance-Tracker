@@ -18,6 +18,7 @@ keep = {
     'requests',
     'sqlalchemy',
     'sqlmodel',
+    'openpyxl',
 }
 selected = []
 for line in requirements:
