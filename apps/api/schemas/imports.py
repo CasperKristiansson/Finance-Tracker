@@ -99,6 +99,9 @@ class ImportRowRead(BaseModel):
     suggested_subscription_confidence: Optional[float] = None
     suggested_subscription_reason: Optional[str] = None
     transfer_match: Optional[dict[str, Any]] = None
+    rule_applied: bool = False
+    rule_type: Optional[str] = None
+    rule_summary: Optional[str] = None
 
 
 class ImportErrorRead(BaseModel):

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING, Any, List, Optional
 from uuid import UUID
 
-from sqlalchemy import JSON, Column, ForeignKey, Integer, Numeric, String
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, Numeric, String
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlmodel import Field, Relationship, SQLModel
@@ -14,6 +16,8 @@ from ..shared import TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:  # pragma: no cover
     from .transaction import Transaction
+    from .category import Category
+    from .subscription import Subscription
 
 
 class ImportFile(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
@@ -106,6 +110,23 @@ class ImportRow(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
         default=None,
         sa_column=Column(JSON, nullable=True),
     )
+    rule_applied: bool = Field(
+        default=False,
+        sa_column=Column(Boolean, nullable=False, server_default="false"),
+    )
+    rule_type: Optional[str] = Field(default=None, sa_column=Column(String(40), nullable=True))
+    rule_summary: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(255), nullable=True),
+    )
+    rule_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("import_rules.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
 
 
 class TransactionImportBatch(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
@@ -135,4 +156,60 @@ class TransactionImportBatch(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, tabl
     )
 
 
-__all__ = ["TransactionImportBatch", "ImportFile", "ImportErrorRecord", "ImportRow"]
+class ImportRule(UUIDPrimaryKeyMixin, TimestampMixin, SQLModel, table=True):
+    """Deterministic import rule learned from user corrections."""
+
+    __tablename__ = "import_rules"
+
+    matcher_text: str = Field(sa_column=Column(String(255), unique=True, nullable=False))
+    matcher_amount: Optional[Decimal] = Field(sa_column=Column(Numeric(18, 2), nullable=True))
+    amount_tolerance: Optional[Decimal] = Field(
+        default=None, sa_column=Column(Numeric(18, 2), nullable=True)
+    )
+    matcher_day_of_month: Optional[int] = Field(sa_column=Column(Integer, nullable=True))
+    category_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(PGUUID(as_uuid=True), ForeignKey("categories.id", ondelete="SET NULL")),
+    )
+    subscription_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PGUUID(as_uuid=True), ForeignKey("subscriptions.id", ondelete="SET NULL")
+        ),
+    )
+    hit_count: int = Field(
+        default=0,
+        sa_column=Column(Integer, nullable=False, server_default="0"),
+    )
+    last_hit_at: Optional[datetime] = Field(
+        default=None, sa_column=Column(DateTime(timezone=True), nullable=True)
+    )
+    is_active: bool = Field(
+        default=True,
+        sa_column=Column(Boolean, nullable=False, server_default="true"),
+    )
+
+    if TYPE_CHECKING:  # pragma: no cover
+        category: Optional["Category"]
+        subscription: Optional["Subscription"]
+
+    category: Optional["Category"] = Relationship(sa_relationship=relationship("Category"))
+    subscription: Optional["Subscription"] = Relationship(
+        sa_relationship=relationship("Subscription")
+    )
+
+
+__all__ = [
+    "TransactionImportBatch",
+    "ImportFile",
+    "ImportErrorRecord",
+    "ImportRow",
+    "ImportRule",
+]
+
+
+TransactionImportBatch.model_rebuild()
+ImportFile.model_rebuild()
+ImportErrorRecord.model_rebuild()
+ImportRow.model_rebuild()
+ImportRule.model_rebuild()

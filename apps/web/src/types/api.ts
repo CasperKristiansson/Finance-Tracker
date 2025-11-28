@@ -350,6 +350,9 @@ export interface ImportRowRead {
   suggested_subscription_confidence?: number | null;
   suggested_subscription_reason?: string | null;
   transfer_match?: Record<string, string> | null;
+  rule_applied?: boolean | null;
+  rule_type?: string | null;
+  rule_summary?: string | null;
 }
 
 export interface ImportBatch {

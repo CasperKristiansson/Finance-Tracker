@@ -9,7 +9,7 @@ import io
 import json
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple, cast
 from uuid import UUID
@@ -27,6 +27,7 @@ from ..models import (
     ImportErrorRecord,
     ImportFile,
     ImportRow,
+    ImportRule,
     Subscription,
     Transaction,
     TransactionImportBatch,
@@ -75,6 +76,20 @@ class SubscriptionSuggestion:
     reason: Optional[str] = None
 
 
+@dataclass
+class RuleMatch:
+    """Represents a deterministic rule hit for a row."""
+
+    rule_id: UUID
+    category_id: Optional[UUID]
+    category_name: Optional[str]
+    subscription_id: Optional[UUID]
+    subscription_name: Optional[str]
+    summary: str
+    score: float
+    rule_type: str
+
+
 BEDROCK_REGION = "eu-north-1"
 BEDROCK_MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
 SUBSCRIPTION_SUGGESTION_THRESHOLD = 0.8
@@ -99,13 +114,18 @@ class ImportService:
 
         row_models: List[ImportRow] = []
         error_models: List[ImportErrorRecord] = []
+        category_lookup_by_id = self._category_lookup_by_id()
+        subscription_lookup_by_id = self._subscription_lookup_by_id()
 
         for parsed in parsed_files:
+            rule_matches = self._rule_matches(
+                parsed.rows, parsed.column_map or {}, category_lookup_by_id, subscription_lookup_by_id
+            )
             suggestions = self._suggest_rows(
-                parsed.rows, parsed.column_map or {}, payload.examples or []
+                parsed.rows, parsed.column_map or {}, payload.examples or [], rule_matches
             )
             subscription_suggestions = self._suggest_subscriptions(
-                parsed.rows, parsed.column_map or {}
+                parsed.rows, parsed.column_map or {}, rule_matches
             )
             transfers = self._match_transfers(parsed.rows, parsed.column_map or {})
 
@@ -114,6 +134,7 @@ class ImportService:
                 suggestion = suggestions.get(idx)
                 subscription_hint = subscription_suggestions.get(idx)
                 transfer = transfers.get(idx)
+                rule_match = rule_matches.get(idx)
                 if suggestion:
                     row["suggested_category"] = suggestion.category
                     row["suggested_confidence"] = round(suggestion.confidence, 2)
@@ -129,6 +150,10 @@ class ImportService:
                         row["suggested_subscription_reason"] = subscription_hint.reason
                 if transfer:
                     row["transfer_match"] = transfer
+                if rule_match:
+                    row["rule_applied"] = True
+                    row["rule_type"] = rule_match.rule_type
+                    row["rule_summary"] = rule_match.summary
 
             for row_number, message in parsed.errors:
                 error_models.append(
@@ -151,6 +176,7 @@ class ImportService:
                 suggestion = suggestions.get(idx - 1)
                 transfer = transfers.get(idx - 1)
                 subscription_hint = subscription_suggestions.get(idx - 1)
+                rule_match = rule_matches.get(idx - 1)
                 row_models.append(
                     ImportRow(
                         file_id=parsed.model.id,
@@ -172,6 +198,10 @@ class ImportService:
                             subscription_hint.reason if subscription_hint else None
                         ),
                         transfer_match=transfer,
+                        rule_applied=bool(rule_match),
+                        rule_type=rule_match.rule_type if rule_match else None,
+                        rule_summary=rule_match.summary if rule_match else None,
+                        rule_id=rule_match.rule_id if rule_match else None,
                     )
                 )
 
@@ -300,6 +330,13 @@ class ImportService:
 
                 try:
                     transaction_service.create_transaction(transaction, legs, import_batch=batch)
+                    self._record_rule_from_row(
+                        description,
+                        amount,
+                        occurred_at,
+                        category_id,
+                        subscription_id,
+                    )
                 except Exception as exc:  # pragma: no cover - defensive
                     error_models.append(
                         ImportErrorRecord(
@@ -340,11 +377,18 @@ class ImportService:
         parsed_files = [self._parse_file(file) for file in files]
         row_models: List[ImportRow] = []
         error_models: List[ImportErrorRecord] = []
+        category_lookup_by_id = self._category_lookup_by_id()
+        subscription_lookup_by_id = self._subscription_lookup_by_id()
 
         for parsed in parsed_files:
-            suggestions = self._suggest_rows(parsed.rows, parsed.column_map or {}, examples or [])
+            rule_matches = self._rule_matches(
+                parsed.rows, parsed.column_map or {}, category_lookup_by_id, subscription_lookup_by_id
+            )
+            suggestions = self._suggest_rows(
+                parsed.rows, parsed.column_map or {}, examples or [], rule_matches
+            )
             subscription_suggestions = self._suggest_subscriptions(
-                parsed.rows, parsed.column_map or {}
+                parsed.rows, parsed.column_map or {}, rule_matches
             )
             transfers = self._match_transfers(parsed.rows, parsed.column_map or {})
 
@@ -352,6 +396,7 @@ class ImportService:
                 suggestion = suggestions.get(idx)
                 subscription_hint = subscription_suggestions.get(idx)
                 transfer = transfers.get(idx)
+                rule_match = rule_matches.get(idx)
                 if suggestion:
                     row["suggested_category"] = suggestion.category
                     row["suggested_confidence"] = round(suggestion.confidence, 2)
@@ -367,6 +412,10 @@ class ImportService:
                         row["suggested_subscription_reason"] = subscription_hint.reason
                 if transfer:
                     row["transfer_match"] = transfer
+                if rule_match:
+                    row["rule_applied"] = True
+                    row["rule_type"] = rule_match.rule_type
+                    row["rule_summary"] = rule_match.summary
 
             for row_number, message in parsed.errors:
                 error_models.append(
@@ -392,6 +441,7 @@ class ImportService:
                 suggestion = suggestions.get(idx - 1)
                 subscription_hint = subscription_suggestions.get(idx - 1)
                 transfer = transfers.get(idx - 1)
+                rule_match = rule_matches.get(idx - 1)
                 row_models.append(
                     ImportRow(
                         file_id=parsed.model.id,
@@ -413,6 +463,10 @@ class ImportService:
                             subscription_hint.reason if subscription_hint else None
                         ),
                         transfer_match=transfer,
+                        rule_applied=bool(rule_match),
+                        rule_type=rule_match.rule_type if rule_match else None,
+                        rule_summary=rule_match.summary if rule_match else None,
+                        rule_id=rule_match.rule_id if rule_match else None,
                     )
                 )
 
@@ -673,7 +727,15 @@ class ImportService:
             if parsed.column_map is None or not parsed.rows:
                 continue
 
-            suggestions = self._suggest_rows(parsed.rows, parsed.column_map, examples)
+            category_lookup_by_id = self._category_lookup_by_id()
+            subscription_lookup_by_id = self._subscription_lookup_by_id()
+            rule_matches = self._rule_matches(
+                parsed.rows, parsed.column_map, category_lookup_by_id, subscription_lookup_by_id
+            )
+            suggestions = self._suggest_rows(parsed.rows, parsed.column_map, examples, rule_matches)
+            subscription_suggestions = self._suggest_subscriptions(
+                parsed.rows, parsed.column_map, rule_matches
+            )
             transfers = self._match_transfers(parsed.rows, parsed.column_map)
 
             for idx, row in enumerate(parsed.preview_rows):
@@ -684,26 +746,162 @@ class ImportService:
                     if suggestion.reason:
                         row["suggested_reason"] = suggestion.reason
 
+                subscription_hint = subscription_suggestions.get(idx)
+                if subscription_hint:
+                    row["suggested_subscription_id"] = str(subscription_hint.subscription_id)
+                    row["suggested_subscription_name"] = subscription_hint.subscription_name
+                    row["suggested_subscription_confidence"] = round(
+                        subscription_hint.confidence, 2
+                    )
+                    if subscription_hint.reason:
+                        row["suggested_subscription_reason"] = subscription_hint.reason
+
                 transfer = transfers.get(idx)
                 if transfer:
                     row["transfer_match"] = transfer
+
+    def _rule_matches(
+        self,
+        rows: List[dict],
+        column_map: Dict[str, str],
+        category_lookup: Dict[UUID, Category],
+        subscription_lookup: Dict[UUID, Subscription],
+    ) -> Dict[int, RuleMatch]:
+        rules = self._active_rules()
+        description_header = column_map.get("description")
+        if not rules or not description_header:
+            return {}
+
+        amount_header = column_map.get("amount")
+        date_header = column_map.get("date")
+        matches: Dict[int, RuleMatch] = {}
+        for idx, row in enumerate(rows):
+            description = str(row.get(description_header, "") or "")
+            amount = self._safe_decimal(row.get(amount_header)) if amount_header else None
+            occurred_at = self._parse_date(str(row.get(date_header, ""))) if date_header else None
+            best: RuleMatch | None = None
+            for rule in rules:
+                candidate = self._score_rule(
+                    rule,
+                    description,
+                    amount,
+                    occurred_at,
+                    category_lookup,
+                    subscription_lookup,
+                )
+                if candidate and (best is None or candidate.score > best.score):
+                    best = candidate
+            if best:
+                matches[idx] = best
+        return matches
+
+    def _score_rule(
+        self,
+        rule: ImportRule,
+        description: str,
+        amount: Optional[Decimal],
+        occurred_at: Optional[datetime],
+        category_lookup: Dict[UUID, Category],
+        subscription_lookup: Dict[UUID, Subscription],
+    ) -> Optional[RuleMatch]:
+        if not rule.is_active:
+            return None
+
+        normalized = description.lower()
+        matcher = rule.matcher_text.lower()
+        if matcher not in normalized:
+            return None
+
+        score = 0.7
+        summary: List[str] = [f"matched '{rule.matcher_text}'"]
+
+        if rule.matcher_day_of_month and occurred_at:
+            if abs(occurred_at.day - rule.matcher_day_of_month) <= 1:
+                score += 0.15
+                summary.append(f"day≈{rule.matcher_day_of_month}")
+            else:
+                return None
+
+        if rule.matcher_amount is not None and amount is not None:
+            target = abs(rule.matcher_amount)
+            delta = (abs(amount) - target).copy_abs()
+            tolerance = rule.amount_tolerance or Decimal("0")
+            if delta <= tolerance:
+                score += 0.15
+                summary.append(f"amount within ±{tolerance}")
+            else:
+                return None
+
+        category = category_lookup.get(rule.category_id) if rule.category_id else None
+        subscription = (
+            subscription_lookup.get(rule.subscription_id) if rule.subscription_id else None
+        )
+        if category is None and subscription is None:
+            return None
+
+        rule_type = "category"
+        if category and subscription:
+            rule_type = "category+subscription"
+        elif subscription and not category:
+            rule_type = "subscription"
+
+        return RuleMatch(
+            rule_id=rule.id,
+            category_id=category.id if category else None,
+            category_name=category.name if category else None,
+            subscription_id=subscription.id if subscription else None,
+            subscription_name=subscription.name if subscription else None,
+            summary="; ".join(summary),
+            score=float(score),
+            rule_type=rule_type,
+        )
+
+    def _active_rules(self) -> List[ImportRule]:
+        statement = select(ImportRule).where(cast(Any, ImportRule.is_active).is_(True))
+        return list(self.session.exec(statement).all())
+
+    def _category_lookup_by_id(self) -> dict[UUID, Category]:
+        categories = self.session.exec(select(Category)).all()
+        return {cat.id: cat for cat in categories if getattr(cat, "id", None) is not None}
+
+    def _subscription_lookup_by_id(self) -> dict[UUID, Subscription]:
+        subscriptions = self.session.exec(select(Subscription)).all()
+        return {
+            sub.id: sub for sub in subscriptions if getattr(sub, "id", None) is not None
+        }
 
     def _suggest_rows(
         self,
         rows: List[dict],
         column_map: Dict[str, str],
         examples: List[ExampleTransaction],
+        rule_matches: Optional[Dict[int, RuleMatch]] = None,
     ) -> Dict[int, CategorySuggestion]:
         if not column_map or not column_map.get("description") or not column_map.get("amount"):
             return {}
         heuristic: Dict[int, CategorySuggestion] = {}
+        locked: set[int] = set()
+        if rule_matches:
+            for idx, match in rule_matches.items():
+                if match.category_name:
+                    heuristic[idx] = CategorySuggestion(
+                        category=match.category_name,
+                        confidence=0.95,
+                        reason=match.summary or "Rule match",
+                    )
+                    locked.add(idx)
+
         for idx, row in enumerate(rows):
+            if idx in locked:
+                continue
             heuristic[idx] = self._suggest_category_heuristic(row, column_map, examples)
 
         bedrock_client = self._get_bedrock_client()
         if bedrock_client:
             bedrock = self._bedrock_suggest_batch(bedrock_client, rows, column_map, examples)
             for idx, suggestion in bedrock.items():
+                if idx in locked:
+                    continue
                 heuristic[idx] = suggestion
 
         return heuristic
@@ -743,7 +941,10 @@ class ImportService:
         )
 
     def _suggest_subscriptions(
-        self, rows: List[dict], column_map: Dict[str, str]
+        self,
+        rows: List[dict],
+        column_map: Dict[str, str],
+        rule_matches: Optional[Dict[int, RuleMatch]] = None,
     ) -> Dict[int, SubscriptionSuggestion]:
         if not rows:
             return {}
@@ -759,7 +960,20 @@ class ImportService:
         last_amounts = self._subscription_amount_lookup()
 
         suggestions: Dict[int, SubscriptionSuggestion] = {}
+        locked: set[int] = set()
+        if rule_matches:
+            for idx, match in rule_matches.items():
+                if match.subscription_id:
+                    suggestions[idx] = SubscriptionSuggestion(
+                        subscription_id=match.subscription_id,
+                        subscription_name=match.subscription_name or "Matched rule",
+                        confidence=0.99,
+                        reason=match.summary or "Rule match",
+                    )
+                    locked.add(idx)
         for idx, row in enumerate(rows):
+            if idx in locked:
+                continue
             description = str(row.get(description_header, "") or "")
             amount = self._safe_decimal(row.get(amount_header)) if amount_header else None
             occurred_at = self._parse_date(str(row.get(date_header, ""))) if date_header else None
@@ -945,6 +1159,61 @@ class ImportService:
         except Exception:  # pragma: no cover - external dependency
             return {}
 
+    def _record_rule_from_row(
+        self,
+        description: Optional[str],
+        amount: Optional[Decimal],
+        occurred_at: Optional[datetime],
+        category_id: Optional[UUID],
+        subscription_id: Optional[UUID],
+    ) -> None:
+        if not description or (category_id is None and subscription_id is None):
+            return
+
+        matcher_text = description.lower().strip()
+        if not matcher_text:
+            return
+
+        amount_abs = abs(amount) if amount is not None else None
+        tolerance = self._derive_amount_tolerance(amount_abs)
+        day_of_month = occurred_at.day if occurred_at else None
+
+        existing = self.session.exec(
+            select(ImportRule).where(func.lower(ImportRule.matcher_text) == matcher_text)
+        ).one_or_none()
+
+        if existing:
+            if category_id:
+                existing.category_id = category_id
+            if subscription_id:
+                existing.subscription_id = subscription_id
+            if amount_abs is not None and existing.matcher_amount is None:
+                existing.matcher_amount = amount_abs
+            if tolerance and existing.amount_tolerance is None:
+                existing.amount_tolerance = tolerance
+            if day_of_month and existing.matcher_day_of_month is None:
+                existing.matcher_day_of_month = day_of_month
+            existing.updated_at = datetime.now(timezone.utc)
+            return
+
+        rule = ImportRule(
+            matcher_text=matcher_text,
+            matcher_amount=amount_abs,
+            amount_tolerance=tolerance,
+            matcher_day_of_month=day_of_month,
+            category_id=category_id,
+            subscription_id=subscription_id,
+        )
+        self.session.add(rule)
+
+    def _derive_amount_tolerance(self, amount: Optional[Decimal]) -> Optional[Decimal]:
+        if amount is None:
+            return None
+        amount_abs = abs(amount)
+        baseline = Decimal("1.00")
+        percent = (amount_abs * Decimal("0.02")).quantize(Decimal("0.01"))
+        return max(baseline, percent)
+
     def _match_transfers(
         self, rows: List[dict[str, Any]], column_map: Dict[str, str]
     ) -> Dict[int, dict[str, Any]]:
@@ -1039,13 +1308,18 @@ class ImportService:
         transaction_service = TransactionService(self.session)
         offset_account = self._get_or_create_offset_account()
         category_map = self._category_lookup()
+        category_lookup_by_id = self._category_lookup_by_id()
+        subscription_lookup_by_id = self._subscription_lookup_by_id()
 
         for saved_file, parsed in zip(batch.files, parsed_files):
             if saved_file.status == "error" or not parsed.rows or parsed.column_map is None:
                 saved_file.status = saved_file.status or "error"
                 continue
 
-            suggestions = self._suggest_rows(parsed.rows, parsed.column_map, examples)
+            rule_matches = self._rule_matches(
+                parsed.rows, parsed.column_map, category_lookup_by_id, subscription_lookup_by_id
+            )
+            suggestions = self._suggest_rows(parsed.rows, parsed.column_map, examples, rule_matches)
             added_errors = 0
 
             for idx, row in enumerate(parsed.rows, start=1):
@@ -1173,4 +1447,4 @@ class ImportService:
             return False
 
 
-__all__ = ["ImportService", "ParsedImportFile", "CategorySuggestion"]
+__all__ = ["ImportService", "ParsedImportFile", "CategorySuggestion", "RuleMatch"]

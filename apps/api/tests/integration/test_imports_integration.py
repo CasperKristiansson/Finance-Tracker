@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime
+from uuid import uuid4
 from typing import List
 from uuid import UUID
 
@@ -43,6 +44,15 @@ def _make_file_payload(filename: str = "import.xlsx", amount: str = "100.00") ->
     }
 
 
+def _make_rule_file(description: str, amount: str, date_iso: str) -> dict:
+    b64_content = _build_seb_workbook(rows=[(date_iso, description, "Card", amount)])
+    return {
+        "filename": f"rule-{description}.xlsx",
+        "content_base64": b64_content,
+        "bank_type": "seb",
+    }
+
+
 def test_imports_flow(api_call, json_body) -> None:
     # Create batch with one file
     create_payload = {"files": [_make_file_payload()], "note": "integration"}
@@ -74,3 +84,64 @@ def test_imports_flow(api_call, json_body) -> None:
     # Commit the session with no overrides
     commit_resp = api_call("POST", f"/imports/{batch_id}/commit", {"rows": []})
     assert commit_resp["statusCode"] == 200
+
+
+def test_import_rule_autocategorization(api_call, json_body) -> None:
+    unique = uuid4().hex[:8]
+    category_payload = {"name": f"RuleCat-{unique}", "category_type": "expense"}
+    cat_resp = api_call("POST", "/categories", category_payload)
+    assert cat_resp["statusCode"] in {200, 201}
+    category = json_body(cat_resp)
+
+    sub_payload = {
+        "name": f"RuleSub-{unique}",
+        "matcher_text": "gym",
+        "matcher_day_of_month": 5,
+        "is_active": True,
+    }
+    sub_resp = api_call("POST", "/subscriptions", sub_payload)
+    assert sub_resp["statusCode"] in {200, 201}
+    subscription = json_body(sub_resp)
+
+    date_iso = datetime(2025, 2, 5).date().isoformat()
+    description = "Gym Unlimited"
+    amount = "-75.00"
+
+    # Seed a rule by committing with explicit overrides
+    create_resp = api_call(
+        "POST",
+        "/imports",
+        {"files": [_make_rule_file(description, amount, date_iso)], "note": "rule seed"},
+    )
+    assert create_resp["statusCode"] == 201
+    created = json_body(create_resp)["imports"][0]
+    row = created["rows"][0]
+    commit_payload = {
+        "rows": [
+            {
+                "row_id": row["id"],
+                "category_id": category["id"],
+                "subscription_id": subscription["id"],
+                "occurred_at": date_iso,
+            }
+        ]
+    }
+    commit_resp = api_call("POST", f"/imports/{created['id']}/commit", commit_payload)
+    assert commit_resp["statusCode"] == 200
+
+    # New batch should auto-apply rule
+    second_resp = api_call(
+        "POST",
+        "/imports",
+        {"files": [_make_rule_file(description, amount, date_iso)], "note": "rule check"},
+    )
+    assert second_resp["statusCode"] == 201
+    second = json_body(second_resp)["imports"][0]
+    preview = second["files"][0]["preview_rows"][0]
+    assert preview.get("rule_applied") is True
+    rows = second["rows"]
+    assert rows, "Expected rows to be returned"
+    matched_row = rows[0]
+    assert matched_row.get("rule_applied") is True
+    assert matched_row.get("suggested_category") == category_payload["name"]
+    assert matched_row.get("suggested_subscription_id") == subscription["id"]

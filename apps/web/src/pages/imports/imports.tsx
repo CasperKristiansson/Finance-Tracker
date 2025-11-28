@@ -639,6 +639,22 @@ export const Imports: React.FC = () => {
                       </TableCell>
                       <TableCell className="min-w-[180px]">
                         <div className="flex flex-col gap-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {row.rule_applied ? (
+                              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                                Rule hit
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                                No rule
+                              </span>
+                            )}
+                            {row.rule_summary ? (
+                              <span className="text-[11px] text-slate-500">
+                                {row.rule_summary}
+                              </span>
+                            ) : null}
+                          </div>
                           <select
                             className="rounded border border-slate-200 px-2 py-1 text-sm"
                             value={override.categoryId || ""}

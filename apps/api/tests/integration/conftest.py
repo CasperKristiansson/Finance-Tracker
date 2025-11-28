@@ -3,11 +3,23 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime
-from typing import Callable
+from typing import Callable, Literal, Sequence
 from urllib import error, request
 
 import boto3
 import pytest
+
+ExplicitAuthFlow = Literal[
+    "ADMIN_NO_SRP_AUTH",
+    "ALLOW_ADMIN_USER_PASSWORD_AUTH",
+    "ALLOW_CUSTOM_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH",
+    "ALLOW_USER_AUTH",
+    "ALLOW_USER_PASSWORD_AUTH",
+    "ALLOW_USER_SRP_AUTH",
+    "CUSTOM_AUTH_FLOW_ONLY",
+    "USER_PASSWORD_AUTH",
+]
 
 
 @pytest.fixture
@@ -141,17 +153,20 @@ def auth_token() -> str:
     desc = idp.describe_user_pool_client(UserPoolId=user_pool_id, ClientId=client_id)[
         "UserPoolClient"
     ]
-    flows = set(desc.get("ExplicitAuthFlows") or [])
-    required_flows = {
+    explicit_flows: Sequence[ExplicitAuthFlow] = desc.get("ExplicitAuthFlows") or []
+    flows: set[ExplicitAuthFlow] = set(explicit_flows)
+    required_flows: set[ExplicitAuthFlow] = {
         "ALLOW_ADMIN_USER_PASSWORD_AUTH",
         "ALLOW_REFRESH_TOKEN_AUTH",
         "ALLOW_USER_PASSWORD_AUTH",
     }
     if not required_flows.issubset(flows):
+        updated_flows: list[ExplicitAuthFlow] = list(flows)
+        updated_flows.extend(flow for flow in required_flows if flow not in flows)
         idp.update_user_pool_client(
             UserPoolId=user_pool_id,
             ClientId=client_id,
-            ExplicitAuthFlows=list(flows | required_flows),
+            ExplicitAuthFlows=updated_flows,
         )
     resp = idp.admin_initiate_auth(
         UserPoolId=user_pool_id,

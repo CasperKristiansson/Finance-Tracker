@@ -6,7 +6,7 @@ import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, cast
 from urllib.parse import quote_plus
 
 import boto3
@@ -57,7 +57,13 @@ def _fetch_ssm_database_url() -> Optional[str]:
     def _get_param(key: str, decrypt: bool = False) -> str:
         name = f"{ssm_prefix}/{key}"
         resp = ssm.get_parameter(Name=name, WithDecryption=decrypt)
-        return resp["Parameter"]["Value"]
+        parameter = cast(dict[str, Any] | None, resp.get("Parameter"))
+        if parameter is None or "Value" not in parameter:
+            raise RuntimeError(f"Missing Parameter.Value in SSM response for {name}")
+        value = parameter["Value"]
+        if not isinstance(value, str):
+            raise RuntimeError(f"Unexpected Parameter.Value type for {name}: {type(value)}")
+        return value
 
     endpoint = _get_param("endpoint")
     name = _get_param("name")

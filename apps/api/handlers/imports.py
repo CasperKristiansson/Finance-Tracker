@@ -197,6 +197,9 @@ def _to_session_read(
                         ),
                         "suggested_subscription_reason": row_model.suggested_subscription_reason,
                         "transfer_match": row_model.transfer_match,
+                        "rule_applied": row_model.rule_applied,
+                        "rule_type": row_model.rule_type,
+                        "rule_summary": row_model.rule_summary,
                     }
                 )
             )
