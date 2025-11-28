@@ -2,11 +2,14 @@ import React, { useEffect } from "react";
 import { Route, Routes } from "react-router";
 import { useAppDispatch, useAppSelector } from "./app/hooks.ts";
 import { AppLoadingShell } from "./components/app-loading-shell.tsx";
+import { DatabaseWarmup } from "./components/database-warmup.tsx";
 import { PageRoutes } from "./data/routes.ts";
 import { selectLoading } from "./features/app/appSlice.tsx";
 import { AuthInitialize } from "./features/auth/authSaga.ts";
 import { selectInitialLoaded } from "./features/auth/authSlice.ts";
 import { LoadSettings } from "./features/settings/settingsSaga.ts";
+import { BeginWarmup } from "./features/warmup/warmupSaga.ts";
+import { selectWarmupState } from "./features/warmup/warmupSlice.ts";
 import { Accounts } from "./pages/accounts/accounts.tsx";
 import { Budgets } from "./pages/budgets/budgets.tsx";
 import { CashFlow } from "./pages/cash-flow/cash-flow.tsx";
@@ -27,6 +30,7 @@ export const App: React.FC = () => {
   const dispatch = useAppDispatch();
   const initialLoaded = useAppSelector(selectInitialLoaded);
   const loadingLogout = useAppSelector(selectLoading)["logout"];
+  const warmupState = useAppSelector(selectWarmupState);
 
   const NavigationWrapper = ({
     children,
@@ -39,9 +43,24 @@ export const App: React.FC = () => {
   };
 
   useEffect(() => {
-    dispatch(AuthInitialize());
-    dispatch(LoadSettings());
+    dispatch(BeginWarmup());
   }, [dispatch]);
+
+  useEffect(() => {
+    if (warmupState.status === "ready") {
+      dispatch(AuthInitialize());
+      dispatch(LoadSettings());
+    }
+  }, [dispatch, warmupState.status]);
+
+  if (warmupState.status !== "ready") {
+    return (
+      <DatabaseWarmup
+        warmupState={warmupState}
+        onRetry={() => dispatch(BeginWarmup())}
+      />
+    );
+  }
 
   if (!initialLoaded || loadingLogout) {
     return <AppLoadingShell />;

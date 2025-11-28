@@ -10,6 +10,7 @@ import { LoansReducer } from "@/features/loans/loansSlice";
 import { ReportsReducer } from "@/features/reports/reportsSlice";
 import { SettingsReducer } from "@/features/settings/settingsSlice";
 import { TransactionsReducer } from "@/features/transactions/transactionsSlice";
+import { WarmupReducer } from "@/features/warmup/warmupSlice";
 import { RootSaga } from "./rootSaga";
 
 const sagaMiddleware = createSagaMiddleware();
@@ -18,6 +19,7 @@ export const Store = configureStore({
   reducer: {
     auth: AuthReducer,
     app: AppReducer,
+    warmup: WarmupReducer,
     accounts: AccountsReducer,
     categories: CategoriesReducer,
     transactions: TransactionsReducer,

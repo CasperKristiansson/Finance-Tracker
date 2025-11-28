@@ -46,6 +46,18 @@ custom:
   backendLayerArn: ${cf:finance-tracker-layer-service-${self:provider.stage}.BackendDepsLambdaLayerQualifiedArn}
 
 functions:
+  warmDatabase:
+    handler: apps/api/handlers/warmup.warm_database
+    timeout: 12
+    memorySize: 256
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /warmup
+          method: GET
+          authorizer: none
+
   listAccounts:
     handler: apps/api/handlers/accounts.list_accounts
     timeout: 29

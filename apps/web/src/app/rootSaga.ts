@@ -8,6 +8,7 @@ import { LoansSaga } from "@/features/loans/loansSaga";
 import { ReportsSaga } from "@/features/reports/reportsSaga";
 import { SettingsSaga } from "@/features/settings/settingsSaga";
 import { TransactionsSaga } from "@/features/transactions/transactionsSaga";
+import { WarmupSaga } from "@/features/warmup/warmupSaga";
 import type { RootState } from "./store";
 
 type Selector<T> = (state: RootState) => T;
@@ -20,6 +21,7 @@ export function* TypedSelect<T>(
 
 export function* RootSaga() {
   yield all([
+    fork(WarmupSaga),
     fork(AuthSaga),
     fork(AccountsSaga),
     fork(CategoriesSaga),

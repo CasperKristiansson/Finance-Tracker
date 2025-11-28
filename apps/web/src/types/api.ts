@@ -406,3 +406,10 @@ export interface SettingsPayload {
 export interface SettingsResponse {
   settings: SettingsPayload;
 }
+
+export type WarmupStatus = "ready" | "starting" | "error";
+
+export interface WarmupResponse {
+  status: WarmupStatus;
+  message?: string;
+}
