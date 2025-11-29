@@ -9,6 +9,7 @@ import type {
   SettingsResponse,
   ThemePreference,
 } from "@/types/api";
+import { selectIsDemo, selectToken } from "../auth/authSlice";
 import {
   SETTINGS_STORAGE_KEY,
   THEME_STORAGE_KEY,
@@ -66,6 +67,13 @@ function* handleLoadSettings() {
           ...cached,
         }),
       );
+    }
+
+    const token: string | undefined = yield* TypedSelect(selectToken);
+    const isDemo: boolean = yield* TypedSelect(selectIsDemo);
+
+    if (!token || isDemo) {
+      return;
     }
 
     try {

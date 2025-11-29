@@ -29,17 +29,45 @@ let amplifyConfigured = false;
 
 const isBrowser = () => typeof window !== "undefined";
 
+const normalizeCognitoDomain = (
+  domain: string | undefined,
+  region: string,
+): string => {
+  if (!domain) return domain ?? "";
+  const trimmed = domain.trim().replace(/^https?:\/\//i, "");
+  if (trimmed.includes("amazoncognito.com")) return trimmed;
+  if (region) return `${trimmed}.auth.${region}.amazoncognito.com`;
+  return trimmed;
+};
+
+const normalizeRedirect = (value: string | undefined): string => {
+  const fallback = `${window.location.origin}/login`;
+  if (!value) return fallback;
+  const trimmed = value.trim();
+  const hasProtocol = /^https?:\/\//i.test(trimmed);
+  if (hasProtocol) return trimmed;
+  const isLocal =
+    /^localhost(?::\d+)?/.test(trimmed) || /^127\.0\.0\.1/.test(trimmed);
+  const protocol = isLocal ? "http://" : "https://";
+  return `${protocol}${trimmed}`;
+};
+
 const ensureAmplifyConfigured = () => {
   if (amplifyConfigured || !isBrowser()) return;
 
   const region = import.meta.env[authEnvKeys.region] ?? "";
   const userPoolId = import.meta.env[authEnvKeys.userPoolId];
   const userPoolClientId = import.meta.env[authEnvKeys.userPoolClientId];
-  const cognitoDomain = import.meta.env[authEnvKeys.cognitoDomain];
-  const redirectSignIn =
-    import.meta.env[authEnvKeys.redirectSignIn] ?? `${window.location.origin}/login`;
-  const redirectSignOut =
-    import.meta.env[authEnvKeys.redirectSignOut] ?? `${window.location.origin}/login`;
+  const cognitoDomain = normalizeCognitoDomain(
+    import.meta.env[authEnvKeys.cognitoDomain],
+    region,
+  );
+  const redirectSignIn = normalizeRedirect(
+    import.meta.env[authEnvKeys.redirectSignIn],
+  );
+  const redirectSignOut = normalizeRedirect(
+    import.meta.env[authEnvKeys.redirectSignOut],
+  );
 
   if (!userPoolId || !userPoolClientId || !cognitoDomain) {
     throw new Error(

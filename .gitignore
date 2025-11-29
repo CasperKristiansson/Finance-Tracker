@@ -15,4 +15,4 @@ docs/data
 apps/web/build
 apps/web/dist
 apps/web/.env.production
-.gitignore
+apps/web/.env.local

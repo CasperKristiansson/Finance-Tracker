@@ -279,47 +279,59 @@ export const {
   selectExportState,
 } = reportsSlice.selectors;
 
-export const selectMonthlyByFilters = (
-  state: RootState,
+const selectReportFiltersKey = (
+  _state: RootState,
   filters: ReportFilters | undefined,
-) => {
-  const key = buildReportKey(filters);
-  const monthly = selectMonthlyReportState(state);
-  return {
-    data: monthly.cache[key] ?? [],
-    loading: monthly.loading && monthly.currentKey === key,
-    error: monthly.error,
-  };
-};
+) => buildReportKey(filters);
 
-export const selectQuarterlyByFilters = (
-  state: RootState,
-  filters: ReportFilters | undefined,
-) => {
-  const key = buildReportKey(filters);
-  const quarterly = selectQuarterlyReportState(state);
-  return {
-    data: quarterly.cache[key] ?? [],
-    loading: quarterly.loading && quarterly.currentKey === key,
-    error: quarterly.error,
-  };
-};
-
-export const selectCustomByFilters = (
-  state: RootState,
+const buildCustomReportKey = (
   filters: { start_date: string; end_date: string } & Omit<
     ReportFilters,
     "year"
   >,
-) => {
-  const key = JSON.stringify(filters);
-  const custom = selectCustomReportState(state);
-  return {
+) =>
+  JSON.stringify({
+    start_date: filters.start_date,
+    end_date: filters.end_date,
+    accountIds: [...(filters.accountIds ?? [])].sort(),
+    categoryIds: [...(filters.categoryIds ?? [])].sort(),
+    subscriptionIds: [...(filters.subscriptionIds ?? [])].sort(),
+  });
+
+const selectCustomFiltersKey = (
+  _state: RootState,
+  filters: { start_date: string; end_date: string } & Omit<
+    ReportFilters,
+    "year"
+  >,
+) => buildCustomReportKey(filters);
+
+export const selectMonthlyByFilters = createSelector(
+  [selectMonthlyReportState, selectReportFiltersKey],
+  (monthly, key) => ({
+    data: monthly.cache[key] ?? [],
+    loading: monthly.loading && monthly.currentKey === key,
+    error: monthly.error,
+  }),
+);
+
+export const selectQuarterlyByFilters = createSelector(
+  [selectQuarterlyReportState, selectReportFiltersKey],
+  (quarterly, key) => ({
+    data: quarterly.cache[key] ?? [],
+    loading: quarterly.loading && quarterly.currentKey === key,
+    error: quarterly.error,
+  }),
+);
+
+export const selectCustomByFilters = createSelector(
+  [selectCustomReportState, selectCustomFiltersKey],
+  (custom, key) => ({
     data: custom.cache[key] ?? [],
     loading: custom.loading && custom.currentKey === key,
     error: custom.error,
-  };
-};
+  }),
+);
 
 export const selectMonthlyReport = selectCurrentMonthly;
 export const selectYearlyReport = selectCurrentYearly;

@@ -21,16 +21,6 @@ export const Login: React.FC = () => {
         <div className="p-4 sm:p-7">
           <div className="text-center">
             <h1 className="block text-2xl font-bold text-gray-800">Sign in</h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Don&apos;t have an account yet?
-              <a
-                className="font-medium text-blue-600 decoration-2 hover:underline focus:underline focus:outline-hidden"
-                href="https://www.linkedin.com/in/casperKristiansson/"
-              >
-                {"  "}
-                Message me
-              </a>
-            </p>
             <p className="mt-2 text-xs text-gray-500">
               Access is protected. Use your credentials or explore in demo mode.
             </p>
@@ -55,14 +45,22 @@ export const Login: React.FC = () => {
               ) : null}
               <button
                 type="button"
-                className="inline-flex w-full items-center justify-center gap-x-2 rounded-lg border border-transparent bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 focus:bg-blue-700 focus:outline-hidden disabled:pointer-events-none disabled:opacity-50"
+                className="inline-flex w-full cursor-pointer items-center justify-center gap-x-2 rounded-lg border border-transparent bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700 focus:bg-blue-700 focus:outline-hidden disabled:pointer-events-none disabled:opacity-50"
                 onClick={startGoogleSignIn}
                 disabled={loadingLogIn}
               >
                 {loadingLogIn ? (
                   <Spinner height={20} width={20} color="white" />
                 ) : (
-                  "Continue with Google"
+                  <>
+                    <img
+                      src="/google.webp"
+                      alt="Google icon"
+                      className="h-4 w-4"
+                      loading="lazy"
+                    />
+                    <span>Continue with Google</span>
+                  </>
                 )}
               </button>
             </div>

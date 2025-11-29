@@ -1,12 +1,16 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Route, Routes } from "react-router";
 import { useAppDispatch, useAppSelector } from "./app/hooks.ts";
 import { AppLoadingShell } from "./components/app-loading-shell.tsx";
 import { DatabaseWarmup } from "./components/database-warmup.tsx";
+import { Spinner } from "./components/spinner.tsx";
 import { PageRoutes } from "./data/routes.ts";
 import { selectLoading } from "./features/app/appSlice.tsx";
 import { AuthInitialize } from "./features/auth/authSaga.ts";
-import { selectInitialLoaded } from "./features/auth/authSlice.ts";
+import {
+  selectInitialLoaded,
+  selectIsAuthenticated,
+} from "./features/auth/authSlice.ts";
 import { LoadSettings } from "./features/settings/settingsSaga.ts";
 import { BeginWarmup } from "./features/warmup/warmupSaga.ts";
 import { selectWarmupState } from "./features/warmup/warmupSlice.ts";
@@ -32,7 +36,9 @@ export const App: React.FC = () => {
   const dispatch = useAppDispatch();
   const initialLoaded = useAppSelector(selectInitialLoaded);
   const loadingLogout = useAppSelector(selectLoading)["logout"];
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const warmupState = useAppSelector(selectWarmupState);
+  const [showDetailedWarmup, setShowDetailedWarmup] = useState(false);
 
   const NavigationWrapper = ({
     children,
@@ -55,7 +61,36 @@ export const App: React.FC = () => {
     }
   }, [dispatch, warmupState.status]);
 
+  useEffect(() => {
+    if (warmupState.status !== "ready" || !isAuthenticated) return;
+    dispatch(LoadSettings());
+  }, [dispatch, isAuthenticated, warmupState.status]);
+
+  useEffect(() => {
+    if (warmupState.status === "ready") {
+      setShowDetailedWarmup(false);
+      return;
+    }
+
+    if (warmupState.status === "failed") {
+      setShowDetailedWarmup(true);
+      return;
+    }
+
+    setShowDetailedWarmup(false);
+    const timer = window.setTimeout(() => setShowDetailedWarmup(true), 5000);
+    return () => window.clearTimeout(timer);
+  }, [warmupState.status]);
+
   if (warmupState.status !== "ready") {
+    if (!showDetailedWarmup) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-white">
+          <Spinner color="#2563eb" height={72} width={72} />
+        </div>
+      );
+    }
+
     return (
       <DatabaseWarmup
         warmupState={warmupState}

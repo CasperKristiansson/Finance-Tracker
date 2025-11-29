@@ -19,7 +19,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--env-path",
         default="apps/web/.env",
-        help="Path to the env file that should be updated",
+        help="Path to the base env file that should be updated (production defaults)",
+    )
+    parser.add_argument(
+        "--env-local-path",
+        default="apps/web/.env.local",
+        help="Path to the local env file that should be updated",
+    )
+    parser.add_argument(
+        "--env-production-path",
+        default="apps/web/.env.production",
+        help="Path to the production env file that should be updated",
     )
     parser.add_argument(
         "--aws-region",
@@ -30,6 +40,16 @@ def parse_args() -> argparse.Namespace:
         "--aws-profile",
         default="",
         help="Optional AWS CLI profile for the terraform outputs and SSM queries",
+    )
+    parser.add_argument(
+        "--local-redirect-signin",
+        default="http://localhost:5173/login",
+        help="Override for VITE_OAUTH_REDIRECT_SIGNIN in .env.local",
+    )
+    parser.add_argument(
+        "--local-redirect-signout",
+        default="http://localhost:5173/login",
+        help="Override for VITE_OAUTH_REDIRECT_SIGNOUT in .env.local",
     )
     return parser.parse_args()
 
@@ -107,11 +127,16 @@ def write_env_file(
     user_pool_id: str,
     user_pool_client_id: str,
     oauth_settings: dict,
+    *,
+    redirect_signin: str | None = None,
+    redirect_signout: str | None = None,
 ) -> None:
     existing = _parse_existing_env(env_path)
     api_base = existing.get("VITE_API_BASE_URL", "")
-    redirect_signin = oauth_settings.get("callback_urls", [""])[0]
-    redirect_signout = oauth_settings.get("logout_urls", [""])[0]
+    fallback_signin = oauth_settings.get("callback_urls", [""])[0]
+    fallback_signout = oauth_settings.get("logout_urls", [""])[0]
+    redirect_signin = redirect_signin or fallback_signin
+    redirect_signout = redirect_signout or fallback_signout
 
     env_path.parent.mkdir(parents=True, exist_ok=True)
     content = (
@@ -130,18 +155,98 @@ def write_env_file(
 def main() -> None:
     args = parse_args()
 
-    auth_paths = read_auth_parameter_paths(args.tf_dir, args.aws_profile)
-    oauth_settings = read_oauth_settings(args.tf_dir, args.aws_profile)
+    base_env_path = Path(args.env_path)
+    local_env_path = Path(args.env_local_path)
+    prod_env_path = Path(args.env_production_path)
 
-    user_pool_id = read_parameter(auth_paths["user_pool_id"], args.aws_region, args.aws_profile)
-    user_pool_client_id = read_parameter(
-        auth_paths["user_pool_client"], args.aws_region, args.aws_profile
-    )
+    existing_env = _parse_existing_env(base_env_path)
+    existing_local_env = _parse_existing_env(local_env_path)
+    existing_prod_env = _parse_existing_env(prod_env_path)
+
+    def first_present(key: str) -> str:
+        for source in (existing_env, existing_local_env, existing_prod_env):
+            if key in source and source[key]:
+                return source[key]
+        return ""
+
+    auth_paths = read_auth_parameter_paths(args.tf_dir, args.aws_profile)
+    try:
+        oauth_settings = read_oauth_settings(args.tf_dir, args.aws_profile)
+    except subprocess.CalledProcessError as error:
+        fallback_domain = first_present("VITE_COGNITO_DOMAIN")
+        fallback_signin = first_present("VITE_OAUTH_REDIRECT_SIGNIN")
+        fallback_signout = first_present("VITE_OAUTH_REDIRECT_SIGNOUT")
+        if not fallback_domain:
+            raise RuntimeError(
+                "Failed to read oauth settings from terraform output and no fallback found in existing env files."
+            ) from error
+        print("Warning: using existing OAuth settings from env as fallback", flush=True)
+        oauth_settings = {
+            "domain": fallback_domain,
+            "callback_urls": [fallback_signin],
+            "logout_urls": [fallback_signout],
+        }
+
+    try:
+        user_pool_id = read_parameter(auth_paths["user_pool_id"], args.aws_region, args.aws_profile)
+    except subprocess.CalledProcessError as error:
+        fallback = first_present("VITE_USER_POOL_ID")
+        if not fallback:
+            raise RuntimeError(
+                "Failed to read user pool id from SSM and no fallback found in existing env files."
+            ) from error
+        print("Warning: using existing VITE_USER_POOL_ID from env as fallback", flush=True)
+        user_pool_id = fallback
+
+    try:
+        user_pool_client_id = read_parameter(
+            auth_paths["user_pool_client"], args.aws_region, args.aws_profile
+        )
+    except subprocess.CalledProcessError as error:
+        fallback = first_present("VITE_USER_POOL_CLIENT_ID")
+        if not fallback:
+            raise RuntimeError(
+                "Failed to read user pool client id from SSM and no fallback found in existing env files."
+            ) from error
+        print(
+            "Warning: using existing VITE_USER_POOL_CLIENT_ID from env as fallback",
+            flush=True,
+        )
+        user_pool_client_id = fallback
 
     env_path = Path(args.env_path)
-    write_env_file(env_path, args.aws_region, user_pool_id, user_pool_client_id, oauth_settings)
+    env_local_path = Path(args.env_local_path)
+    env_prod_path = Path(args.env_production_path)
 
-    print(f"Updated {env_path} with Cognito configuration.")
+    write_env_file(
+        env_path,
+        args.aws_region,
+        user_pool_id,
+        user_pool_client_id,
+        oauth_settings,
+    )
+
+    write_env_file(
+        env_prod_path,
+        args.aws_region,
+        user_pool_id,
+        user_pool_client_id,
+        oauth_settings,
+    )
+
+    write_env_file(
+        env_local_path,
+        args.aws_region,
+        user_pool_id,
+        user_pool_client_id,
+        oauth_settings,
+        redirect_signin=args.local_redirect_signin,
+        redirect_signout=args.local_redirect_signout,
+    )
+
+    print(
+        f"Updated {env_path}, {env_local_path}, and {env_prod_path} with Cognito configuration."
+    )
 
 
 if __name__ == "__main__":

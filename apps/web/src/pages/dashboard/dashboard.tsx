@@ -21,6 +21,7 @@ import {
   YAxis,
 } from "recharts";
 import { toast } from "sonner";
+import { useAppSelector } from "@/app/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,6 +29,7 @@ import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { selectIsAuthenticated } from "@/features/auth/authSlice";
 import {
   useBudgetsApi,
   useCategoriesApi,
@@ -105,8 +107,11 @@ export const Dashboard: React.FC = () => {
     budgetsByUsage,
   } = useBudgetsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     const year = new Date().getFullYear();
     fetchMonthlyReport({ year });
     fetchYearlyReport();
@@ -115,8 +120,16 @@ export const Dashboard: React.FC = () => {
     fetchRecentTransactions({ limit: 5 });
     fetchBudgets();
     fetchCategories();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [
+    fetchMonthlyReport,
+    fetchYearlyReport,
+    fetchTotalReport,
+    fetchNetWorthReport,
+    fetchRecentTransactions,
+    fetchBudgets,
+    fetchCategories,
+    isAuthenticated,
+  ]);
 
   const kpis: KPI[] = useMemo(() => {
     const net = numberFromString(total.data?.net);

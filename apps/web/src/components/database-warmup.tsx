@@ -97,37 +97,39 @@ export const DatabaseWarmup: React.FC<DatabaseWarmupProps> = ({
           : "Preparing warmup request";
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-50">
-      <div className="pointer-events-none absolute inset-0 [background-image:radial-gradient(circle_at_20%_20%,rgba(52,211,153,0.18),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(59,130,246,0.16),transparent_40%),radial-gradient(circle_at_50%_90%,rgba(16,185,129,0.15),transparent_35%)] opacity-70" />
+    <div className="relative min-h-screen overflow-hidden bg-slate-50 text-slate-900">
+      <div className="pointer-events-none absolute inset-0 [background-image:radial-gradient(circle_at_20%_20%,rgba(59,130,246,0.12),transparent_35%),radial-gradient(circle_at_80%_0%,rgba(56,189,248,0.12),transparent_40%),radial-gradient(circle_at_50%_90%,rgba(99,102,241,0.1),transparent_35%)] opacity-80" />
       <div className="relative mx-auto flex min-h-screen max-w-4xl flex-col justify-center px-6 py-12">
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur">
+        <div className="rounded-3xl border border-slate-200 bg-white p-8 shadow-xl">
           <div className="flex flex-wrap items-start justify-between gap-6">
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 ring-1 ring-white/20">
-                  <Flame className="h-5 w-5 text-emerald-200" />
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 ring-1 ring-blue-100">
+                  <Flame className="h-5 w-5 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-xs tracking-[0.24em] text-slate-200/70 uppercase">
+                  <p className="text-xs tracking-[0.24em] text-slate-500 uppercase">
                     Preparing data layer
                   </p>
-                  <h1 className="text-3xl font-semibold text-white">
+                  <h1 className="text-3xl font-semibold text-slate-900">
                     Waking Aurora
                   </h1>
                 </div>
               </div>
-              <p className="max-w-2xl text-sm leading-relaxed text-slate-200/80">
+              <p className="max-w-2xl text-sm leading-relaxed text-slate-700">
                 Aurora scales down to zero when idle. We are running a warmup
                 ping so the first real request does not fight a cold start. This
                 typically takes 30-60 seconds and may retry if a Lambda hits the
                 29s cap.
               </p>
             </div>
-            <div className="flex items-center gap-3 rounded-2xl bg-white/10 px-4 py-3 text-xs text-slate-100/80 ring-1 ring-white/15">
-              <TimerReset className="h-4 w-4 text-emerald-200" />
+            <div className="flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-xs text-slate-700 ring-1 ring-slate-200">
+              <TimerReset className="h-4 w-4 text-blue-600" />
               <div className="flex flex-col">
-                <span className="font-semibold text-white">{attemptLabel}</span>
-                <span className="text-[11px] text-slate-200/70">
+                <span className="font-semibold text-slate-900">
+                  {attemptLabel}
+                </span>
+                <span className="text-[11px] text-slate-500">
                   {elapsed || "Clock starts once the first ping is sent"}
                 </span>
               </div>
@@ -137,27 +139,29 @@ export const DatabaseWarmup: React.FC<DatabaseWarmupProps> = ({
           <div className="mt-8 space-y-3">
             <Progress
               value={progress}
-              className="h-3 bg-white/10"
-              indicatorClassName="bg-gradient-to-r from-emerald-300 via-cyan-300 to-indigo-400 shadow-[0_0_24px_rgba(94,234,212,0.35)]"
+              className="h-3 bg-slate-100"
+              indicatorClassName="bg-gradient-to-r from-blue-500 via-indigo-400 to-cyan-400 shadow-[0_0_18px_rgba(59,130,246,0.35)]"
             />
-            <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-200/80">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-700">
               <div className="flex items-center gap-2">
-                <Gauge className="h-4 w-4 text-cyan-200" />
-                <span className="font-medium text-white">{statusLabel}</span>
+                <Gauge className="h-4 w-4 text-blue-600" />
+                <span className="font-medium text-slate-900">
+                  {statusLabel}
+                </span>
               </div>
-              <span className="font-semibold text-emerald-200">
+              <span className="font-semibold text-blue-600">
                 {Math.min(100, Math.round(progress))}%
               </span>
             </div>
           </div>
 
           {warmupState.status === "failed" ? (
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-white/5 px-4 py-4 ring-1 ring-rose-300/30">
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-rose-50 px-4 py-4 ring-1 ring-rose-200">
               <div className="space-y-1">
-                <p className="text-sm font-semibold text-white">
+                <p className="text-sm font-semibold text-rose-900">
                   Could not confirm the database is awake yet.
                 </p>
-                <p className="text-xs text-slate-200/80">{helperLine}</p>
+                <p className="text-xs text-rose-800">{helperLine}</p>
               </div>
               <Button variant="secondary" onClick={onRetry}>
                 <RefreshCw className="h-4 w-4" />
@@ -165,13 +169,15 @@ export const DatabaseWarmup: React.FC<DatabaseWarmupProps> = ({
               </Button>
             </div>
           ) : (
-            <div className="mt-6 flex items-center gap-3 rounded-2xl bg-white/5 px-4 py-3 ring-1 ring-white/10">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15">
-                <Spinner width={24} height={24} color="#99f6e4" />
+            <div className="mt-6 flex items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 ring-1 ring-blue-100">
+                <Spinner width={24} height={24} color="#2563eb" />
               </div>
               <div className="space-y-0.5">
-                <p className="text-sm font-medium text-white">{helperLine}</p>
-                <p className="text-xs text-slate-200/70">
+                <p className="text-sm font-medium text-slate-900">
+                  {helperLine}
+                </p>
+                <p className="text-xs text-slate-600">
                   We will keep checking until the cluster responds.
                 </p>
               </div>
