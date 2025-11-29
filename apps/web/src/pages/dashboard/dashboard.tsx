@@ -22,20 +22,13 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { selectIsAuthenticated } from "@/features/auth/authSlice";
-import {
-  useBudgetsApi,
-  useCategoriesApi,
-  useReportsApi,
-  useTransactionsApi,
-} from "@/hooks/use-api";
+import { useReportsApi, useTransactionsApi } from "@/hooks/use-api";
 
 type KPI = {
   title: string;
@@ -81,7 +74,7 @@ const ChartCard: React.FC<{
       </div>
       {action}
     </CardHeader>
-    <CardContent className="h-72">
+    <CardContent className="h-80 md:h-96">
       {loading ? <Skeleton className="h-full w-full" /> : children}
     </CardContent>
   </Card>
@@ -99,14 +92,6 @@ export const Dashboard: React.FC = () => {
     fetchNetWorthReport,
   } = useReportsApi();
   const { recent, fetchRecentTransactions } = useTransactionsApi();
-  const {
-    items: budgets,
-    loading: budgetsLoading,
-    fetchBudgets,
-    totals: budgetTotals,
-    budgetsByUsage,
-  } = useBudgetsApi();
-  const { items: categories, fetchCategories } = useCategoriesApi();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const hasFetched = useRef(false);
 
@@ -120,16 +105,12 @@ export const Dashboard: React.FC = () => {
     fetchTotalReport();
     fetchNetWorthReport();
     fetchRecentTransactions({ limit: 5 });
-    fetchBudgets();
-    fetchCategories();
   }, [
     fetchMonthlyReport,
     fetchYearlyReport,
     fetchTotalReport,
     fetchNetWorthReport,
     fetchRecentTransactions,
-    fetchBudgets,
-    fetchCategories,
     isAuthenticated,
   ]);
 
@@ -139,10 +120,6 @@ export const Dashboard: React.FC = () => {
     const expense = numberFromString(total.data?.expense);
     const savingsRate =
       income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
-    const budgetPercent =
-      budgetTotals.budgetTotal > 0
-        ? Math.round((budgetTotals.spentTotal / budgetTotals.budgetTotal) * 100)
-        : 0;
 
     return [
       {
@@ -163,14 +140,8 @@ export const Dashboard: React.FC = () => {
         helper: "Income retained",
         trend: savingsRate >= 0 ? "up" : "down",
       },
-      {
-        title: "Budget usage",
-        value: `${budgetPercent}%`,
-        helper: `${currency(budgetTotals.spentTotal)} / ${currency(budgetTotals.budgetTotal || 0)}`,
-        trend: budgetPercent > 100 ? "down" : "neutral",
-      },
     ];
-  }, [total.data, budgetTotals]);
+  }, [total.data]);
 
   const incomeExpenseChart = useMemo(() => {
     return (monthly.data || []).map((entry) => ({
@@ -229,28 +200,6 @@ export const Dashboard: React.FC = () => {
       net: Number(point.net_worth),
     }));
   }, [netWorth.data]);
-
-  const budgetProgressData = useMemo(() => {
-    if (!budgets.length) return [];
-    return (budgetsByUsage.length ? budgetsByUsage : budgets)
-      .map((b) => {
-        const cat = categories.find((c) => c.id === b.category_id);
-        const category = cat?.name ?? "Uncategorized";
-        const icon = cat?.icon ?? "🏷️";
-        const color = cat?.color_hex ?? "#0f172a";
-        const percent = Math.min(150, Math.max(0, Number(b.percent_used || 0)));
-        return {
-          id: b.id,
-          label: `${icon ? `${icon} ` : ""}${category}`,
-          percent,
-          remaining: Number(b.remaining),
-          spent: Number(b.spent),
-          total: Number(b.amount),
-          color,
-        };
-      })
-      .slice(0, 5);
-  }, [budgets, budgetsByUsage, categories]);
 
   const recentTransactions = useMemo(() => {
     if (recent.items.length === 0) {
@@ -367,6 +316,7 @@ export const Dashboard: React.FC = () => {
           loading={monthly.loading}
         >
           <ChartContainer
+            className="h-full"
             config={{
               income: {
                 label: "Income",
@@ -418,7 +368,15 @@ export const Dashboard: React.FC = () => {
           description="Trajectory over time"
           loading={netWorth.loading}
         >
-          <ResponsiveContainer width="100%" height="100%">
+          <ChartContainer
+            className="h-full"
+            config={{
+              net: {
+                label: "Net worth",
+                color: "#4f46e5",
+              },
+            }}
+          >
             <AreaChart data={netWorthData}>
               <defs>
                 <linearGradient id="netFill" x1="0" y1="0" x2="0" y2="1">
@@ -448,7 +406,7 @@ export const Dashboard: React.FC = () => {
                 name="Net worth"
               />
             </AreaChart>
-          </ResponsiveContainer>
+          </ChartContainer>
         </ChartCard>
       </div>
 
@@ -541,46 +499,7 @@ export const Dashboard: React.FC = () => {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard
-          title="Budgets vs actual"
-          description="Top categories by utilization"
-          loading={budgetsLoading}
-          action={<Badge variant="outline">{budgets.length} tracked</Badge>}
-        >
-          <div className="space-y-3">
-            {budgetProgressData.length === 0 ? (
-              <p className="text-sm text-slate-500">
-                No budgets yet. Add one to start tracking progress.
-              </p>
-            ) : (
-              budgetProgressData.map((row) => (
-                <div key={row.id} className="space-y-1">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2 text-slate-800">
-                      <span
-                        className="inline-block h-2 w-2 rounded-full"
-                        style={{ backgroundColor: row.color }}
-                      />
-                      {row.label}
-                    </span>
-                    <span className="text-slate-600">{row.percent}%</span>
-                  </div>
-                  <Progress
-                    value={row.percent}
-                    className="h-2"
-                    indicatorStyle={{ backgroundColor: row.color }}
-                  />
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span>Spent {currency(row.spent)}</span>
-                    <span>Remaining {currency(row.remaining)}</span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </ChartCard>
-
-        <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.25)]">
+        <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.25)]">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <div>
               <CardTitle className="text-base font-semibold text-slate-900">

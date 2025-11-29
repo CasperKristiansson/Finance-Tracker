@@ -180,6 +180,30 @@ functions:
           method: POST
           authorizer: cognitoJwt
 
+  getSettings:
+    handler: apps/api/handlers/settings.get_settings
+    timeout: 10
+    memorySize: 256
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /settings
+          method: GET
+          authorizer: cognitoJwt
+
+  saveSettings:
+    handler: apps/api/handlers/settings.save_settings
+    timeout: 10
+    memorySize: 256
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /settings
+          method: PUT
+          authorizer: cognitoJwt
+
   listCategories:
     handler: apps/api/handlers/categories.list_categories
     timeout: 29
