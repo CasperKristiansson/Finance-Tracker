@@ -18,11 +18,7 @@ import {
   setRememberMe,
 } from "./authSlice";
 
-export const AuthLogin = createAction<{
-  username: string;
-  password: string;
-  rememberMe?: boolean;
-}>("auth/login");
+export const AuthLoginGoogle = createAction("auth/loginGoogle");
 export const AuthLogout = createAction("auth/logout");
 export const AuthInitialize = createAction("auth/initialize");
 export const AuthLoginDemo = createAction("auth/loginDemo");
@@ -49,32 +45,20 @@ const hydrateRemembered = () => {
   return { remember, username };
 };
 
-function* handleLogin(action: ReturnType<typeof AuthLogin>) {
+function* handleLoginWithGoogle() {
   yield put(setLoading({ key: "login", isLoading: true }));
   yield put(setLoginError(null));
   try {
-    const session: AuthenticatedUser = yield call(() =>
-      authService.signIn(action.payload.username, action.payload.password),
-    );
-    if (action.payload.rememberMe) {
-      persistRememberMe(true, action.payload.username);
-      yield put(setRememberMe(true));
-      yield put(setLastUsername(action.payload.username));
-    } else {
-      persistRememberMe(false);
-      yield put(setRememberMe(false));
-    }
-    yield put(loginSuccess(session));
-    toast.success("Login Successful");
+    yield call(() => authService.signInWithGoogle());
   } catch (error) {
     if (error instanceof Error) {
       yield put(setLoginError(error.message));
-      toast.error("Failed to Login", {
+      toast.error("Failed to start Google sign-in", {
         description: error.message,
       });
     } else {
-      yield put(setLoginError("Failed to login"));
-      toast.error("Failed to Login");
+      yield put(setLoginError("Failed to start Google sign-in"));
+      toast.error("Failed to start Google sign-in");
     }
   }
   yield put(setLoading({ key: "login", isLoading: false }));
@@ -111,6 +95,7 @@ function* initializeAuth() {
     yield put(setLastUsername(username));
   }
   try {
+    yield call(() => authService.completeRedirectIfPresent());
     const existingSession: AuthenticatedUser | null = yield call(() =>
       authService.fetchAuthenticatedUser(),
     );
@@ -156,7 +141,7 @@ function* handleLoginDemo() {
 
 export function* AuthSaga() {
   yield all([
-    takeLatest(AuthLogin.type, handleLogin),
+    takeLatest(AuthLoginGoogle.type, handleLoginWithGoogle),
     takeLatest(AuthLogout.type, handleLogout),
     takeLatest(AuthInitialize.type, initializeAuth),
     takeLatest(AuthLoginDemo.type, handleLoginDemo),
