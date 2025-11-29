@@ -5,7 +5,7 @@ import {
   Plus,
   Upload,
 } from "lucide-react";
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import {
   Area,
   AreaChart,
@@ -108,10 +108,12 @@ export const Dashboard: React.FC = () => {
   } = useBudgetsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const hasFetched = useRef(false);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated || hasFetched.current) return;
 
+    hasFetched.current = true;
     const year = new Date().getFullYear();
     fetchMonthlyReport({ year });
     fetchYearlyReport();

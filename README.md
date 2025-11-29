@@ -30,35 +30,3 @@ The two most important pages are the yearly and total overview. Both these pages
 A big part of keeping track of personal finance is knowing exactly where all the existing money is located. As you grow older you usually will end up with more and more different bank accounts, investment portfolios, and saving accounts. The accounts overview gives the exact amount that exists in each account. One thing that I had a really hard time with before when tracking in excel is that even after tracking all the monthly expenses the accounts wouldn’t always line up with the real-world amount. Therefore, the transaction page also gives it user a way to edit the balance and then track it as an adjustment.
 
 Another big thing in managing finance is that it must be easy to create new, edit or delete transactions. The application with help of API endpoints can easily perform all of these actions against the database. A biig functionality added to the application is uploading an excel document. The user can upload an excel document with a list of expenses and income which the application can post to the database. This makes it easy to manage the finance from month to month.
-
-## Infrastructure & Local Database Access
-
-Terraform under `infra/terraform/` provisions the Aurora PostgreSQL cluster and supporting AWS resources. The database stays private by default. For local development you can temporarily expose the cluster publicly (port 5432) by applying with `enable_public_db_access=true`; remember to turn it off when you're finished.
-
-### Expose / Hide the Database
-
-```bash
-# expose Aurora publicly for local development
-make tf-enable-public-db
-# or: terraform -chdir=infra/terraform apply -var 'enable_public_db_access=true'
-
-# return to private-only access
-make tf-disable-public-db
-# or: terraform -chdir=infra/terraform apply -var 'enable_public_db_access=false'
-```
-
-### Connect from Your Laptop
-
-```bash
-ENV=dev                    # matches the terraform workspace
-PROFILE=Personal           # AWS CLI profile
-REGION=eu-north-1
-
-DB_ENDPOINT=$(aws ssm get-parameter --name "/finance-tracker/${ENV}/db/endpoint" --query Parameter.Value --output text --profile "$PROFILE" --region "$REGION")
-DB_USER=$(aws ssm get-parameter --name "/finance-tracker/${ENV}/db/user" --query Parameter.Value --output text --profile "$PROFILE" --region "$REGION")
-DB_PASSWORD=$(aws ssm get-parameter --with-decryption --name "/finance-tracker/${ENV}/db/password" --query Parameter.Value --output text --profile "$PROFILE" --region "$REGION")
-
-psql "host=$DB_ENDPOINT user=$DB_USER password=$DB_PASSWORD dbname=finance_tracker sslmode=require"
-```
-
-The public toggle opens the Aurora security group to `0.0.0.0/0`. Leave it disabled outside of local testing.

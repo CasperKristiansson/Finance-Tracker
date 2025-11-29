@@ -26,6 +26,14 @@ const authEnvKeys = {
 } as const;
 
 let amplifyConfigured = false;
+let lastConfiguredAuth: {
+  region?: string;
+  userPoolId?: string;
+  userPoolClientId?: string;
+  oauthDomain?: string;
+  redirectSignIn?: string[];
+  redirectSignOut?: string[];
+} = {};
 
 const isBrowser = () => typeof window !== "undefined";
 
@@ -36,6 +44,8 @@ const normalizeCognitoDomain = (
   if (!domain) return domain ?? "";
   const trimmed = domain.trim().replace(/^https?:\/\//i, "");
   if (trimmed.includes("amazoncognito.com")) return trimmed;
+  // If the env already provides a custom domain (contains a dot), keep it as-is.
+  if (trimmed.includes(".")) return trimmed;
   if (region) return `${trimmed}.auth.${region}.amazoncognito.com`;
   return trimmed;
 };
@@ -62,12 +72,12 @@ const ensureAmplifyConfigured = () => {
     import.meta.env[authEnvKeys.cognitoDomain],
     region,
   );
-  const redirectSignIn = normalizeRedirect(
-    import.meta.env[authEnvKeys.redirectSignIn],
-  );
-  const redirectSignOut = normalizeRedirect(
-    import.meta.env[authEnvKeys.redirectSignOut],
-  );
+  const redirectSignIn = [
+    normalizeRedirect(import.meta.env[authEnvKeys.redirectSignIn]),
+  ];
+  const redirectSignOut = [
+    normalizeRedirect(import.meta.env[authEnvKeys.redirectSignOut]),
+  ];
 
   if (!userPoolId || !userPoolClientId || !cognitoDomain) {
     throw new Error(
@@ -81,17 +91,27 @@ const ensureAmplifyConfigured = () => {
         userPoolId,
         userPoolClientId,
         ...(region ? { region } : {}),
-      },
-      oauth: {
-        domain: cognitoDomain,
-        redirectSignIn,
-        redirectSignOut,
-        responseType: "code",
-        scopes: ["email", "openid", "profile"],
-        providers: ["Google"],
+        loginWith: {
+          oauth: {
+            domain: cognitoDomain,
+            redirectSignIn,
+            redirectSignOut,
+            responseType: "code",
+            scopes: ["email", "openid", "profile"],
+          },
+        },
       },
     },
   });
+
+  lastConfiguredAuth = {
+    region,
+    userPoolId,
+    userPoolClientId,
+    oauthDomain: cognitoDomain,
+    redirectSignIn,
+    redirectSignOut,
+  };
 
   amplifyConfigured = true;
 };
@@ -159,8 +179,17 @@ class AmplifyAuthService {
   }
 
   async signInWithGoogle(): Promise<void> {
-    ensureAmplifyConfigured();
-    await signInWithRedirect({ provider: "Google" });
+    try {
+      ensureAmplifyConfigured();
+      await signInWithRedirect({ provider: "Google" });
+    } catch (error) {
+      // Surface configuration details to help debug OAuth issues (avoids tokens)
+      console.error("Amplify signInWithRedirect failed", {
+        error,
+        authConfig: lastConfiguredAuth,
+      });
+      throw error;
+    }
   }
 
   async signOut(): Promise<void> {

@@ -4,7 +4,6 @@ import {
   SidebarGroup,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
@@ -33,19 +32,16 @@ export function NavMain({
               <Link
                 to={item.url}
                 className={cn(
-                  "flex items-center gap-2",
-                  isActive && "font-bold",
+                  "flex w-full items-center gap-2 rounded-md p-2 text-sm",
+                  isActive && "bg-muted font-medium text-foreground",
                 )}
               >
-                <SidebarMenuButton
-                  tooltip={item.title}
-                  className={cn(isActive && "bg-muted text-foreground")}
-                >
-                  {item.icon && (
-                    <item.icon className={cn(isActive && "text-primary")} />
-                  )}
-                  <span>{item.title}</span>
-                </SidebarMenuButton>
+                {item.icon && (
+                  <item.icon
+                    className={cn("h-4 w-4", isActive && "text-primary")}
+                  />
+                )}
+                <span className="truncate">{item.title}</span>
               </Link>
             </SidebarMenuItem>
           );

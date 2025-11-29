@@ -8,14 +8,15 @@ data "aws_ssm_parameter" "google_client_secret" {
 }
 
 locals {
-  google_client_id     = data.aws_ssm_parameter.google_client_id.value
-  google_client_secret = data.aws_ssm_parameter.google_client_secret.value
-  google_enabled       = local.google_client_id != "" && local.google_client_secret != ""
+  google_client_id      = data.aws_ssm_parameter.google_client_id.value
+  google_client_secret  = data.aws_ssm_parameter.google_client_secret.value
+  google_enabled        = local.google_client_id != "" && local.google_client_secret != ""
   cognito_domain_prefix = substr(
     replace(lower("${local.name_prefix}-${var.account_id}"), "_", "-"),
     0,
     62,
   )
+  cognito_custom_domain = "auth.finance-tracker.${var.root_domain_name}"
   oauth_callback_urls = [
     "https://${local.static_site_domain}/login",
     "http://localhost:5173/login",
@@ -108,9 +109,59 @@ resource "aws_cognito_user_pool_client" "finance_tracker_web" {
   ]
 }
 
+resource "aws_acm_certificate" "cognito_custom_domain" {
+  provider          = aws.us_east_1
+  domain_name       = local.cognito_custom_domain
+  validation_method = "DNS"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+
+  tags = merge(
+    local.common_tags,
+    { Name = "${local.name_prefix}-cognito-custom-domain-cert" },
+  )
+}
+
+resource "aws_route53_record" "cognito_custom_domain_validation" {
+  for_each = {
+    for option in aws_acm_certificate.cognito_custom_domain.domain_validation_options : option.domain_name => {
+      name   = option.resource_record_name
+      type   = option.resource_record_type
+      record = option.resource_record_value
+    }
+  }
+
+  name    = each.value.name
+  type    = each.value.type
+  zone_id = data.aws_route53_zone.root.zone_id
+  ttl     = 300
+  records = [each.value.record]
+}
+
+resource "aws_route53_record" "cognito_custom_domain" {
+  zone_id = data.aws_route53_zone.root.zone_id
+  name    = local.cognito_custom_domain
+  type    = "CNAME"
+  ttl     = 300
+  records = [aws_cognito_user_pool_domain.finance_tracker.cloudfront_distribution]
+
+  depends_on = [aws_cognito_user_pool_domain.finance_tracker]
+}
+
+resource "aws_acm_certificate_validation" "cognito_custom_domain" {
+  provider                = aws.us_east_1
+  certificate_arn         = aws_acm_certificate.cognito_custom_domain.arn
+  validation_record_fqdns = [for record in aws_route53_record.cognito_custom_domain_validation : record.fqdn]
+}
+
 resource "aws_cognito_user_pool_domain" "finance_tracker" {
-  domain       = local.cognito_domain_prefix
-  user_pool_id = aws_cognito_user_pool.finance_tracker.id
+  domain          = local.cognito_custom_domain
+  certificate_arn = aws_acm_certificate.cognito_custom_domain.arn
+  user_pool_id    = aws_cognito_user_pool.finance_tracker.id
+
+  depends_on = [aws_acm_certificate_validation.cognito_custom_domain]
 }
 
 resource "aws_cognito_identity_provider" "google" {
