@@ -46,7 +46,7 @@ def _seed_transaction(
     amount: Decimal,
     occurred_at: datetime,
 ) -> None:
-    account = Account(account_type=AccountType.NORMAL)
+    account = Account(name="Account", account_type=AccountType.NORMAL)
     session.add(account)
     session.flush()
 

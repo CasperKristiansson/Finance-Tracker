@@ -109,7 +109,7 @@ def create_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         return json_response(400, {"error": exc.errors()})
 
     account = Account(
-        display_order=data.display_order,
+        name=data.name,
         account_type=data.account_type,
         is_active=data.is_active,
     )
@@ -146,7 +146,7 @@ def update_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         try:
             updated = service.update_account(
                 account_id,
-                display_order=data.display_order,
+                name=data.name,
                 is_active=data.is_active,
             )
         except LookupError:

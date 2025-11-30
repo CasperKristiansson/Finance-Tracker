@@ -12,7 +12,7 @@ from sqlalchemy import Table, desc, func, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, select
 
-from ..models import Transaction, TransactionLeg
+from ..models import Account, Transaction, TransactionLeg
 from ..models.investment_snapshot import InvestmentSnapshot
 from ..shared import coerce_decimal, get_default_user_id
 
@@ -73,6 +73,14 @@ class ReportingRepository:
     def __init__(self, session: Session):
         self.session = session
         self.user_id: str = str(session.info.get("user_id") or get_default_user_id())
+        self._excluded_account_ids: set[UUID] = set(
+            acc_id
+            for acc_id in session.exec(
+                select(Account.id).where(
+                    Account.user_id == self.user_id, Account.name.in_(["Offset", "Unassigned"])
+                )
+            ).all()
+        )
 
     def get_monthly_totals(
         self,
@@ -191,6 +199,8 @@ class ReportingRepository:
 
         if account_ids:
             statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
+        elif self._excluded_account_ids:
+            statement = statement.where(~leg_table.c.account_id.in_(list(self._excluded_account_ids)))
 
         rows = self.session.exec(statement).all()
 
@@ -239,6 +249,8 @@ class ReportingRepository:
         )
         if account_ids:
             statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
+        elif self._excluded_account_ids:
+            statement = statement.where(~leg_table.c.account_id.in_(list(self._excluded_account_ids)))
         scalar_result = cast(Any, self.session.exec(statement))
 
         if hasattr(scalar_result, "scalar_one"):
@@ -372,6 +384,8 @@ class ReportingRepository:
 
         if account_ids:
             statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
+        elif self._excluded_account_ids:
+            statement = statement.where(~leg_table.c.account_id.in_(list(self._excluded_account_ids)))
         if category_ids:
             statement = statement.where(transaction_table.c.category_id.in_(list(category_ids)))
         if subscription_ids:

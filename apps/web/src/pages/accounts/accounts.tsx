@@ -358,7 +358,7 @@ export const Accounts: React.FC = () => {
                       className="flex items-center gap-1 text-left text-xs font-medium tracking-wide text-slate-500 uppercase"
                       onClick={() => toggleSort("order")}
                     >
-                      Order
+                      Name / Order
                     </button>
                   </TableHead>
                   <TableHead>
@@ -394,11 +394,15 @@ export const Accounts: React.FC = () => {
                   return (
                     <TableRow key={account.id} className="align-top">
                       <TableCell className="font-medium text-slate-900">
-                        {account.display_order !== null &&
-                        account.display_order !== undefined
-                          ? `${account.display_order}. `
-                          : ""}
-                        {formatAccountType(account.account_type)} account
+                        <div className="flex flex-col">
+                          <span>{account.name}</span>
+                          <span className="text-xs font-normal text-slate-500">
+                            {account.display_order !== null &&
+                            account.display_order !== undefined
+                              ? `Order ${account.display_order}`
+                              : "Unordered"}
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell className="text-slate-600">
                         {formatAccountType(account.account_type)}

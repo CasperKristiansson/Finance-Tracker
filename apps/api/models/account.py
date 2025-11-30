@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
-from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Numeric, UniqueConstraint
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import Enum as SAEnum
@@ -31,7 +31,7 @@ class Account(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, tab
 
     __tablename__ = "accounts"
 
-    display_order: int | None = Field(default=None)
+    name: str = Field(default="", sa_column=Column(String(120), nullable=False, server_default=""))
     account_type: AccountType = Field(sa_column=Column(SAEnum(AccountType), nullable=False))
     is_active: bool = Field(
         default=True,

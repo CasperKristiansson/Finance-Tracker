@@ -82,7 +82,7 @@ class AccountService:
         self,
         account_id: UUID,
         *,
-        display_order: Optional[int] = None,
+        name: Optional[str] = None,
         is_active: Optional[bool] = None,
     ) -> Account:
         account = self.repository.get(account_id, with_relationships=True)
@@ -90,7 +90,7 @@ class AccountService:
             raise LookupError("Account not found")
         updated = self.repository.update_fields(
             account,
-            display_order=display_order,
+            name=name,
             is_active=is_active,
         )
         return updated
@@ -182,7 +182,11 @@ class AccountService:
             )
         ).one_or_none()
         if account is None:
-            account = Account(account_type=AccountType.NORMAL, is_active=False, display_order=9999)
+            account = Account(
+                name="Offset",
+                account_type=AccountType.NORMAL,
+                is_active=False,
+            )
             self.repository.save(account)
         setattr(self, "_offset_account", account)
         return account

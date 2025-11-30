@@ -51,7 +51,7 @@ def _json_body(response: dict) -> dict:
 
 
 def _create_account(session: Session, account_type: AccountType = AccountType.NORMAL) -> Account:
-    account = Account(account_type=account_type)
+    account = Account(name="Test Account", account_type=account_type)
     session.add(account)
     session.commit()
     session.refresh(account)

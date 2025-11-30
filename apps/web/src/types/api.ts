@@ -128,6 +128,7 @@ export interface LoanRead {
 
 export interface AccountRead {
   id: string;
+  name: string;
   display_order?: number | null;
   account_type: AccountType;
   is_active: boolean;
@@ -144,6 +145,7 @@ export interface AccountWithBalance extends AccountRead {
 }
 
 export interface AccountCreateRequest {
+  name: string;
   display_order?: number | null;
   account_type: AccountType;
   is_active?: boolean;
@@ -158,6 +160,7 @@ export interface AccountCreateRequest {
 }
 
 export interface AccountUpdateRequest {
+  name?: string;
   display_order?: number | null;
   is_active?: boolean;
 }

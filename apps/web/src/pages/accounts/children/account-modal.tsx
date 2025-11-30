@@ -20,6 +20,7 @@ type Props = {
 };
 
 type FormState = {
+  name: string;
   display_order: string;
   account_type: AccountType;
   is_active: boolean;
@@ -34,6 +35,7 @@ type FormState = {
 };
 
 const defaultFormState: FormState = {
+  name: "",
   display_order: "",
   account_type: AccountType.NORMAL,
   is_active: true,
@@ -66,6 +68,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
   useEffect(() => {
     if (account) {
       setForm({
+        name: account.name,
         display_order:
           account.display_order !== null && account.display_order !== undefined
             ? String(account.display_order)
@@ -112,6 +115,9 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
 
   const validate = () => {
     const nextErrors: Record<string, string> = {};
+    if (!form.name.trim()) {
+      nextErrors.name = "Name is required";
+    }
     if (isDebt(form.account_type)) {
       const requiredLoanFields: Array<keyof FormState["loan"]> = [
         "origin_principal",
@@ -132,6 +138,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
     if (!validate()) return;
 
     const payload: AccountCreateRequest = {
+      name: form.name.trim(),
       display_order: form.display_order ? Number(form.display_order) : null,
       account_type: form.account_type,
       is_active: form.is_active,
@@ -154,6 +161,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
     try {
       if (account) {
         updateAccount(account.id, {
+          name: payload.name,
           display_order: payload.display_order ?? undefined,
           is_active: payload.is_active,
         });
@@ -207,6 +215,21 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-sm text-slate-700" htmlFor="name">
+              Account name
+            </label>
+            <Input
+              id="name"
+              value={form.name}
+              onChange={(e) => handleChange("name", e.target.value)}
+              placeholder="e.g., Swedbank"
+              autoFocus
+            />
+            {errors.name ? (
+              <p className="text-xs text-red-600">{errors.name}</p>
+            ) : null}
+          </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
               <label className="text-sm text-slate-700" htmlFor="display_order">

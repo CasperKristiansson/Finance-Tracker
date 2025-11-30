@@ -43,7 +43,7 @@ class LoanRead(BaseModel):
 class AccountCreate(BaseModel):
     """Request payload for creating accounts."""
 
-    display_order: Optional[int] = None
+    name: str
     account_type: AccountType
     is_active: bool = True
     loan: Optional[LoanCreate] = None
@@ -55,18 +55,28 @@ class AccountCreate(BaseModel):
         if self.account_type != AccountType.DEBT and self.loan is not None:
             raise ValueError("Loan details are only allowed for debt accounts")
         return self
+    @model_validator(mode="after")
+    def validate_name(self) -> "AccountCreate":
+        if not self.name or not self.name.strip():
+            raise ValueError("Account name is required")
+        self.name = self.name.strip()
+        return self
 
 
 class AccountUpdate(BaseModel):
     """Request payload for updating account metadata."""
 
-    display_order: Optional[int] = None
+    name: Optional[str] = None
     is_active: Optional[bool] = None
 
     @model_validator(mode="after")
     def ensure_fields_present(self) -> "AccountUpdate":
-        if not any(value is not None for value in (self.display_order, self.is_active)):
+        if not any(value is not None for value in (self.name, self.is_active)):
             raise ValueError("At least one field must be provided for update")
+        if self.name is not None:
+            if not self.name.strip():
+                raise ValueError("Account name cannot be empty")
+            self.name = self.name.strip()
         return self
 
 
@@ -76,7 +86,7 @@ class AccountRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    display_order: Optional[int] = None
+    name: str
     account_type: AccountType
     is_active: bool
     created_at: datetime

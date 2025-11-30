@@ -233,10 +233,17 @@ class InvestmentSnapshotService:
             )
         ).one_or_none()
         if account is None:
-            account = Account(account_type=AccountType.NORMAL, is_active=False, display_order=9999)
+            account = Account(
+                name="Offset",
+                account_type=AccountType.NORMAL,
+                is_active=False,
+                display_order=9999,
+            )
             self.session.add(account)
             self.session.commit()
             self.session.refresh(account)
+        else:
+            account.name = account.name or "Offset"
         self._account_cache[key] = account
         return account
 
@@ -249,11 +256,14 @@ class InvestmentSnapshotService:
         ).first()
         if account is None:
             account = Account(
+                name="Investments",
                 account_type=AccountType.INVESTMENT, is_active=False, display_order=9997
             )
             self.session.add(account)
             self.session.commit()
             self.session.refresh(account)
+        else:
+            account.name = account.name or "Investments"
         self._account_cache[key] = account
         return account
 

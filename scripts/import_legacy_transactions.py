@@ -2,7 +2,7 @@
 One-off importer for legacy transactions/loans.
 
 Usage:
-  AWS_PROFILE=Personal python temp.py --user Google_105712732762355947213
+  AWS_PROFILE=Personal python scripts/import_legacy_transactions.py --user Google_105712732762355947213
 
 Optional flags:
   --stage default                # SSM stage prefix (/finance-tracker/{stage}/db/*)
@@ -15,15 +15,20 @@ import argparse
 import hashlib
 import os
 from decimal import Decimal
+import sys
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Iterable, Optional, Tuple
 
 import boto3
 import pandas as pd
-from sqlalchemy.exc import IntegrityError
-from sqlmodel import select
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.append(str(REPO_ROOT))
 
-from apps.api.models import Account, Category, Loan, Transaction, TransactionLeg
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import delete, select
+
+from apps.api.models import Account, Category, Loan, LoanEvent, Transaction, TransactionLeg
 from apps.api.services.transaction import TransactionService
 from apps.api.shared import (
     AccountType,
@@ -32,14 +37,13 @@ from apps.api.shared import (
     InterestCompound,
     TransactionStatus,
     TransactionType,
+    ensure_balanced_legs,
     configure_engine,
     scope_session_to_user,
 )
 from apps.api.shared.session import get_session
-
-BASE_DIR = Path(__file__).resolve().parent
-TX_PATH = BASE_DIR / "docs" / "data" / "transactions" / "Transactions Export.xlsx"
-LOAN_PATH = BASE_DIR / "docs" / "data" / "transactions" / "Loans Export.xlsx"
+TX_PATH = REPO_ROOT / "docs" / "data" / "transactions" / "Transactions Export.xlsx"
+LOAN_PATH = REPO_ROOT / "docs" / "data" / "transactions" / "Loans Export.xlsx"
 
 
 def fetch_db_url_from_ssm(stage: str) -> str:
@@ -76,7 +80,7 @@ def make_external_id(
     return "legacy-" + hashlib.sha1(raw.encode()).hexdigest()
 
 
-def ensure_accounts(session, user_id: str) -> Dict[str, str]:
+def ensure_accounts(session, user_id: str) -> Tuple[Dict[str, str], Dict[str, str]]:
     rename_map = {
         "Card": "Swedbank",
         "Nordnet": "Nordnet Private",
@@ -110,9 +114,10 @@ def ensure_accounts(session, user_id: str) -> Dict[str, str]:
             existing.account_type = atype
             existing.is_active = active
             existing.display_order = order
+            existing.name = name
             account_ids[name] = existing.id
             continue
-        acc = Account(account_type=atype, is_active=active, display_order=order)
+        acc = Account(name=name, account_type=atype, is_active=active, display_order=order)
         session.add(acc)
         session.flush()
         account_ids[name] = acc.id
@@ -123,15 +128,19 @@ def ensure_accounts(session, user_id: str) -> Dict[str, str]:
         select(Account).where(Account.user_id == user_id, Account.display_order == 9999)
     ).one_or_none()
     if not offset:
-        offset = Account(account_type=AccountType.NORMAL, is_active=False, display_order=9999)
+        offset = Account(
+            name="Offset", account_type=AccountType.NORMAL, is_active=False, display_order=9999
+        )
         session.add(offset)
         session.flush()
+    else:
+        offset.name = offset.name or "Offset"
     account_ids["_offset"] = offset.id
 
-    return rename_map | account_ids  # type: ignore
+    return rename_map, account_ids
 
 
-def ensure_categories(session, user_id: str, tx_df: pd.DataFrame) -> Dict[str, str]:
+def ensure_categories(session, user_id: str, tx_df: pd.DataFrame) -> Tuple[Dict[str, str], Dict[str, CategoryType]]:
     def resolve(typeset):
         if "Income" in typeset and "Expense" in typeset:
             return CategoryType.ADJUSTMENT
@@ -151,6 +160,7 @@ def ensure_categories(session, user_id: str, tx_df: pd.DataFrame) -> Dict[str, s
         cat_map.setdefault(cat, set()).add(ttype)
 
     category_ids: Dict[str, str] = {}
+    category_types: Dict[str, CategoryType] = {}
     for cat, typeset in cat_map.items():
         ctype = resolve(typeset)
         existing = session.exec(
@@ -159,17 +169,20 @@ def ensure_categories(session, user_id: str, tx_df: pd.DataFrame) -> Dict[str, s
         if existing:
             existing.category_type = ctype
             category_ids[cat] = existing.id
+            category_types[cat] = ctype
             continue
         c = Category(name=cat, category_type=ctype)
         session.add(c)
         session.flush()
         category_ids[cat] = c.id
+        category_types[cat] = ctype
 
     if "Adjustment" not in category_ids:
         c = Category(name="Adjustment", category_type=CategoryType.ADJUSTMENT)
         session.add(c)
         session.flush()
         category_ids["Adjustment"] = c.id
+        category_types["Adjustment"] = CategoryType.ADJUSTMENT
 
     loan_cat = session.exec(
         select(Category).where(Category.user_id == user_id, Category.name == "CSN Loan")
@@ -179,12 +192,33 @@ def ensure_categories(session, user_id: str, tx_df: pd.DataFrame) -> Dict[str, s
         session.add(loan_cat)
         session.flush()
     category_ids["CSN Loan"] = loan_cat.id
+    category_types["CSN Loan"] = CategoryType.LOAN
 
     session.commit()
-    return category_ids
+    return category_ids, category_types
 
 
-def import_loans(session, user_id: str, account_ids: Dict[str, str], loan_cat_id: str, cash_account: str) -> None:
+def purge_all_transactional_data(session) -> int:
+    """Delete all transactional data across users (transactions, legs, loan events, loans)."""
+
+    statements = [
+        delete(LoanEvent).execution_options(include_all_users=True),
+        delete(TransactionLeg).execution_options(include_all_users=True),
+        delete(Transaction).execution_options(include_all_users=True),
+        delete(Loan).execution_options(include_all_users=True),
+    ]
+    total_deleted = 0
+    for stmt in statements:
+        result = session.exec(stmt)
+        total_deleted += result.rowcount or 0
+    session.commit()
+    return total_deleted
+
+
+def import_loans(
+    session, user_id: str, account_ids: Dict[str, str], loan_cat_id: str, cash_account: str
+) -> None:
+    ts = TransactionService(session)
     loan_df = pd.read_excel(LOAN_PATH)
     total = len(loan_df)
     if not total:
@@ -195,9 +229,13 @@ def import_loans(session, user_id: str, account_ids: Dict[str, str], loan_cat_id
         select(Account).where(Account.user_id == user_id, Account.display_order == 800)
     ).one_or_none()
     if not loan_account:
-        loan_account = Account(account_type=AccountType.DEBT, is_active=True, display_order=800)
+        loan_account = Account(
+            name="CSN Loan", account_type=AccountType.DEBT, is_active=True, display_order=800
+        )
         session.add(loan_account)
         session.flush()
+    else:
+        loan_account.name = loan_account.name or "CSN Loan"
 
     loan = session.exec(select(Loan).where(Loan.account_id == loan_account.id)).one_or_none()
     if not loan:
@@ -213,7 +251,6 @@ def import_loans(session, user_id: str, account_ids: Dict[str, str], loan_cat_id
         session.flush()
     session.commit()
 
-    ts = TransactionService(session)
     inserted = 0
     for idx, row in loan_df.iterrows():
         amount = Decimal(str(row["amount"]))
@@ -245,41 +282,111 @@ def import_loans(session, user_id: str, account_ids: Dict[str, str], loan_cat_id
     print(f"Loans inserted: {inserted}/{total}")
 
 
-def import_transactions(session, user_id: str, rename_map: Dict[str, str], ids: Dict[str, str], cat_ids: Dict[str, str]) -> None:
-    df = pd.read_excel(TX_PATH)
+def import_transactions(
+    session,
+    rename_map: Dict[str, str],
+    account_ids: Dict[str, str],
+    cat_ids: Dict[str, str],
+    cat_types: Dict[str, CategoryType],
+    tx_df: Optional[pd.DataFrame] = None,
+    *,
+    batch_size: int = 1000,
+) -> None:
+    df = tx_df.copy() if tx_df is not None else pd.read_excel(TX_PATH)
     total = len(df)
-    ts = TransactionService(session)
-    inserted = skipped = zero_skipped = 0
-    offset_id = ids["_offset"]
+    inserted = skipped = zero_skipped = dup_skipped = 0
+    offset_id = account_ids["_offset"]
+    quantize = Decimal("0.01")
+    user_id = session.info.get("user_id")
+    seen_external: set[str] = set()
 
-    for idx, row in df.iterrows():
-        amount = Decimal(str(row["Amount"]))
+    def normalize(value: object) -> Optional[str]:
+        if value is None or pd.isna(value):
+            return None
+        s = str(value).strip()
+        return s if s and s.lower() != "nan" else None
+
+    transactions: list[Transaction] = []
+    legs_pending: list[tuple[int, list[TransactionLeg]]] = []
+
+    def infer_transaction_type(
+        legs: Iterable[TransactionLeg], category_type: Optional[CategoryType], fallback: TransactionType
+    ) -> TransactionType:
+        if fallback == TransactionType.ADJUSTMENT:
+            return TransactionType.ADJUSTMENT
+        if category_type is not None:
+            mapping = {
+                CategoryType.INCOME: TransactionType.INCOME,
+                CategoryType.EXPENSE: TransactionType.EXPENSE,
+                CategoryType.ADJUSTMENT: TransactionType.ADJUSTMENT,
+                CategoryType.INTEREST: TransactionType.EXPENSE,
+                CategoryType.LOAN: TransactionType.TRANSFER,
+            }
+            mapped = mapping.get(category_type)
+            if mapped is not None:
+                return mapped
+
+        amounts = [Decimal(leg.amount) for leg in legs]
+        has_positive = any(val > 0 for val in amounts)
+        has_negative = any(val < 0 for val in amounts)
+        if has_positive and has_negative:
+            return TransactionType.TRANSFER
+        return fallback
+
+    def validate_legs(tx_type: TransactionType, legs: Iterable[TransactionLeg]) -> None:
+        legs_list = list(legs)
+        ensure_balanced_legs([leg.amount for leg in legs_list])
+        has_positive = any(Decimal(leg.amount) > 0 for leg in legs_list)
+        has_negative = any(Decimal(leg.amount) < 0 for leg in legs_list)
+        if not (has_positive and has_negative):
+            raise ValueError("Transactions must include positive and negative legs")
+        if tx_type == TransactionType.TRANSFER:
+            unique_accounts = {leg.account_id for leg in legs_list}
+            if len(unique_accounts) < 2:
+                raise ValueError("Transfers require at least two distinct accounts")
+
+    for idx, row in enumerate(df.itertuples(index=False), start=1):
+        amount = Decimal(str(row.Amount))
         if amount == 0:
             zero_skipped += 1
-            progress("Transactions", idx + 1, total)
+            progress("Transactions", idx, total)
             continue
 
-        occurred_at = pd.to_datetime(row["Date"]).to_pydatetime()
-        acct_raw = str(row["Account"]).strip()
+        occurred_at = pd.to_datetime(row.Date).to_pydatetime()
+        acct_raw = normalize(row.Account)
+        if not acct_raw:
+            skipped += 1
+            progress("Transactions", idx, total)
+            continue
+
         account_name = rename_map.get(acct_raw, acct_raw)
-        account_id = ids.get(account_name)
+        account_id = account_ids.get(account_name)
         if not account_id:
             skipped += 1
-            progress("Transactions", idx + 1, total)
+            progress("Transactions", idx, total)
             continue
 
-        category = row.get("Category")
-        category_name = None if pd.isna(category) else str(category).strip()
+        category_name = normalize(getattr(row, "Category", None))
         category_id = cat_ids.get(category_name) if category_name else None
-        note = row.get("Note")
-        note_str = "" if pd.isna(note) else str(note)
-        ttype = row["Type"]
+        note_str = normalize(getattr(row, "Note", None)) or ""
+        ttype = str(row.Type)
+        external_id = make_external_id(
+            occurred_at, account_name, amount, category_name, note_str, ttype
+        )
+        if external_id in seen_external:
+            dup_skipped += 1
+            progress("Transactions", idx, total)
+            continue
+        seen_external.add(external_id)
 
         if ttype == "Transfer-Out":
-            dest_raw = category_name
-            dest_name = rename_map.get(dest_raw, dest_raw) if dest_raw else None
-            dest_id = ids.get(dest_name) or offset_id
-            amt = abs(amount)
+            dest_name = rename_map.get(category_name, category_name) if category_name else None
+            dest_id = account_ids.get(dest_name or "")
+            if dest_id is None:
+                raise ValueError(
+                    f"Transfer-Out missing destination account mapping for category '{category_name}'"
+                )
+            amt = abs(amount).quantize(quantize)
             legs = [
                 TransactionLeg(account_id=account_id, amount=-amt),
                 TransactionLeg(account_id=dest_id, amount=amt),
@@ -289,41 +396,71 @@ def import_transactions(session, user_id: str, rename_map: Dict[str, str], ids: 
             if amount < 0:
                 tx_type = TransactionType.ADJUSTMENT
                 category_id = category_id or cat_ids.get("Adjustment")
+                amt = abs(amount).quantize(quantize)
+                legs = [
+                    TransactionLeg(account_id=account_id, amount=-amt),
+                    TransactionLeg(account_id=offset_id, amount=amt),
+                ]
             else:
                 tx_type = TransactionType.INCOME
-            amt = abs(amount)
-            legs = [
-                TransactionLeg(account_id=account_id, amount=amt),
-                TransactionLeg(account_id=offset_id, amount=-amt),
-            ]
+                amt = abs(amount).quantize(quantize)
+                legs = [
+                    TransactionLeg(account_id=account_id, amount=amt),
+                    TransactionLeg(account_id=offset_id, amount=-amt),
+                ]
         else:  # Expense
             tx_type = TransactionType.EXPENSE
-            amt = abs(amount)
+            amt = abs(amount).quantize(quantize)
             legs = [
                 TransactionLeg(account_id=account_id, amount=-amt),
                 TransactionLeg(account_id=offset_id, amount=amt),
             ]
 
+        category_type = cat_types.get(category_name) if category_name else None
+        inferred_type = infer_transaction_type(legs, category_type, tx_type)
+        validate_legs(inferred_type, legs)
+
         tx = Transaction(
             category_id=category_id,
-            transaction_type=tx_type,
+            transaction_type=inferred_type,
             description=note_str or category_name,
             occurred_at=occurred_at,
             posted_at=occurred_at,
             status=TransactionStatus.IMPORTED,
             created_source=CreatedSource.IMPORT,
-            external_id=make_external_id(occurred_at, account_name, amount, category_name, note_str, ttype),
+            external_id=external_id,
         )
-        try:
-            ts.create_transaction(tx, legs)
-            inserted += 1
-        except IntegrityError:
-            session.rollback()
-            skipped += 1
-        progress("Transactions", idx + 1, total)
+        if user_id:
+            tx.user_id = user_id
+            for leg in legs:
+                leg.user_id = user_id
+        transactions.append(tx)
+        legs_pending.append((len(transactions) - 1, legs))
 
-    session.commit()
-    print(f"Transactions inserted: {inserted}/{total} (zero skipped: {zero_skipped}, dupes skipped: {skipped})")
+        progress("Transactions", idx, total)
+
+    # Bulk insert transactions to get IDs, then bulk insert legs
+    for start in range(0, len(transactions), batch_size):
+        chunk = transactions[start : start + batch_size]
+        session.bulk_save_objects(chunk, return_defaults=True)
+        session.commit()
+    inserted = len(transactions)
+
+    legs_to_insert: list[TransactionLeg] = []
+    for tx_index, legs in legs_pending:
+        tx_id = transactions[tx_index].id
+        for leg in legs:
+            leg.transaction_id = tx_id
+            legs_to_insert.append(leg)
+
+    for start in range(0, len(legs_to_insert), batch_size * 2):
+        chunk = legs_to_insert[start : start + batch_size * 2]
+        session.bulk_save_objects(chunk, return_defaults=False)
+        session.commit()
+
+    print(
+        f"Transactions inserted: {inserted}/{total} (zero skipped: {zero_skipped}, dupes skipped: {dup_skipped}, other skipped: {skipped})"
+    )
 
 
 def main() -> None:
@@ -341,14 +478,18 @@ def main() -> None:
     configure_engine(db_url, pool_pre_ping=True)
 
     session = get_session()
+    session.expire_on_commit = False
     scope_session_to_user(session, args.user)
 
     tx_df = pd.read_excel(TX_PATH)
-    rename_and_ids = ensure_accounts(session, args.user)
-    cat_ids = ensure_categories(session, args.user, tx_df)
+    rename_map, account_ids = ensure_accounts(session, args.user)
+    cat_ids, cat_types = ensure_categories(session, args.user, tx_df)
 
-    import_loans(session, args.user, rename_and_ids, cat_ids["CSN Loan"], args.loan_cash_account)
-    import_transactions(session, args.user, rename_and_ids, rename_and_ids, cat_ids)
+    purged = purge_all_transactional_data(session)
+    print(f"Purged existing transactional rows across all users: {purged}")
+
+    import_loans(session, args.user, account_ids, cat_ids["CSN Loan"], args.loan_cash_account)
+    import_transactions(session, rename_map, account_ids, cat_ids, cat_types, tx_df=tx_df)
 
 
 if __name__ == "__main__":

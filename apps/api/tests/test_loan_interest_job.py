@@ -40,9 +40,9 @@ def configure_sqlite(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 
 def _create_accounts_and_category(session: Session) -> tuple[UUID, UUID, UUID, UUID]:
-    debt_account = Account(account_type=AccountType.DEBT)
-    expense_account = Account(account_type=AccountType.NORMAL)
-    offset_account = Account(account_type=AccountType.NORMAL)
+    debt_account = Account(name="Debt", account_type=AccountType.DEBT)
+    expense_account = Account(name="Expense", account_type=AccountType.NORMAL)
+    offset_account = Account(name="Offset", account_type=AccountType.NORMAL)
     session.add_all([debt_account, expense_account, offset_account])
     session.flush()
 

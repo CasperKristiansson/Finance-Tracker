@@ -1270,10 +1270,17 @@ class ImportService:
         )
         account = self.session.exec(statement).one_or_none()
         if account is None:
-            account = Account(account_type=AccountType.NORMAL, is_active=False, display_order=9999)
+            account = Account(
+                name="Offset",
+                account_type=AccountType.NORMAL,
+                is_active=False,
+                display_order=9999,
+            )
             self.session.add(account)
             self.session.commit()
             self.session.refresh(account)
+        else:
+            account.name = account.name or "Offset"
         setattr(self, "_offset_account", account)
         return account
 
@@ -1286,10 +1293,17 @@ class ImportService:
         )
         account = self.session.exec(statement).one_or_none()
         if account is None:
-            account = Account(account_type=AccountType.NORMAL, is_active=False, display_order=9998)
+            account = Account(
+                name="Unassigned",
+                account_type=AccountType.NORMAL,
+                is_active=False,
+                display_order=9998,
+            )
             self.session.add(account)
             self.session.commit()
             self.session.refresh(account)
+        else:
+            account.name = account.name or "Unassigned"
         setattr(self, "_unassigned_account", account)
         return account
 

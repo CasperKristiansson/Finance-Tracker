@@ -34,7 +34,7 @@ class AccountRepository:
         statement = select(Account).options(selectinload(Account.loan))
         if not include_inactive:
             statement = statement.where(Account.is_active.is_(True))
-        statement = statement.order_by(Account.display_order, Account.created_at)
+        statement = statement.order_by(Account.name, Account.created_at)
         return list(self.session.exec(statement).scalars())
 
     def save(self, account: Account) -> Account:
@@ -92,11 +92,11 @@ class AccountRepository:
         self,
         account: Account,
         *,
-        display_order: Optional[int] = None,
+        name: Optional[str] = None,
         is_active: Optional[bool] = None,
     ) -> Account:
-        if display_order is not None:
-            account.display_order = display_order
+        if name is not None:
+            account.name = name
         if is_active is not None:
             account.is_active = is_active
 
