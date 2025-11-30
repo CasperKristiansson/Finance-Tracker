@@ -34,7 +34,7 @@ function* handleFetchSchedule(action: ReturnType<typeof FetchLoanSchedule>) {
 
     const response: LoanScheduleRead = yield call(
       callApiWithAuth,
-      { path: `/accounts/${accountId}/loan/schedule`, query },
+      { path: `/loans/${accountId}/schedule`, query },
       { loadingKey },
     );
 
@@ -63,7 +63,7 @@ function* handleFetchEvents(action: ReturnType<typeof FetchLoanEvents>) {
 
     const response: { events: LoanEventRead[] } = yield call(
       callApiWithAuth,
-      { path: `/accounts/${accountId}/loan/events`, query },
+      { path: `/loans/${accountId}/events`, query },
       { loadingKey },
     );
 

@@ -1,12 +1,6 @@
-import {
-  AlertCircle,
-  Archive,
-  Loader2,
-  Plus,
-  RefreshCw,
-  Undo,
-} from "lucide-react";
+import { Archive, Loader2, Plus, RefreshCw, Undo } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
 import { Badge } from "@/components/ui/badge";
@@ -23,21 +17,19 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi } from "@/hooks/use-api";
-import { apiFetch } from "@/lib/apiClient";
 import { AccountType } from "@/types/api";
+import { PageRoutes } from "@/data/routes";
 import { AccountModal } from "./children/account-modal";
-import { LoanOverview } from "./children/loan-overview";
 
 type SortKey = "name" | "type" | "status" | "balance";
 
 const formatCurrency = (value: number) =>
-  value.toLocaleString("en-US", {
+  new Intl.NumberFormat("sv-SE", {
     style: "currency",
-    currency: "USD",
+    currency: "SEK",
     maximumFractionDigits: 0,
-  });
+  }).format(value);
 
 const formatAccountType = (type: AccountType) => {
   switch (type) {
@@ -60,23 +52,12 @@ export const Accounts: React.FC = () => {
     archiveAccount,
     updateAccount,
   } = useAccountsApi();
-  const token = useAppSelector(selectToken);
-
   const [asOfInput, setAsOfInput] = useState<string>(asOfDate ?? "");
   const [showInactive, setShowInactive] = useState(includeInactive);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
-  const [reconcileAccountId, setReconcileAccountId] = useState<string>("");
-  const [reconcileAmount, setReconcileAmount] = useState<string>("");
-  const [reconcileDate, setReconcileDate] = useState<string>(
-    new Date().toISOString().slice(0, 10),
-  );
-  const needsReconcile = useMemo(
-    () => items.some((acc) => acc.needs_reconciliation),
-    [items],
-  );
 
   useEffect(() => {
     fetchAccounts({});
@@ -117,34 +98,6 @@ export const Accounts: React.FC = () => {
       includeInactive: showInactive,
       asOfDate: asOfInput || null,
     });
-  };
-
-  const submitReconciliation = async () => {
-    if (!reconcileAccountId || !reconcileAmount || !reconcileDate) {
-      toast.error("Pick account, amount, and date");
-      return;
-    }
-    try {
-      await apiFetch({
-        path: `/accounts/${reconcileAccountId}/reconcile`,
-        method: "POST",
-        body: {
-          captured_at: new Date(reconcileDate).toISOString(),
-          reported_balance: reconcileAmount,
-        },
-        token,
-      });
-      toast.success("Reconciled");
-      fetchAccounts({
-        includeInactive: showInactive,
-        asOfDate: asOfInput || null,
-      });
-      setReconcileAmount("");
-    } catch (error) {
-      toast.error("Reconciliation failed", {
-        description: error instanceof Error ? error.message : "Try again.",
-      });
-    }
   };
 
   const sortedItems = useMemo(() => {
@@ -212,57 +165,9 @@ export const Accounts: React.FC = () => {
         </div>
       </div>
 
-      {needsReconcile ? (
-        <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-[0_10px_30px_-24px_rgba(146,64,14,0.45)]">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5" />
-            <div className="font-semibold">Needs reconciliation</div>
-          </div>
-          <p className="text-amber-800">
-            One or more accounts haven’t been reconciled recently or drifted
-            from the last snapshot. Enter the latest end-of-month balance and
-            I’ll post an adjustment.
-          </p>
-          <div className="grid gap-2 md:grid-cols-5 md:items-center">
-            <select
-              className="col-span-2 rounded-md border border-amber-200 bg-white px-3 py-2 text-sm"
-              value={reconcileAccountId}
-              onChange={(e) => setReconcileAccountId(e.target.value)}
-            >
-              <option value="">Select account</option>
-              {items.map((acc, idx) => (
-                <option key={acc.id} value={acc.id}>
-                  {`Account ${idx + 1}`} • {formatAccountType(acc.account_type)}
-                </option>
-              ))}
-            </select>
-            <Input
-              type="number"
-              placeholder="Reported balance"
-              value={reconcileAmount}
-              onChange={(e) => setReconcileAmount(e.target.value)}
-            />
-            <Input
-              type="date"
-              value={reconcileDate}
-              onChange={(e) => setReconcileDate(e.target.value)}
-            />
-            <Button
-              variant="default"
-              className="gap-2"
-              disabled={!reconcileAccountId || !reconcileAmount}
-              onClick={submitReconciliation}
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              Reconcile
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      
+      {/* Reconciliation banner removed */}
+
 
       <div className="grid gap-3 md:grid-cols-3">
         <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.4)]">
@@ -348,113 +253,135 @@ export const Accounts: React.FC = () => {
               </Button>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>
-                    <button
-                      className="flex items-center gap-1 text-left text-xs font-medium tracking-wide text-slate-500 uppercase"
-                      onClick={() => toggleSort("name")}
-                    >
-                      Name
-                    </button>
-                  </TableHead>
-                  <TableHead>
-                    <button
-                      className="flex items-center gap-1 text-left text-xs font-medium tracking-wide text-slate-500 uppercase"
-                      onClick={() => toggleSort("type")}
-                    >
-                      Type
-                    </button>
-                  </TableHead>
-                  <TableHead>
-                    <button
-                      className="flex items-center gap-1 text-left text-xs font-medium tracking-wide text-slate-500 uppercase"
-                      onClick={() => toggleSort("status")}
-                    >
-                      Status
-                    </button>
-                  </TableHead>
-                  <TableHead className="text-right">
-                    <button
-                      className="ml-auto flex items-center gap-1 text-xs font-medium tracking-wide text-slate-500 uppercase"
-                      onClick={() => toggleSort("balance")}
-                    >
-                      Balance
-                    </button>
-                  </TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedItems.map((account) => {
-                  const isActive = account.is_active;
-                  return (
-                    <TableRow key={account.id} className="align-top">
-                      <TableCell className="font-medium text-slate-900">
-                        {account.name}
-                      </TableCell>
-                      <TableCell className="text-slate-600">
-                        {formatAccountType(account.account_type)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={isActive ? "default" : "outline"}
-                          className={
-                            isActive
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "border-slate-300 text-slate-600"
-                          }
-                        >
-                          {isActive ? "Active" : "Archived"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-semibold text-slate-900">
-                        {formatCurrency(Number(account.balance))}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="gap-1 text-slate-700"
-                            onClick={() => {
-                              setEditingId(account.id);
-                              setModalOpen(true);
-                            }}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="gap-1 text-slate-700"
-                            onClick={() =>
-                              handleArchiveToggle(account.id, isActive)
+            <div className="rounded-xl border border-slate-100 bg-white">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="px-4">
+                      <button
+                        className="flex items-center gap-1 text-left text-xs font-medium tracking-wide text-slate-500 uppercase"
+                        onClick={() => toggleSort("name")}
+                      >
+                        Name
+                      </button>
+                    </TableHead>
+                    <TableHead className="px-4">
+                      <button
+                        className="flex items-center gap-1 text-left text-xs font-medium tracking-wide text-slate-500 uppercase"
+                        onClick={() => toggleSort("type")}
+                      >
+                        Type
+                      </button>
+                    </TableHead>
+                    <TableHead className="px-4">
+                      <button
+                        className="flex items-center gap-1 text-left text-xs font-medium tracking-wide text-slate-500 uppercase"
+                        onClick={() => toggleSort("status")}
+                      >
+                        Status
+                      </button>
+                    </TableHead>
+                    <TableHead className="px-4 text-right">
+                      <button
+                        className="ml-auto flex items-center gap-1 text-xs font-medium tracking-wide text-slate-500 uppercase"
+                        onClick={() => toggleSort("balance")}
+                      >
+                        Balance
+                      </button>
+                    </TableHead>
+                    <TableHead className="px-4 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedItems.map((account) => {
+                    const isActive = account.is_active;
+                    return (
+                      <TableRow key={account.id} className="align-top">
+                        <TableCell className="px-4 font-medium text-slate-900">
+                          <div className="flex items-center gap-3">
+                            {account.icon ? (
+                              <img
+                                src={`/${account.icon}`}
+                                alt={account.name}
+                                className="h-8 w-8 rounded-full border border-slate-100 bg-white object-contain p-1"
+                              />
+                            ) : (
+                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
+                                {account.name.charAt(0)}
+                              </div>
+                            )}
+                            <span>{account.name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-4 text-slate-600">
+                          {formatAccountType(account.account_type)}
+                        </TableCell>
+                        <TableCell className="px-4">
+                          <Badge
+                            variant={isActive ? "default" : "outline"}
+                            className={
+                              isActive
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "border-slate-300 text-slate-600"
                             }
                           >
-                            {isActive ? (
-                              <>
-                                <Archive className="h-4 w-4" /> Archive
-                              </>
-                            ) : (
-                              <>
-                                <Undo className="h-4 w-4" /> Restore
-                              </>
-                            )}
-                          </Button>
-                        </div>
-                        {account.account_type === AccountType.DEBT ? (
-                          <div className="mt-3">
-                            <LoanOverview account={account} />
+                            {isActive ? "Active" : "Archived"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="px-4 text-right font-semibold text-slate-900">
+                          {formatCurrency(Number(account.balance))}
+                        </TableCell>
+                        <TableCell className="px-4 text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="gap-1 text-slate-700"
+                              onClick={() => {
+                                setEditingId(account.id);
+                                setModalOpen(true);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            {account.account_type === AccountType.DEBT ? (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="gap-1 text-slate-700"
+                                asChild
+                              >
+                                <Link to={`${PageRoutes.loans}/${account.id}`}>
+                                  Loan page
+                                </Link>
+                              </Button>
+                            ) : null}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="gap-1 text-slate-700"
+                              onClick={() =>
+                                handleArchiveToggle(account.id, isActive)
+                              }
+                            >
+                              {isActive ? (
+                                <>
+                                  <Archive className="h-4 w-4" /> Archive
+                                </>
+                              ) : (
+                                <>
+                                  <Undo className="h-4 w-4" /> Restore
+                                </>
+                              )}
+                            </Button>
                           </div>
-                        ) : null}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
