@@ -14,7 +14,7 @@ from sqlmodel import Session, select
 
 from ..models import Account, Transaction, TransactionLeg
 from ..models.investment_snapshot import InvestmentSnapshot
-from ..shared import coerce_decimal, get_default_user_id
+from ..shared import TransactionType, coerce_decimal, get_default_user_id
 
 DecimalTotals = Tuple[Decimal, Decimal]
 
@@ -381,6 +381,9 @@ class ReportingRepository:
 
         statement = statement.where(transaction_table.c.user_id == self.user_id)
         statement = statement.where(leg_table.c.user_id == self.user_id)
+        statement = statement.where(
+            cast(Any, transaction_table.c.transaction_type) != TransactionType.TRANSFER
+        )
 
         if account_ids:
             statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))

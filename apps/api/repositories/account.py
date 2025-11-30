@@ -94,11 +94,14 @@ class AccountRepository:
         *,
         name: Optional[str] = None,
         is_active: Optional[bool] = None,
+        icon: Optional[str] = None,
     ) -> Account:
         if name is not None:
             account.name = name
         if is_active is not None:
             account.is_active = is_active
+        if icon is not None:
+            account.icon = icon
 
         self.session.add(account)
         self.session.commit()

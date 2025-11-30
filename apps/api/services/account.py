@@ -84,6 +84,7 @@ class AccountService:
         *,
         name: Optional[str] = None,
         is_active: Optional[bool] = None,
+        icon: Optional[str] = None,
     ) -> Account:
         account = self.repository.get(account_id, with_relationships=True)
         if account is None:
@@ -92,6 +93,7 @@ class AccountService:
             account,
             name=name,
             is_active=is_active,
+            icon=icon,
         )
         return updated
 

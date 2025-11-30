@@ -112,6 +112,7 @@ def create_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         name=data.name,
         account_type=data.account_type,
         is_active=data.is_active,
+        icon=data.icon,
     )
 
     with session_scope(user_id=user_id) as session:
@@ -148,6 +149,7 @@ def update_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                 account_id,
                 name=data.name,
                 is_active=data.is_active,
+                icon=data.icon,
             )
         except LookupError:
             return json_response(404, {"error": "Account not found"})

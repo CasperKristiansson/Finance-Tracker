@@ -23,6 +23,7 @@ type FormState = {
   name: string;
   account_type: AccountType;
   is_active: boolean;
+  icon: string;
   loan: {
     origin_principal: string;
     current_principal: string;
@@ -37,6 +38,7 @@ const defaultFormState: FormState = {
   name: "",
   account_type: AccountType.NORMAL,
   is_active: true,
+  icon: "",
   loan: {
     origin_principal: "",
     current_principal: "",
@@ -69,6 +71,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
         name: account.name,
         account_type: account.account_type,
         is_active: account.is_active,
+        icon: account.icon ?? "",
         loan: {
           origin_principal: account.loan?.origin_principal ?? "",
           current_principal: account.loan?.current_principal ?? "",
@@ -135,6 +138,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
       name: form.name.trim(),
       account_type: form.account_type,
       is_active: form.is_active,
+      icon: form.icon || null,
       loan: null,
     };
 
@@ -156,6 +160,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
         updateAccount(account.id, {
           name: payload.name,
           is_active: payload.is_active,
+          icon: payload.icon ?? undefined,
         });
         if (isDebt(form.account_type)) {
           if (account.loan) {
@@ -221,6 +226,25 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
             {errors.name ? (
               <p className="text-xs text-red-600">{errors.name}</p>
             ) : null}
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm text-slate-700" htmlFor="icon">
+              Account icon (relative path or pick a bank)
+            </label>
+            <Input
+              id="icon"
+              value={form.icon}
+              onChange={(e) => handleChange("icon", e.target.value)}
+              placeholder="e.g., banks/swedbank.png"
+              list="bank-icons"
+            />
+            <datalist id="bank-icons">
+              <option value="banks/swedbank.png" />
+              <option value="banks/nordnet.jpg" />
+              <option value="banks/seb.png" />
+              <option value="banks/danskebank.png" />
+              <option value="banks/circlek.png" />
+            </datalist>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-1.5">

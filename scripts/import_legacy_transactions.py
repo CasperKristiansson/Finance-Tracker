@@ -93,20 +93,20 @@ def ensure_accounts(session, user_id: str) -> Tuple[Dict[str, str], Dict[str, st
         "Cash": "Cash",
     }
     account_configs = {
-        "Swedbank": (AccountType.NORMAL, True),
-        "Nordnet Private": (AccountType.INVESTMENT, True),
-        "Nordnet Company": (AccountType.INVESTMENT, True),
-        "SEB Company": (AccountType.NORMAL, True),
-        "Danske Bank": (AccountType.NORMAL, True),
-        "Circle K Mastercard": (AccountType.NORMAL, True),
-        "Cash": (AccountType.NORMAL, True),
-        "Swedbank Savings": (AccountType.NORMAL, False),
-        "Paypal": (AccountType.NORMAL, False),
-        "Gift Card": (AccountType.NORMAL, False),
+        "Swedbank": (AccountType.NORMAL, True, "banks/swedbank.png"),
+        "Nordnet Private": (AccountType.INVESTMENT, True, "banks/nordnet.jpg"),
+        "Nordnet Company": (AccountType.INVESTMENT, True, "banks/nordnet.jpg"),
+        "SEB Company": (AccountType.NORMAL, True, "banks/seb.png"),
+        "Danske Bank": (AccountType.NORMAL, True, "banks/danskebank.png"),
+        "Circle K Mastercard": (AccountType.NORMAL, True, "banks/circlek.png"),
+        "Cash": (AccountType.NORMAL, True, None),
+        "Swedbank Savings": (AccountType.NORMAL, False, "banks/swedbank.png"),
+        "Paypal": (AccountType.NORMAL, False, None),
+        "Gift Card": (AccountType.NORMAL, False, None),
     }
 
     account_ids: Dict[str, str] = {}
-    for name, (atype, active) in account_configs.items():
+    for name, (atype, active, icon) in account_configs.items():
         existing = session.exec(
             select(Account).where(Account.user_id == user_id, Account.name == name)
         ).one_or_none()
@@ -114,9 +114,10 @@ def ensure_accounts(session, user_id: str) -> Tuple[Dict[str, str], Dict[str, st
             existing.account_type = atype
             existing.is_active = active
             existing.name = name
+            existing.icon = icon
             account_ids[name] = existing.id
             continue
-        acc = Account(name=name, account_type=atype, is_active=active)
+        acc = Account(name=name, account_type=atype, is_active=active, icon=icon)
         session.add(acc)
         session.flush()
         account_ids[name] = acc.id

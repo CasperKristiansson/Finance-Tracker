@@ -46,6 +46,7 @@ class AccountCreate(BaseModel):
     name: str
     account_type: AccountType
     is_active: bool = True
+    icon: Optional[str] = None
     loan: Optional[LoanCreate] = None
 
     @model_validator(mode="after")
@@ -68,10 +69,11 @@ class AccountUpdate(BaseModel):
 
     name: Optional[str] = None
     is_active: Optional[bool] = None
+    icon: Optional[str] = None
 
     @model_validator(mode="after")
     def ensure_fields_present(self) -> "AccountUpdate":
-        if not any(value is not None for value in (self.name, self.is_active)):
+        if not any(value is not None for value in (self.name, self.is_active, self.icon)):
             raise ValueError("At least one field must be provided for update")
         if self.name is not None:
             if not self.name.strip():
@@ -89,6 +91,7 @@ class AccountRead(BaseModel):
     name: str
     account_type: AccountType
     is_active: bool
+    icon: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     loan: Optional[LoanRead] = None

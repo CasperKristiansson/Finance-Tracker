@@ -131,6 +131,7 @@ export interface AccountRead {
   name: string;
   account_type: AccountType;
   is_active: boolean;
+  icon?: string | null;
   created_at: string;
   updated_at: string;
   loan?: LoanRead | null;
@@ -147,6 +148,7 @@ export interface AccountCreateRequest {
   name: string;
   account_type: AccountType;
   is_active?: boolean;
+  icon?: string | null;
   loan?: {
     origin_principal: string;
     current_principal: string;
@@ -160,6 +162,7 @@ export interface AccountCreateRequest {
 export interface AccountUpdateRequest {
   name?: string;
   is_active?: boolean;
+  icon?: string | null;
 }
 
 export interface CategoryRead {
