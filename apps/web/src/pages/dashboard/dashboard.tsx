@@ -120,11 +120,15 @@ export const Dashboard: React.FC = () => {
   ]);
 
   const kpis: KPI[] = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const ytd = (monthly.data || []).filter(
+      (entry) => new Date(entry.period).getFullYear() === currentYear,
+    );
+    const ytdIncome = ytd.reduce((sum, entry) => sum + Number(entry.income), 0);
+    const ytdExpense = ytd.reduce((sum, entry) => sum + Number(entry.expense), 0);
+    const ytdNet = ytdIncome - ytdExpense;
+    const ytdSavingsRate = ytdIncome > 0 ? Math.round((ytdNet / ytdIncome) * 100) : 0;
     const net = numberFromString(total.data?.net);
-    const income = numberFromString(total.data?.income);
-    const expense = numberFromString(total.data?.expense);
-    const savingsRate =
-      income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
 
     return [
       {
@@ -135,18 +139,19 @@ export const Dashboard: React.FC = () => {
       },
       {
         title: "Cash flow (YTD)",
-        value: currency(income - expense),
-        delta: formatDelta(income - expense),
-        trend: income - expense >= 0 ? "up" : "down",
+        value: currency(ytdNet),
+        delta: formatDelta(ytdNet),
+        trend: ytdNet >= 0 ? "up" : "down",
+        helper: `Year to date (${currentYear})`,
       },
       {
         title: "Savings rate",
-        value: `${savingsRate}%`,
-        helper: "Income retained",
-        trend: savingsRate >= 0 ? "up" : "down",
+        value: `${ytdSavingsRate}%`,
+        helper: `Income retained YTD (${currentYear})`,
+        trend: ytdSavingsRate >= 0 ? "up" : "down",
       },
     ];
-  }, [total.data]);
+  }, [total.data, monthly.data]);
 
   const incomeExpenseChart = useMemo(() => {
     return (monthly.data || []).map((entry) => ({

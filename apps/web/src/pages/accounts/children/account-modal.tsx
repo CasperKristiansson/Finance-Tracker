@@ -21,7 +21,6 @@ type Props = {
 
 type FormState = {
   name: string;
-  display_order: string;
   account_type: AccountType;
   is_active: boolean;
   loan: {
@@ -36,7 +35,6 @@ type FormState = {
 
 const defaultFormState: FormState = {
   name: "",
-  display_order: "",
   account_type: AccountType.NORMAL,
   is_active: true,
   loan: {
@@ -69,10 +67,6 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
     if (account) {
       setForm({
         name: account.name,
-        display_order:
-          account.display_order !== null && account.display_order !== undefined
-            ? String(account.display_order)
-            : "",
         account_type: account.account_type,
         is_active: account.is_active,
         loan: {
@@ -139,7 +133,6 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
 
     const payload: AccountCreateRequest = {
       name: form.name.trim(),
-      display_order: form.display_order ? Number(form.display_order) : null,
       account_type: form.account_type,
       is_active: form.is_active,
       loan: null,
@@ -162,7 +155,6 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
       if (account) {
         updateAccount(account.id, {
           name: payload.name,
-          display_order: payload.display_order ?? undefined,
           is_active: payload.is_active,
         });
         if (isDebt(form.account_type)) {
@@ -231,18 +223,6 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
             ) : null}
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="space-y-1.5">
-              <label className="text-sm text-slate-700" htmlFor="display_order">
-                Display order
-              </label>
-              <Input
-                id="display_order"
-                type="number"
-                value={form.display_order}
-                onChange={(e) => handleChange("display_order", e.target.value)}
-                placeholder="e.g., 1"
-              />
-            </div>
             <div className="space-y-1.5">
               <label className="text-sm text-slate-700" htmlFor="account_type">
                 Account type

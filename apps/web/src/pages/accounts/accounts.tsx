@@ -30,7 +30,7 @@ import { AccountType } from "@/types/api";
 import { AccountModal } from "./children/account-modal";
 import { LoanOverview } from "./children/loan-overview";
 
-type SortKey = "order" | "type" | "status" | "balance";
+type SortKey = "name" | "type" | "status" | "balance";
 
 const formatCurrency = (value: number) =>
   value.toLocaleString("en-US", {
@@ -66,7 +66,7 @@ export const Accounts: React.FC = () => {
   const [showInactive, setShowInactive] = useState(includeInactive);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("order");
+  const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
   const [reconcileAccountId, setReconcileAccountId] = useState<string>("");
   const [reconcileAmount, setReconcileAmount] = useState<string>("");
@@ -154,10 +154,8 @@ export const Accounts: React.FC = () => {
       if (sortKey === "balance") {
         return (Number(a.balance) - Number(b.balance)) * direction;
       }
-      if (sortKey === "order") {
-        const aOrder = a.display_order ?? Number.MAX_SAFE_INTEGER;
-        const bOrder = b.display_order ?? Number.MAX_SAFE_INTEGER;
-        return (aOrder - bOrder) * direction;
+      if (sortKey === "name") {
+        return a.name.localeCompare(b.name) * direction;
       }
       if (sortKey === "status") {
         return (Number(b.is_active) - Number(a.is_active)) * direction;
@@ -356,9 +354,9 @@ export const Accounts: React.FC = () => {
                   <TableHead>
                     <button
                       className="flex items-center gap-1 text-left text-xs font-medium tracking-wide text-slate-500 uppercase"
-                      onClick={() => toggleSort("order")}
+                      onClick={() => toggleSort("name")}
                     >
-                      Name / Order
+                      Name
                     </button>
                   </TableHead>
                   <TableHead>
@@ -394,15 +392,7 @@ export const Accounts: React.FC = () => {
                   return (
                     <TableRow key={account.id} className="align-top">
                       <TableCell className="font-medium text-slate-900">
-                        <div className="flex flex-col">
-                          <span>{account.name}</span>
-                          <span className="text-xs font-normal text-slate-500">
-                            {account.display_order !== null &&
-                            account.display_order !== undefined
-                              ? `Order ${account.display_order}`
-                              : "Unordered"}
-                          </span>
-                        </div>
+                        {account.name}
                       </TableCell>
                       <TableCell className="text-slate-600">
                         {formatAccountType(account.account_type)}

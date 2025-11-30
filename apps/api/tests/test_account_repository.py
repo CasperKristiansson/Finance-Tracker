@@ -45,8 +45,8 @@ def _create_transaction(
 def test_calculate_balance_with_and_without_as_of(session):
     repo = AccountRepository(session)
 
-    account = Account(account_type=AccountType.NORMAL, display_order=1)
-    counter_account = Account(account_type=AccountType.NORMAL, display_order=2)
+    account = Account(name="A", account_type=AccountType.NORMAL)
+    counter_account = Account(name="B", account_type=AccountType.NORMAL)
     session.add_all([account, counter_account])
     session.commit()
     session.refresh(account)
@@ -127,14 +127,14 @@ def test_attach_loan_rules(session):
 def test_account_service_create_and_balance(session):
     service = AccountService(session)
 
-    account = Account(account_type=AccountType.NORMAL)
+    account = Account(name="Acct", account_type=AccountType.NORMAL)
     created = service.create_account(account)
     assert created.id is not None
 
     _, balance = service.get_account_with_balance(created.id)
     assert balance == Decimal("0")
 
-    counter = Account(account_type=AccountType.NORMAL)
+    counter = Account(name="Counter", account_type=AccountType.NORMAL)
     session.add(counter)
     session.commit()
     session.refresh(counter)
@@ -155,11 +155,11 @@ def test_account_service_create_and_balance(session):
         account.id == created.id and balance == Decimal("75.00") for account, balance in listings
     )
 
-    debt_account = Account(account_type=AccountType.DEBT)
+    debt_account = Account(name="Debt", account_type=AccountType.DEBT)
     with pytest.raises(ValueError):
         service.create_account(debt_account)
 
-    debt_account = Account(account_type=AccountType.DEBT)
+    debt_account = Account(name="Debt2", account_type=AccountType.DEBT)
     loan_args = {
         "origin_principal": Decimal("2000.00"),
         "current_principal": Decimal("2000.00"),

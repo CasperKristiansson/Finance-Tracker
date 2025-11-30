@@ -214,7 +214,7 @@ export const CashFlow: React.FC = () => {
                       : "rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700"
                   }
                 >
-                  {account.display_order ?? ""} {account.id.slice(0, 4)}
+                  {account.name}
                 </button>
               ))}
               {accounts.length === 0 ? (

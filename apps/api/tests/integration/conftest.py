@@ -33,7 +33,11 @@ def json_body() -> Callable[[dict], dict]:
 @pytest.fixture
 def make_account_event() -> Callable[[str], dict]:
     def _inner(account_type: str = "normal") -> dict:
-        payload = {"account_type": account_type, "is_active": True}
+        payload = {
+            "name": f"{account_type.title()} Account",
+            "account_type": account_type,
+            "is_active": True,
+        }
         return {"body": payload}
 
     return _inner

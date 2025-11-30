@@ -1266,7 +1266,7 @@ class ImportService:
             return getattr(self, "_offset_account")
 
         statement = select(Account).where(
-            cast(Any, Account.is_active).is_(False), Account.display_order == 9999
+            cast(Any, Account.is_active).is_(False), Account.name == "Offset"
         )
         account = self.session.exec(statement).one_or_none()
         if account is None:
@@ -1274,7 +1274,6 @@ class ImportService:
                 name="Offset",
                 account_type=AccountType.NORMAL,
                 is_active=False,
-                display_order=9999,
             )
             self.session.add(account)
             self.session.commit()
@@ -1289,7 +1288,7 @@ class ImportService:
             return getattr(self, "_unassigned_account")
 
         statement = select(Account).where(
-            cast(Any, Account.is_active).is_(False), Account.display_order == 9998
+            cast(Any, Account.is_active).is_(False), Account.name == "Unassigned"
         )
         account = self.session.exec(statement).one_or_none()
         if account is None:
@@ -1297,7 +1296,6 @@ class ImportService:
                 name="Unassigned",
                 account_type=AccountType.NORMAL,
                 is_active=False,
-                display_order=9998,
             )
             self.session.add(account)
             self.session.commit()

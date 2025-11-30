@@ -178,7 +178,7 @@ class AccountService:
             return getattr(self, "_offset_account")
         account = self.repository.session.exec(
             select(Account).where(
-                cast(Any, Account.is_active).is_(False), Account.display_order == 9999
+                cast(Any, Account.is_active).is_(False), Account.name == "Offset"
             )
         ).one_or_none()
         if account is None:

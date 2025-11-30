@@ -93,31 +93,30 @@ def ensure_accounts(session, user_id: str) -> Tuple[Dict[str, str], Dict[str, st
         "Cash": "Cash",
     }
     account_configs = {
-        "Swedbank": (AccountType.NORMAL, True, 10),
-        "Nordnet Private": (AccountType.INVESTMENT, True, 20),
-        "Nordnet Company": (AccountType.INVESTMENT, True, 30),
-        "SEB Company": (AccountType.NORMAL, True, 40),
-        "Danske Bank": (AccountType.NORMAL, True, 50),
-        "Circle K Mastercard": (AccountType.NORMAL, True, 60),
-        "Cash": (AccountType.NORMAL, True, 70),
-        "Swedbank Savings": (AccountType.NORMAL, False, 900),
-        "Paypal": (AccountType.NORMAL, False, 910),
-        "Gift Card": (AccountType.NORMAL, False, 920),
+        "Swedbank": (AccountType.NORMAL, True),
+        "Nordnet Private": (AccountType.INVESTMENT, True),
+        "Nordnet Company": (AccountType.INVESTMENT, True),
+        "SEB Company": (AccountType.NORMAL, True),
+        "Danske Bank": (AccountType.NORMAL, True),
+        "Circle K Mastercard": (AccountType.NORMAL, True),
+        "Cash": (AccountType.NORMAL, True),
+        "Swedbank Savings": (AccountType.NORMAL, False),
+        "Paypal": (AccountType.NORMAL, False),
+        "Gift Card": (AccountType.NORMAL, False),
     }
 
     account_ids: Dict[str, str] = {}
-    for name, (atype, active, order) in account_configs.items():
+    for name, (atype, active) in account_configs.items():
         existing = session.exec(
-            select(Account).where(Account.user_id == user_id, Account.display_order == order)
+            select(Account).where(Account.user_id == user_id, Account.name == name)
         ).one_or_none()
         if existing:
             existing.account_type = atype
             existing.is_active = active
-            existing.display_order = order
             existing.name = name
             account_ids[name] = existing.id
             continue
-        acc = Account(name=name, account_type=atype, is_active=active, display_order=order)
+        acc = Account(name=name, account_type=atype, is_active=active)
         session.add(acc)
         session.flush()
         account_ids[name] = acc.id
@@ -125,11 +124,13 @@ def ensure_accounts(session, user_id: str) -> Tuple[Dict[str, str], Dict[str, st
     session.commit()
 
     offset = session.exec(
-        select(Account).where(Account.user_id == user_id, Account.display_order == 9999)
+        select(Account).where(Account.user_id == user_id, Account.name == "Offset")
     ).one_or_none()
     if not offset:
         offset = Account(
-            name="Offset", account_type=AccountType.NORMAL, is_active=False, display_order=9999
+            name="Offset",
+            account_type=AccountType.NORMAL,
+            is_active=False,
         )
         session.add(offset)
         session.flush()
@@ -226,12 +227,10 @@ def import_loans(
         return
 
     loan_account = session.exec(
-        select(Account).where(Account.user_id == user_id, Account.display_order == 800)
+        select(Account).where(Account.user_id == user_id, Account.name == "CSN Loan")
     ).one_or_none()
     if not loan_account:
-        loan_account = Account(
-            name="CSN Loan", account_type=AccountType.DEBT, is_active=True, display_order=800
-        )
+        loan_account = Account(name="CSN Loan", account_type=AccountType.DEBT, is_active=True)
         session.add(loan_account)
         session.flush()
     else:

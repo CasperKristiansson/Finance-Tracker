@@ -229,7 +229,7 @@ class InvestmentSnapshotService:
             return self._account_cache[key]
         account = self.session.exec(
             select(Account).where(
-                cast(Any, Account.is_active).is_(False), Account.display_order == 9999
+                cast(Any, Account.is_active).is_(False), Account.name == "Offset"
             )
         ).one_or_none()
         if account is None:
@@ -237,7 +237,6 @@ class InvestmentSnapshotService:
                 name="Offset",
                 account_type=AccountType.NORMAL,
                 is_active=False,
-                display_order=9999,
             )
             self.session.add(account)
             self.session.commit()
@@ -257,7 +256,8 @@ class InvestmentSnapshotService:
         if account is None:
             account = Account(
                 name="Investments",
-                account_type=AccountType.INVESTMENT, is_active=False, display_order=9997
+                account_type=AccountType.INVESTMENT,
+                is_active=False,
             )
             self.session.add(account)
             self.session.commit()

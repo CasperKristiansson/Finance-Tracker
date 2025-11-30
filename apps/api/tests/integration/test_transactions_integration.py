@@ -151,9 +151,9 @@ def test_patch_account_updates_fields(api_call, json_body, make_account_event) -
     assert create_resp["statusCode"] == 201
     account_id = json_body(create_resp)["id"]
 
-    patch_payload = {"is_active": False, "display_order": 42}
+    patch_payload = {"is_active": False, "name": "Updated Name"}
     patch_resp = api_call("PATCH", f"/accounts/{account_id}", patch_payload)
     assert patch_resp["statusCode"] == 200
     updated = json_body(patch_resp)
     assert updated["is_active"] is False
-    assert updated["display_order"] == 42
+    assert updated["name"] == "Updated Name"
