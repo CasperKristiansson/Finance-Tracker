@@ -1,9 +1,9 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Link } from "react-router-dom";
-import type { AccountWithBalance } from "@/types/api";
 import { PageRoutes } from "@/data/routes";
+import type { AccountWithBalance } from "@/types/api";
 
 type Props = {
   account: AccountWithBalance;

@@ -102,7 +102,6 @@ export const Settings: React.FC = () => {
     changeLastName(trimmedLast);
     setProfileError(null);
     saveSettings();
-    setProfileDialogOpen(false);
   };
 
   const headerStatus = useMemo(() => {

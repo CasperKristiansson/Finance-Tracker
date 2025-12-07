@@ -1,4 +1,3 @@
-import clsx from "clsx";
 import {
   BookOpen,
   Settings2,

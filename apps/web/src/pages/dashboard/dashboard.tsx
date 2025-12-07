@@ -33,11 +33,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { selectIsAuthenticated, selectToken } from "@/features/auth/authSlice";
-import { useAccountsApi } from "@/hooks/use-api";
-import { useReportsApi, useTransactionsApi } from "@/hooks/use-api";
-import { apiFetch } from "@/lib/apiClient";
 import { PageRoutes } from "@/data/routes";
+import { selectIsAuthenticated, selectToken } from "@/features/auth/authSlice";
+import {
+  useAccountsApi,
+  useReportsApi,
+  useTransactionsApi,
+} from "@/hooks/use-api";
+import { apiFetch } from "@/lib/apiClient";
 import {
   AccountType,
   type MonthlyReportEntry,
@@ -120,9 +123,6 @@ export const Dashboard: React.FC = () => {
   } = useAccountsApi();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const token = useAppSelector(selectToken);
-  const [windowWidth, setWindowWidth] = useState<number>(
-    typeof window !== "undefined" ? window.innerWidth : 0,
-  );
   const hasFetched = useRef(false);
   const [filteredMonthly, setFilteredMonthly] = useState<MonthlyReportEntry[]>(
     [],
@@ -220,12 +220,6 @@ export const Dashboard: React.FC = () => {
     };
     fetchDeltas();
   }, [activeAccounts, token]);
-
-  useEffect(() => {
-    const handler = () => setWindowWidth(window.innerWidth);
-    window.addEventListener("resize", handler);
-    return () => window.removeEventListener("resize", handler);
-  }, []);
 
   const kpis: KPI[] = useMemo(() => {
     const currentYear = new Date().getFullYear();
@@ -401,7 +395,9 @@ export const Dashboard: React.FC = () => {
     return recent.items.map((tx) => {
       const primaryLeg = tx.legs?.[0];
       const amount = primaryLeg ? Number(primaryLeg.amount) : 0;
-      const txType = tx.transaction_type || (amount >= 0 ? TransactionType.INCOME : TransactionType.EXPENSE);
+      const txType =
+        tx.transaction_type ||
+        (amount >= 0 ? TransactionType.INCOME : TransactionType.EXPENSE);
 
       return {
         id: tx.id,
@@ -1060,16 +1056,22 @@ export const Dashboard: React.FC = () => {
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                        tx.amount >= 0
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-rose-50 text-rose-700"
-                      }`}
-                    >
-                      {tx.amount >= 0 ? "+" : "-"}
-                      {currency(Math.abs(tx.amount))}
-                    </span>
+                    {tx.type === TransactionType.TRANSFER ? (
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                        {currency(Math.abs(tx.amount))}
+                      </span>
+                    ) : (
+                      <span
+                        className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                          tx.amount >= 0
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-rose-50 text-rose-700"
+                        }`}
+                      >
+                        {tx.amount >= 0 ? "+" : "-"}
+                        {currency(Math.abs(tx.amount))}
+                      </span>
+                    )}
                     <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700">
                       {tx.status}
                     </span>

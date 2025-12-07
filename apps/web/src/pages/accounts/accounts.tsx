@@ -2,7 +2,6 @@ import { Archive, Loader2, Plus, RefreshCw, Undo } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { useAppSelector } from "@/app/hooks";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,9 +16,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageRoutes } from "@/data/routes";
 import { useAccountsApi } from "@/hooks/use-api";
 import { AccountType } from "@/types/api";
-import { PageRoutes } from "@/data/routes";
 import { AccountModal } from "./children/account-modal";
 
 type SortKey = "name" | "type" | "status" | "balance";
