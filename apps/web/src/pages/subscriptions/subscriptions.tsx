@@ -1,6 +1,8 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import {
   Loader2,
+  Plus,
   RefreshCw,
   Sparkles,
   ToggleLeft,
@@ -24,32 +26,34 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { selectToken } from "@/features/auth/authSlice";
 import { useCategoriesApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
-import type {
-  CategoryRead,
-  SubscriptionSummaryRead,
-  SubscriptionSummaryResponse,
-} from "@/types/api";
-import { subscriptionSummaryResponseSchema } from "@/types/schemas";
+import {
+  categorySchema,
+  subscriptionSchema,
+  subscriptionSummaryResponseSchema,
+  subscriptionSummarySchema,
+} from "@/types/schemas";
 
-type MatcherRow = {
-  id: string;
-  matcher_text?: string;
-  matcher_amount_tolerance: number | null;
-  matcher_day_of_month: number | null;
-  category_id?: string | null;
-};
+type CategoryRead = z.infer<typeof categorySchema>;
+type SubscriptionRead = z.infer<typeof subscriptionSchema>;
+type SubscriptionSummaryRead = z.infer<typeof subscriptionSummarySchema>;
+type SubscriptionSummaryResponse = z.infer<
+  typeof subscriptionSummaryResponseSchema
+>;
 
-type MatcherFormValues = {
-  rows: MatcherRow[];
-};
-
-const matcherRowSchema: z.ZodType<MatcherRow> = z.object({
+const matcherRowSchema = z.object({
   id: z.string(),
-  matcher_text: z.string().optional(),
+  matcher_text: z.string().trim().optional(),
   matcher_amount_tolerance: z.number().nullable(),
   matcher_day_of_month: z.number().nullable(),
   category_id: z.string().nullable().optional(),
 });
+
+const matcherFormSchema = z.object({
+  rows: z.array(matcherRowSchema),
+});
+
+type MatcherRow = z.infer<typeof matcherRowSchema>;
+type MatcherFormValues = z.infer<typeof matcherFormSchema>;
 
 const numberValue = (value: string | number | null | undefined) =>
   value === null || value === undefined ? 0 : Number(value);
@@ -67,6 +71,16 @@ const toNumberOrNull = (value: string | number | null | undefined) => {
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
 };
+
+const createSubscriptionSchema = z.object({
+  name: z.string().trim().min(1, "Name required"),
+  matcher_text: z.string().trim().min(1, "Matcher required"),
+  matcher_amount_tolerance: z.number().nullable().optional(),
+  matcher_day_of_month: z.number().nullable().optional(),
+  category_id: z.string().nullable().optional(),
+});
+
+type CreateSubscriptionValues = z.infer<typeof createSubscriptionSchema>;
 
 const Sparkline: React.FC<{ data: Array<string | number> }> = ({ data }) => {
   const points = data.map((value) => numberValue(value));
@@ -114,7 +128,19 @@ export const Subscriptions: React.FC = () => {
   );
 
   const matcherForm = useForm<MatcherFormValues>({
+    resolver: zodResolver(matcherFormSchema),
     defaultValues: { rows: [] },
+  });
+
+  const createForm = useForm<CreateSubscriptionValues>({
+    resolver: zodResolver(createSubscriptionSchema),
+    defaultValues: {
+      name: "",
+      matcher_text: "",
+      matcher_amount_tolerance: null,
+      matcher_day_of_month: null,
+      category_id: null,
+    },
   });
 
   const load = async () => {
@@ -154,6 +180,48 @@ export const Subscriptions: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
+  const createSubscription = createForm.handleSubmit(async (values) => {
+    if (!token) return;
+    setSavingId("new");
+    try {
+      const payload = {
+        ...values,
+        name: values.name.trim(),
+        matcher_text: values.matcher_text.trim(),
+        matcher_amount_tolerance: values.matcher_amount_tolerance,
+        matcher_day_of_month: values.matcher_day_of_month,
+        category_id: values.category_id || null,
+        is_active: true,
+      };
+
+      await apiFetch<SubscriptionRead>({
+        path: "/subscriptions",
+        method: "POST",
+        body: payload,
+        schema: subscriptionSchema,
+        token,
+      });
+      toast.success("Subscription created", {
+        description: payload.name,
+      });
+      createForm.reset({
+        name: "",
+        matcher_text: "",
+        matcher_amount_tolerance: null,
+        matcher_day_of_month: null,
+        category_id: null,
+      });
+      await load();
+    } catch (error) {
+      toast.error("Unable to create subscription", {
+        description:
+          error instanceof Error ? error.message : "Please try again shortly.",
+      });
+    } finally {
+      setSavingId(null);
+    }
+  });
+
   const grouped = useMemo(() => {
     const active = subscriptions.filter((s) => s.is_active);
     const archived = subscriptions.filter((s) => !s.is_active);
@@ -164,22 +232,29 @@ export const Subscriptions: React.FC = () => {
 
   const saveMatcher = async (subscription: SubscriptionSummaryRead) => {
     if (!token) return;
-    const row = rows?.find((r: MatcherRow) => r.id === subscription.id);
-    const parsed = matcherRowSchema.safeParse(row);
-    if (!parsed.success) {
-      void matcherForm.trigger();
+    const rowIndex =
+      rows?.findIndex((r: MatcherRow) => r.id === subscription.id) ?? -1;
+    if (rowIndex < 0) return;
+    const isValid = await matcherForm.trigger(`rows.${rowIndex}` as const);
+    if (!isValid) {
+      const error = matcherForm.formState.errors.rows?.[rowIndex];
       toast.error("Fix matcher values", {
-        description: parsed.error.issues[0]?.message,
+        description:
+          error?.matcher_text?.message ||
+          error?.matcher_amount_tolerance?.toString() ||
+          error?.matcher_day_of_month?.toString() ||
+          "Check the matcher inputs and try again.",
       });
       return;
     }
+    const parsed = matcherForm.getValues(`rows.${rowIndex}` as const);
     setSavingId(subscription.id);
     try {
       const payload: Partial<EditableFields> = {
-        matcher_text: parsed.data.matcher_text?.trim() || undefined,
-        matcher_amount_tolerance: parsed.data.matcher_amount_tolerance,
-        matcher_day_of_month: parsed.data.matcher_day_of_month,
-        category_id: parsed.data.category_id || null,
+        matcher_text: parsed.matcher_text?.trim() || undefined,
+        matcher_amount_tolerance: parsed.matcher_amount_tolerance,
+        matcher_day_of_month: parsed.matcher_day_of_month,
+        category_id: parsed.category_id || null,
       };
 
       await apiFetch({
@@ -306,7 +381,7 @@ export const Subscriptions: React.FC = () => {
                   <div className="flex items-center justify-between text-slate-600">
                     <span>Trailing 3 / 12</span>
                     <span className="font-semibold text-slate-900">
-                      {formatAmount(sub.trailing_three_month_spend)} ·{" "}
+                      {formatAmount(sub.trailing_three_month_spend)} -{" "}
                       {formatAmount(sub.trailing_twelve_month_spend)}
                     </span>
                   </div>
@@ -315,7 +390,7 @@ export const Subscriptions: React.FC = () => {
                     <span className="font-semibold text-slate-900">
                       {sub.last_charge_at
                         ? new Date(sub.last_charge_at).toLocaleDateString()
-                        : "—"}
+                        : "-"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-slate-600">
@@ -466,12 +541,111 @@ export const Subscriptions: React.FC = () => {
       </StaggerWrap>
 
       <div className="space-y-4">
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-slate-800">
+              Create subscription
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form
+              className="grid gap-3 md:grid-cols-2 lg:grid-cols-3"
+              onSubmit={createSubscription}
+            >
+              <div className="space-y-1">
+                <Input placeholder="Name" {...createForm.register("name")} />
+                {createForm.formState.errors.name ? (
+                  <p className="text-xs text-rose-600">
+                    {createForm.formState.errors.name.message}
+                  </p>
+                ) : null}
+              </div>
+              <div className="space-y-1">
+                <Input
+                  placeholder="Matcher text or regex"
+                  {...createForm.register("matcher_text")}
+                />
+                {createForm.formState.errors.matcher_text ? (
+                  <p className="text-xs text-rose-600">
+                    {createForm.formState.errors.matcher_text.message}
+                  </p>
+                ) : null}
+              </div>
+              <div className="space-y-1">
+                <Input
+                  type="number"
+                  placeholder="Amount tolerance"
+                  {...createForm.register("matcher_amount_tolerance", {
+                    setValueAs: (val) =>
+                      val === "" || val === undefined ? null : Number(val),
+                  })}
+                />
+              </div>
+              <div className="space-y-1">
+                <Input
+                  type="number"
+                  placeholder="Day of month"
+                  {...createForm.register("matcher_day_of_month", {
+                    setValueAs: (val) =>
+                      val === "" || val === undefined ? null : Number(val),
+                  })}
+                />
+              </div>
+              <div className="space-y-1">
+                <select
+                  className="h-10 rounded border border-slate-200 px-3 text-sm"
+                  {...createForm.register("category_id", {
+                    setValueAs: (val) => (val === "" ? null : val),
+                  })}
+                >
+                  <option value="">No category</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="submit"
+                  className="gap-2"
+                  disabled={savingId === "new"}
+                >
+                  {savingId === "new" ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                  Create
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    createForm.reset({
+                      name: "",
+                      matcher_text: "",
+                      matcher_amount_tolerance: null,
+                      matcher_day_of_month: null,
+                      category_id: null,
+                    })
+                  }
+                >
+                  Clear
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold tracking-wide text-slate-600 uppercase">
             Active
           </h2>
           <span className="text-xs text-slate-500">
-            Current month · trailing 3/12 months · last charge · trend
+            Current month - trailing 3/12 months - last charge - trend
           </span>
         </div>
         {renderGroup("Active", grouped.active)}

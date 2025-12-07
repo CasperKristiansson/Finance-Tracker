@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { resetAccounts } from "@/features/accounts/accountsSlice";
 import { resetReports } from "@/features/reports/reportsSlice";
 import { resetTransactions } from "@/features/transactions/transactionsSlice";
+import { authSessionSchema } from "@/types/schemas";
 import { setLoading } from "../app/appSlice";
 import authService, { type AuthenticatedUser } from "./authHelpers";
 import {
@@ -101,7 +102,14 @@ function* initializeAuth() {
     );
 
     if (existingSession) {
-      yield put(loginSuccess(existingSession));
+      const parsed = authSessionSchema.safeParse(existingSession);
+      if (parsed.success) {
+        yield put(loginSuccess({ ...parsed.data }));
+      } else {
+        toast.error("Failed to restore session", {
+          description: "Session payload was invalid.",
+        });
+      }
     }
   } catch (error) {
     if (error instanceof Error) {

@@ -1,6 +1,9 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, Loader2, Plus, Trash2, UploadCloud } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Controller, useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { z } from "zod";
 import { useAppSelector } from "@/app/hooks";
 import { MotionPage } from "@/components/motion-presets";
 import { Button } from "@/components/ui/button";
@@ -28,29 +31,74 @@ import type {
   ImportCreateRequest,
   ImportRowRead,
   ImportSession,
-  SubscriptionListResponse,
-  SubscriptionRead,
 } from "@/types/api";
-import { subscriptionListSchema, subscriptionSchema } from "@/types/schemas";
+import {
+  bankImportTypeSchema,
+  importRowSchema,
+  importSessionSchema,
+  subscriptionListSchema,
+  subscriptionSchema,
+} from "@/types/schemas";
 
-type LocalFile = {
-  id: string;
-  file?: File;
-  filename: string;
-  accountId?: string;
-  bankType?: BankImportType;
-  contentBase64?: string;
-};
+type SubscriptionRead = z.infer<typeof subscriptionSchema>;
+type ImportRow = z.infer<typeof importRowSchema>;
+type ImportSessionSchema = z.infer<typeof importSessionSchema>;
+type SubscriptionListResponse = z.infer<typeof subscriptionListSchema>;
 
-type RowOverride = {
-  categoryId?: string;
-  accountId?: string;
-  description?: string;
-  amount?: string;
-  occurredAt?: string;
-  subscriptionId?: string;
-  delete?: boolean;
-};
+const trimmedString = z.string().trim().optional();
+
+const nullableTrimmedString = z.string().trim().nullable().optional();
+
+const uploadFormSchema = z.object({
+  files: z
+    .array(
+      z
+        .object({
+          clientId: z.string(),
+          filename: z.string().min(1, "Filename required"),
+          accountId: z.string().optional(),
+          bankType: bankImportTypeSchema.optional(),
+          contentBase64: z.string().optional(),
+          file: z.any().optional(),
+        })
+        .superRefine((file, ctx) => {
+          if (!file.bankType) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Select a bank",
+              path: ["bankType"],
+            });
+          }
+          if (!file.file && !file.contentBase64) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Attach a file",
+              path: ["file"],
+            });
+          }
+        }),
+    )
+    .min(1, "Add at least one file"),
+  note: z.string().trim().optional(),
+});
+
+const commitRowSchema = z.object({
+  row_id: z.string(),
+  description: trimmedString,
+  amount: trimmedString,
+  occurred_at: trimmedString,
+  category_id: nullableTrimmedString,
+  account_id: nullableTrimmedString,
+  subscription_id: nullableTrimmedString,
+  delete: z.boolean().optional(),
+});
+
+const commitFormSchema = z.object({
+  rows: z.array(commitRowSchema),
+});
+
+type UploadFormValues = z.infer<typeof uploadFormSchema>;
+type CommitFormValues = z.infer<typeof commitFormSchema>;
 
 const toBase64 = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -83,6 +131,34 @@ const bankOptions: { id: BankImportType; label: string }[] = [
   { id: "swedbank", label: "Swedbank" },
 ];
 
+const deriveRowDefaults = (
+  row: ImportRowRead,
+  fileAccountId?: string | null,
+): CommitFormValues["rows"][number] => {
+  const base = (row.data || {}) as Record<string, unknown>;
+  const dateValue =
+    toStringValue(base["date"] ?? base["occurred_at"] ?? base["posted_at"])
+      .trim()
+      .slice(0, 10) || undefined;
+  const amountValue =
+    toStringValue(base["amount"] ?? base["value"] ?? "").trim() || undefined;
+  const descriptionValue =
+    toStringValue(
+      base["description"] ?? base["memo"] ?? base["text"] ?? "",
+    ).trim() || undefined;
+
+  return {
+    row_id: row.id,
+    description: descriptionValue,
+    amount: amountValue,
+    occurred_at: dateValue,
+    category_id: null,
+    account_id: fileAccountId ?? null,
+    subscription_id: row.suggested_subscription_id ?? null,
+    delete: false,
+  };
+};
+
 export const Imports: React.FC = () => {
   const {
     loading,
@@ -97,13 +173,35 @@ export const Imports: React.FC = () => {
   const { items: accounts, fetchAccounts } = useAccountsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
   const token = useAppSelector(selectToken);
-  const [localFiles, setLocalFiles] = useState<LocalFile[]>([]);
-  const [note, setNote] = useState("");
-  const [uploading, setUploading] = useState(false);
   const dropRef = useRef<HTMLLabelElement | null>(null);
-  const [overrides, setOverrides] = useState<Record<string, RowOverride>>({});
+  const [uploading, setUploading] = useState(false);
   const [subscriptions, setSubscriptions] = useState<SubscriptionRead[]>([]);
   const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
+
+  const uploadForm = useForm<UploadFormValues>({
+    resolver: zodResolver(uploadFormSchema),
+    defaultValues: { files: [], note: "" },
+  });
+
+  const {
+    fields: fileFields,
+    append: appendFile,
+    remove: removeFile,
+    update: updateFile,
+  } = useFieldArray({
+    control: uploadForm.control,
+    name: "files",
+  });
+
+  const commitForm = useForm<CommitFormValues>({
+    resolver: zodResolver(commitFormSchema),
+    defaultValues: { rows: [] },
+  });
+
+  const { fields: commitFields, replace: replaceCommitRows } = useFieldArray({
+    control: commitForm.control,
+    name: "rows",
+  });
 
   useEffect(() => {
     fetchAccounts({});
@@ -112,9 +210,9 @@ export const Imports: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const loadSubscriptions = async () => {
-      if (!token) return;
-      setSubscriptionsLoading(true);
+    if (!token) return;
+    setSubscriptionsLoading(true);
+    const load = async () => {
       try {
         const { data } = await apiFetch<SubscriptionListResponse>({
           path: "/subscriptions",
@@ -133,93 +231,181 @@ export const Imports: React.FC = () => {
         setSubscriptionsLoading(false);
       }
     };
-    void loadSubscriptions();
+    void load();
   }, [token]);
 
-  const currentSession: ImportSession | undefined = session;
+  const currentSession: ImportSession | ImportSessionSchema | undefined =
+    session;
+  const summaryFiles = useMemo(
+    () => currentSession?.files ?? [],
+    [currentSession?.files],
+  );
+  const rows: ImportRow[] = useMemo(
+    () => (currentSession?.rows as ImportRow[] | undefined) ?? [],
+    [currentSession?.rows],
+  );
+
+  const rowMap = useMemo(() => {
+    const map = new Map<string, ImportRow>();
+    rows.forEach((row) => map.set(row.id, row));
+    return map;
+  }, [rows]);
+
+  const fileAccountMap = useMemo(() => {
+    const map = new Map<string, string | null | undefined>();
+    summaryFiles.forEach((file) => map.set(file.id, file.account_id));
+    return map;
+  }, [summaryFiles]);
+
+  useEffect(() => {
+    const defaults = rows.map((row) =>
+      deriveRowDefaults(row as ImportRowRead, fileAccountMap.get(row.file_id)),
+    );
+    replaceCommitRows(defaults);
+    commitForm.reset({ rows: defaults });
+  }, [rows, commitForm, replaceCommitRows, fileAccountMap]);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files) return;
-    const next: LocalFile[] = [];
-    for (const file of Array.from(files)) {
-      next.push({
-        id: crypto.randomUUID(),
-        file,
-        filename: file.name,
-      });
-    }
-    setLocalFiles((prev) => [...prev, ...next]);
+    const next = Array.from(files).map((file) => ({
+      clientId: crypto.randomUUID(),
+      filename: file.name,
+      file,
+      bankType: undefined,
+      accountId: undefined,
+    }));
+    appendFile(next);
   };
 
-  const updateLocal = (id: string, patch: Partial<LocalFile>) => {
-    setLocalFiles((prev) =>
-      prev.map((lf) => (lf.id === id ? { ...lf, ...patch } : lf)),
-    );
-  };
-
-  const removeLocal = (id: string) => {
-    setLocalFiles((prev) => prev.filter((lf) => lf.id !== id));
-  };
-
-  const upload = async () => {
-    if (!localFiles.length) return;
+  const upload = uploadForm.handleSubmit(async (values) => {
+    if (!values.files.length) return;
     setUploading(true);
     try {
-      const missingBank = localFiles.find((lf) => !lf.bankType);
-      if (missingBank) {
-        toast.error("Choose a bank for each file", {
-          description: missingBank.filename,
-        });
-        return;
-      }
       const filesPayload = await Promise.all(
-        localFiles.map(async (lf) => {
+        values.files.map(async (lf, index) => {
           const content =
-            lf.contentBase64 || (lf.file ? await toBase64(lf.file) : "");
+            lf.contentBase64 ||
+            (lf.file ? await toBase64(lf.file as File) : "");
+          if (content && !lf.contentBase64) {
+            uploadForm.setValue(`files.${index}.contentBase64`, content);
+          }
           return {
-            filename: lf.filename,
+            filename: lf.filename.trim(),
             content_base64: content,
-            account_id: lf.accountId,
-            bank_type: lf.bankType!,
+            account_id: lf.accountId || undefined,
+            bank_type: (lf.bankType as BankImportType)!,
           };
         }),
       );
+
       const payload: ImportCreateRequest = {
         files: filesPayload,
-        note: note || undefined,
+        note: values.note?.trim() || undefined,
       };
+
       if (currentSession?.id) {
         await appendImportFiles(currentSession.id, payload);
         await fetchImportSession(currentSession.id);
       } else {
         await startImportSession(payload);
       }
-      setLocalFiles([]);
+      uploadForm.reset({ files: [], note: "" });
     } finally {
       setUploading(false);
     }
-  };
+  });
 
-  const applyOverride = (rowId: string, patch: RowOverride) => {
-    setOverrides((prev) => ({
-      ...prev,
-      [rowId]: { ...prev[rowId], ...patch },
+  const commit = commitForm.handleSubmit(async (values) => {
+    if (!currentSession?.id || !values.rows.length) return;
+    const commitRows: ImportCommitRow[] = values.rows.map((row) => ({
+      row_id: row.row_id,
+      category_id: row.category_id ?? undefined,
+      account_id: row.account_id ?? undefined,
+      description: row.description?.trim() || undefined,
+      amount: row.amount?.trim() || undefined,
+      occurred_at: row.occurred_at?.trim() || undefined,
+      subscription_id: row.subscription_id ?? undefined,
+      delete: Boolean(row.delete),
     }));
+
+    await commitImportSession(currentSession.id, commitRows);
+    commitForm.reset({ rows: [] });
+  });
+
+  const setRowValue = (
+    rowId: string,
+    key: keyof CommitFormValues["rows"][number],
+    value: unknown,
+  ) => {
+    const index = commitFields.findIndex((field) => field.row_id === rowId);
+    if (index < 0) return;
+    switch (key) {
+      case "description":
+        commitForm.setValue(
+          `rows.${index}.description`,
+          (value as string | undefined) ?? undefined,
+          { shouldDirty: true },
+        );
+        return;
+      case "amount":
+        commitForm.setValue(
+          `rows.${index}.amount`,
+          (value as string | undefined) ?? undefined,
+          { shouldDirty: true },
+        );
+        return;
+      case "occurred_at":
+        commitForm.setValue(
+          `rows.${index}.occurred_at`,
+          (value as string | undefined) ?? undefined,
+          { shouldDirty: true },
+        );
+        return;
+      case "category_id":
+        commitForm.setValue(
+          `rows.${index}.category_id`,
+          (value as string | null | undefined) ?? null,
+          { shouldDirty: true },
+        );
+        return;
+      case "account_id":
+        commitForm.setValue(
+          `rows.${index}.account_id`,
+          (value as string | null | undefined) ?? null,
+          { shouldDirty: true },
+        );
+        return;
+      case "subscription_id":
+        commitForm.setValue(
+          `rows.${index}.subscription_id`,
+          (value as string | null | undefined) ?? null,
+          { shouldDirty: true },
+        );
+        return;
+      case "delete":
+        commitForm.setValue(`rows.${index}.delete`, Boolean(value), {
+          shouldDirty: true,
+        });
+        return;
+      default:
+        return;
+    }
   };
 
-  const clearOverrides = () => setOverrides({});
-
-  const createSubscriptionForRow = async (row: ImportRowRead) => {
-    const base = (row.data || {}) as Record<string, unknown>;
-    const override = overrides[row.id];
-    const descriptionText =
-      (
-        override?.description ??
-        toStringValue(base["description"] ?? base["memo"] ?? base["text"])
-      )?.trim() || "";
-    const dateValue =
-      override?.occurredAt ||
-      toStringValue(base["date"] ?? base["occurred_at"] ?? base["posted_at"]);
+  const createSubscriptionForRow = async (row: ImportRow) => {
+    const index = commitFields.findIndex((field) => field.row_id === row.id);
+    if (index < 0) return;
+    const formRow = commitForm.getValues(`rows.${index}`);
+    const base = deriveRowDefaults(
+      row as ImportRowRead,
+      fileAccountMap.get(row.file_id),
+    );
+    const descriptionText = (
+      formRow.description ||
+      base.description ||
+      ""
+    ).trim();
+    const dateValue = formRow.occurred_at || base.occurred_at || "";
 
     if (!descriptionText) {
       toast.error("Add a description first", {
@@ -254,7 +440,7 @@ export const Imports: React.FC = () => {
         data,
         ...prev.filter((s) => s.id !== data.id),
       ]);
-      applyOverride(row.id, { subscriptionId: data.id });
+      setRowValue(row.id, "subscription_id", data.id);
       toast.success("Subscription created", {
         description: data.name,
       });
@@ -268,43 +454,7 @@ export const Imports: React.FC = () => {
     }
   };
 
-  const rows: ImportRowRead[] = useMemo(
-    () => currentSession?.rows ?? [],
-    [currentSession],
-  );
-
-  const commit = async () => {
-    if (!currentSession?.id || !rows.length) return;
-    const commitRows: ImportCommitRow[] = rows.map((row) => {
-      const override = overrides[row.id];
-      const baseData = (row.data || {}) as Record<string, unknown>;
-      const dateValue =
-        override?.occurredAt ||
-        toStringValue(
-          baseData["date"] ?? baseData["occurred_at"] ?? baseData["posted_at"],
-        ) ||
-        "";
-      const amountValue =
-        override?.amount ||
-        toStringValue(baseData["amount"] ?? baseData["value"] ?? "");
-
-      return {
-        row_id: row.id,
-        category_id: override?.categoryId,
-        account_id: override?.accountId,
-        description: override?.description,
-        amount: amountValue ? String(amountValue) : undefined,
-        occurred_at: dateValue ? String(dateValue) : undefined,
-        subscription_id: override?.subscriptionId,
-        delete: override?.delete || false,
-      };
-    });
-
-    await commitImportSession(currentSession.id, commitRows);
-    clearOverrides();
-  };
-
-  const summaryFiles = currentSession?.files || [];
+  const watchedRows = commitForm.watch("rows") ?? [];
 
   return (
     <MotionPage className="space-y-4">
@@ -379,10 +529,10 @@ export const Imports: React.FC = () => {
             </label>
 
             <div className="space-y-2">
-              {localFiles.length === 0 ? (
+              {fileFields.length === 0 ? (
                 <p className="text-slate-500">No files added yet.</p>
               ) : (
-                localFiles.map((lf) => (
+                fileFields.map((lf, idx) => (
                   <div
                     key={lf.id}
                     className="grid grid-cols-[1.2fr,1fr,1fr,auto] items-center gap-2 rounded border border-slate-200 bg-white px-3 py-2"
@@ -392,9 +542,10 @@ export const Imports: React.FC = () => {
                     </span>
                     <select
                       className="rounded border border-slate-200 px-2 py-1 text-sm"
-                      value={lf.accountId || ""}
+                      value={(lf.accountId as string | undefined) || ""}
                       onChange={(e) =>
-                        updateLocal(lf.id, {
+                        updateFile(idx, {
+                          ...lf,
                           accountId: e.target.value || undefined,
                         })
                       }
@@ -402,15 +553,16 @@ export const Imports: React.FC = () => {
                       <option value="">Account (optional)</option>
                       {accounts.map((acc) => (
                         <option key={acc.id} value={acc.id}>
-                          {acc.account_type} • {acc.id.slice(0, 6)}
+                          {acc.account_type} - {acc.id.slice(0, 6)}
                         </option>
                       ))}
                     </select>
                     <select
                       className="rounded border border-slate-200 px-2 py-1 text-sm"
-                      value={lf.bankType || ""}
+                      value={(lf.bankType as string | undefined) || ""}
                       onChange={(e) =>
-                        updateLocal(lf.id, {
+                        updateFile(idx, {
+                          ...lf,
                           bankType: (e.target.value || undefined) as
                             | BankImportType
                             | undefined,
@@ -427,7 +579,7 @@ export const Imports: React.FC = () => {
                     <Button
                       size="icon"
                       variant="ghost"
-                      onClick={() => removeLocal(lf.id)}
+                      onClick={() => removeFile(idx)}
                       className="text-slate-500"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -435,14 +587,20 @@ export const Imports: React.FC = () => {
                   </div>
                 ))
               )}
+              {uploadForm.formState.errors.files ? (
+                <p className="text-xs text-rose-600">
+                  {uploadForm.formState.errors.files.root?.message ??
+                    uploadForm.formState.errors.files?.message ??
+                    ""}
+                </p>
+              ) : null}
             </div>
 
             <div className="flex flex-col gap-2">
               <label className="text-sm text-slate-700">Note (optional)</label>
               <textarea
                 className="min-h-[60px] rounded border border-slate-200 px-3 py-2"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
+                {...uploadForm.register("note")}
                 placeholder="e.g., January statements"
               />
             </div>
@@ -455,15 +613,15 @@ export const Imports: React.FC = () => {
                   className="text-slate-600"
                   onClick={() => {
                     resetImportSession();
-                    clearOverrides();
+                    commitForm.reset({ rows: [] });
                   }}
                 >
                   Reset session
                 </Button>
               ) : null}
               <Button
-                onClick={upload}
-                disabled={uploading || localFiles.length === 0}
+                onClick={() => void upload()}
+                disabled={uploading || fileFields.length === 0}
                 className="gap-2"
               >
                 {uploading ? (
@@ -525,7 +683,7 @@ export const Imports: React.FC = () => {
                 <Button
                   disabled={!rows.length || saving}
                   className="mt-2 w-full gap-2"
-                  onClick={commit}
+                  onClick={() => void commit()}
                 >
                   {saving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -572,25 +730,10 @@ export const Imports: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((row) => {
-                  const override = overrides[row.id] || {};
-                  const base = (row.data || {}) as Record<string, unknown>;
-                  const dateValue =
-                    override.occurredAt ||
-                    toStringValue(
-                      base["date"] ?? base["occurred_at"] ?? base["posted_at"],
-                    );
-                  const descriptionValue =
-                    override.description ??
-                    toStringValue(
-                      base["description"] ?? base["memo"] ?? base["text"],
-                    );
-                  const amountValue =
-                    override.amount ??
-                    toStringValue(base["amount"] ?? base["value"] ?? "");
-                  const fileAccountId = summaryFiles.find(
-                    (f) => f.id === row.file_id,
-                  )?.account_id;
+                {commitFields.map((field, idx) => {
+                  const row = rowMap.get(field.row_id);
+                  if (!row) return null;
+                  const formRow = watchedRows[idx] ?? field;
                   const suggestedSubName = row.suggested_subscription_name;
                   const suggestedSubId = row.suggested_subscription_id;
                   const suggestedSubConfidence =
@@ -598,17 +741,17 @@ export const Imports: React.FC = () => {
                   const suggestedSubReason = row.suggested_subscription_reason;
 
                   return (
-                    <TableRow key={row.id}>
+                    <TableRow key={field.id}>
                       <TableCell className="min-w-[120px]">
                         <input
                           type="date"
-                          value={
-                            dateValue ? String(dateValue).slice(0, 10) : ""
-                          }
+                          value={formRow.occurred_at ?? ""}
                           onChange={(e) =>
-                            applyOverride(row.id, {
-                              occurredAt: e.target.value,
-                            })
+                            setRowValue(
+                              row.id,
+                              "occurred_at",
+                              e.target.value || undefined,
+                            )
                           }
                           className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
                         />
@@ -616,11 +759,9 @@ export const Imports: React.FC = () => {
                       <TableCell>
                         <input
                           type="text"
-                          value={descriptionValue}
+                          value={formRow.description ?? ""}
                           onChange={(e) =>
-                            applyOverride(row.id, {
-                              description: e.target.value,
-                            })
+                            setRowValue(row.id, "description", e.target.value)
                           }
                           className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
                           placeholder="Description"
@@ -634,9 +775,9 @@ export const Imports: React.FC = () => {
                       <TableCell className="min-w-[120px]">
                         <input
                           type="text"
-                          value={amountValue}
+                          value={formRow.amount ?? ""}
                           onChange={(e) =>
-                            applyOverride(row.id, { amount: e.target.value })
+                            setRowValue(row.id, "amount", e.target.value)
                           }
                           className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
                         />
@@ -661,11 +802,13 @@ export const Imports: React.FC = () => {
                           </div>
                           <select
                             className="rounded border border-slate-200 px-2 py-1 text-sm"
-                            value={override.categoryId || ""}
+                            value={formRow.category_id ?? ""}
                             onChange={(e) =>
-                              applyOverride(row.id, {
-                                categoryId: e.target.value || undefined,
-                              })
+                              setRowValue(
+                                row.id,
+                                "category_id",
+                                e.target.value || null,
+                              )
                             }
                           >
                             <option value="">
@@ -696,16 +839,18 @@ export const Imports: React.FC = () => {
                         <div className="flex flex-col gap-1">
                           <select
                             className="rounded border border-slate-200 px-2 py-1 text-sm"
-                            value={override.subscriptionId || ""}
+                            value={formRow.subscription_id ?? ""}
                             onChange={async (e) => {
                               const value = e.target.value;
                               if (value === "__create__") {
                                 await createSubscriptionForRow(row);
                                 return;
                               }
-                              applyOverride(row.id, {
-                                subscriptionId: value || undefined,
-                              });
+                              setRowValue(
+                                row.id,
+                                "subscription_id",
+                                value || null,
+                              );
                             }}
                           >
                             <option value="">
@@ -715,9 +860,9 @@ export const Imports: React.FC = () => {
                             </option>
                             {suggestedSubId ? (
                               <option value={suggestedSubId}>
-                                Use suggested{" "}
+                                Use suggested
                                 {suggestedSubConfidence
-                                  ? `(${Math.round(
+                                  ? ` (${Math.round(
                                       suggestedSubConfidence * 100,
                                     )}%)`
                                   : ""}
@@ -737,15 +882,15 @@ export const Imports: React.FC = () => {
                               Suggestion: {suggestedSubReason}
                             </span>
                           ) : null}
-                          {override.subscriptionId &&
-                          suggestedSubId === override.subscriptionId ? (
+                          {formRow.subscription_id &&
+                          suggestedSubId === formRow.subscription_id ? (
                             <span className="text-xs text-emerald-600">
                               Suggested applied
                             </span>
                           ) : null}
                           {subscriptionsLoading ? (
                             <span className="text-xs text-slate-500">
-                              Loading subscriptions…
+                              Loading subscriptions...
                             </span>
                           ) : null}
                         </div>
@@ -753,34 +898,42 @@ export const Imports: React.FC = () => {
                       <TableCell className="min-w-[160px]">
                         <select
                           className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
-                          value={override.accountId || fileAccountId || ""}
+                          value={
+                            formRow.account_id ??
+                            fileAccountMap.get(row.file_id) ??
+                            ""
+                          }
                           onChange={(e) =>
-                            applyOverride(row.id, {
-                              accountId: e.target.value || undefined,
-                            })
+                            setRowValue(
+                              row.id,
+                              "account_id",
+                              e.target.value || null,
+                            )
                           }
                         >
                           <option value="">Use file/default account</option>
                           {accounts.map((acc) => (
                             <option key={acc.id} value={acc.id}>
-                              {acc.account_type} • {acc.id.slice(0, 6)}
+                              {acc.account_type} - {acc.id.slice(0, 6)}
                             </option>
                           ))}
                         </select>
                       </TableCell>
                       <TableCell className="min-w-[80px]">
-                        <label className="flex items-center gap-2 text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={override.delete ?? false}
-                            onChange={(e) =>
-                              applyOverride(row.id, {
-                                delete: e.target.checked,
-                              })
-                            }
-                          />
-                          Remove
-                        </label>
+                        <Controller
+                          control={commitForm.control}
+                          name={`rows.${idx}.delete` as const}
+                          render={({ field: { value, onChange } }) => (
+                            <label className="flex items-center gap-2 text-slate-700">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(value)}
+                                onChange={(e) => onChange(e.target.checked)}
+                              />
+                              Remove
+                            </label>
+                          )}
+                        />
                       </TableCell>
                     </TableRow>
                   );

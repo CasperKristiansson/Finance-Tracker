@@ -1,3 +1,4 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import {
   Check,
@@ -9,6 +10,7 @@ import {
   Wand2,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Controller, useFieldArray, useForm } from "react-hook-form";
 import {
   Area,
   AreaChart,
@@ -18,6 +20,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { toast } from "sonner";
+import { z } from "zod";
 import {
   MotionPage,
   StaggerWrap,
@@ -43,23 +47,39 @@ import { useInvestmentsApi } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
 import type { InvestmentSnapshot } from "@/types/api";
 
-type Draft = {
-  id: string;
-  label: string;
-  rawText: string;
-  parsedPayload?: Record<string, unknown>;
-  snapshotDate?: string;
-  portfolioValue?: number | null;
-  accountName?: string | null;
-  reportType?: string | null;
-  useBedrock?: boolean;
-  bedrockModelId?: string | null;
-  bedrockMaxTokens?: number | null;
-  status: "idle" | "parsing" | "parsed" | "error";
-  error?: string;
-};
+const pasteFormSchema = z.object({
+  pasteValue: z.string().min(1, "Paste some text").trim(),
+});
 
-type Holding = Record<string, unknown> & {
+type PasteFormValues = z.infer<typeof pasteFormSchema>;
+
+type DraftStatus = "idle" | "parsing" | "parsed" | "error";
+
+const draftSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  raw_text: z.string().min(1, "Paste the export text"),
+  snapshot_date: z.string().optional(),
+  portfolio_value: z.union([z.number(), z.string()]).nullable().optional(),
+  account_name: z.string().nullable().optional(),
+  report_type: z.string().nullable().optional(),
+  use_bedrock: z.boolean().optional(),
+  bedrock_model_id: z.string().nullable().optional(),
+  bedrock_max_tokens: z.union([z.string(), z.number()]).nullable().optional(),
+  parsed_payload: z.record(z.string(), z.unknown()).optional(),
+  status: z.enum(["idle", "parsing", "parsed", "error"]).default("idle"),
+  error: z.string().optional(),
+});
+
+const draftsFormSchema = z.object({
+  drafts: z.array(draftSchema),
+});
+
+type DraftFormValues = z.input<typeof draftsFormSchema>;
+
+type Draft = DraftFormValues["drafts"][number];
+
+type DerivedHolding = Record<string, unknown> & {
   name?: string;
   quantity?: number | string | null;
   market_value_sek?: number | string | null;
@@ -72,22 +92,24 @@ const coerceNumber = (value: unknown): number | undefined => {
   return Number.isFinite(num) ? num : undefined;
 };
 
-const extractHoldings = (payload?: Record<string, unknown>): Holding[] => {
+const extractHoldings = (
+  payload?: Record<string, unknown>,
+): DerivedHolding[] => {
   if ((payload as { holdings?: unknown })?.holdings) {
     const list = (payload as { holdings: unknown }).holdings;
     if (Array.isArray(list)) {
-      return list as Holding[];
+      return list as DerivedHolding[];
     }
   }
   if (!payload) return [];
   const fromHoldings = (payload as { holdings?: unknown }).holdings;
   const fromRows = (payload as { rows?: unknown }).rows;
-  if (Array.isArray(fromHoldings)) return fromHoldings as Holding[];
-  if (Array.isArray(fromRows)) return fromRows as Holding[];
+  if (Array.isArray(fromHoldings)) return fromHoldings as DerivedHolding[];
+  if (Array.isArray(fromRows)) return fromRows as DerivedHolding[];
   return [];
 };
 
-const deriveHoldingsValue = (holding: Holding): number => {
+const deriveHoldingsValue = (holding: DerivedHolding): number => {
   return (
     coerceNumber(holding.market_value_sek) ??
     coerceNumber(holding.value_sek) ??
@@ -146,19 +168,21 @@ const deriveSnapshotValue = (snapshot: InvestmentSnapshot): number => {
   return sumHoldings(payload);
 };
 
-const getSnapshotHoldings = (snapshot: InvestmentSnapshot): Holding[] => {
+const getSnapshotHoldings = (
+  snapshot: InvestmentSnapshot,
+): DerivedHolding[] => {
   if (snapshot.holdings?.length) {
-    return snapshot.holdings as Holding[];
+    return snapshot.holdings as DerivedHolding[];
   }
   const payload =
     (snapshot.cleaned_payload as { cleaned_rows?: unknown; holdings?: unknown })
       ?.cleaned_rows ??
     (snapshot.cleaned_payload as { holdings?: unknown })?.holdings ??
     snapshot.parsed_payload;
-  if (Array.isArray(payload)) return payload as Holding[];
+  if (Array.isArray(payload)) return payload as DerivedHolding[];
   if (payload && typeof payload === "object") {
     if (Array.isArray((payload as { holdings?: unknown }).holdings)) {
-      return (payload as { holdings: unknown[] }).holdings as Holding[];
+      return (payload as { holdings: unknown[] }).holdings as DerivedHolding[];
     }
   }
   return [];
@@ -182,10 +206,27 @@ export const Investments: React.FC = () => {
     clearDraft,
   } = useInvestmentsApi();
 
-  const [drafts, setDrafts] = useState<Draft[]>([]);
-  const [pasteValue, setPasteValue] = useState("");
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const pasteForm = useForm<PasteFormValues>({
+    resolver: zodResolver(pasteFormSchema),
+    defaultValues: { pasteValue: "" },
+  });
+
+  const draftForm = useForm<DraftFormValues>({
+    resolver: zodResolver(draftsFormSchema),
+    defaultValues: { drafts: [] },
+  });
+
+  const {
+    fields: draftFields,
+    append: appendDraft,
+    remove: removeDraft,
+  } = useFieldArray({
+    control: draftForm.control,
+    name: "drafts",
+  });
+
   const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [range, setRange] = useState<"3M" | "6M" | "1Y" | "ALL">("6M");
 
   useEffect(() => {
@@ -195,87 +236,56 @@ export const Investments: React.FC = () => {
   }, [fetchSnapshots, fetchTransactions, fetchMetrics]);
 
   useEffect(() => {
-    setDrafts((prev) =>
-      prev.map((draft) => {
-        const parsed = parsedResults[draft.id];
-        if (!parsed) return draft;
-        const parsedPayload = (
-          parsed as { parsed_payload?: Record<string, unknown> }
-        ).parsed_payload;
-        const payload: Record<string, unknown> = parsedPayload ?? {};
-        return {
-          ...draft,
-          parsedPayload: payload,
-          snapshotDate:
-            (parsed as { snapshot_date?: string }).snapshot_date ||
-            draft.snapshotDate,
-          portfolioValue:
-            coerceNumber(
-              (parsed as { portfolio_value?: number | string }).portfolio_value,
-            ) ?? draft.portfolioValue,
-          reportType:
-            (parsed as { report_type?: string }).report_type ??
-            draft.reportType ??
-            "portfolio_report",
-          status: "parsed",
-          error: undefined,
-        };
-      }),
-    );
-  }, [parsedResults]);
+    draftFields.forEach((field, idx) => {
+      const parsed = parsedResults[field.id];
+      if (!parsed) return;
+      const payload = (parsed as { parsed_payload?: Record<string, unknown> })
+        .parsed_payload;
+      const current = draftForm.getValues(`drafts.${idx}`);
+      draftForm.setValue(`drafts.${idx}.parsed_payload`, payload ?? {});
+      draftForm.setValue(
+        `drafts.${idx}.snapshot_date`,
+        (parsed as { snapshot_date?: string }).snapshot_date ||
+          current.snapshot_date,
+      );
+      draftForm.setValue(
+        `drafts.${idx}.portfolio_value`,
+        coerceNumber(
+          (parsed as { portfolio_value?: number | string }).portfolio_value,
+        ) ?? current.portfolio_value,
+      );
+      draftForm.setValue(
+        `drafts.${idx}.report_type`,
+        (parsed as { report_type?: string }).report_type ??
+          current.report_type ??
+          "portfolio_report",
+      );
+      draftForm.setValue(`drafts.${idx}.status`, "parsed");
+      draftForm.setValue(`drafts.${idx}.error`, undefined);
+    });
+  }, [parsedResults, draftFields, draftForm]);
 
   useEffect(() => {
     if (!lastSavedClientId) return;
-    setDrafts((prev) => prev.filter((d) => d.id !== lastSavedClientId));
+    const index = draftFields.findIndex((d) => d.id === lastSavedClientId);
+    if (index >= 0) {
+      removeDraft(index);
+    }
     clearDraft(lastSavedClientId);
-  }, [clearDraft, lastSavedClientId]);
+  }, [clearDraft, draftFields, lastSavedClientId, removeDraft]);
 
-  const valueSeries = useMemo(() => {
-    const sorted = [...snapshots].sort(
-      (a, b) =>
-        new Date(a.snapshot_date).getTime() -
-        new Date(b.snapshot_date).getTime(),
-    );
-    const cutoff = (() => {
-      const now = new Date();
-      if (range === "3M") return new Date(now.setMonth(now.getMonth() - 3));
-      if (range === "6M") return new Date(now.setMonth(now.getMonth() - 6));
-      if (range === "1Y")
-        return new Date(now.setFullYear(now.getFullYear() - 1));
-      return null;
-    })();
-    const filtered = cutoff
-      ? sorted.filter((snap) => new Date(snap.snapshot_date) >= cutoff)
-      : sorted;
-    return filtered.map((snap) => ({
-      date: snap.snapshot_date,
-      value: deriveSnapshotValue(snap),
-    }));
-  }, [snapshots, range]);
+  const draftValues = draftForm.watch("drafts") ?? [];
 
-  const totalValue =
-    coerceNumber(metrics?.total_value) ??
-    coerceNumber(valueSeries.at(-1)?.value) ??
-    0;
-  const invested = coerceNumber(metrics?.invested) ?? 0;
-  const realizedPl = coerceNumber(metrics?.realized_pl) ?? 0;
-  const unrealizedPl = coerceNumber(metrics?.unrealized_pl) ?? 0;
-  const twr = coerceNumber(metrics?.twr);
-  const irr = coerceNumber(metrics?.irr);
-  const benchmarkChange = coerceNumber(metrics?.benchmark_change_pct);
-
-  const addDraft = (rawText: string, label?: string) => {
-    if (!rawText.trim()) return;
-    setDrafts((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        label: label || `Paste ${prev.length + 1}`,
-        rawText: rawText.trim(),
-        status: "idle",
-        reportType: "portfolio_report",
-      },
-    ]);
+  const addDraft = (raw_text: string, label?: string) => {
+    const text = raw_text.trim();
+    if (!text) return;
+    appendDraft({
+      id: crypto.randomUUID(),
+      label: label || `Paste ${draftFields.length + 1}`,
+      raw_text: text,
+      status: "idle",
+      report_type: "portfolio_report",
+    });
   };
 
   const handleFiles = async (files: FileList | null) => {
@@ -294,19 +304,13 @@ export const Investments: React.FC = () => {
     }
   };
 
-  const handleParse = (draft: Draft) => {
-    setDrafts((prev) =>
-      prev.map((d) =>
-        d.id === draft.id ? { ...d, status: "parsing", error: undefined } : d,
-      ),
-    );
-    parseExport(draft.id, draft.rawText);
-  };
-
-  const updateDraft = (id: string, patch: Partial<Draft>) => {
-    setDrafts((prev) =>
-      prev.map((draft) => (draft.id === id ? { ...draft, ...patch } : draft)),
-    );
+  const handleParse = (draftId: string) => {
+    const index = draftFields.findIndex((d) => d.id === draftId);
+    if (index < 0) return;
+    draftForm.setValue(`drafts.${index}.status`, "parsing");
+    draftForm.setValue(`drafts.${index}.error`, undefined);
+    const rawText = draftForm.getValues(`drafts.${index}.raw_text`) || "";
+    parseExport(draftId, rawText);
   };
 
   const updateHolding = (
@@ -315,33 +319,59 @@ export const Investments: React.FC = () => {
     key: string,
     value: string,
   ) => {
-    setDrafts((prev) =>
-      prev.map((draft) => {
-        if (draft.id !== draftId || !draft.parsedPayload) return draft;
-        const holdings = extractHoldings(draft.parsedPayload);
-        const next = holdings.map((h, idx) =>
-          idx === index ? { ...h, [key]: value } : h,
-        );
-        return {
-          ...draft,
-          parsedPayload: { ...draft.parsedPayload, holdings: next },
-        };
-      }),
+    const draftIndex = draftFields.findIndex((d) => d.id === draftId);
+    if (draftIndex < 0) return;
+    const payload =
+      draftForm.getValues(`drafts.${draftIndex}.parsed_payload`) || {};
+    const holdings = extractHoldings(payload);
+    const next = holdings.map((h, idx) =>
+      idx === index ? { ...h, [key]: value } : h,
     );
+    draftForm.setValue(`drafts.${draftIndex}.parsed_payload`, {
+      ...payload,
+      holdings: next,
+    });
   };
 
-  const handleSave = (draft: Draft) => {
+  const handleSave = async (draftId: string) => {
+    const index = draftFields.findIndex((d) => d.id === draftId);
+    if (index < 0) return;
+    const valid = await draftForm.trigger([
+      `drafts.${index}.raw_text`,
+      `drafts.${index}.portfolio_value`,
+      `drafts.${index}.snapshot_date`,
+    ]);
+    if (!valid) {
+      const error = draftForm.formState.errors.drafts?.[index];
+      toast.error("Fix draft before saving", {
+        description:
+          error?.raw_text?.message ||
+          error?.portfolio_value?.toString() ||
+          "Check the highlighted fields.",
+      });
+      return;
+    }
+    const draft = draftForm.getValues(`drafts.${index}`);
+    const portfolioValue =
+      draft.portfolio_value === undefined || draft.portfolio_value === null
+        ? undefined
+        : (coerceNumber(draft.portfolio_value) ?? undefined);
+    const bedrockTokens =
+      draft.bedrock_max_tokens === undefined ||
+      draft.bedrock_max_tokens === null
+        ? undefined
+        : (coerceNumber(draft.bedrock_max_tokens) ?? undefined);
     saveSnapshot({
       clientId: draft.id,
-      raw_text: draft.rawText,
-      parsed_payload: draft.parsedPayload,
-      snapshot_date: draft.snapshotDate,
-      portfolio_value: draft.portfolioValue,
-      report_type: draft.reportType,
-      account_name: draft.accountName,
-      use_bedrock: draft.useBedrock,
-      bedrock_model_id: draft.bedrockModelId,
-      bedrock_max_tokens: draft.bedrockMaxTokens,
+      raw_text: draft.raw_text,
+      parsed_payload: draft.parsed_payload,
+      snapshot_date: draft.snapshot_date,
+      portfolio_value: portfolioValue,
+      report_type: draft.report_type || "portfolio_report",
+      account_name: draft.account_name,
+      use_bedrock: draft.use_bedrock,
+      bedrock_model_id: draft.bedrock_model_id,
+      bedrock_max_tokens: bedrockTokens,
     });
   };
 
@@ -386,9 +416,12 @@ export const Investments: React.FC = () => {
     )[0];
   }, [snapshots]);
 
-  const renderDraft = (draft: Draft) => {
-    const holdings = extractHoldings(draft.parsedPayload);
-    const status = draft.status;
+  const draftList = draftValues.length ? draftValues : draftFields;
+
+  const renderDraft = (field: Draft, index: number) => {
+    const draft = draftValues[index] ?? field;
+    const holdings = extractHoldings(draft.parsed_payload);
+    const status = (draft.status as DraftStatus) || "idle";
     const isParsing = parseLoading[draft.id];
     const badgeTone =
       status === "parsed"
@@ -421,9 +454,7 @@ export const Investments: React.FC = () => {
                 variant="ghost"
                 size="icon"
                 className="text-slate-500 hover:text-slate-800"
-                onClick={() =>
-                  setDrafts((prev) => prev.filter((d) => d.id !== draft.id))
-                }
+                onClick={() => removeDraft(index)}
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -436,12 +467,9 @@ export const Investments: React.FC = () => {
                   Raw export
                 </Label>
                 <Textarea
-                  value={draft.rawText}
-                  onChange={(e) =>
-                    updateDraft(draft.id, { rawText: e.target.value })
-                  }
                   rows={8}
                   className="font-mono text-sm"
+                  {...draftForm.register(`drafts.${index}.raw_text` as const)}
                 />
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex items-center gap-2">
@@ -450,9 +478,12 @@ export const Investments: React.FC = () => {
                     </Label>
                     <Input
                       type="date"
-                      value={draft.snapshotDate ?? ""}
+                      value={draft.snapshot_date ?? ""}
                       onChange={(e) =>
-                        updateDraft(draft.id, { snapshotDate: e.target.value })
+                        draftForm.setValue(
+                          `drafts.${index}.snapshot_date`,
+                          e.target.value,
+                        )
                       }
                       className="h-9 w-36"
                     />
@@ -464,13 +495,14 @@ export const Investments: React.FC = () => {
                     <Input
                       type="number"
                       inputMode="decimal"
-                      value={draft.portfolioValue ?? ""}
+                      value={draft.portfolio_value ?? ""}
                       onChange={(e) =>
-                        updateDraft(draft.id, {
-                          portfolioValue: e.target.value
-                            ? Number(e.target.value)
-                            : undefined,
-                        })
+                        draftForm.setValue(
+                          `drafts.${index}.portfolio_value`,
+                          e.target.value === ""
+                            ? undefined
+                            : Number(e.target.value),
+                        )
                       }
                       className="h-9 w-32"
                     />
@@ -479,22 +511,29 @@ export const Investments: React.FC = () => {
                     <Label className="text-xs text-slate-600">
                       Use Bedrock
                     </Label>
-                    <Switch
-                      checked={Boolean(draft.useBedrock)}
-                      onCheckedChange={(val) =>
-                        updateDraft(draft.id, { useBedrock: val })
-                      }
+                    <Controller
+                      control={draftForm.control}
+                      name={`drafts.${index}.use_bedrock` as const}
+                      render={({ field: controllerField }) => (
+                        <Switch
+                          checked={Boolean(controllerField.value)}
+                          onCheckedChange={(val) =>
+                            controllerField.onChange(val)
+                          }
+                        />
+                      )}
                     />
                   </div>
                   <div className="flex items-center gap-2">
                     <Label className="text-xs text-slate-600">Model</Label>
                     <select
                       className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800 shadow-sm"
-                      value={draft.bedrockModelId ?? ""}
+                      value={draft.bedrock_model_id ?? ""}
                       onChange={(e) =>
-                        updateDraft(draft.id, {
-                          bedrockModelId: e.target.value || undefined,
-                        })
+                        draftForm.setValue(
+                          `drafts.${index}.bedrock_model_id`,
+                          e.target.value || undefined,
+                        )
                       }
                     >
                       <option value="">Default (Haiku)</option>
@@ -510,13 +549,14 @@ export const Investments: React.FC = () => {
                       type="number"
                       inputMode="numeric"
                       className="h-9 w-20"
-                      value={draft.bedrockMaxTokens ?? ""}
+                      value={draft.bedrock_max_tokens ?? ""}
                       onChange={(e) =>
-                        updateDraft(draft.id, {
-                          bedrockMaxTokens: e.target.value
-                            ? Number(e.target.value)
-                            : undefined,
-                        })
+                        draftForm.setValue(
+                          `drafts.${index}.bedrock_max_tokens`,
+                          e.target.value === ""
+                            ? undefined
+                            : Number(e.target.value),
+                        )
                       }
                       min={100}
                       max={2000}
@@ -527,7 +567,7 @@ export const Investments: React.FC = () => {
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => handleParse(draft)}
+                    onClick={() => handleParse(draft.id)}
                     disabled={isParsing}
                   >
                     {isParsing ? (
@@ -539,7 +579,7 @@ export const Investments: React.FC = () => {
                   </Button>
                   <Button
                     size="sm"
-                    onClick={() => handleSave(draft)}
+                    onClick={() => void handleSave(draft.id)}
                     disabled={saving || status === "parsing"}
                   >
                     {saving ? (
@@ -658,6 +698,40 @@ export const Investments: React.FC = () => {
     );
   };
 
+  const valueSeries = useMemo(() => {
+    const sorted = [...snapshots].sort(
+      (a, b) =>
+        new Date(a.snapshot_date).getTime() -
+        new Date(b.snapshot_date).getTime(),
+    );
+    const cutoff = (() => {
+      const now = new Date();
+      if (range === "3M") return new Date(now.setMonth(now.getMonth() - 3));
+      if (range === "6M") return new Date(now.setMonth(now.getMonth() - 6));
+      if (range === "1Y")
+        return new Date(now.setFullYear(now.getFullYear() - 1));
+      return null;
+    })();
+    const filtered = cutoff
+      ? sorted.filter((snap) => new Date(snap.snapshot_date) >= cutoff)
+      : sorted;
+    return filtered.map((snap) => ({
+      date: snap.snapshot_date,
+      value: deriveSnapshotValue(snap),
+    }));
+  }, [snapshots, range]);
+
+  const totalValue =
+    coerceNumber(metrics?.total_value) ??
+    coerceNumber(valueSeries.at(-1)?.value) ??
+    0;
+  const invested = coerceNumber(metrics?.invested) ?? 0;
+  const realizedPl = coerceNumber(metrics?.realized_pl) ?? 0;
+  const unrealizedPl = coerceNumber(metrics?.unrealized_pl) ?? 0;
+  const twr = coerceNumber(metrics?.twr);
+  const irr = coerceNumber(metrics?.irr);
+  const benchmarkChange = coerceNumber(metrics?.benchmark_change_pct);
+
   return (
     <MotionPage className="space-y-4">
       <StaggerWrap className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
@@ -744,7 +818,7 @@ export const Investments: React.FC = () => {
                 TWR:{" "}
                 {twr !== undefined && twr !== null
                   ? `${(twr * 100).toFixed(1)}%`
-                  : "—"}
+                  : "-"}
               </p>
             </CardContent>
           </Card>
@@ -756,13 +830,13 @@ export const Investments: React.FC = () => {
               <p className="text-lg font-semibold text-slate-900">
                 {irr !== undefined && irr !== null
                   ? `${(irr * 100).toFixed(1)}%`
-                  : "—"}
+                  : "-"}
               </p>
               <p className="text-xs text-slate-500">
                 Benchmark:{" "}
                 {benchmarkChange !== undefined && benchmarkChange !== null
                   ? `${(benchmarkChange * 100).toFixed(1)}%`
-                  : "—"}
+                  : "-"}
               </p>
             </CardContent>
           </Card>
@@ -783,19 +857,25 @@ export const Investments: React.FC = () => {
                   Paste raw text
                 </Label>
                 <Textarea
-                  value={pasteValue}
-                  onChange={(e) => setPasteValue(e.target.value)}
                   rows={6}
-                  placeholder="Paste the full Nordnet export text here…"
+                  placeholder="Paste the full Nordnet export text here..."
                   className="font-mono text-sm"
+                  {...pasteForm.register("pasteValue")}
                 />
+                {pasteForm.formState.errors.pasteValue ? (
+                  <p className="text-xs text-rose-600">
+                    {pasteForm.formState.errors.pasteValue.message}
+                  </p>
+                ) : null}
                 <Button
                   size="sm"
-                  onClick={() => {
-                    addDraft(pasteValue);
-                    setPasteValue("");
-                  }}
-                  disabled={!pasteValue.trim()}
+                  onClick={() =>
+                    void pasteForm.handleSubmit((values) => {
+                      addDraft(values.pasteValue);
+                      pasteForm.reset({ pasteValue: "" });
+                    })()
+                  }
+                  disabled={!pasteForm.watch("pasteValue")?.trim()}
                 >
                   <Plus className="mr-2 h-4 w-4" />
                   Add pasted export
@@ -833,11 +913,11 @@ export const Investments: React.FC = () => {
                 </div>
               </div>
             </div>
-            {drafts.length ? (
+            {draftList.length ? (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium text-slate-800">
-                    Drafts ({drafts.length})
+                    Drafts ({draftList.length})
                   </p>
                   <div className="flex items-center gap-2 text-xs text-slate-500">
                     <Check className="h-4 w-4 text-emerald-500" />
@@ -845,7 +925,9 @@ export const Investments: React.FC = () => {
                   </div>
                 </div>
                 <div className="space-y-3">
-                  {drafts.map((draft) => renderDraft(draft))}
+                  {draftFields.map((field, idx) =>
+                    renderDraft(field as Draft, idx),
+                  )}
                 </div>
               </div>
             ) : (
@@ -963,7 +1045,7 @@ export const Investments: React.FC = () => {
                       <TableHead>Holding</TableHead>
                       <TableHead className="text-right">Now</TableHead>
                       <TableHead className="text-right">Prev</TableHead>
-                      <TableHead className="text-right">Δ</TableHead>
+                      <TableHead className="text-right">Delta</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1126,7 +1208,7 @@ export const Investments: React.FC = () => {
                           {tx.transaction_type}
                         </TableCell>
                         <TableCell className="text-slate-800">
-                          {tx.description || tx.holding_name || "—"}
+                          {tx.description || tx.holding_name || "-"}
                         </TableCell>
                         <TableCell
                           className={cn(

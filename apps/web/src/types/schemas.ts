@@ -188,7 +188,7 @@ export const subscriptionListSchema = z.object({
   subscriptions: z.array(subscriptionSchema),
 });
 
-const bankImportTypeSchema = z.enum([
+export const bankImportTypeSchema = z.enum([
   "circle_k_mastercard",
   "seb",
   "swedbank",
@@ -405,4 +405,12 @@ export const netWorthProjectionResponseSchema = z.object({
   current: money,
   cagr: nullableMoney,
   points: z.array(netWorthProjectionPointSchema),
+});
+
+export const authSessionSchema = z.object({
+  email: z.string().email(),
+  accessToken: z.string().min(1),
+  idToken: z.string().min(1),
+  refreshToken: z.string().min(1),
+  isDemo: z.boolean().optional(),
 });
