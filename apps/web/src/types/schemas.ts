@@ -4,17 +4,18 @@ import {
   BudgetPeriod,
   CategoryType,
   InterestCompound,
+  LoanEventType,
   TransactionStatus,
   TransactionType,
-} from "./api";
+} from "./enums";
 
-const money = z.union([z.coerce.number(), z.string()]);
-const optionalMoney = money.optional();
-const nullableMoney = money.nullable().optional();
-const nullableString = z.string().nullable().optional();
-const dateString = z.string(); // keep loose to match API
-const numeric = z.coerce.number();
-const optionalNumeric = numeric.optional();
+export const money = z.union([z.coerce.number(), z.string()]);
+export const optionalMoney = money.optional();
+export const nullableMoney = money.nullable().optional();
+export const nullableString = z.string().nullable().optional();
+export const dateString = z.string(); // keep loose to match API
+export const numeric = z.coerce.number();
+export const optionalNumeric = numeric.optional();
 
 export const loanSchema = z.object({
   id: z.string(),
@@ -48,8 +49,36 @@ export const accountListSchema = z.object({
   accounts: z.array(accountSchema),
 });
 
-export type AccountSchema = z.infer<typeof accountSchema>;
-export type AccountListSchema = z.infer<typeof accountListSchema>;
+export const loanScheduleEntrySchema = z.object({
+  period: numeric,
+  due_date: dateString,
+  payment_amount: z.string(),
+  interest_amount: z.string(),
+  principal_amount: z.string(),
+  remaining_principal: z.string(),
+});
+
+export const loanScheduleSchema = z.object({
+  account_id: z.string(),
+  loan_id: z.string(),
+  generated_at: dateString,
+  as_of_date: dateString,
+  schedule: z.array(loanScheduleEntrySchema),
+});
+
+export const loanEventSchema = z.object({
+  id: z.string(),
+  loan_id: z.string(),
+  transaction_id: z.string(),
+  transaction_leg_id: z.string().nullable().optional(),
+  event_type: z.nativeEnum(LoanEventType),
+  amount: z.string(),
+  occurred_at: dateString,
+});
+
+export const loanEventsResponseSchema = z.object({
+  events: z.array(loanEventSchema),
+});
 
 export const categorySchema = z.object({
   id: z.string(),
@@ -82,7 +111,11 @@ export const budgetProgressListSchema = z.object({
   budgets: z.array(budgetProgressSchema),
 });
 
-const transactionLegSchema = z.object({
+export const budgetListSchema = z.object({
+  budgets: z.array(budgetSchema),
+});
+
+export const transactionLegSchema = z.object({
   id: z.string(),
   account_id: z.string(),
   amount: z.string(),
@@ -383,7 +416,7 @@ export const warmupResponseSchema = z.object({
   message: nullableString,
 });
 
-const cashflowForecastPointSchema = z.object({
+export const cashflowForecastPointSchema = z.object({
   date: z.string(),
   balance: money,
 });
@@ -396,7 +429,7 @@ export const cashflowForecastResponseSchema = z.object({
   points: z.array(cashflowForecastPointSchema),
 });
 
-const netWorthProjectionPointSchema = z.object({
+export const netWorthProjectionPointSchema = z.object({
   date: z.string(),
   net_worth: money,
 });
@@ -414,3 +447,83 @@ export const authSessionSchema = z.object({
   refreshToken: z.string().min(1),
   isDemo: z.boolean().optional(),
 });
+
+export type LoanRead = z.infer<typeof loanSchema>;
+export type AccountRead = z.infer<typeof accountSchema>;
+export type AccountWithBalance = AccountRead;
+export type AccountListResponse = z.infer<typeof accountListSchema>;
+export type LoanScheduleEntry = z.infer<typeof loanScheduleEntrySchema>;
+export type LoanScheduleRead = z.infer<typeof loanScheduleSchema>;
+export type LoanEventRead = z.infer<typeof loanEventSchema>;
+export type CategoryRead = z.infer<typeof categorySchema>;
+export type CategoryListResponse = z.infer<typeof categoryListSchema>;
+export type BudgetRead = z.infer<typeof budgetSchema>;
+export type BudgetProgress = z.infer<typeof budgetProgressSchema>;
+export type BudgetListResponse = z.infer<typeof budgetListSchema>;
+export type BudgetProgressListResponse = z.infer<
+  typeof budgetProgressListSchema
+>;
+export type TransactionLegRead = z.infer<typeof transactionLegSchema>;
+export type TransactionRead = z.infer<typeof transactionSchema>;
+export type TransactionListResponse = z.infer<typeof transactionListSchema>;
+export type MonthlyReportEntry = z.infer<
+  typeof monthlyReportSchema
+>["results"][number];
+export type YearlyReportEntry = z.infer<
+  typeof yearlyReportSchema
+>["results"][number];
+export type QuarterlyReportEntry = z.infer<
+  typeof quarterlyReportSchema
+>["results"][number];
+export type TotalReportRead = z.infer<typeof totalReportSchema>;
+export type NetWorthPoint = z.infer<
+  typeof netWorthHistorySchema
+>["points"][number];
+export type NetWorthHistoryResponse = z.infer<typeof netWorthHistorySchema>;
+export type SubscriptionRead = z.infer<typeof subscriptionSchema>;
+export type SubscriptionSummaryRead = z.infer<typeof subscriptionSummarySchema>;
+export type SubscriptionSummaryResponse = z.infer<
+  typeof subscriptionSummaryResponseSchema
+>;
+export type SubscriptionListResponse = z.infer<typeof subscriptionListSchema>;
+export type ImportError = z.infer<typeof importErrorSchema>;
+export type ImportFileRead = z.infer<typeof importFileSchema>;
+export type ImportRowRead = z.infer<typeof importRowSchema>;
+export type ImportBatch = z.infer<typeof importBatchSchema>;
+export type ImportListResponse = z.infer<typeof importListResponseSchema>;
+export type ImportSession = z.infer<typeof importSessionSchema>;
+export type ImportSessionResponse = z.infer<typeof importSessionResponseSchema>;
+export type InvestmentHoldingRead = z.infer<typeof investmentHoldingSchema>;
+export type InvestmentSnapshot = z.infer<typeof investmentSnapshotSchema>;
+export type InvestmentSnapshotResponse = z.infer<
+  typeof investmentSnapshotResponseSchema
+>;
+export type InvestmentSnapshotListResponse = z.infer<
+  typeof investmentSnapshotListResponseSchema
+>;
+export type InvestmentTransactionRead = z.infer<
+  typeof investmentTransactionSchema
+>;
+export type InvestmentTransactionListResponse = z.infer<
+  typeof investmentTransactionListSchema
+>;
+export type InvestmentPerformance = z.infer<typeof investmentPerformanceSchema>;
+export type InvestmentMetricsResponse = z.infer<
+  typeof investmentMetricsResponseSchema
+>;
+export type NordnetParseResponse = z.infer<typeof nordnetParseResponseSchema>;
+export type GoalRead = z.infer<typeof goalSchema>;
+export type GoalListResponse = z.infer<typeof goalListSchema>;
+export type SettingsPayload = z.infer<typeof settingsPayloadSchema>;
+export type SettingsResponse = z.infer<typeof settingsResponseSchema>;
+export type WarmupResponse = z.infer<typeof warmupResponseSchema>;
+export type CashflowForecastPoint = z.infer<typeof cashflowForecastPointSchema>;
+export type CashflowForecastResponse = z.infer<
+  typeof cashflowForecastResponseSchema
+>;
+export type NetWorthProjectionPoint = z.infer<
+  typeof netWorthProjectionPointSchema
+>;
+export type NetWorthProjectionResponse = z.infer<
+  typeof netWorthProjectionResponseSchema
+>;

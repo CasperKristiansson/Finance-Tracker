@@ -8,6 +8,7 @@ import {
   setLoanSchedule,
 } from "@/features/loans/loansSlice";
 import type { LoanEventRead, LoanScheduleRead } from "@/types/api";
+import { loanEventsResponseSchema, loanScheduleSchema } from "@/types/schemas";
 
 export const FetchLoanSchedule = createAction<{
   accountId: string;
@@ -34,7 +35,11 @@ function* handleFetchSchedule(action: ReturnType<typeof FetchLoanSchedule>) {
 
     const response: LoanScheduleRead = yield call(
       callApiWithAuth,
-      { path: `/loans/${accountId}/schedule`, query },
+      {
+        path: `/loans/${accountId}/schedule`,
+        query,
+        schema: loanScheduleSchema,
+      },
       { loadingKey },
     );
 
@@ -63,7 +68,11 @@ function* handleFetchEvents(action: ReturnType<typeof FetchLoanEvents>) {
 
     const response: { events: LoanEventRead[] } = yield call(
       callApiWithAuth,
-      { path: `/loans/${accountId}/events`, query },
+      {
+        path: `/loans/${accountId}/events`,
+        query,
+        schema: loanEventsResponseSchema,
+      },
       { loadingKey },
     );
 
