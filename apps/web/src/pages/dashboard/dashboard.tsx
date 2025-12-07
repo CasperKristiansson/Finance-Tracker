@@ -1078,9 +1078,15 @@ export const Dashboard: React.FC = () => {
               className="w-auto"
             >
               <TabsList className="bg-slate-100">
-                <TabsTrigger value="all">All</TabsTrigger>
-                <TabsTrigger value="income">Income</TabsTrigger>
-                <TabsTrigger value="expense">Expense</TabsTrigger>
+                <TabsTrigger value="all" className="cursor-pointer">
+                  All
+                </TabsTrigger>
+                <TabsTrigger value="income" className="cursor-pointer">
+                  Income
+                </TabsTrigger>
+                <TabsTrigger value="expense" className="cursor-pointer">
+                  Expense
+                </TabsTrigger>
               </TabsList>
             </Tabs>
           </CardHeader>
