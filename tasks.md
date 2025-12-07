@@ -1,14 +1,11 @@
-React Hook Form + Zod Adoption
-==============================
-Goal: full-stack type-safe validation and leaner renders by using react-hook-form with zod resolvers on every user input surface, and zod schemas for every API response wired through `apiFetch`/sagas. Perfect state = zero uncontrolled state shims for forms, all network payloads parsed/guarded, and fewer needless controlled-input re-renders.
+# React Hook Form + Zod Adoption – Remaining Work
 
-Current coverage
-- Account modal uses react-hook-form + zod (debt-only requirements handled).
-- Response validation via `apiFetch.schema` for: accounts, categories, budgets, transactions (list/recent/create/update), reports (monthly/yearly/quarterly/total/net-worth), subscription summary.
+Goal: finish end-to-end migration to `react-hook-form` + `@hookform/resolvers/zod` with runtime-validated API responses and fewer controlled re-renders.
 
-Remaining tasks
-- API schemas: add zod schemas for imports (sessions, commits), investments (snapshots list/detail, transactions, metrics, parse/save), goals, settings, cash-flow forecasts, warmup/status, auth/whoami if applicable. Keep number/string money fields tolerant (string | number) and optional/nullability aligned to `types/api.ts`.
-- Wire schemas: plug the new schemas into saga calls and any direct `apiFetch` usage (imports, investments, goals, settings, warmup, auth redirects), ensuring decode happens before state updates.
-- Form migrations to react-hook-form + zod: categories create/update, budgets CRUD, transactions modal/create flows, goals create/edit, settings profile/theme, imports mapping/commit UI, investments paste/upload/draft edits, subscription inline matcher edits, login/cover forms. Trim/normalize payloads in resolvers and avoid local useState field tracking.
-- Type plumbing: reuse `z.infer` types where possible (e.g., list item DTOs) and coerce numeric strings in schemas to reduce downstream casting. Add helpers for common money/date coercion.
-- Smoke tests: after each migration, re-run lint/tsc and sanity-click paths for the affected form to ensure no uncontrolled-to-controlled warnings and that API validation errors surface in the UI.
+Open tasks
+
+- Imports UI: migrate file mapping/commit overrides to RHF + zod; trim payloads before POST; decode import session/list responses with schemas everywhere.
+- Investments flows: move paste/upload/draft edit forms to RHF + zod; ensure parse/save/metrics/transactions responses use schemas and normalized numeric coercion.
+- Auth/whoami/warmup: add whoami/auth session schema (if backend available) and validate redirects; ensure warmup/status UI uses RHF where applicable and surfaces schema errors.
+- Subscriptions: extend matcher form to cover inline create/edit flows if any; reuse `z.infer` types to reduce interface/schema drift.
+- Verification: after each migration, run `npm run lint -w apps/web` and sanity-click the migrated forms to confirm no uncontrolled warnings and API validation errors appear.\*\*\* End Patch

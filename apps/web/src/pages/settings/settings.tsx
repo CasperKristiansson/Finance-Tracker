@@ -1,3 +1,4 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Cpu,
   Loader2,
@@ -10,7 +11,9 @@ import {
   XCircle,
 } from "lucide-react";
 import { useTheme } from "next-themes";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo } from "react";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
 import { useAppSelector } from "@/app/hooks";
 import { MotionPage } from "@/components/motion-presets";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +52,13 @@ const themeOptions: {
   },
 ];
 
+const profileSchema = z.object({
+  first_name: z.string().min(1, "First name required").trim(),
+  last_name: z.string().min(1, "Last name required").trim(),
+});
+
+type ProfileFormValues = z.infer<typeof profileSchema>;
+
 const formatTimestamp = (value?: string) => {
   if (!value) return "Not synced yet";
   try {
@@ -78,32 +88,39 @@ export const Settings: React.FC = () => {
     changeLastName,
   } = useSettings();
   const { setTheme, resolvedTheme } = useTheme();
-  const [profileError, setProfileError] = useState<string | null>(null);
+  const profileForm = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: {
+      first_name: firstName ?? "",
+      last_name: lastName ?? "",
+    },
+  });
 
   useEffect(() => {
     setTheme(theme);
   }, [setTheme, theme]);
 
-  const missingProfile = !firstName || !lastName;
+  const watchedProfile = profileForm.watch();
+  const missingProfile =
+    !watchedProfile.first_name || !watchedProfile.last_name;
 
   const handleThemeChange = (next: ThemePreference) => {
     setTheme(next);
     changeTheme(next);
   };
 
-  const handleProfileSubmit = (event?: React.FormEvent) => {
-    event?.preventDefault();
-    const trimmedFirst = (firstName || "").trim();
-    const trimmedLast = (lastName || "").trim();
-    if (!trimmedFirst || !trimmedLast) {
-      setProfileError("Please add both first and last name.");
-      return;
-    }
-    changeFirstName(trimmedFirst);
-    changeLastName(trimmedLast);
-    setProfileError(null);
+  const handleProfileSubmit = profileForm.handleSubmit((values) => {
+    changeFirstName(values.first_name);
+    changeLastName(values.last_name);
     saveSettings();
-  };
+  });
+
+  useEffect(() => {
+    profileForm.reset({
+      first_name: firstName ?? "",
+      last_name: lastName ?? "",
+    });
+  }, [firstName, lastName, profileForm]);
 
   const headerStatus = useMemo(() => {
     if (saving) return "Saving to API";
@@ -308,27 +325,28 @@ export const Settings: React.FC = () => {
                 <Label htmlFor="first-name">First name</Label>
                 <Input
                   id="first-name"
-                  value={firstName ?? ""}
-                  onChange={(e) => changeFirstName(e.target.value)}
                   placeholder="Ada"
-                  required
+                  {...profileForm.register("first_name")}
                 />
+                {profileForm.formState.errors.first_name ? (
+                  <p className="text-xs text-rose-600">
+                    {profileForm.formState.errors.first_name.message}
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="last-name">Last name</Label>
                 <Input
                   id="last-name"
-                  value={lastName ?? ""}
-                  onChange={(e) => changeLastName(e.target.value)}
                   placeholder="Lovelace"
-                  required
+                  {...profileForm.register("last_name")}
                 />
+                {profileForm.formState.errors.last_name ? (
+                  <p className="text-xs text-rose-600">
+                    {profileForm.formState.errors.last_name.message}
+                  </p>
+                ) : null}
               </div>
-              {profileError ? (
-                <div className="text-sm text-rose-600 md:col-span-2">
-                  {profileError}
-                </div>
-              ) : null}
               <div className="flex flex-wrap gap-2 md:col-span-2">
                 <Button type="submit" disabled={saving} className="gap-2">
                   {saving ? (

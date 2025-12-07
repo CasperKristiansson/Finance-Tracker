@@ -1,6 +1,9 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle, Goal as GoalIcon, Plus } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { z } from "zod";
 import { useAppSelector } from "@/app/hooks";
 import { MotionPage } from "@/components/motion-presets";
 import { Badge } from "@/components/ui/badge";
@@ -11,11 +14,20 @@ import { Progress } from "@/components/ui/progress";
 import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useCategoriesApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
-import {
-  type GoalRead,
-  type GoalCreateRequest,
-  type GoalListResponse,
-} from "@/types/api";
+import { type GoalRead, type GoalListResponse } from "@/types/api";
+import { goalListSchema } from "@/types/schemas";
+
+const goalFormSchema = z.object({
+  name: z.string().min(1, "Name required").trim(),
+  target_amount: z.string().min(1, "Target amount required").trim(),
+  target_date: z.string().optional(),
+  category_id: z.string().optional(),
+  account_id: z.string().optional(),
+  subscription_id: z.string().optional(),
+  note: z.string().optional(),
+});
+
+type GoalFormValues = z.infer<typeof goalFormSchema>;
 
 const formatCurrency = (value: string | number) =>
   Number(value || 0).toLocaleString("en-US", {
@@ -40,14 +52,17 @@ export const Goals: React.FC = () => {
   const { items: categories, fetchCategories } = useCategoriesApi();
   const [goals, setGoals] = useState<GoalRead[]>([]);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState<GoalCreateRequest>({
-    name: "",
-    target_amount: "",
-    target_date: "",
-    category_id: "",
-    account_id: "",
-    subscription_id: "",
-    note: "",
+  const goalForm = useForm<GoalFormValues>({
+    resolver: zodResolver(goalFormSchema),
+    defaultValues: {
+      name: "",
+      target_amount: "",
+      target_date: "",
+      category_id: "",
+      account_id: "",
+      subscription_id: "",
+      note: "",
+    },
   });
 
   useEffect(() => {
@@ -62,6 +77,7 @@ export const Goals: React.FC = () => {
     try {
       const { data } = await apiFetch<GoalListResponse>({
         path: "/goals",
+        schema: goalListSchema,
         token,
       });
       setGoals(data.goals ?? []);
@@ -75,27 +91,23 @@ export const Goals: React.FC = () => {
     }
   };
 
-  const submitGoal = async () => {
-    if (!form.name || !form.target_amount) {
-      toast.error("Add a name and target amount");
-      return;
-    }
+  const submitGoal = goalForm.handleSubmit(async (values) => {
     try {
       await apiFetch({
         path: "/goals",
         method: "POST",
         token,
         body: {
-          ...form,
-          target_date: form.target_date || null,
-          category_id: form.category_id || null,
-          account_id: form.account_id || null,
-          subscription_id: form.subscription_id || null,
-          note: form.note || null,
+          ...values,
+          target_date: values.target_date || null,
+          category_id: values.category_id || null,
+          account_id: values.account_id || null,
+          subscription_id: values.subscription_id || null,
+          note: values.note || null,
         },
       });
       toast.success("Goal added");
-      setForm({
+      goalForm.reset({
         name: "",
         target_amount: "",
         target_date: "",
@@ -110,7 +122,7 @@ export const Goals: React.FC = () => {
         description: error instanceof Error ? error.message : "Try again.",
       });
     }
-  };
+  });
 
   const totals = useMemo(() => {
     const totalTarget = goals.reduce(
@@ -142,38 +154,40 @@ export const Goals: React.FC = () => {
             automatically.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Input
-            placeholder="Goal name"
-            value={form.name}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, name: e.target.value }))
-            }
-            className="w-48"
-          />
-          <Input
-            type="number"
-            placeholder="Target amount"
-            value={form.target_amount}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, target_amount: e.target.value }))
-            }
-            className="w-32"
-          />
+        <form className="flex flex-wrap gap-2" onSubmit={submitGoal}>
+          <div className="flex flex-col gap-1">
+            <Input
+              placeholder="Goal name"
+              className="w-48"
+              {...goalForm.register("name")}
+            />
+            {goalForm.formState.errors.name ? (
+              <span className="text-xs text-rose-600">
+                {goalForm.formState.errors.name.message}
+              </span>
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-1">
+            <Input
+              type="number"
+              placeholder="Target amount"
+              className="w-32"
+              {...goalForm.register("target_amount")}
+            />
+            {goalForm.formState.errors.target_amount ? (
+              <span className="text-xs text-rose-600">
+                {goalForm.formState.errors.target_amount.message}
+              </span>
+            ) : null}
+          </div>
           <Input
             type="date"
-            value={form.target_date || ""}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, target_date: e.target.value }))
-            }
             className="w-40"
+            {...goalForm.register("target_date")}
           />
           <select
             className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
-            value={form.account_id || ""}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, account_id: e.target.value }))
-            }
+            {...goalForm.register("account_id")}
           >
             <option value="">Account (optional)</option>
             {accounts.map((acc, idx) => (
@@ -184,10 +198,7 @@ export const Goals: React.FC = () => {
           </select>
           <select
             className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
-            value={form.category_id || ""}
-            onChange={(e) =>
-              setForm((prev) => ({ ...prev, category_id: e.target.value }))
-            }
+            {...goalForm.register("category_id")}
           >
             <option value="">Category (optional)</option>
             {categories.map((cat) => (
@@ -196,10 +207,10 @@ export const Goals: React.FC = () => {
               </option>
             ))}
           </select>
-          <Button className="gap-2" onClick={submitGoal}>
+          <Button className="gap-2" type="submit">
             <Plus className="h-4 w-4" /> Add goal
           </Button>
-        </div>
+        </form>
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">

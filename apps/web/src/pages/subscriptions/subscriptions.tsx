@@ -7,7 +7,9 @@ import {
   ToggleRight,
 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { z } from "zod";
 import { useAppSelector } from "@/app/hooks";
 import {
   MotionPage,
@@ -29,6 +31,26 @@ import type {
 } from "@/types/api";
 import { subscriptionSummaryResponseSchema } from "@/types/schemas";
 
+type MatcherRow = {
+  id: string;
+  matcher_text?: string;
+  matcher_amount_tolerance: number | null;
+  matcher_day_of_month: number | null;
+  category_id?: string | null;
+};
+
+type MatcherFormValues = {
+  rows: MatcherRow[];
+};
+
+const matcherRowSchema: z.ZodType<MatcherRow> = z.object({
+  id: z.string(),
+  matcher_text: z.string().optional(),
+  matcher_amount_tolerance: z.number().nullable(),
+  matcher_day_of_month: z.number().nullable(),
+  category_id: z.string().nullable().optional(),
+});
+
 const numberValue = (value: string | number | null | undefined) =>
   value === null || value === undefined ? 0 : Number(value);
 
@@ -39,6 +61,12 @@ const formatAmount = (value: string | number | null | undefined) =>
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(numberValue(value));
+
+const toNumberOrNull = (value: string | number | null | undefined) => {
+  if (value === undefined || value === null || value === "") return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
 
 const Sparkline: React.FC<{ data: Array<string | number> }> = ({ data }) => {
   const points = data.map((value) => numberValue(value));
@@ -84,7 +112,10 @@ export const Subscriptions: React.FC = () => {
   const [subscriptions, setSubscriptions] = useState<SubscriptionSummaryRead[]>(
     [],
   );
-  const [editing, setEditing] = useState<Record<string, EditableFields>>({});
+
+  const matcherForm = useForm<MatcherFormValues>({
+    defaultValues: { rows: [] },
+  });
 
   const load = async () => {
     if (!token) return;
@@ -96,6 +127,17 @@ export const Subscriptions: React.FC = () => {
         token,
       });
       setSubscriptions(data.subscriptions ?? []);
+      matcherForm.reset({
+        rows: (data.subscriptions ?? []).map((sub) => ({
+          id: sub.id,
+          matcher_text: sub.matcher_text ?? "",
+          matcher_amount_tolerance: toNumberOrNull(
+            sub.matcher_amount_tolerance,
+          ),
+          matcher_day_of_month: toNumberOrNull(sub.matcher_day_of_month),
+          category_id: sub.category_id ?? null,
+        })),
+      });
     } catch (error) {
       toast.error("Unable to load subscriptions", {
         description:
@@ -118,18 +160,28 @@ export const Subscriptions: React.FC = () => {
     return { active, archived };
   }, [subscriptions]);
 
-  const onEditChange = (id: string, patch: Partial<EditableFields>) => {
-    setEditing((prev) => ({
-      ...prev,
-      [id]: { ...(prev[id] || {}), ...patch },
-    }));
-  };
+  const rows = (matcherForm.watch("rows") as MatcherRow[] | undefined) ?? [];
 
   const saveMatcher = async (subscription: SubscriptionSummaryRead) => {
     if (!token) return;
+    const row = rows?.find((r: MatcherRow) => r.id === subscription.id);
+    const parsed = matcherRowSchema.safeParse(row);
+    if (!parsed.success) {
+      void matcherForm.trigger();
+      toast.error("Fix matcher values", {
+        description: parsed.error.issues[0]?.message,
+      });
+      return;
+    }
     setSavingId(subscription.id);
     try {
-      const payload = editing[subscription.id];
+      const payload: Partial<EditableFields> = {
+        matcher_text: parsed.data.matcher_text?.trim() || undefined,
+        matcher_amount_tolerance: parsed.data.matcher_amount_tolerance,
+        matcher_day_of_month: parsed.data.matcher_day_of_month,
+        category_id: parsed.data.category_id || null,
+      };
+
       await apiFetch({
         path: `/subscriptions/${subscription.id}`,
         method: "PATCH",
@@ -137,11 +189,6 @@ export const Subscriptions: React.FC = () => {
         token,
       });
       toast.success("Subscription updated", { description: subscription.name });
-      setEditing((prev) => {
-        const next = { ...prev };
-        delete next[subscription.id];
-        return next;
-      });
       await load();
     } catch (error) {
       toast.error("Update failed", {
@@ -194,7 +241,15 @@ export const Subscriptions: React.FC = () => {
     return (
       <StaggerWrap className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {list.map((sub, index) => {
-          const edit = editing[sub.id] || {};
+          const rowIndex =
+            rows?.findIndex((r: MatcherRow) => r.id === sub.id) ?? -1;
+          if (rowIndex < 0) return null;
+          const edit = rows?.[rowIndex] || {
+            matcher_text: sub.matcher_text,
+            matcher_amount_tolerance: sub.matcher_amount_tolerance,
+            matcher_day_of_month: sub.matcher_day_of_month,
+            category_id: sub.category_id,
+          };
           const categoryName =
             categories.find(
               (c: CategoryRead) =>
@@ -275,10 +330,9 @@ export const Subscriptions: React.FC = () => {
                     <div className="space-y-2">
                       <Input
                         size="sm"
-                        value={edit.matcher_text ?? sub.matcher_text}
-                        onChange={(e) =>
-                          onEditChange(sub.id, { matcher_text: e.target.value })
-                        }
+                        {...matcherForm.register(
+                          `rows.${rowIndex}.matcher_text` as const,
+                        )}
                         placeholder="Matcher text or regex"
                         className="h-8"
                       />
@@ -286,40 +340,42 @@ export const Subscriptions: React.FC = () => {
                         <Input
                           size="sm"
                           type="number"
-                          value={`${edit.matcher_amount_tolerance ?? sub.matcher_amount_tolerance ?? ""}`}
-                          onChange={(e) =>
-                            onEditChange(sub.id, {
-                              matcher_amount_tolerance: e.target.value
-                                ? Number(e.target.value)
-                                : null,
-                            })
-                          }
+                          {...matcherForm.register(
+                            `rows.${rowIndex}.matcher_amount_tolerance` as const,
+                            {
+                              setValueAs: (val) =>
+                                val === "" || val === undefined
+                                  ? null
+                                  : Number(val),
+                            },
+                          )}
                           placeholder="Amount tolerance"
                           className="h-8"
                         />
                         <Input
                           size="sm"
                           type="number"
-                          value={`${edit.matcher_day_of_month ?? sub.matcher_day_of_month ?? ""}`}
-                          onChange={(e) =>
-                            onEditChange(sub.id, {
-                              matcher_day_of_month: e.target.value
-                                ? Number(e.target.value)
-                                : null,
-                            })
-                          }
+                          {...matcherForm.register(
+                            `rows.${rowIndex}.matcher_day_of_month` as const,
+                            {
+                              setValueAs: (val) =>
+                                val === "" || val === undefined
+                                  ? null
+                                  : Number(val),
+                            },
+                          )}
                           placeholder="Day of month"
                           className="h-8"
                         />
                       </div>
                       <select
                         className="h-8 rounded border border-slate-200 px-2 text-sm"
-                        value={edit.category_id ?? sub.category_id ?? ""}
-                        onChange={(e) =>
-                          onEditChange(sub.id, {
-                            category_id: e.target.value || null,
-                          })
-                        }
+                        {...matcherForm.register(
+                          `rows.${rowIndex}.category_id` as const,
+                          {
+                            setValueAs: (val) => (val === "" ? null : val),
+                          },
+                        )}
                       >
                         <option value="">No category</option>
                         {categories.map((cat) => (
@@ -347,7 +403,21 @@ export const Subscriptions: React.FC = () => {
                       <Button
                         size="icon"
                         variant="ghost"
-                        onClick={() => onEditChange(sub.id, {})}
+                        onClick={() =>
+                          matcherForm.reset({
+                            rows: subscriptions.map((s) => ({
+                              id: s.id,
+                              matcher_text: s.matcher_text ?? "",
+                              matcher_amount_tolerance: toNumberOrNull(
+                                s.matcher_amount_tolerance,
+                              ),
+                              matcher_day_of_month: toNumberOrNull(
+                                s.matcher_day_of_month,
+                              ),
+                              category_id: s.category_id ?? null,
+                            })),
+                          })
+                        }
                         className="text-slate-500"
                       >
                         <RefreshCw className="h-4 w-4" />

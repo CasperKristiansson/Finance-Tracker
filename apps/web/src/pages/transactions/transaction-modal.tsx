@@ -1,5 +1,8 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { X, Plus, Trash2 } from "lucide-react";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
   useAccountsApi,
@@ -9,11 +12,44 @@ import {
 import { cn } from "@/lib/utils";
 import { TransactionStatus } from "@/types/api";
 
-type LegInput = {
-  id: string;
-  account_id: string;
-  amount: string;
-};
+const legSchema = z.object({
+  account_id: z.string().min(1, "Pick an account"),
+  amount: z.string().min(1, "Add an amount"),
+});
+
+const transactionFormSchema = z
+  .object({
+    description: z.string().min(1, "Description required").trim(),
+    notes: z.string().optional(),
+    category_id: z.string().optional(),
+    status: z.nativeEnum(TransactionStatus),
+    occurred_at: z.string().min(1, "Occurred date required"),
+    posted_at: z.string().optional(),
+    legs: z.array(legSchema).min(2, "Add at least two legs"),
+  })
+  .superRefine((val, ctx) => {
+    const amounts = val.legs.map((leg) => Number(leg.amount));
+    if (amounts.some((amt) => Number.isNaN(amt))) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["legs"],
+        message: "Amounts must be numeric",
+      });
+    }
+    const total = amounts.reduce(
+      (sum, amt) => sum + (Number.isNaN(amt) ? 0 : amt),
+      0,
+    );
+    if (Math.abs(total) > 0.0001) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["legs"],
+        message: "Legs must balance to zero",
+      });
+    }
+  });
+
+type TransactionFormValues = z.infer<typeof transactionFormSchema>;
 
 const statusTone: Record<TransactionStatus, string> = {
   [TransactionStatus.RECORDED]: "bg-slate-100 text-slate-700",
@@ -40,100 +76,84 @@ export const TransactionModal: React.FC<{
   const { items: accounts, fetchAccounts } = useAccountsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
   const { createTransaction } = useTransactionsApi();
+  const today = new Date().toISOString().slice(0, 10);
 
-  const [description, setDescription] = useState("");
-  const [notes, setNotes] = useState("");
-  const [categoryId, setCategoryId] = useState<string>("");
-  const [status, setStatus] = useState<TransactionStatus>(
-    TransactionStatus.RECORDED,
-  );
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const [occurredAt, setOccurredAt] = useState(today);
-  const [postedAt, setPostedAt] = useState(today);
-  const [legs, setLegs] = useState<LegInput[]>([
-    { id: crypto.randomUUID(), account_id: "", amount: "" },
-    { id: crypto.randomUUID(), account_id: "", amount: "" },
-  ]);
-  const [error, setError] = useState<string>("");
-  const [submitting, setSubmitting] = useState(false);
+  const {
+    control,
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<TransactionFormValues>({
+    resolver: zodResolver(transactionFormSchema),
+    defaultValues: {
+      description: "",
+      notes: "",
+      category_id: "",
+      status: TransactionStatus.RECORDED,
+      occurred_at: today,
+      posted_at: today,
+      legs: [
+        { account_id: "", amount: "" },
+        { account_id: "", amount: "" },
+      ],
+    },
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "legs",
+  });
 
   useEffect(() => {
     if (open) {
       fetchAccounts({});
       fetchCategories();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [fetchAccounts, fetchCategories, open]);
 
-  const resetForm = () => {
-    setDescription("");
-    setNotes("");
-    setCategoryId("");
-    setStatus(TransactionStatus.RECORDED);
-    setOccurredAt(today);
-    setPostedAt(today);
-    setLegs([
-      { id: crypto.randomUUID(), account_id: "", amount: "" },
-      { id: crypto.randomUUID(), account_id: "", amount: "" },
-    ]);
-    setError("");
-  };
+  const statusValue = watch("status");
 
-  const validate = () => {
-    if (legs.length < 2) return "Add at least two legs";
-    if (legs.some((leg) => !leg.account_id || !leg.amount))
-      return "Each leg needs an account and amount";
-    const total = legs.reduce((sum, leg) => sum + Number(leg.amount || 0), 0);
-    if (Number.isNaN(total)) return "Amounts must be numeric";
-    if (Math.abs(total) > 0.0001) return "Legs must balance to zero";
-    return "";
-  };
+  const onSubmit = handleSubmit(async (values) => {
+    await createTransaction({
+      description: values.description,
+      notes: values.notes?.trim() || undefined,
+      category_id: values.category_id || undefined,
+      occurred_at: new Date(values.occurred_at).toISOString(),
+      posted_at: values.posted_at
+        ? new Date(values.posted_at).toISOString()
+        : undefined,
+      status: values.status,
+      legs: values.legs.map((leg) => ({
+        account_id: leg.account_id,
+        amount: leg.amount,
+      })),
+    });
+    reset({
+      description: "",
+      notes: "",
+      category_id: "",
+      status: TransactionStatus.RECORDED,
+      occurred_at: today,
+      posted_at: today,
+      legs: [
+        { account_id: "", amount: "" },
+        { account_id: "", amount: "" },
+      ],
+    });
+    onClose();
+  });
 
-  const handleSubmit = async () => {
-    const validation = validate();
-    if (validation) {
-      setError(validation);
-      return;
-    }
-    setError("");
-    setSubmitting(true);
-    try {
-      await createTransaction({
-        description,
-        notes: notes || undefined,
-        category_id: categoryId || undefined,
-        occurred_at: new Date(occurredAt).toISOString(),
-        posted_at: postedAt ? new Date(postedAt).toISOString() : undefined,
-        status,
-        legs: legs.map((leg) => ({
-          account_id: leg.account_id,
-          amount: leg.amount,
-        })),
-      });
-      resetForm();
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unable to create transaction");
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const addLeg = () =>
+    append({
+      account_id: "",
+      amount: "",
+    });
 
-  const updateLeg = (id: string, field: keyof LegInput, value: string) => {
-    setLegs((prev) =>
-      prev.map((leg) => (leg.id === id ? { ...leg, [field]: value } : leg)),
-    );
-  };
-
-  const removeLeg = (id: string) => {
-    setLegs((prev) => prev.filter((leg) => leg.id !== id));
-  };
-
-  const addLeg = () => {
-    setLegs((prev) => [
-      ...prev,
-      { id: crypto.randomUUID(), account_id: "", amount: "" },
-    ]);
+  const removeLeg = (index: number) => {
+    if (fields.length <= 2) return;
+    remove(index);
   };
 
   if (!open) return null;
@@ -146,7 +166,7 @@ export const TransactionModal: React.FC<{
             <h2 className="text-lg font-semibold text-slate-900">
               Add Transaction
             </h2>
-            {statusBadge(status)}
+            {statusBadge(statusValue)}
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
@@ -158,18 +178,21 @@ export const TransactionModal: React.FC<{
               Description
               <input
                 className="rounded border border-slate-200 px-3 py-2"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
                 placeholder="Payee or memo"
+                {...register("description")}
               />
+              {errors.description ? (
+                <span className="text-xs text-rose-600">
+                  {errors.description.message}
+                </span>
+              ) : null}
             </label>
             <label className="flex flex-col gap-1 text-sm text-slate-700">
               Notes
               <textarea
                 className="min-h-[80px] rounded border border-slate-200 px-3 py-2"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
                 placeholder="Optional notes"
+                {...register("notes")}
               />
             </label>
             <div className="grid grid-cols-2 gap-3">
@@ -178,8 +201,7 @@ export const TransactionModal: React.FC<{
                 <input
                   type="date"
                   className="rounded border border-slate-200 px-3 py-2"
-                  value={occurredAt}
-                  onChange={(e) => setOccurredAt(e.target.value)}
+                  {...register("occurred_at")}
                 />
               </label>
               <label className="flex flex-col gap-1 text-sm text-slate-700">
@@ -187,8 +209,7 @@ export const TransactionModal: React.FC<{
                 <input
                   type="date"
                   className="rounded border border-slate-200 px-3 py-2"
-                  value={postedAt}
-                  onChange={(e) => setPostedAt(e.target.value)}
+                  {...register("posted_at")}
                 />
               </label>
             </div>
@@ -197,8 +218,7 @@ export const TransactionModal: React.FC<{
                 Category
                 <select
                   className="rounded border border-slate-200 px-3 py-2"
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
+                  {...register("category_id")}
                 >
                   <option value="">Unassigned</option>
                   {categories.map((cat) => (
@@ -212,10 +232,7 @@ export const TransactionModal: React.FC<{
                 Status
                 <select
                   className="rounded border border-slate-200 px-3 py-2"
-                  value={status}
-                  onChange={(e) =>
-                    setStatus(e.target.value as TransactionStatus)
-                  }
+                  {...register("status")}
                 >
                   {Object.values(TransactionStatus).map((s) => (
                     <option key={s} value={s}>
@@ -234,17 +251,14 @@ export const TransactionModal: React.FC<{
               </Button>
             </div>
             <div className="space-y-2">
-              {legs.map((leg) => (
+              {fields.map((leg, index) => (
                 <div
                   key={leg.id}
                   className="grid grid-cols-[1.5fr,1fr,auto] items-center gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2"
                 >
                   <select
                     className="rounded border border-slate-200 px-2 py-1 text-sm"
-                    value={leg.account_id}
-                    onChange={(e) =>
-                      updateLeg(leg.id, "account_id", e.target.value)
-                    }
+                    {...register(`legs.${index}.account_id` as const)}
                   >
                     <option value="">Select account</option>
                     {accounts.map((acc) => (
@@ -257,38 +271,39 @@ export const TransactionModal: React.FC<{
                     type="number"
                     step="0.01"
                     className="rounded border border-slate-200 px-2 py-1 text-sm"
-                    value={leg.amount}
-                    onChange={(e) =>
-                      updateLeg(leg.id, "amount", e.target.value)
-                    }
                     placeholder="0.00"
+                    {...register(`legs.${index}.amount` as const)}
                   />
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => removeLeg(leg.id)}
-                    disabled={legs.length <= 2}
+                    onClick={() => removeLeg(index)}
+                    disabled={fields.length <= 2}
                   >
                     <Trash2 className="h-4 w-4 text-slate-500" />
                   </Button>
                 </div>
               ))}
             </div>
+            {errors.legs ? (
+              <div className="text-sm text-rose-600">
+                {errors.legs?.message?.toString() ||
+                  (Array.isArray(errors.legs) &&
+                    errors.legs.find((err) => err?.message)?.message)}
+              </div>
+            ) : null}
             <div className="rounded border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
               Legs must balance to zero. Debits are negative, credits are
               positive. Minimum two legs.
             </div>
           </div>
         </div>
-        {error ? (
-          <div className="px-6 pb-2 text-sm text-rose-600">{error}</div>
-        ) : null}
         <div className="flex items-center justify-end gap-2 border-t px-6 py-4">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Saving..." : "Save transaction"}
+          <Button onClick={onSubmit} disabled={isSubmitting}>
+            {isSubmitting ? "Saving..." : "Save transaction"}
           </Button>
         </div>
       </div>

@@ -1,7 +1,10 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 import { toast } from "sonner";
+import { z } from "zod";
 import { useAppSelector } from "@/app/hooks";
 import { MotionPage } from "@/components/motion-presets";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +25,7 @@ import {
   type BudgetProgress,
   type CategoryRead,
 } from "@/types/api";
+import { budgetSchema } from "@/types/schemas";
 
 const periodLabels: Record<BudgetPeriod, string> = {
   [BudgetPeriod.MONTHLY]: "Monthly",
@@ -38,6 +42,28 @@ const formatCurrency = (value: string | number) =>
 
 const categoryLabel = (cat: CategoryRead) =>
   `${cat.icon ? `${cat.icon} ` : ""}${cat.name}`;
+
+const budgetFormSchema = budgetSchema
+  .pick({ category_id: true, period: true, amount: true, note: true })
+  .extend({
+    amount: z.string().min(1, "Add an amount").trim(),
+    note: z.string().optional(),
+  });
+
+type BudgetFormValues = z.infer<typeof budgetFormSchema>;
+
+const wizardSchema = z.object({
+  rows: z.array(budgetFormSchema),
+});
+
+type WizardValues = z.infer<typeof wizardSchema>;
+
+const editBudgetSchema = z.object({
+  amount: z.string().min(1, "Add an amount").trim(),
+  note: z.string().optional(),
+});
+
+type EditBudgetValues = z.infer<typeof editBudgetSchema>;
 
 export const Budgets: React.FC = () => {
   const currentYear = new Date().getFullYear();
@@ -56,25 +82,36 @@ export const Budgets: React.FC = () => {
   const { items: categories, fetchCategories } = useCategoriesApi();
   const { fetchMonthlyReport } = useReportsApi();
   const monthlyState = useAppSelector((state) => state.reports.monthly);
-
-  const [form, setForm] = useState<{
-    category_id: string;
-    period: BudgetPeriod;
-    amount: string;
-    note?: string;
-  }>({
-    category_id: "",
-    period: BudgetPeriod.MONTHLY,
-    amount: "0",
-    note: "",
+  const createForm = useForm<BudgetFormValues>({
+    resolver: zodResolver(budgetFormSchema),
+    defaultValues: {
+      category_id: "",
+      period: BudgetPeriod.MONTHLY,
+      amount: "0",
+      note: "",
+    },
   });
+
+  const wizardForm = useForm<WizardValues>({
+    resolver: zodResolver(wizardSchema),
+    defaultValues: { rows: [] },
+  });
+
+  const wizardArray = useFieldArray({
+    control: wizardForm.control,
+    name: "rows",
+  });
+
+  const wizardRows = wizardForm.watch("rows");
+
+  const editForm = useForm<EditBudgetValues>({
+    resolver: zodResolver(editBudgetSchema),
+    defaultValues: { amount: "", note: "" },
+  });
+
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingAmount, setEditingAmount] = useState<string>("");
-  const [editingNote, setEditingNote] = useState<string>("");
   const [periodFilter, setPeriodFilter] = useState<BudgetPeriod | "all">("all");
-  const [wizardRows, setWizardRows] = useState<
-    { category_id: string; period: BudgetPeriod; amount: string }[]
-  >([]);
+
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -106,10 +143,11 @@ export const Budgets: React.FC = () => {
   }, [availableCategories]);
 
   useEffect(() => {
-    if (!form.category_id && availableCategories.length > 0) {
-      setForm((prev) => ({ ...prev, category_id: availableCategories[0].id }));
+    const firstId = availableCategories[0]?.id;
+    if (!createForm.getValues("category_id") && firstId) {
+      createForm.setValue("category_id", firstId);
     }
-  }, [availableCategories, form.category_id]);
+  }, [availableCategories, createForm]);
 
   useEffect(() => {
     const year = new Date().getFullYear();
@@ -119,15 +157,16 @@ export const Budgets: React.FC = () => {
 
   useEffect(() => {
     if (items.length === 0 && topCategoriesBySpend.length > 0) {
-      setWizardRows(
-        topCategoriesBySpend.map((cat) => ({
+      wizardForm.reset({
+        rows: topCategoriesBySpend.map((cat) => ({
           category_id: cat.id,
           period: BudgetPeriod.MONTHLY,
           amount: "500",
+          note: "",
         })),
-      );
+      });
     }
-  }, [items.length, topCategoriesBySpend]);
+  }, [items.length, topCategoriesBySpend, wizardForm]);
 
   const filteredBudgets = useMemo(
     () =>
@@ -165,42 +204,57 @@ export const Budgets: React.FC = () => {
 
   const startEdit = (budget: BudgetProgress) => {
     setEditingId(budget.id);
-    setEditingAmount(budget.amount);
-    setEditingNote(budget.note ?? "");
+    editForm.reset({
+      amount: budget.amount,
+      note: budget.note ?? "",
+    });
   };
 
-  const submitEdit = () => {
+  const submitEdit = editForm.handleSubmit((values) => {
     if (!editingId) return;
     updateBudget(editingId, {
-      amount: editingAmount,
-      note: editingNote,
+      amount: values.amount,
+      note: values.note,
     });
     toast.success("Budget updated");
     setEditingId(null);
-  };
+  });
 
-  const submitCreate = () => {
-    if (!form.category_id || Number(form.amount) <= 0) {
-      toast.error("Pick a category and amount > 0");
-      return;
-    }
-    createBudget(form);
+  const submitCreate = createForm.handleSubmit((values) => {
+    createBudget({
+      category_id: values.category_id,
+      period: values.period,
+      amount: values.amount,
+      note: values.note?.trim() || undefined,
+    });
     toast.success("Budget added");
-    setForm((prev) => ({ ...prev, amount: "0", note: "" }));
-  };
+    createForm.reset({
+      category_id: values.category_id,
+      period: values.period,
+      amount: "0",
+      note: "",
+    });
+  });
 
-  const submitWizard = () => {
-    const rows = wizardRows.filter(
+  const submitWizard = wizardForm.handleSubmit((values) => {
+    const rows = (values.rows ?? []).filter(
       (row) => row.category_id && Number(row.amount) > 0,
     );
     if (!rows.length) {
       toast.error("Add at least one suggested budget with amount > 0");
       return;
     }
-    rows.forEach((row) => createBudget(row));
+    rows.forEach((row) =>
+      createBudget({
+        category_id: row.category_id,
+        period: row.period,
+        amount: row.amount,
+        note: row.note?.trim() || undefined,
+      }),
+    );
     toast.success("Budgets created");
-    setWizardRows([]);
-  };
+    wizardForm.reset({ rows: [] });
+  });
 
   const escapeCsv = (value: unknown) => {
     const str = value === null || value === undefined ? "" : String(value);
@@ -403,30 +457,25 @@ export const Budgets: React.FC = () => {
             </p>
           </CardHeader>
           <CardContent className="space-y-3">
-            {wizardRows.length === 0 ? (
+            {(wizardRows?.length ?? 0) === 0 ? (
               <p className="text-sm text-slate-500">
                 Add at least one category to start.
               </p>
             ) : (
               <div className="space-y-2">
-                {wizardRows.map((row, index) => {
+                {wizardArray.fields.map((field, index) => {
+                  const row = wizardRows?.[index];
                   const cat = categories.find((c) => c.id === row.category_id);
                   return (
                     <div
-                      key={`${row.category_id}-${index}`}
+                      key={field.id}
                       className="grid gap-2 rounded-lg border border-slate-200 p-3 md:grid-cols-4"
                     >
                       <select
                         className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                        value={row.category_id}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setWizardRows((prev) =>
-                            prev.map((r, i) =>
-                              i === index ? { ...r, category_id: value } : r,
-                            ),
-                          );
-                        }}
+                        {...wizardForm.register(
+                          `rows.${index}.category_id` as const,
+                        )}
                       >
                         <option value="">Select category</option>
                         {availableCategories.map((c) => (
@@ -437,15 +486,9 @@ export const Budgets: React.FC = () => {
                       </select>
                       <select
                         className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                        value={row.period}
-                        onChange={(e) => {
-                          const value = e.target.value as BudgetPeriod;
-                          setWizardRows((prev) =>
-                            prev.map((r, i) =>
-                              i === index ? { ...r, period: value } : r,
-                            ),
-                          );
-                        }}
+                        {...wizardForm.register(
+                          `rows.${index}.period` as const,
+                        )}
                       >
                         {Object.values(BudgetPeriod).map((value) => (
                           <option key={value} value={value}>
@@ -454,27 +497,16 @@ export const Budgets: React.FC = () => {
                         ))}
                       </select>
                       <Input
-                        value={row.amount}
-                        onChange={(e) =>
-                          setWizardRows((prev) =>
-                            prev.map((r, i) =>
-                              i === index
-                                ? { ...r, amount: e.target.value }
-                                : r,
-                            ),
-                          )
-                        }
+                        {...wizardForm.register(
+                          `rows.${index}.amount` as const,
+                        )}
                         placeholder="500"
                       />
                       <div className="flex items-center gap-2">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() =>
-                            setWizardRows((prev) =>
-                              prev.filter((_, i) => i !== index),
-                            )
-                          }
+                          onClick={() => wizardArray.remove(index)}
                         >
                           Remove
                         </Button>
@@ -492,14 +524,12 @@ export const Budgets: React.FC = () => {
                 size="sm"
                 variant="outline"
                 onClick={() =>
-                  setWizardRows((prev) => [
-                    ...prev,
-                    {
-                      category_id: availableCategories[0]?.id ?? "",
-                      period: BudgetPeriod.MONTHLY,
-                      amount: "0",
-                    },
-                  ])
+                  wizardArray.append({
+                    category_id: availableCategories[0]?.id ?? "",
+                    period: BudgetPeriod.MONTHLY,
+                    amount: "0",
+                    note: "",
+                  })
                 }
               >
                 <Plus className="mr-2 h-4 w-4" />
@@ -603,32 +633,39 @@ export const Budgets: React.FC = () => {
                             </Badge>
                           </div>
                           {isEditing ? (
-                            <div className="flex flex-col gap-2 md:flex-row">
+                            <form
+                              className="flex flex-col gap-2 md:flex-row"
+                              onSubmit={submitEdit}
+                            >
+                              <div className="flex flex-col gap-1">
+                                <Input
+                                  className="w-32"
+                                  {...editForm.register("amount")}
+                                />
+                                {editForm.formState.errors.amount ? (
+                                  <p className="text-xs text-rose-600">
+                                    {editForm.formState.errors.amount?.message}
+                                  </p>
+                                ) : null}
+                              </div>
                               <Input
-                                value={editingAmount}
-                                onChange={(e) =>
-                                  setEditingAmount(e.target.value)
-                                }
-                                className="w-32"
-                              />
-                              <Input
-                                value={editingNote}
-                                onChange={(e) => setEditingNote(e.target.value)}
+                                {...editForm.register("note")}
                                 placeholder="Note"
                               />
                               <div className="flex gap-2">
-                                <Button size="sm" onClick={submitEdit}>
+                                <Button size="sm" type="submit">
                                   Save
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
+                                  type="button"
                                   onClick={() => setEditingId(null)}
                                 >
                                   Cancel
                                 </Button>
                               </div>
-                            </div>
+                            </form>
                           ) : (
                             <>
                               <p className="text-sm text-slate-600">
@@ -705,79 +742,64 @@ export const Budgets: React.FC = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="space-y-2">
-              <label className="text-sm text-slate-600">Category</label>
-              <select
-                className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                value={form.category_id}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, category_id: e.target.value }))
-                }
-              >
-                {availableCategories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {categoryLabel(cat)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex gap-2">
-              <div className="flex-1 space-y-2">
-                <label className="text-sm text-slate-600">Period</label>
+            <form onSubmit={submitCreate} className="space-y-3">
+              <div className="space-y-2">
+                <label className="text-sm text-slate-600">Category</label>
                 <select
                   className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                  value={form.period}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      period: e.target.value as BudgetPeriod,
-                    }))
-                  }
+                  {...createForm.register("category_id")}
                 >
-                  {Object.entries(periodLabels).map(([key, label]) => (
-                    <option key={key} value={key}>
-                      {label}
+                  {availableCategories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {categoryLabel(cat)}
                     </option>
                   ))}
                 </select>
               </div>
-              <div className="flex-1 space-y-2">
-                <label className="text-sm text-slate-600">Amount</label>
+              <div className="flex gap-2">
+                <div className="flex-1 space-y-2">
+                  <label className="text-sm text-slate-600">Period</label>
+                  <select
+                    className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                    {...createForm.register("period")}
+                  >
+                    {Object.entries(periodLabels).map(([key, label]) => (
+                      <option key={key} value={key}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex-1 space-y-2">
+                  <label className="text-sm text-slate-600">Amount</label>
+                  <Input placeholder="500" {...createForm.register("amount")} />
+                  {createForm.formState.errors.amount ? (
+                    <p className="text-xs text-rose-600">
+                      {createForm.formState.errors.amount?.message}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm text-slate-600">Note</label>
                 <Input
-                  value={form.amount}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, amount: e.target.value }))
-                  }
-                  placeholder="500"
+                  placeholder="Optional"
+                  {...createForm.register("note")}
                 />
               </div>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm text-slate-600">Note</label>
-              <Input
-                value={form.note ?? ""}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, note: e.target.value }))
-                }
-                placeholder="Optional"
-              />
-            </div>
-            <Button
-              className="w-full"
-              onClick={submitCreate}
-              disabled={loading}
-            >
-              {loading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Plus className="mr-2 h-4 w-4" />
-              )}
-              Add budget
-            </Button>
-            <div className="rounded-md bg-slate-50 p-2 text-xs text-slate-600">
-              Tip: budgets are unique per category + period. Update instead of
-              duplicating to avoid conflicts.
-            </div>
+              <Button className="w-full" type="submit" disabled={loading}>
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="mr-2 h-4 w-4" />
+                )}
+                Add budget
+              </Button>
+              <div className="rounded-md bg-slate-50 p-2 text-xs text-slate-600">
+                Tip: budgets are unique per category + period. Update instead of
+                duplicating to avoid conflicts.
+              </div>
+            </form>
           </CardContent>
         </Card>
       </div>

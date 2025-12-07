@@ -1,6 +1,9 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, Plus, RefreshCw, Save, Sparkles } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { z } from "zod";
 import { MotionPage } from "@/components/motion-presets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useCategoriesApi } from "@/hooks/use-api";
 import { CategoryType, type CategoryRead } from "@/types/api";
+import { categorySchema } from "@/types/schemas";
 
 const categoryBadges: Record<CategoryType, string> = {
   [CategoryType.INCOME]:
@@ -62,6 +66,45 @@ const categoryTypeOptions = [
   ...Object.values(CategoryType).map((value) => ({ label: value, value })),
 ] as const;
 
+const categoryFormSchema = categorySchema
+  .pick({ name: true, category_type: true, icon: true })
+  .extend({
+    name: z.string().min(1, "Name is required").trim(),
+    icon: z.string().optional(),
+  });
+
+type CategoryFormValues = z.infer<typeof categoryFormSchema>;
+
+const categoryGridSchema = z.object({
+  categories: z.array(
+    categorySchema.extend({
+      name: z.string().min(1, "Name is required").trim(),
+      icon: z.string().nullable().optional(),
+    }),
+  ),
+});
+
+type CategoryGridValues = z.infer<typeof categoryGridSchema>;
+
+const mergeSchema = z
+  .object({
+    sourceCategoryId: z.string().min(1, "Pick a source"),
+    targetCategoryId: z.string().min(1, "Pick a target"),
+    renameTargetTo: z.string().optional(),
+  })
+  .refine(
+    (val) =>
+      val.sourceCategoryId.trim() !== "" &&
+      val.targetCategoryId.trim() !== "" &&
+      val.sourceCategoryId !== val.targetCategoryId,
+    {
+      path: ["targetCategoryId"],
+      message: "Pick distinct source and target",
+    },
+  );
+
+type MergeFormValues = z.infer<typeof mergeSchema>;
+
 export const Categories: React.FC = () => {
   const {
     items,
@@ -77,55 +120,62 @@ export const Categories: React.FC = () => {
   const [showArchived, setShowArchived] = useState(includeArchived);
   const [typeFilter, setTypeFilter] =
     useState<(typeof categoryTypeOptions)[number]["value"]>("all");
-  const [form, setForm] = useState<{
-    name: string;
-    category_type: CategoryType;
-    icon?: string;
-  }>({
-    name: "",
-    category_type: CategoryType.EXPENSE,
-    icon: "",
-  });
-  const [editBuffer, setEditBuffer] = useState<
-    Record<
-      string,
-      {
-        icon?: string;
-        name?: string;
-        category_type?: CategoryType;
-      }
-    >
-  >({});
   const [showNewSheet, setShowNewSheet] = useState(false);
-  const [mergeState, setMergeState] = useState<{
-    sourceCategoryId: string;
-    targetCategoryId: string;
-    renameTargetTo?: string;
-  }>({ sourceCategoryId: "", targetCategoryId: "", renameTargetTo: "" });
   const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  const createForm = useForm<CategoryFormValues>({
+    resolver: zodResolver(categoryFormSchema),
+    defaultValues: {
+      name: "",
+      category_type: CategoryType.EXPENSE,
+      icon: "",
+    },
+  });
+
+  const gridForm = useForm<CategoryGridValues>({
+    resolver: zodResolver(categoryGridSchema),
+    defaultValues: { categories: items },
+    mode: "onBlur",
+  });
+
+  const mergeForm = useForm<MergeFormValues>({
+    resolver: zodResolver(mergeSchema),
+    defaultValues: {
+      sourceCategoryId: "",
+      targetCategoryId: "",
+      renameTargetTo: "",
+    },
+  });
+
+  const watchedCategories = gridForm.watch("categories");
 
   useEffect(() => {
     fetchCategories({ includeArchived: showArchived });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    gridForm.reset({ categories: items });
+  }, [gridForm, items]);
+
   const handleRefresh = () => {
     fetchCategories({ includeArchived: showArchived });
   };
 
-  const handleCreate = () => {
-    if (!form.name.trim()) {
-      toast.error("Name is required");
-      return;
-    }
+  const handleCreate = createForm.handleSubmit((values) => {
     createCategory({
-      ...form,
-      icon: form.icon || undefined,
+      name: values.name.trim(),
+      category_type: values.category_type,
+      icon: values.icon?.trim() || undefined,
     });
     toast.success("Category created");
-    setForm((prev) => ({ ...prev, name: "", icon: "" }));
+    createForm.reset({
+      name: "",
+      category_type: values.category_type,
+      icon: "",
+    });
     setShowNewSheet(false);
-  };
+  });
 
   const escapeCsv = (value: unknown) => {
     const str = value === null || value === undefined ? "" : String(value);
@@ -185,51 +235,58 @@ export const Categories: React.FC = () => {
     reader.readAsText(file);
   };
 
-  const handleMerge = () => {
-    if (
-      !mergeState.sourceCategoryId ||
-      !mergeState.targetCategoryId ||
-      mergeState.sourceCategoryId === mergeState.targetCategoryId
-    ) {
-      toast.error("Pick distinct source and target");
-      return;
-    }
+  const handleMerge = mergeForm.handleSubmit((values) => {
     mergeCategory({
-      sourceCategoryId: mergeState.sourceCategoryId,
-      targetCategoryId: mergeState.targetCategoryId,
-      renameTargetTo: mergeState.renameTargetTo || undefined,
+      sourceCategoryId: values.sourceCategoryId,
+      targetCategoryId: values.targetCategoryId,
+      renameTargetTo: values.renameTargetTo?.trim() || undefined,
     });
     toast.success("Merge requested");
-    setMergeState({
+    mergeForm.reset({
       sourceCategoryId: "",
       targetCategoryId: "",
       renameTargetTo: "",
     });
-  };
+  });
 
   const visibleCategories = useMemo(
     () =>
-      items
+      (watchedCategories && watchedCategories.length
+        ? watchedCategories
+        : items
+      )
         .filter((c) => (showArchived ? true : !c.is_archived))
         .filter((c) =>
           typeFilter === "all" ? true : c.category_type === typeFilter,
         ),
-    [items, showArchived, typeFilter],
+    [items, showArchived, typeFilter, watchedCategories],
   );
 
   const saveInline = (id: string) => {
-    const payload = editBuffer[id];
-    if (!payload) return;
-    if (payload.name !== undefined && !payload.name.trim()) {
+    const currentList = gridForm.getValues("categories") ?? [];
+    const current = currentList.find((c) => c.id === id);
+    if (!current) return;
+    const trimmedName = current.name?.trim();
+    if (!trimmedName) {
       toast.error("Name cannot be empty");
       return;
     }
+    const original = items.find((cat) => cat.id === id);
+    const payload: Partial<CategoryRead> = {};
+    if (!original || original.name !== trimmedName) {
+      payload.name = trimmedName;
+    }
+    if (!original || original.category_type !== current.category_type) {
+      payload.category_type = current.category_type as CategoryType;
+    }
+    if ((original?.icon ?? "") !== (current.icon ?? "")) {
+      payload.icon = current.icon?.trim() || null;
+    }
+    if (Object.keys(payload).length === 0) {
+      toast.message("No changes to save");
+      return;
+    }
     updateCategory(id, payload);
-    setEditBuffer((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
     toast.success("Category updated");
   };
 
@@ -337,29 +394,39 @@ export const Categories: React.FC = () => {
           </CardHeader>
           <CardContent className="divide-y divide-slate-100">
             {visibleCategories.map((cat) => {
-              const pending = editBuffer[cat.id] ?? {};
-              const appliedIcon = pending.icon ?? cat.icon ?? "";
-              const appliedName = pending.name ?? cat.name;
-              const appliedType = pending.category_type ?? cat.category_type;
+              const index = (watchedCategories ?? items).findIndex(
+                (c) => c.id === cat.id,
+              );
+              if (index < 0) return null;
+              const rowDirty = Boolean(
+                gridForm.formState.dirtyFields.categories?.[index],
+              );
+              const iconValue =
+                watchedCategories?.[index]?.icon ?? cat.icon ?? "🎯";
+
               return (
                 <div
                   key={cat.id}
                   className="flex flex-col gap-2 py-3 md:flex-row md:items-center md:justify-between"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-xl leading-none">
-                      {appliedIcon || "🗂️"}
-                    </span>
+                    <span className="text-xl leading-none">{iconValue}</span>
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-slate-900">
-                          {appliedName}
+                          {watchedCategories?.[index]?.name ?? cat.name}
                         </span>
                         <Badge
-                          className={categoryBadges[appliedType]}
+                          className={
+                            categoryBadges[
+                              (watchedCategories?.[index]?.category_type ||
+                                cat.category_type) as CategoryType
+                            ]
+                          }
                           variant="outline"
                         >
-                          {appliedType}
+                          {watchedCategories?.[index]?.category_type ??
+                            cat.category_type}
                         </Badge>
                         {cat.is_archived ? (
                           <Badge variant="secondary">Archived</Badge>
@@ -370,27 +437,16 @@ export const Categories: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <Input
                       className="w-40"
-                      value={appliedName}
-                      onChange={(e) =>
-                        setEditBuffer((prev) => ({
-                          ...prev,
-                          [cat.id]: { ...prev[cat.id], name: e.target.value },
-                        }))
-                      }
                       placeholder="Name"
+                      {...gridForm.register(
+                        `categories.${index}.name` as const,
+                      )}
                     />
                     <select
                       className="w-32 rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                      value={appliedType}
-                      onChange={(e) =>
-                        setEditBuffer((prev) => ({
-                          ...prev,
-                          [cat.id]: {
-                            ...prev[cat.id],
-                            category_type: e.target.value as CategoryType,
-                          },
-                        }))
-                      }
+                      {...gridForm.register(
+                        `categories.${index}.category_type` as const,
+                      )}
                     >
                       {Object.values(CategoryType).map((value) => (
                         <option key={value} value={value}>
@@ -407,7 +463,7 @@ export const Categories: React.FC = () => {
                           aria-label="Pick emoji"
                         >
                           <span className="text-lg leading-none">
-                            {pending.icon ?? cat.icon ?? "🎯"}
+                            {iconValue || "🎯"}
                           </span>
                           <Sparkles className="h-4 w-4" />
                         </Button>
@@ -419,10 +475,11 @@ export const Categories: React.FC = () => {
                               key={emoji}
                               className="flex h-10 w-10 items-center justify-center text-lg"
                               onSelect={() =>
-                                setEditBuffer((prev) => ({
-                                  ...prev,
-                                  [cat.id]: { ...prev[cat.id], icon: emoji },
-                                }))
+                                gridForm.setValue(
+                                  `categories.${index}.icon`,
+                                  emoji,
+                                  { shouldDirty: true },
+                                )
                               }
                             >
                               {emoji}
@@ -434,18 +491,23 @@ export const Categories: React.FC = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() =>
+                      onClick={() => {
                         updateCategory(cat.id, {
                           is_archived: !cat.is_archived,
-                        })
-                      }
+                        });
+                        gridForm.setValue(
+                          `categories.${index}.is_archived`,
+                          !cat.is_archived,
+                          { shouldDirty: false },
+                        );
+                      }}
                     >
                       {cat.is_archived ? "Restore" : "Archive"}
                     </Button>
                     <Button
                       size="sm"
                       onClick={() => saveInline(cat.id)}
-                      disabled={!editBuffer[cat.id]}
+                      disabled={!rowDirty}
                     >
                       <Save className="mr-2 h-4 w-4" />
                       Save
@@ -475,13 +537,7 @@ export const Categories: React.FC = () => {
               <label className="text-sm text-slate-600">Source</label>
               <select
                 className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                value={mergeState.sourceCategoryId}
-                onChange={(e) =>
-                  setMergeState((prev) => ({
-                    ...prev,
-                    sourceCategoryId: e.target.value,
-                  }))
-                }
+                {...mergeForm.register("sourceCategoryId")}
               >
                 <option value="">Pick source</option>
                 {items.map((cat) => (
@@ -495,13 +551,7 @@ export const Categories: React.FC = () => {
               <label className="text-sm text-slate-600">Target</label>
               <select
                 className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                value={mergeState.targetCategoryId}
-                onChange={(e) =>
-                  setMergeState((prev) => ({
-                    ...prev,
-                    targetCategoryId: e.target.value,
-                  }))
-                }
+                {...mergeForm.register("targetCategoryId")}
               >
                 <option value="">Pick target</option>
                 {items.map((cat) => (
@@ -514,15 +564,14 @@ export const Categories: React.FC = () => {
             <div className="space-y-2">
               <label className="text-sm text-slate-600">Rename target to</label>
               <Input
-                value={mergeState.renameTargetTo}
-                onChange={(e) =>
-                  setMergeState((prev) => ({
-                    ...prev,
-                    renameTargetTo: e.target.value,
-                  }))
-                }
+                {...mergeForm.register("renameTargetTo")}
                 placeholder="(optional)"
               />
+              {mergeForm.formState.errors.targetCategoryId ? (
+                <p className="text-xs text-rose-600">
+                  {mergeForm.formState.errors.targetCategoryId?.message}
+                </p>
+              ) : null}
             </div>
             <div className="flex items-end">
               <Button
@@ -560,28 +609,24 @@ export const Categories: React.FC = () => {
                 Close
               </Button>
             </div>
-            <div className="space-y-3">
+            <form className="space-y-3" onSubmit={handleCreate}>
               <div className="space-y-2">
                 <label className="text-sm text-slate-600">Name</label>
                 <Input
-                  value={form.name}
-                  onChange={(e) =>
-                    setForm((prev) => ({ ...prev, name: e.target.value }))
-                  }
                   placeholder="Groceries"
+                  {...createForm.register("name")}
                 />
+                {createForm.formState.errors.name ? (
+                  <p className="text-xs text-rose-600">
+                    {createForm.formState.errors.name.message}
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <label className="text-sm text-slate-600">Type</label>
                 <select
                   className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                  value={form.category_type}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      category_type: e.target.value as CategoryType,
-                    }))
-                  }
+                  {...createForm.register("category_type")}
                 >
                   {Object.values(CategoryType).map((value) => (
                     <option key={value} value={value}>
@@ -600,7 +645,7 @@ export const Categories: React.FC = () => {
                       aria-label="Pick emoji"
                     >
                       <span className="text-lg leading-none">
-                        {form.icon || "🎯"}
+                        {createForm.watch("icon") || "🎯"}
                       </span>
                       <Sparkles className="h-4 w-4" />
                     </Button>
@@ -612,7 +657,9 @@ export const Categories: React.FC = () => {
                           key={emoji}
                           className="flex h-10 w-10 items-center justify-center text-lg"
                           onSelect={() =>
-                            setForm((prev) => ({ ...prev, icon: emoji }))
+                            createForm.setValue("icon", emoji, {
+                              shouldDirty: true,
+                            })
                           }
                         >
                           {emoji}
@@ -625,15 +672,16 @@ export const Categories: React.FC = () => {
               <div className="flex justify-end gap-2">
                 <Button
                   variant="outline"
+                  type="button"
                   onClick={() => setShowNewSheet(false)}
                 >
                   Cancel
                 </Button>
-                <Button onClick={handleCreate}>
+                <Button type="submit">
                   <Plus className="mr-2 h-4 w-4" /> Add category
                 </Button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       ) : null}

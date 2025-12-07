@@ -9,6 +9,7 @@ import type {
   SettingsResponse,
   ThemePreference,
 } from "@/types/api";
+import { settingsResponseSchema } from "@/types/schemas";
 import { selectIsDemo, selectToken } from "../auth/authSlice";
 import {
   SETTINGS_STORAGE_KEY,
@@ -81,7 +82,7 @@ function* handleLoadSettings() {
     try {
       const response: SettingsResponse = yield call(
         callApiWithAuth,
-        { path: "/settings" },
+        { path: "/settings", schema: settingsResponseSchema },
         { loadingKey: "settings", silent: true },
       );
       if (response?.settings) {

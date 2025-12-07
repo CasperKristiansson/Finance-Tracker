@@ -3,6 +3,7 @@ import { call, delay, put, takeLatest } from "redux-saga/effects";
 import { TypedSelect } from "@/app/rootSaga";
 import { apiFetch, ApiError } from "@/lib/apiClient";
 import type { WarmupResponse } from "@/types/api";
+import { warmupResponseSchema } from "@/types/schemas";
 import {
   recordWarmupAttempt,
   selectWarmupState,
@@ -45,6 +46,7 @@ function* performWarmup() {
         path: "/warmup",
         method: "GET",
         retryCount: 1,
+        schema: warmupResponseSchema,
       })) as { data: WarmupResponse };
 
       if (data?.status === "ready") {

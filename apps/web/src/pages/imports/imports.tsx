@@ -31,6 +31,7 @@ import type {
   SubscriptionListResponse,
   SubscriptionRead,
 } from "@/types/api";
+import { subscriptionListSchema, subscriptionSchema } from "@/types/schemas";
 
 type LocalFile = {
   id: string;
@@ -117,6 +118,7 @@ export const Imports: React.FC = () => {
       try {
         const { data } = await apiFetch<SubscriptionListResponse>({
           path: "/subscriptions",
+          schema: subscriptionListSchema,
           token,
         });
         setSubscriptions(data.subscriptions ?? []);
@@ -245,6 +247,7 @@ export const Imports: React.FC = () => {
         path: "/subscriptions",
         method: "POST",
         body: payload,
+        schema: subscriptionSchema,
         token,
       });
       setSubscriptions((prev) => [

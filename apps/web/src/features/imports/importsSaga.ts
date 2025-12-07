@@ -14,6 +14,7 @@ import type {
   ImportCreateRequest,
   ImportSessionResponse,
 } from "@/types/api";
+import { importSessionResponseSchema } from "@/types/schemas";
 
 export const StartImportSession = createAction<ImportCreateRequest>(
   "imports/startSession",
@@ -37,6 +38,7 @@ function* handleStartSession(action: ReturnType<typeof StartImportSession>) {
         path: "/imports",
         method: "POST",
         body: action.payload,
+        schema: importSessionResponseSchema,
       },
       { loadingKey: "imports" },
     );
@@ -75,6 +77,7 @@ function* handleAppendFiles(action: ReturnType<typeof AppendImportFiles>) {
           note: action.payload.note,
           examples: action.payload.examples,
         },
+        schema: importSessionResponseSchema,
       },
       { loadingKey: "imports" },
     );
@@ -105,7 +108,10 @@ function* handleFetchSession(action: ReturnType<typeof FetchImportSession>) {
   try {
     const response: ImportSessionResponse = yield call(
       callApiWithAuth,
-      { path: `/imports/${action.payload}` },
+      {
+        path: `/imports/${action.payload}`,
+        schema: importSessionResponseSchema,
+      },
       { loadingKey: "imports", silent: true },
     );
     if (response?.import_session) {

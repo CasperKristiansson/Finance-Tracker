@@ -29,6 +29,11 @@ import type {
   QuarterlyReportEntry,
   SubscriptionSummaryResponse,
 } from "@/types/api";
+import {
+  cashflowForecastResponseSchema,
+  netWorthProjectionResponseSchema,
+  subscriptionSummaryResponseSchema,
+} from "@/types/schemas";
 
 type Granularity = "monthly" | "quarterly" | "yearly";
 
@@ -81,6 +86,7 @@ export const Reports: React.FC = () => {
       try {
         const { data } = await apiFetch<SubscriptionSummaryResponse>({
           path: "/subscriptions/summary",
+          schema: subscriptionSummaryResponseSchema,
           token,
         });
         setSubscriptionSummaries(data.subscriptions || []);
@@ -100,10 +106,12 @@ export const Reports: React.FC = () => {
         const [{ data: cashflow }, { data: netWorth }] = await Promise.all([
           apiFetch<CashflowForecastResponse>({
             path: "/reports/forecast/cashflow",
+            schema: cashflowForecastResponseSchema,
             token,
           }),
           apiFetch<NetWorthProjectionResponse>({
             path: "/reports/forecast/net-worth",
+            schema: netWorthProjectionResponseSchema,
             token,
           }),
         ]);

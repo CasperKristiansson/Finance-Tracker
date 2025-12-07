@@ -24,6 +24,13 @@ import type {
   NordnetParseResponse,
   NordnetSnapshotCreateRequest,
 } from "@/types/api";
+import {
+  investmentMetricsResponseSchema,
+  investmentSnapshotListResponseSchema,
+  investmentSnapshotResponseSchema,
+  investmentTransactionListSchema,
+  nordnetParseResponseSchema,
+} from "@/types/schemas";
 
 export const FetchInvestmentSnapshots = createAction("investments/fetch");
 export const FetchInvestmentTransactions = createAction(
@@ -47,6 +54,7 @@ function* handleFetchSnapshots(): Generator {
       callApiWithAuth,
       {
         path: "/investments/nordnet/snapshots",
+        schema: investmentSnapshotListResponseSchema,
       },
       { loadingKey: "investments", silent: true },
     );
@@ -72,6 +80,7 @@ function* handleFetchTransactions(): Generator {
       callApiWithAuth,
       {
         path: "/investments/transactions",
+        schema: investmentTransactionListSchema,
       },
       { loadingKey: "investments", silent: true },
     );
@@ -95,6 +104,7 @@ function* handleFetchMetrics(): Generator {
       callApiWithAuth,
       {
         path: "/investments/metrics",
+        schema: investmentMetricsResponseSchema,
       },
       { loadingKey: "investments", silent: true },
     );
@@ -131,6 +141,7 @@ function* handleParseNordnetExport(
         path: "/investments/nordnet/parse",
         method: "POST",
         body,
+        schema: nordnetParseResponseSchema,
       },
       { loadingKey: `parse-${clientId}` },
     );
@@ -161,6 +172,7 @@ function* handleSaveSnapshot(action: ReturnType<typeof SaveNordnetSnapshot>) {
         path: "/investments/nordnet/snapshots",
         method: "POST",
         body: action.payload,
+        schema: investmentSnapshotResponseSchema,
       },
       { loadingKey: "investments" },
     );

@@ -54,6 +54,7 @@ import {
   type TransactionListResponse,
   TransactionType,
 } from "@/types/api";
+import { monthlyReportSchema, transactionListSchema } from "@/types/schemas";
 
 type KPI = {
   title: string;
@@ -181,12 +182,13 @@ export const Dashboard: React.FC = () => {
       if (!nonInvestmentIds.length) return;
       const year = new Date().getFullYear();
       try {
-        const { data } = await apiFetch<MonthlyReportEntry[]>({
+        const { data } = await apiFetch<{ results: MonthlyReportEntry[] }>({
           path: "/reports/monthly",
           query: { year, account_ids: nonInvestmentIds },
           token,
+          schema: monthlyReportSchema,
         });
-        setFilteredMonthly(data);
+        setFilteredMonthly(data.results ?? []);
       } catch (err) {
         console.error("Failed to fetch filtered monthly report", err);
       }
@@ -212,6 +214,7 @@ export const Dashboard: React.FC = () => {
             limit: 200,
           },
           token,
+          schema: transactionListSchema,
         });
         const deltaMap: Record<string, number> = {};
         (data.transactions || []).forEach((tx) => {

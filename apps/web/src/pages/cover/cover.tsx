@@ -1,8 +1,31 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import React from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { z } from "zod";
 import { MotionPage, fadeInUp } from "@/components/motion-presets";
 
+const coverFormSchema = z.object({
+  name: z.string().min(1, "Name required").trim(),
+  email: z.string().email("Valid email required").trim(),
+});
+
+type CoverFormValues = z.infer<typeof coverFormSchema>;
+
 export const Cover: React.FC = () => {
+  const coverForm = useForm<CoverFormValues>({
+    resolver: zodResolver(coverFormSchema),
+    defaultValues: { name: "", email: "" },
+  });
+
+  const onSubmit = coverForm.handleSubmit((values) => {
+    toast.success("Joined waitlist", {
+      description: `${values.email} will get early updates soon!`,
+    });
+    coverForm.reset({ name: "", email: "" });
+  });
+
   return (
     <MotionPage className="h-screen bg-black">
       <motion.main
@@ -22,7 +45,7 @@ export const Cover: React.FC = () => {
             </span>
           </h2>
 
-          <form>
+          <form onSubmit={onSubmit} className="space-y-4">
             <div className="mt-8 space-y-4">
               <div>
                 <label
@@ -37,6 +60,7 @@ export const Cover: React.FC = () => {
                     id="hs-cover-with-gradient-form-name-1"
                     className="block w-full rounded-lg border-white/20 bg-white/10 py-2.5 ps-11 pe-4 text-white placeholder:text-white focus:border-white/30 focus:ring-white/30 sm:p-4 sm:py-3 sm:ps-11 sm:text-sm"
                     placeholder="Full name"
+                    {...coverForm.register("name")}
                   />
                   <div className="pointer-events-none absolute inset-y-0 start-0 z-20 flex items-center ps-4">
                     <svg
@@ -56,6 +80,11 @@ export const Cover: React.FC = () => {
                     </svg>
                   </div>
                 </div>
+                {coverForm.formState.errors.name ? (
+                  <p className="mt-1 text-xs text-rose-200">
+                    {coverForm.formState.errors.name.message}
+                  </p>
+                ) : null}
               </div>
 
               <div>
@@ -71,6 +100,7 @@ export const Cover: React.FC = () => {
                     id="hs-cover-with-gradient-form-email-1"
                     className="block w-full rounded-lg border-white/20 bg-white/10 py-2.5 ps-11 pe-4 text-white placeholder:text-white focus:border-white/30 focus:ring-white/30 sm:p-4 sm:py-3 sm:ps-11 sm:text-sm"
                     placeholder="Email address"
+                    {...coverForm.register("email")}
                   />
                   <div className="pointer-events-none absolute inset-y-0 start-0 z-20 flex items-center ps-4">
                     <svg
@@ -90,6 +120,11 @@ export const Cover: React.FC = () => {
                     </svg>
                   </div>
                 </div>
+                {coverForm.formState.errors.email ? (
+                  <p className="mt-1 text-xs text-rose-200">
+                    {coverForm.formState.errors.email.message}
+                  </p>
+                ) : null}
               </div>
 
               <div className="grid">
