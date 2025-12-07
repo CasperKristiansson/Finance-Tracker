@@ -53,7 +53,11 @@ export function NavUser({ user }: { user: AuthState["user"] }) {
 
   const initials =
     (settingsFirstName?.charAt(0) || getNameFromEmail(user.email).charAt(0)) +
-    ((settingsLastName || getNameFromEmail(user.email).split(" ")[1] || "").charAt(0) || "");
+    ((
+      settingsLastName ||
+      getNameFromEmail(user.email).split(" ")[1] ||
+      ""
+    ).charAt(0) || "");
 
   return (
     <SidebarMenu>

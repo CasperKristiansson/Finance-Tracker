@@ -165,9 +165,7 @@ export const Accounts: React.FC = () => {
         </div>
       </div>
 
-      
       {/* Reconciliation banner removed */}
-
 
       <div className="grid gap-3 md:grid-cols-3">
         <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.4)]">

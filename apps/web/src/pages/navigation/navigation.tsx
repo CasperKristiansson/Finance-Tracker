@@ -50,7 +50,8 @@ const ProfileGate: React.FC = () => {
   });
 
   const missingProfile = !firstName?.trim() || !lastName?.trim();
-  const shouldBlock = !isDemo && (loading || saving || missingProfile || !submitted);
+  const shouldBlock =
+    !isDemo && (loading || saving || missingProfile || !submitted);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -81,15 +82,19 @@ const ProfileGate: React.FC = () => {
       <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
               Profile required
             </p>
-            <h2 className="text-xl font-semibold text-slate-900">Finish your details</h2>
+            <h2 className="text-xl font-semibold text-slate-900">
+              Finish your details
+            </h2>
             <p className="text-sm text-slate-600">
               Add your first and last name to personalize your workspace.
             </p>
           </div>
-          {saving ? <Loader2 className="h-5 w-5 animate-spin text-slate-400" /> : null}
+          {saving ? (
+            <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
+          ) : null}
         </div>
 
         {loading ? (
@@ -128,9 +133,7 @@ const ProfileGate: React.FC = () => {
             ) : null}
             <div className="flex justify-end">
               <Button type="submit" className="gap-2" disabled={saving}>
-                {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : null}
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                 Save and continue
               </Button>
             </div>
@@ -163,7 +166,11 @@ export const Navigation: React.FC<{
   const initials = React.useMemo(() => {
     const name = [firstName, lastName].filter(Boolean);
     if (name.length) {
-      return name.map((part) => part.charAt(0)).join("").slice(0, 2).toUpperCase();
+      return name
+        .map((part) => part.charAt(0))
+        .join("")
+        .slice(0, 2)
+        .toUpperCase();
     }
     const parts = user.email.split("@")[0].split(/[._]/);
     if (parts.length >= 2) {
@@ -195,24 +202,24 @@ export const Navigation: React.FC<{
                 Demo mode
               </span>
             ) : null}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="flex items-center gap-2 px-2"
-              >
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback>{initials}</AvatarFallback>
-                </Avatar>
-                <div className="hidden flex-col text-left sm:flex">
-                  <span className="text-sm leading-none font-medium">
-                    {displayName || "User"}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    Account
-                  </span>
-                </div>
-              </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="flex items-center gap-2 px-2"
+                >
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback>{initials}</AvatarFallback>
+                  </Avatar>
+                  <div className="hidden flex-col text-left sm:flex">
+                    <span className="text-sm leading-none font-medium">
+                      {displayName || "User"}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Account
+                    </span>
+                  </div>
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuLabel>Session</DropdownMenuLabel>

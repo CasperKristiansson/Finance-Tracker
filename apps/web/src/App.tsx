@@ -35,9 +35,7 @@ import { Transactions } from "./pages/transactions/transactions.tsx";
 const NavigationWrapper: React.FC<{
   children: React.ReactNode;
   title: string;
-}> = ({ children, title }) => (
-  <Navigation title={title}>{children}</Navigation>
-);
+}> = ({ children, title }) => <Navigation title={title}>{children}</Navigation>;
 
 export const App: React.FC = () => {
   const dispatch = useAppDispatch();

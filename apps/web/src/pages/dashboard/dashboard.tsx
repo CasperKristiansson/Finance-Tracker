@@ -112,17 +112,26 @@ export const Dashboard: React.FC = () => {
     fetchNetWorthReport,
   } = useReportsApi();
   const { recent, fetchRecentTransactions } = useTransactionsApi();
-  const { items: accounts, loading: accountsLoading, fetchAccounts } =
-    useAccountsApi();
+  const {
+    items: accounts,
+    loading: accountsLoading,
+    fetchAccounts,
+  } = useAccountsApi();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const token = useAppSelector(selectToken);
   const [windowWidth, setWindowWidth] = useState<number>(
     typeof window !== "undefined" ? window.innerWidth : 0,
   );
   const hasFetched = useRef(false);
-  const [filteredMonthly, setFilteredMonthly] = useState<MonthlyReportEntry[]>([]);
-  const [accountDeltas, setAccountDeltas] = useState<Record<string, number>>({});
-  const [recentTab, setRecentTab] = useState<"all" | "income" | "expense">("all");
+  const [filteredMonthly, setFilteredMonthly] = useState<MonthlyReportEntry[]>(
+    [],
+  );
+  const [accountDeltas, setAccountDeltas] = useState<Record<string, number>>(
+    {},
+  );
+  const [recentTab, setRecentTab] = useState<"all" | "income" | "expense">(
+    "all",
+  );
   const activeAccounts = useMemo(
     () =>
       accounts.filter(
@@ -134,7 +143,6 @@ export const Dashboard: React.FC = () => {
       ),
     [accounts],
   );
-
 
   useEffect(() => {
     if (!isAuthenticated || hasFetched.current) return;
@@ -158,22 +166,22 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const loadFilteredMonthly = async () => {
-        if (!accounts.length || !token) return;
-        const nonInvestmentIds = accounts
-          .filter((acc) => acc.account_type !== AccountType.INVESTMENT)
-          .map((acc) => acc.id);
-        if (!nonInvestmentIds.length) return;
-        const year = new Date().getFullYear();
-        try {
-          const { data } = await apiFetch<MonthlyReportEntry[]>({
-            path: "/reports/monthly",
-            query: { year, account_ids: nonInvestmentIds },
-            token,
-          });
-          setFilteredMonthly(data);
-        } catch (err) {
-          console.error("Failed to fetch filtered monthly report", err);
-        }
+      if (!accounts.length || !token) return;
+      const nonInvestmentIds = accounts
+        .filter((acc) => acc.account_type !== AccountType.INVESTMENT)
+        .map((acc) => acc.id);
+      if (!nonInvestmentIds.length) return;
+      const year = new Date().getFullYear();
+      try {
+        const { data } = await apiFetch<MonthlyReportEntry[]>({
+          path: "/reports/monthly",
+          query: { year, account_ids: nonInvestmentIds },
+          token,
+        });
+        setFilteredMonthly(data);
+      } catch (err) {
+        console.error("Failed to fetch filtered monthly report", err);
+      }
     };
     loadFilteredMonthly();
   }, [accounts, token]);
@@ -181,18 +189,27 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchDeltas = async () => {
       if (!activeAccounts.length || !token) return;
-      const startOfYear = new Date(new Date().getFullYear(), 0, 1).toISOString();
+      const startOfYear = new Date(
+        new Date().getFullYear(),
+        0,
+        1,
+      ).toISOString();
       const accountIds = activeAccounts.map((a) => a.id).join(",");
       try {
         const { data } = await apiFetch<TransactionListResponse>({
           path: "/transactions",
-          query: { start_date: startOfYear, account_ids: accountIds, limit: 200 },
+          query: {
+            start_date: startOfYear,
+            account_ids: accountIds,
+            limit: 200,
+          },
           token,
         });
         const deltaMap: Record<string, number> = {};
         (data.transactions || []).forEach((tx) => {
           tx.legs.forEach((leg) => {
-            deltaMap[leg.account_id] = (deltaMap[leg.account_id] || 0) + Number(leg.amount);
+            deltaMap[leg.account_id] =
+              (deltaMap[leg.account_id] || 0) + Number(leg.amount);
           });
         });
         setAccountDeltas(deltaMap);
@@ -211,14 +228,20 @@ export const Dashboard: React.FC = () => {
 
   const kpis: KPI[] = useMemo(() => {
     const currentYear = new Date().getFullYear();
-    const ytdSrc = filteredMonthly.length ? filteredMonthly : monthly.data || [];
+    const ytdSrc = filteredMonthly.length
+      ? filteredMonthly
+      : monthly.data || [];
     const ytd = ytdSrc.filter(
       (entry) => new Date(entry.period).getFullYear() === currentYear,
     );
     const ytdIncome = ytd.reduce((sum, entry) => sum + Number(entry.income), 0);
-    const ytdExpense = ytd.reduce((sum, entry) => sum + Number(entry.expense), 0);
+    const ytdExpense = ytd.reduce(
+      (sum, entry) => sum + Number(entry.expense),
+      0,
+    );
     const ytdNet = ytdIncome - ytdExpense;
-    const ytdSavingsRate = ytdIncome > 0 ? Math.round((ytdNet / ytdIncome) * 100) : 0;
+    const ytdSavingsRate =
+      ytdIncome > 0 ? Math.round((ytdNet / ytdIncome) * 100) : 0;
     const net = numberFromString(total.data?.net);
 
     return [
@@ -340,28 +363,33 @@ export const Dashboard: React.FC = () => {
     );
 
     const avgBurn =
-      sorted.reduce((sum, entry) => sum + Math.max(Number(entry.expense), 0), 0) /
-      sorted.length;
+      sorted.reduce(
+        (sum, entry) => sum + Math.max(Number(entry.expense), 0),
+        0,
+      ) / sorted.length;
     const avgIncome =
-      sorted.reduce((sum, entry) => sum + Math.max(Number(entry.income), 0), 0) /
-      sorted.length;
+      sorted.reduce(
+        (sum, entry) => sum + Math.max(Number(entry.income), 0),
+        0,
+      ) / sorted.length;
     const nets = sorted.map(
       (entry) => Number(entry.income) - Number(entry.expense),
     );
     const lastNet = nets[nets.length - 1] ?? 0;
     const prevNet = nets[nets.length - 2] ?? lastNet;
-    const trend = lastNet > prevNet ? "up" : lastNet < prevNet ? "down" : "neutral";
+    const trend =
+      lastNet > prevNet ? "up" : lastNet < prevNet ? "down" : "neutral";
 
     let running = 0;
-    const sparkline = sorted
-      .slice(-6)
-      .map((entry) => {
-        running += Number(entry.income) - Number(entry.expense);
-        return {
-          month: new Date(entry.period).toLocaleString("en-US", { month: "short" }),
-          balance: running,
-        };
-      });
+    const sparkline = sorted.slice(-6).map((entry) => {
+      running += Number(entry.income) - Number(entry.expense);
+      return {
+        month: new Date(entry.period).toLocaleString("en-US", {
+          month: "short",
+        }),
+        balance: running,
+      };
+    });
 
     const months = avgBurn > 0 ? cashOnHand / avgBurn : null;
 
@@ -499,23 +527,11 @@ export const Dashboard: React.FC = () => {
           >
             <AreaChart data={incomeExpenseChart}>
               <defs>
-                <linearGradient
-                  id="incomeFill"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
+                <linearGradient id="incomeFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#22c55e" stopOpacity={0.25} />
                   <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
                 </linearGradient>
-                <linearGradient
-                  id="expenseFill"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
+                <linearGradient id="expenseFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
                   <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
                 </linearGradient>
@@ -558,7 +574,10 @@ export const Dashboard: React.FC = () => {
               },
             }}
           >
-            <AreaChart data={netWorthData} margin={{ left: 0, right: 0, top: 10, bottom: 0 }}>
+            <AreaChart
+              data={netWorthData}
+              margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
+            >
               <defs>
                 <linearGradient id="netFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3} />
@@ -586,23 +605,25 @@ export const Dashboard: React.FC = () => {
                 tickFormatter={(v) => compactCurrency(Number(v))}
               />
               <Tooltip content={<ChartTooltipContent />} />
-              {Array.from(new Set(netWorthData.map((d) => d.year))).map((year) => {
-                const firstPoint = netWorthData.find((d) => d.year === year);
-                return firstPoint ? (
-                  <ReferenceLine
-                    key={year}
-                    x={firstPoint.date}
-                    stroke="#cbd5e1"
-                    strokeDasharray="4 4"
-                    label={{
-                      value: `${year}`,
-                      position: "insideTopLeft",
-                      fill: "#475569",
-                      fontSize: 10,
-                    }}
-                  />
-                ) : null;
-              })}
+              {Array.from(new Set(netWorthData.map((d) => d.year))).map(
+                (year) => {
+                  const firstPoint = netWorthData.find((d) => d.year === year);
+                  return firstPoint ? (
+                    <ReferenceLine
+                      key={year}
+                      x={firstPoint.date}
+                      stroke="#cbd5e1"
+                      strokeDasharray="4 4"
+                      label={{
+                        value: `${year}`,
+                        position: "insideTopLeft",
+                        fill: "#475569",
+                        fontSize: 10,
+                      }}
+                    />
+                  ) : null;
+                },
+              )}
               <Area
                 type="monotoneX"
                 connectNulls
@@ -721,7 +742,10 @@ export const Dashboard: React.FC = () => {
               variant="outline"
               className="w-full justify-start gap-2"
             >
-              <Link to={PageRoutes.transactions} className="flex items-center gap-2">
+              <Link
+                to={PageRoutes.transactions}
+                className="flex items-center gap-2"
+              >
                 <Plus className="h-4 w-4" />
                 Add transaction
               </Link>
@@ -736,32 +760,58 @@ export const Dashboard: React.FC = () => {
                 Import bank file
               </Link>
             </Button>
-            <Button asChild variant="outline" className="w-full justify-start gap-2">
-              <Link to={PageRoutes.accounts} className="flex items-center gap-2">
+            <Button
+              asChild
+              variant="outline"
+              className="w-full justify-start gap-2"
+            >
+              <Link
+                to={PageRoutes.accounts}
+                className="flex items-center gap-2"
+              >
                 <Wallet className="h-4 w-4" />
                 View accounts
               </Link>
             </Button>
-            <Button asChild variant="outline" className="w-full justify-start gap-2">
+            <Button
+              asChild
+              variant="outline"
+              className="w-full justify-start gap-2"
+            >
               <Link to={PageRoutes.budgets} className="flex items-center gap-2">
                 <Receipt className="h-4 w-4" />
                 Budgets
               </Link>
             </Button>
-            <Button asChild variant="outline" className="w-full justify-start gap-2">
+            <Button
+              asChild
+              variant="outline"
+              className="w-full justify-start gap-2"
+            >
               <Link to={PageRoutes.reports} className="flex items-center gap-2">
                 <FileBarChart className="h-4 w-4" />
                 Reports
               </Link>
             </Button>
-            <Button asChild variant="outline" className="w-full justify-start gap-2">
+            <Button
+              asChild
+              variant="outline"
+              className="w-full justify-start gap-2"
+            >
               <Link to={PageRoutes.goals} className="flex items-center gap-2">
                 <PiggyBank className="h-4 w-4" />
                 Goals
               </Link>
             </Button>
-            <Button asChild variant="outline" className="w-full justify-start gap-2">
-              <Link to={PageRoutes.settings} className="flex items-center gap-2">
+            <Button
+              asChild
+              variant="outline"
+              className="w-full justify-start gap-2"
+            >
+              <Link
+                to={PageRoutes.settings}
+                className="flex items-center gap-2"
+              >
                 <Settings className="h-4 w-4" />
                 Settings
               </Link>
@@ -791,13 +841,16 @@ export const Dashboard: React.FC = () => {
                 const delta = accountDeltas[account.id] ?? 0;
                 const isPositive = delta >= 0;
                 return (
-                  <div key={account.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2">
+                  <div
+                    key={account.id}
+                    className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"
+                  >
                     <div className="flex items-center gap-3">
                       {account.icon ? (
                         <img
                           src={`/${account.icon}`}
                           alt={account.name}
-                          className="h-8 w-8 rounded-full border border-slate-100 object-contain bg-white p-1"
+                          className="h-8 w-8 rounded-full border border-slate-100 bg-white object-contain p-1"
                         />
                       ) : (
                         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">
@@ -846,10 +899,12 @@ export const Dashboard: React.FC = () => {
             {monthly.loading || accountsLoading ? (
               <Skeleton className="h-10 w-48" />
             ) : runwayMetrics.months === null ? (
-              <p className="text-sm text-slate-500">Add expense history to estimate runway.</p>
+              <p className="text-sm text-slate-500">
+                Add expense history to estimate runway.
+              </p>
             ) : (
               <div className="flex items-center gap-3">
-                <div className="rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 border border-slate-200">
+                <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
                   Runway
                 </div>
                 <div className="text-3xl font-semibold text-slate-900">
@@ -874,7 +929,9 @@ export const Dashboard: React.FC = () => {
                 <p className="text-xs text-slate-500">Last month net</p>
                 <p
                   className={`text-base font-semibold ${
-                    runwayMetrics.lastNet >= 0 ? "text-emerald-600" : "text-rose-600"
+                    runwayMetrics.lastNet >= 0
+                      ? "text-emerald-600"
+                      : "text-rose-600"
                   }`}
                 >
                   {currency(runwayMetrics.lastNet)}
@@ -884,7 +941,9 @@ export const Dashboard: React.FC = () => {
                 <p className="text-xs text-slate-500">Previous month net</p>
                 <p
                   className={`text-base font-semibold ${
-                    runwayMetrics.prevNet >= 0 ? "text-emerald-600" : "text-rose-600"
+                    runwayMetrics.prevNet >= 0
+                      ? "text-emerald-600"
+                      : "text-rose-600"
                   }`}
                 >
                   {currency(runwayMetrics.prevNet)}
@@ -894,17 +953,33 @@ export const Dashboard: React.FC = () => {
             {runwayMetrics.sparkline.length ? (
               <div className="rounded-lg border border-slate-100 p-3">
                 <ChartContainer
-                  className="h-36 w-full !aspect-auto"
-                  config={{ balance: { label: "Cash trend", color: "#0ea5e9" } }}
+                  className="!aspect-auto h-36 w-full"
+                  config={{
+                    balance: { label: "Cash trend", color: "#0ea5e9" },
+                  }}
                 >
                   <AreaChart
                     data={runwayMetrics.sparkline}
                     margin={{ left: 0, right: 0, top: 6, bottom: 0 }}
                   >
                     <defs>
-                      <linearGradient id="cashSpark" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.25} />
-                        <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
+                      <linearGradient
+                        id="cashSpark"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="#0ea5e9"
+                          stopOpacity={0.25}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#0ea5e9"
+                          stopOpacity={0}
+                        />
                       </linearGradient>
                     </defs>
                     <XAxis dataKey="month" hide />
@@ -939,7 +1014,11 @@ export const Dashboard: React.FC = () => {
               Latest activity across tracked accounts
             </p>
           </div>
-          <Tabs value={recentTab} onValueChange={(val) => setRecentTab(val as typeof recentTab)} className="w-auto">
+          <Tabs
+            value={recentTab}
+            onValueChange={(val) => setRecentTab(val as typeof recentTab)}
+            className="w-auto"
+          >
             <TabsList className="bg-slate-100">
               <TabsTrigger value="all">All</TabsTrigger>
               <TabsTrigger value="income">Income</TabsTrigger>
@@ -955,7 +1034,9 @@ export const Dashboard: React.FC = () => {
               ))}
             </div>
           ) : filteredRecentTransactions.length === 0 ? (
-            <p className="text-sm text-slate-500">No recent transactions yet.</p>
+            <p className="text-sm text-slate-500">
+              No recent transactions yet.
+            </p>
           ) : (
             <div className="space-y-2">
               {filteredRecentTransactions.map((tx) => (

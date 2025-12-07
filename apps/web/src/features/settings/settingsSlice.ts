@@ -97,8 +97,10 @@ const settingsSlice = createSlice({
     hydrateSettings(state, action: PayloadAction<Partial<SettingsState>>) {
       const payload = action.payload;
       if (payload.theme) state.theme = payload.theme;
-      if (payload.firstName !== undefined) state.firstName = payload.firstName || undefined;
-      if (payload.lastName !== undefined) state.lastName = payload.lastName || undefined;
+      if (payload.firstName !== undefined)
+        state.firstName = payload.firstName || undefined;
+      if (payload.lastName !== undefined)
+        state.lastName = payload.lastName || undefined;
       if (payload.apiBaseUrl) state.apiBaseUrl = payload.apiBaseUrl;
       if (payload.envInfo) state.envInfo = payload.envInfo;
       if (payload.lastSavedAt) state.lastSavedAt = payload.lastSavedAt;

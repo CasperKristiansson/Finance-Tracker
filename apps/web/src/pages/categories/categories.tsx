@@ -399,7 +399,12 @@ export const Categories: React.FC = () => {
                     </select>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="outline" size="sm" className="gap-2" aria-label="Pick emoji">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          aria-label="Pick emoji"
+                        >
                           <span className="text-lg leading-none">
                             {pending.icon ?? cat.icon ?? "🎯"}
                           </span>
@@ -519,7 +524,11 @@ export const Categories: React.FC = () => {
               />
             </div>
             <div className="flex items-end">
-              <Button className="w-full" onClick={handleMerge} disabled={loading}>
+              <Button
+                className="w-full"
+                onClick={handleMerge}
+                disabled={loading}
+              >
                 {loading ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}
@@ -528,18 +537,25 @@ export const Categories: React.FC = () => {
             </div>
           </CardContent>
         </Card>
-
       </div>
 
       {showNewSheet ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md space-y-4 rounded-xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs tracking-wide text-slate-500 uppercase">New category</p>
-                <h3 className="text-lg font-semibold text-slate-900">Add category</h3>
+                <p className="text-xs tracking-wide text-slate-500 uppercase">
+                  New category
+                </p>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  Add category
+                </h3>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setShowNewSheet(false)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowNewSheet(false)}
+              >
                 Close
               </Button>
             </div>
@@ -577,8 +593,14 @@ export const Categories: React.FC = () => {
                 <label className="text-sm text-slate-600">Icon</label>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="gap-2" aria-label="Pick emoji">
-                      <span className="text-lg leading-none">{form.icon || "🎯"}</span>
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      aria-label="Pick emoji"
+                    >
+                      <span className="text-lg leading-none">
+                        {form.icon || "🎯"}
+                      </span>
                       <Sparkles className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -588,7 +610,9 @@ export const Categories: React.FC = () => {
                         <DropdownMenuItem
                           key={emoji}
                           className="flex h-10 w-10 items-center justify-center text-lg"
-                          onSelect={() => setForm((prev) => ({ ...prev, icon: emoji }))}
+                          onSelect={() =>
+                            setForm((prev) => ({ ...prev, icon: emoji }))
+                          }
                         >
                           {emoji}
                         </DropdownMenuItem>
@@ -598,7 +622,10 @@ export const Categories: React.FC = () => {
                 </DropdownMenu>
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowNewSheet(false)}>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowNewSheet(false)}
+                >
                   Cancel
                 </Button>
                 <Button onClick={handleCreate}>
