@@ -50,17 +50,42 @@ function* handleLoginWithGoogle() {
   yield put(setLoading({ key: "login", isLoading: true }));
   yield put(setLoginError(null));
   try {
+    const existingSession: AuthenticatedUser | null = yield call(() =>
+      authService.fetchAuthenticatedUser(),
+    );
+    if (existingSession) {
+      const parsed = authSessionSchema.safeParse(existingSession);
+      if (parsed.success) {
+        yield put(loginSuccess(parsed.data));
+        return;
+      }
+    }
+
     yield call(() => authService.signInWithGoogle());
   } catch (error) {
-    if (error instanceof Error) {
-      yield put(setLoginError(error.message));
-      toast.error("Failed to start Google sign-in", {
-        description: error.message,
-      });
-    } else {
-      yield put(setLoginError("Failed to start Google sign-in"));
-      toast.error("Failed to start Google sign-in");
+    const message =
+      error instanceof Error ? error.message : "Failed to start Google sign-in";
+    const alreadySignedIn = message.toLowerCase().includes("signed in user");
+
+    if (alreadySignedIn) {
+      try {
+        const session: AuthenticatedUser | null = yield call(() =>
+          authService.fetchAuthenticatedUser(true),
+        );
+        const parsed = session ? authSessionSchema.safeParse(session) : null;
+        if (parsed?.success) {
+          yield put(loginSuccess(parsed.data));
+          return;
+        }
+      } catch {
+        // fall through to error toast below
+      }
     }
+
+    yield put(setLoginError(message));
+    toast.error("Failed to start Google sign-in", {
+      description: message,
+    });
   }
   yield put(setLoading({ key: "login", isLoading: false }));
 }
@@ -106,12 +131,17 @@ function* initializeAuth() {
       if (parsed.success) {
         yield put(loginSuccess({ ...parsed.data }));
       } else {
+        console.error("Invalid session payload from auth provider", {
+          issues: parsed.error.format(),
+          session: existingSession,
+        });
         toast.error("Failed to restore session", {
           description: "Session payload was invalid.",
         });
       }
     }
   } catch (error) {
+    console.error("Failed to restore session", error);
     if (error instanceof Error) {
       toast.error("Failed to restore session", {
         description: error.message,
