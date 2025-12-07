@@ -43,7 +43,7 @@ class LoanRead(BaseModel):
 class AccountCreate(BaseModel):
     """Request payload for creating accounts."""
 
-    name: str
+    name: Optional[str] = None
     account_type: AccountType
     is_active: bool = True
     icon: Optional[str] = None
@@ -59,9 +59,10 @@ class AccountCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_name(self) -> "AccountCreate":
-        if not self.name or not self.name.strip():
-            raise ValueError("Account name is required")
-        self.name = self.name.strip()
+        if not self.name or not str(self.name).strip():
+            self.name = "Account"
+        else:
+            self.name = str(self.name).strip()
         return self
 
 

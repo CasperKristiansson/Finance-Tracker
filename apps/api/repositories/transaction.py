@@ -13,7 +13,13 @@ from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from ..models import LoanEvent, Transaction, TransactionImportBatch, TransactionLeg
-from ..shared import LoanEventType, TransactionStatus, coerce_decimal, ensure_balanced_legs
+from ..shared import (
+    LoanEventType,
+    TransactionStatus,
+    TransactionType,
+    coerce_decimal,
+    ensure_balanced_legs,
+)
 
 
 class TransactionRepository:

@@ -77,7 +77,8 @@ class ReportingRepository:
             acc_id
             for acc_id in session.exec(
                 select(Account.id).where(
-                    Account.user_id == self.user_id, Account.name.in_(["Offset", "Unassigned"])
+                    Account.user_id == self.user_id,
+                    cast(Any, Account.name).in_(["Offset", "Unassigned"]),
                 )
             ).all()
         )
@@ -385,10 +386,6 @@ class ReportingRepository:
 
         statement = statement.where(transaction_table.c.user_id == self.user_id)
         statement = statement.where(leg_table.c.user_id == self.user_id)
-        statement = statement.where(
-            cast(Any, transaction_table.c.transaction_type) != TransactionType.TRANSFER
-        )
-
         if account_ids:
             statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
         elif self._excluded_account_ids:

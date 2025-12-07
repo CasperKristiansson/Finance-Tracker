@@ -801,6 +801,7 @@ class ImportService:
                 matches[idx] = best
         return matches
 
+    # pylint: disable=too-many-positional-arguments
     def _score_rule(
         self,
         rule: ImportRule,
@@ -809,7 +810,7 @@ class ImportService:
         occurred_at: Optional[datetime],
         category_lookup: Dict[UUID, Category],
         subscription_lookup: Dict[UUID, Subscription],
-    ) -> Optional[RuleMatch]:  # pylint: disable=too-many-positional-arguments
+    ) -> Optional[RuleMatch]:
         if not rule.is_active:
             return None
 
@@ -1163,6 +1164,7 @@ class ImportService:
         except Exception:  # pragma: no cover - external dependency
             return {}
 
+    # pylint: disable=too-many-positional-arguments
     def _record_rule_from_row(
         self,
         description: Optional[str],
@@ -1170,7 +1172,7 @@ class ImportService:
         occurred_at: Optional[datetime],
         category_id: Optional[UUID],
         subscription_id: Optional[UUID],
-    ) -> None:  # pylint: disable=too-many-positional-arguments
+    ) -> None:
         if not description or (category_id is None and subscription_id is None):
             return
 
