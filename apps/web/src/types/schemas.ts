@@ -16,6 +16,7 @@ export const nullableString = z.string().nullable().optional();
 export const dateString = z.string(); // keep loose to match API
 export const numeric = z.coerce.number();
 export const optionalNumeric = numeric.optional();
+export const nullableNumeric = numeric.nullable().optional();
 
 export const loanCreateRequestSchema = z.object({
   account_id: z.string(),
@@ -74,15 +75,18 @@ export const accountSchema = z.object({
   icon: z.string().nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
-  balance: z.string().optional(),
   loan: loanSchema.nullable().optional(),
+});
+
+export const accountWithBalanceSchema = accountSchema.extend({
+  balance: z.string(),
   last_reconciled_at: z.string().nullable().optional(),
   reconciliation_gap: z.string().nullable().optional(),
   needs_reconciliation: z.boolean().nullable().optional(),
 });
 
 export const accountListSchema = z.object({
-  accounts: z.array(accountSchema),
+  accounts: z.array(accountWithBalanceSchema),
 });
 
 export const loanScheduleEntrySchema = z.object({
@@ -234,7 +238,7 @@ export const transactionSchema = z.object({
 
 export const transactionListSchema = z.object({
   transactions: z.array(transactionSchema),
-  running_balances: z.record(z.string(), z.string()).optional(),
+  running_balances: z.record(z.string(), z.string()).default({}),
 });
 
 export const monthlyReportSchema = z.object({
@@ -300,9 +304,9 @@ export const subscriptionSchema = z.object({
 });
 
 export const subscriptionSummarySchema = subscriptionSchema.extend({
-  current_month_spend: optionalMoney,
-  trailing_three_month_spend: optionalMoney,
-  trailing_twelve_month_spend: optionalMoney,
+  current_month_spend: money,
+  trailing_three_month_spend: money,
+  trailing_twelve_month_spend: money,
   trend: z.array(money),
   last_charge_at: z.string().nullable().optional(),
   category_name: z.string().nullable().optional(),
@@ -354,8 +358,8 @@ export const importFileSchema = z.object({
   error_count: numeric,
   status: z.string(),
   bank_type: bankImportTypeSchema,
-  preview_rows: z.array(z.record(z.string(), z.unknown())).optional(),
-  errors: z.array(importErrorSchema).optional(),
+  preview_rows: z.array(z.record(z.string(), z.unknown())).default([]),
+  errors: z.array(importErrorSchema).default([]),
 });
 
 export const importRowSchema = z
@@ -388,11 +392,11 @@ export const importBatchSchema = z.object({
   total_rows: numeric,
   total_errors: numeric,
   status: z.string(),
-  files: z.array(importFileSchema).optional(),
+  files: z.array(importFileSchema).default([]),
 });
 
 export const importSessionSchema = importBatchSchema.extend({
-  rows: z.array(importRowSchema),
+  rows: z.array(importRowSchema).default([]),
 });
 
 export const importListResponseSchema = z.object({
@@ -462,14 +466,18 @@ export const investmentSnapshotListResponseSchema = z.object({
 export const investmentTransactionSchema = z
   .object({
     id: z.string(),
+    snapshot_id: z.string().nullable().optional(),
     occurred_at: z.string(),
+    transaction_type: z.string().nullable().optional(),
     description: nullableString,
-    account_name: nullableString,
-    asset: nullableString,
-    amount: money,
-    transaction_type: nullableString,
     holding_name: nullableString,
-    amount_sek: nullableMoney,
+    isin: nullableString,
+    account_name: nullableString,
+    quantity: nullableMoney,
+    amount_sek: money,
+    currency: nullableString,
+    fee_sek: nullableMoney,
+    notes: nullableString,
   })
   .passthrough();
 
@@ -477,31 +485,28 @@ export const investmentTransactionListSchema = z.object({
   transactions: z.array(investmentTransactionSchema),
 });
 
+const benchmarkSchema = z.object({
+  symbol: z.string(),
+  change_pct: nullableNumeric,
+  series: z.array(z.tuple([z.string(), z.number()])).default([]),
+});
+
 export const investmentPerformanceSchema = z.object({
-  portfolio_value: nullableMoney,
-  change_absolute: nullableMoney,
-  change_percent: nullableMoney,
-  by_asset: z
-    .union([
-      z.array(z.record(z.string(), z.unknown())),
-      z.record(z.string(), z.unknown()),
-    ])
-    .optional(),
-  timeseries: z.array(z.record(z.string(), z.unknown())).optional(),
-  total_value: nullableMoney,
-  invested: nullableMoney,
-  realized_pl: nullableMoney,
-  unrealized_pl: nullableMoney,
-  twr: nullableMoney,
-  irr: nullableMoney,
-  benchmark_change_pct: nullableMoney,
+  total_value: money,
+  invested: money,
+  realized_pl: money,
+  unrealized_pl: money,
+  twr: nullableNumeric,
+  irr: nullableNumeric,
+  as_of: dateString,
+  benchmarks: z.array(benchmarkSchema).default([]),
 });
 
 export const investmentMetricsResponseSchema = z.object({
-  performance: investmentPerformanceSchema.optional(),
-  snapshots: z.array(investmentSnapshotSchema).optional(),
-  holdings: z.array(investmentHoldingSchema).optional(),
-  transactions: z.array(investmentTransactionSchema).optional(),
+  performance: investmentPerformanceSchema,
+  snapshots: z.array(investmentSnapshotSchema).default([]),
+  holdings: z.array(investmentHoldingSchema).default([]),
+  transactions: z.array(investmentTransactionSchema).default([]),
 });
 
 export const nordnetParseRequestSchema = z.object({
@@ -613,7 +618,7 @@ export type LoanRead = z.infer<typeof loanSchema>;
 export type AccountCreateRequest = z.infer<typeof accountCreateRequestSchema>;
 export type AccountUpdateRequest = z.infer<typeof accountUpdateRequestSchema>;
 export type AccountRead = z.infer<typeof accountSchema>;
-export type AccountWithBalance = AccountRead;
+export type AccountWithBalance = z.infer<typeof accountWithBalanceSchema>;
 export type AccountListResponse = z.infer<typeof accountListSchema>;
 export type LoanScheduleEntry = z.infer<typeof loanScheduleEntrySchema>;
 export type LoanScheduleRead = z.infer<typeof loanScheduleSchema>;

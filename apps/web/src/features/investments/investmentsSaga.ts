@@ -110,18 +110,10 @@ function* handleFetchMetrics(): Generator {
       },
       { loadingKey: "investments", silent: true },
     );
-    if (response?.performance) {
-      yield put(setMetrics(response.performance));
-    }
-    if (response?.snapshots) {
-      yield put(setSnapshots(response.snapshots));
-    }
-    if (response?.holdings) {
-      // holdings already embedded in snapshots; no-op
-    }
-    if (response?.transactions) {
-      yield put(setTransactions(response.transactions));
-    }
+    yield put(setMetrics(response.performance));
+    yield put(setSnapshots(response.snapshots));
+    // holdings already embedded in snapshots; no-op
+    yield put(setTransactions(response.transactions));
   } catch (error) {
     yield put(
       setInvestmentsError(

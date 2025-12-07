@@ -30,20 +30,14 @@ import type {
   ImportCommitRow,
   ImportCreateRequest,
   ImportRowRead,
-  ImportSession,
+  SubscriptionListResponse,
+  SubscriptionRead,
 } from "@/types/api";
 import {
   bankImportTypeSchema,
-  importRowSchema,
-  importSessionSchema,
   subscriptionListSchema,
   subscriptionSchema,
 } from "@/types/schemas";
-
-type SubscriptionRead = z.infer<typeof subscriptionSchema>;
-type ImportRow = z.infer<typeof importRowSchema>;
-type ImportSessionSchema = z.infer<typeof importSessionSchema>;
-type SubscriptionListResponse = z.infer<typeof subscriptionListSchema>;
 
 const trimmedString = z.string().trim().optional();
 
@@ -234,19 +228,18 @@ export const Imports: React.FC = () => {
     void load();
   }, [token]);
 
-  const currentSession: ImportSession | ImportSessionSchema | undefined =
-    session;
+  const currentSession = session;
   const summaryFiles = useMemo(
     () => currentSession?.files ?? [],
     [currentSession?.files],
   );
-  const rows: ImportRow[] = useMemo(
-    () => (currentSession?.rows as ImportRow[] | undefined) ?? [],
+  const rows: ImportRowRead[] = useMemo(
+    () => currentSession?.rows ?? [],
     [currentSession?.rows],
   );
 
   const rowMap = useMemo(() => {
-    const map = new Map<string, ImportRow>();
+    const map = new Map<string, ImportRowRead>();
     rows.forEach((row) => map.set(row.id, row));
     return map;
   }, [rows]);
@@ -259,7 +252,7 @@ export const Imports: React.FC = () => {
 
   useEffect(() => {
     const defaults = rows.map((row) =>
-      deriveRowDefaults(row as ImportRowRead, fileAccountMap.get(row.file_id)),
+      deriveRowDefaults(row, fileAccountMap.get(row.file_id)),
     );
     replaceCommitRows(defaults);
     commitForm.reset({ rows: defaults });
@@ -392,14 +385,11 @@ export const Imports: React.FC = () => {
     }
   };
 
-  const createSubscriptionForRow = async (row: ImportRow) => {
+  const createSubscriptionForRow = async (row: ImportRowRead) => {
     const index = commitFields.findIndex((field) => field.row_id === row.id);
     if (index < 0) return;
     const formRow = commitForm.getValues(`rows.${index}`);
-    const base = deriveRowDefaults(
-      row as ImportRowRead,
-      fileAccountMap.get(row.file_id),
-    );
+    const base = deriveRowDefaults(row, fileAccountMap.get(row.file_id));
     const descriptionText = (
       formRow.description ||
       base.description ||

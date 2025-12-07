@@ -18,7 +18,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageRoutes } from "@/data/routes";
 import { useAccountsApi, useReportsApi } from "@/hooks/use-api";
-import type { MonthlyReportEntry, QuarterlyReportEntry } from "@/types/api";
 
 const currency = (value: number) =>
   value.toLocaleString("en-US", {
@@ -68,16 +67,14 @@ export const CashFlow: React.FC = () => {
 
   const chartData: ChartPoint[] = useMemo(() => {
     if (granularity === "monthly") {
-      const rows = (monthly.data as MonthlyReportEntry[]) || [];
-      return rows.map((row) => ({
+      return monthly.data.map((row) => ({
         label: new Date(row.period).toLocaleString("en-US", { month: "short" }),
         inflow: Number(row.income),
         outflow: Math.abs(Number(row.expense)),
         net: Number(row.net),
       }));
     }
-    const rows = (quarterly.data as QuarterlyReportEntry[]) || [];
-    return rows.map((row) => ({
+    return quarterly.data.map((row) => ({
       label: `Q${row.quarter} ${row.year}`,
       inflow: Number(row.income),
       outflow: Math.abs(Number(row.expense)),

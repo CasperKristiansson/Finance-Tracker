@@ -26,7 +26,6 @@ import { apiFetch } from "@/lib/apiClient";
 import type {
   CashflowForecastResponse,
   NetWorthProjectionResponse,
-  QuarterlyReportEntry,
   SubscriptionSummaryResponse,
 } from "@/types/api";
 import {
@@ -176,7 +175,7 @@ export const Reports: React.FC = () => {
 
   const chartData: ChartPoint[] = useMemo(() => {
     if (granularity === "monthly") {
-      return (monthly.data || []).map((row) => ({
+      return monthly.data.map((row) => ({
         label: new Date(row.period).toLocaleString("en-US", { month: "short" }),
         income: Number(row.income),
         expense: Math.abs(Number(row.expense)),
@@ -184,16 +183,14 @@ export const Reports: React.FC = () => {
       }));
     }
     if (granularity === "quarterly") {
-      return (
-        (quarterly.data as QuarterlyReportEntry[] | undefined)?.map((row) => ({
-          label: `Q${row.quarter} ${row.year}`,
-          income: Number(row.income),
-          expense: Math.abs(Number(row.expense)),
-          net: Number(row.net),
-        })) ?? []
-      );
+      return quarterly.data.map((row) => ({
+        label: `Q${row.quarter} ${row.year}`,
+        income: Number(row.income),
+        expense: Math.abs(Number(row.expense)),
+        net: Number(row.net),
+      }));
     }
-    return (yearly.data || []).map((row) => ({
+    return yearly.data.map((row) => ({
       label: row.year,
       income: Number(row.income),
       expense: Math.abs(Number(row.expense)),

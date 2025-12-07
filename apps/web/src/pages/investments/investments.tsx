@@ -730,7 +730,7 @@ export const Investments: React.FC = () => {
   const unrealizedPl = coerceNumber(metrics?.unrealized_pl) ?? 0;
   const twr = coerceNumber(metrics?.twr);
   const irr = coerceNumber(metrics?.irr);
-  const benchmarkChange = coerceNumber(metrics?.benchmark_change_pct);
+  const benchmarkChange = coerceNumber(metrics?.benchmarks?.[0]?.change_pct);
 
   return (
     <MotionPage className="space-y-4">
