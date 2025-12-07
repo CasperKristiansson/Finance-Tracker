@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import * as LucideIcons from "lucide-react";
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -22,6 +22,8 @@ type Props = {
   onClose: () => void;
   account?: AccountWithBalance;
 };
+
+type IconComponent = React.FC<React.SVGProps<SVGSVGElement>>;
 
 const iconPresets = [
   { label: "Swedbank", value: "banks/swedbank.png" },
@@ -67,9 +69,10 @@ const accountFormSchema = z
 type AccountFormValues = z.infer<typeof accountFormSchema>;
 
 const isDebt = (type: AccountType) => type === AccountType.DEBT;
-const lucideIconNames = Object.keys(LucideIcons).filter((name) =>
-  /^[A-Z]/.test(name),
-);
+type LucideEntry = { name: string; Icon: IconComponent };
+const lucideEntries: LucideEntry[] = Object.entries(LucideIcons)
+  .filter(([name]) => /^[A-Z]/.test(name) && name !== "Icon")
+  .map(([name, component]) => ({ name, Icon: component as IconComponent }));
 
 export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
   const {
@@ -81,6 +84,8 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
     createLoading,
     updateLoading,
   } = useAccountsApi();
+  const [lucideOpen, setLucideOpen] = useState(false);
+  const [lucideQuery, setLucideQuery] = useState("");
 
   const getDefaults = useCallback((): AccountFormValues => {
     return {
@@ -114,7 +119,23 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
 
   useEffect(() => {
     reset(getDefaults());
+    const currentIcon = account?.icon;
+    if (currentIcon?.startsWith("lucide:")) {
+      setLucideQuery(currentIcon.replace("lucide:", ""));
+    } else {
+      setLucideQuery("");
+    }
+    setLucideOpen(false);
   }, [account, getDefaults, open, reset]);
+
+  const filteredLucideIcons = useMemo(() => {
+    const q = lucideQuery.trim().toLowerCase();
+    if (!q) return lucideEntries;
+    const filtered = lucideEntries.filter((entry) =>
+      entry.name.toLowerCase().includes(q),
+    );
+    return filtered.length ? filtered : lucideEntries;
+  }, [lucideQuery]);
 
   const accountType = watch("account_type");
   const isActive = watch("is_active");
@@ -248,6 +269,62 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
                 </Button>
               ))}
             </div>
+            <div className="space-y-1.5">
+              <label className="text-xs text-slate-500" htmlFor="lucide-icon">
+                Or browse Lucide icons
+              </label>
+              <div className="relative">
+                <Input
+                  id="lucide-icon"
+                  placeholder="Search icons (e.g., Wallet, PiggyBank)"
+                  value={lucideQuery}
+                  onFocus={() => setLucideOpen(true)}
+                  onChange={(e) => setLucideQuery(e.target.value)}
+                  className="pr-24"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="absolute top-1/2 right-1 -translate-y-1/2"
+                  onClick={() => setLucideOpen((prev) => !prev)}
+                >
+                  {lucideOpen ? "Close" : "Browse"}
+                </Button>
+                {lucideOpen ? (
+                  <div className="absolute z-20 mt-2 w-[420px] max-w-[90vw] rounded-lg border border-slate-200 bg-white p-2 shadow-xl">
+                    <div className="max-h-64 overflow-y-auto">
+                      <div className="grid grid-cols-6 gap-2">
+                        {filteredLucideIcons.map(({ name, Icon }) => {
+                          return (
+                            <button
+                              key={name}
+                              type="button"
+                              className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-100 text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setValue("icon", `lucide:${name}`);
+                                setLucideOpen(false);
+                                setLucideQuery(name);
+                              }}
+                              aria-label={name}
+                              title={name}
+                            >
+                              <Icon className="h-5 w-5" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {filteredLucideIcons.length === 0 ? (
+                        <p className="p-2 text-center text-xs text-slate-500">
+                          No icons match your search.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
           <div className="space-y-1.5">
             <label className="text-xs text-slate-500" htmlFor="lucide-icon">
@@ -257,14 +334,16 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
               id="lucide-icon"
               list="lucide-icons"
               placeholder="e.g., Wallet, PiggyBank, Cash"
+              value={lucideQuery}
               onChange={(e) => {
                 const value = e.target.value.trim();
+                setLucideQuery(value);
                 setValue("icon", value ? `lucide:${value}` : "");
               }}
             />
             <datalist id="lucide-icons">
-              {lucideIconNames.map((name) => (
-                <option key={name} value={name} />
+              {lucideEntries.map((entry) => (
+                <option key={entry.name} value={entry.name} />
               ))}
             </datalist>
           </div>
