@@ -14,7 +14,11 @@ import type {
   ImportCreateRequest,
   ImportSessionResponse,
 } from "@/types/api";
-import { importSessionResponseSchema } from "@/types/schemas";
+import {
+  importCommitRequestSchema,
+  importCreateRequestSchema,
+  importSessionResponseSchema,
+} from "@/types/schemas";
 
 export const StartImportSession = createAction<ImportCreateRequest>(
   "imports/startSession",
@@ -32,12 +36,13 @@ export const ResetImportSession = createAction("imports/resetSession");
 function* handleStartSession(action: ReturnType<typeof StartImportSession>) {
   yield put(setImportsLoading(true));
   try {
+    const body = importCreateRequestSchema.parse(action.payload);
     const response: ImportSessionResponse = yield call(
       callApiWithAuth,
       {
         path: "/imports",
         method: "POST",
-        body: action.payload,
+        body,
         schema: importSessionResponseSchema,
       },
       { loadingKey: "imports" },
@@ -67,16 +72,14 @@ function* handleStartSession(action: ReturnType<typeof StartImportSession>) {
 function* handleAppendFiles(action: ReturnType<typeof AppendImportFiles>) {
   yield put(setImportsLoading(true));
   try {
+    const { sessionId, ...request } = action.payload;
+    const body = importCreateRequestSchema.parse(request);
     const response: ImportSessionResponse = yield call(
       callApiWithAuth,
       {
-        path: `/imports/${action.payload.sessionId}/files`,
+        path: `/imports/${sessionId}/files`,
         method: "POST",
-        body: {
-          files: action.payload.files,
-          note: action.payload.note,
-          examples: action.payload.examples,
-        },
+        body,
         schema: importSessionResponseSchema,
       },
       { loadingKey: "imports" },
@@ -131,7 +134,9 @@ function* handleFetchSession(action: ReturnType<typeof FetchImportSession>) {
 function* handleCommitSession(action: ReturnType<typeof CommitImportSession>) {
   yield put(setImportsSaving(true));
   try {
-    const body: ImportCommitRequest = { rows: action.payload.rows };
+    const body: ImportCommitRequest = importCommitRequestSchema.parse({
+      rows: action.payload.rows,
+    });
     yield call(
       callApiWithAuth,
       {

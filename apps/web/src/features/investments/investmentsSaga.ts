@@ -29,7 +29,9 @@ import {
   investmentSnapshotListResponseSchema,
   investmentSnapshotResponseSchema,
   investmentTransactionListSchema,
+  nordnetParseRequestSchema,
   nordnetParseResponseSchema,
+  nordnetSnapshotCreateRequestSchema,
 } from "@/types/schemas";
 
 export const FetchInvestmentSnapshots = createAction("investments/fetch");
@@ -132,7 +134,8 @@ function* handleFetchMetrics(): Generator {
 function* handleParseNordnetExport(
   action: ReturnType<typeof ParseNordnetExport>,
 ) {
-  const { clientId, ...body } = action.payload;
+  const { clientId, ...rawBody } = action.payload;
+  const body = nordnetParseRequestSchema.parse(rawBody);
   yield put(setParseLoading({ clientId, loading: true }));
   try {
     const response: NordnetParseResponse = yield call(
@@ -166,12 +169,14 @@ function* handleParseNordnetExport(
 function* handleSaveSnapshot(action: ReturnType<typeof SaveNordnetSnapshot>) {
   yield put(setInvestmentsSaving(true));
   try {
+    const { clientId, ...rawBody } = action.payload;
+    const body = nordnetSnapshotCreateRequestSchema.parse(rawBody);
     const response: InvestmentSnapshotResponse = yield call(
       callApiWithAuth,
       {
         path: "/investments/nordnet/snapshots",
         method: "POST",
-        body: action.payload,
+        body,
         schema: investmentSnapshotResponseSchema,
       },
       { loadingKey: "investments" },
@@ -182,9 +187,9 @@ function* handleSaveSnapshot(action: ReturnType<typeof SaveNordnetSnapshot>) {
         description: "Portfolio snapshot stored successfully.",
       });
     }
-    if (action.payload.clientId) {
-      yield put(setLastSavedClientId(action.payload.clientId));
-      yield put(clearParseResult(action.payload.clientId));
+    if (clientId) {
+      yield put(setLastSavedClientId(clientId));
+      yield put(clearParseResult(clientId));
     }
   } catch (error) {
     yield put(

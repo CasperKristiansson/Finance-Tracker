@@ -13,7 +13,11 @@ import type {
   CategoryListResponse,
   CategoryUpdateRequest,
 } from "@/types/api";
-import { categoryListSchema } from "@/types/schemas";
+import {
+  categoryCreateRequestSchema,
+  categoryListSchema,
+  categoryUpdateRequestSchema,
+} from "@/types/schemas";
 
 export const FetchCategories = createAction<
   Partial<Pick<CategoriesState, "includeArchived">> | undefined
@@ -62,12 +66,13 @@ function* handleFetchCategories(action: ReturnType<typeof FetchCategories>) {
 
 function* handleCreateCategory(action: ReturnType<typeof CreateCategory>) {
   try {
+    const body = categoryCreateRequestSchema.parse(action.payload);
     yield call(
       callApiWithAuth,
       {
         path: "/categories",
         method: "POST",
-        body: action.payload,
+        body,
       },
       { loadingKey: "categories" },
     );
@@ -83,12 +88,13 @@ function* handleCreateCategory(action: ReturnType<typeof CreateCategory>) {
 
 function* handleUpdateCategory(action: ReturnType<typeof UpdateCategory>) {
   try {
+    const body = categoryUpdateRequestSchema.parse(action.payload.data);
     yield call(
       callApiWithAuth,
       {
         path: `/categories/${action.payload.id}`,
         method: "PATCH",
-        body: action.payload.data,
+        body,
       },
       { loadingKey: "categories" },
     );

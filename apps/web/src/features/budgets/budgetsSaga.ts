@@ -11,7 +11,11 @@ import type {
   BudgetProgressListResponse,
   BudgetUpdateRequest,
 } from "@/types/api";
-import { budgetProgressListSchema } from "@/types/schemas";
+import {
+  budgetCreateRequestSchema,
+  budgetProgressListSchema,
+  budgetUpdateRequestSchema,
+} from "@/types/schemas";
 
 export const FetchBudgets = createAction("budgets/fetch");
 export const CreateBudget = createAction<BudgetCreateRequest>("budgets/create");
@@ -43,9 +47,10 @@ function* handleFetchBudgets() {
 
 function* handleCreateBudget(action: ReturnType<typeof CreateBudget>) {
   try {
+    const body = budgetCreateRequestSchema.parse(action.payload);
     yield call(
       callApiWithAuth,
-      { path: "/budgets", method: "POST", body: action.payload },
+      { path: "/budgets", method: "POST", body },
       { loadingKey: "budgets" },
     );
     yield call(handleFetchBudgets);
@@ -60,12 +65,13 @@ function* handleCreateBudget(action: ReturnType<typeof CreateBudget>) {
 
 function* handleUpdateBudget(action: ReturnType<typeof UpdateBudget>) {
   try {
+    const body = budgetUpdateRequestSchema.parse(action.payload.data);
     yield call(
       callApiWithAuth,
       {
         path: `/budgets/${action.payload.id}`,
         method: "PATCH",
-        body: action.payload.data,
+        body,
       },
       { loadingKey: "budgets" },
     );

@@ -18,7 +18,13 @@ import type {
   LoanCreateRequest,
   LoanUpdateRequest,
 } from "@/types/api";
-import { accountListSchema } from "@/types/schemas";
+import {
+  accountCreateRequestSchema,
+  accountListSchema,
+  accountUpdateRequestSchema,
+  loanCreateRequestSchema,
+  loanUpdateRequestSchema,
+} from "@/types/schemas";
 
 export const FetchAccounts = createAction<
   Partial<Pick<AccountsState, "includeInactive" | "asOfDate">> | undefined
@@ -75,9 +81,10 @@ function* handleCreateAccount(action: ReturnType<typeof CreateAccount>) {
   yield put(setAccountCreateLoading(true));
   yield put(setAccountMutationError(undefined));
   try {
+    const body = accountCreateRequestSchema.parse(action.payload);
     yield call(
       callApiWithAuth,
-      { path: "/accounts", method: "POST", body: action.payload },
+      { path: "/accounts", method: "POST", body },
       { loadingKey: "accounts-create" },
     );
     yield put(FetchAccounts(undefined));
@@ -97,9 +104,10 @@ function* handleUpdateAccount(action: ReturnType<typeof UpdateAccount>) {
   yield put(setAccountUpdateLoading(true));
   yield put(setAccountMutationError(undefined));
   try {
+    const body = accountUpdateRequestSchema.parse(data);
     yield call(
       callApiWithAuth,
-      { path: `/accounts/${accountId}`, method: "PATCH", body: data },
+      { path: `/accounts/${accountId}`, method: "PATCH", body },
       { loadingKey: "accounts-update" },
     );
     yield put(FetchAccounts(undefined));
@@ -128,9 +136,10 @@ function* handleAttachLoan(action: ReturnType<typeof AttachLoan>) {
   yield put(setAccountUpdateLoading(true));
   yield put(setAccountMutationError(undefined));
   try {
+    const body = loanCreateRequestSchema.parse({ account_id, ...loanData });
     yield call(
       callApiWithAuth,
-      { path: "/loans", method: "POST", body: { account_id, ...loanData } },
+      { path: "/loans", method: "POST", body },
       { loadingKey: "loan-attach" },
     );
     yield put(FetchAccounts(undefined));
@@ -150,9 +159,10 @@ function* handleUpdateLoan(action: ReturnType<typeof UpdateLoan>) {
   yield put(setAccountUpdateLoading(true));
   yield put(setAccountMutationError(undefined));
   try {
+    const body = loanUpdateRequestSchema.parse(data);
     yield call(
       callApiWithAuth,
-      { path: `/accounts/${accountId}/loan`, method: "PATCH", body: data },
+      { path: `/accounts/${accountId}/loan`, method: "PATCH", body },
       { loadingKey: "loan-update" },
     );
     yield put(FetchAccounts(undefined));

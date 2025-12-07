@@ -9,7 +9,7 @@ import type {
   SettingsResponse,
   ThemePreference,
 } from "@/types/api";
-import { settingsResponseSchema } from "@/types/schemas";
+import { settingsPayloadSchema, settingsResponseSchema } from "@/types/schemas";
 import { selectIsDemo, selectToken } from "../auth/authSlice";
 import {
   SETTINGS_STORAGE_KEY,
@@ -119,11 +119,11 @@ function* handleSaveSettings() {
     yield put(setLastSavedAt(timestamp));
 
     try {
-      const payload: SettingsPayload = {
+      const payload: SettingsPayload = settingsPayloadSchema.parse({
         theme: state.theme,
         first_name: state.firstName,
         last_name: state.lastName,
-      };
+      });
       yield call(
         callApiWithAuth,
         {
