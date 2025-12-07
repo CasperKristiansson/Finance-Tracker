@@ -267,11 +267,7 @@ export const Subscriptions: React.FC = () => {
                       <Input
                         size="sm"
                         type="number"
-                        value={
-                          edit.matcher_amount_tolerance ??
-                          sub.matcher_amount_tolerance ??
-                          ""
-                        }
+                        value={`${edit.matcher_amount_tolerance ?? sub.matcher_amount_tolerance ?? ""}`}
                         onChange={(e) =>
                           onEditChange(sub.id, {
                             matcher_amount_tolerance: e.target.value
@@ -285,11 +281,7 @@ export const Subscriptions: React.FC = () => {
                       <Input
                         size="sm"
                         type="number"
-                        value={
-                          edit.matcher_day_of_month ??
-                          sub.matcher_day_of_month ??
-                          ""
-                        }
+                        value={`${edit.matcher_day_of_month ?? sub.matcher_day_of_month ?? ""}`}
                         onChange={(e) =>
                           onEditChange(sub.id, {
                             matcher_day_of_month: e.target.value

@@ -150,7 +150,7 @@ export const Dashboard: React.FC = () => {
     hasFetched.current = true;
     const year = new Date().getFullYear();
     fetchMonthlyReport({ year });
-    fetchYearlyReport({ year });
+    fetchYearlyReport();
     fetchTotalReport();
     fetchNetWorthReport();
     fetchRecentTransactions({ limit: 20 });

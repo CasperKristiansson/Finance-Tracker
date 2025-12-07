@@ -154,17 +154,21 @@ export const Navigation: React.FC<{
   const { firstName, lastName } = useSettings();
 
   const displayName = React.useMemo(() => {
-    const name = [firstName, lastName].filter(Boolean).join(" ");
+    const name = [firstName, lastName]
+      .filter((part): part is string => Boolean(part))
+      .join(" ");
     if (name) return name;
     const parts = user.email.split("@")[0].split(/[._]/);
-    if (parts.length >= 2) {
+    if (parts.length >= 2 && parts[0] && parts[1]) {
       return `${parts[0].charAt(0).toUpperCase()}${parts[1].charAt(0).toUpperCase()}`;
     }
     return user.email.slice(0, 2).toUpperCase();
   }, [firstName, lastName, user.email]);
 
   const initials = React.useMemo(() => {
-    const name = [firstName, lastName].filter(Boolean);
+    const name = [firstName, lastName].filter((part): part is string =>
+      Boolean(part),
+    );
     if (name.length) {
       return name
         .map((part) => part.charAt(0))
@@ -173,7 +177,7 @@ export const Navigation: React.FC<{
         .toUpperCase();
     }
     const parts = user.email.split("@")[0].split(/[._]/);
-    if (parts.length >= 2) {
+    if (parts.length >= 2 && parts[0] && parts[1]) {
       return `${parts[0].charAt(0)}${parts[1].charAt(0)}`.toUpperCase();
     }
     return user.email.slice(0, 2).toUpperCase();

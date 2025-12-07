@@ -40,7 +40,7 @@ export const ClearDraft = createAction<{ clientId: string }>(
   "investments/clearDraft",
 );
 
-function* handleFetchSnapshots() {
+function* handleFetchSnapshots(): Generator {
   yield put(setInvestmentsLoading(true));
   try {
     const response: InvestmentSnapshotListResponse = yield call(
@@ -66,7 +66,7 @@ function* handleFetchSnapshots() {
   }
 }
 
-function* handleFetchTransactions() {
+function* handleFetchTransactions(): Generator {
   try {
     const response: InvestmentTransactionListResponse = yield call(
       callApiWithAuth,
@@ -89,7 +89,7 @@ function* handleFetchTransactions() {
   }
 }
 
-function* handleFetchMetrics() {
+function* handleFetchMetrics(): Generator {
   try {
     const response: InvestmentMetricsResponse = yield call(
       callApiWithAuth,

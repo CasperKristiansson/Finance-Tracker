@@ -192,9 +192,10 @@ export const Investments: React.FC = () => {
       prev.map((draft) => {
         const parsed = parsedResults[draft.id];
         if (!parsed) return draft;
-        const payload =
-          (parsed as { parsed_payload?: Record<string, unknown> })
-            .parsed_payload ?? (parsed as Record<string, unknown>);
+        const parsedPayload = (
+          parsed as { parsed_payload?: Record<string, unknown> }
+        ).parsed_payload;
+        const payload: Record<string, unknown> = parsedPayload ?? {};
         return {
           ...draft,
           parsedPayload: payload,
@@ -221,6 +222,40 @@ export const Investments: React.FC = () => {
     setDrafts((prev) => prev.filter((d) => d.id !== lastSavedClientId));
     clearDraft(lastSavedClientId);
   }, [clearDraft, lastSavedClientId]);
+
+  const valueSeries = useMemo(() => {
+    const sorted = [...snapshots].sort(
+      (a, b) =>
+        new Date(a.snapshot_date).getTime() -
+        new Date(b.snapshot_date).getTime(),
+    );
+    const cutoff = (() => {
+      const now = new Date();
+      if (range === "3M") return new Date(now.setMonth(now.getMonth() - 3));
+      if (range === "6M") return new Date(now.setMonth(now.getMonth() - 6));
+      if (range === "1Y")
+        return new Date(now.setFullYear(now.getFullYear() - 1));
+      return null;
+    })();
+    const filtered = cutoff
+      ? sorted.filter((snap) => new Date(snap.snapshot_date) >= cutoff)
+      : sorted;
+    return filtered.map((snap) => ({
+      date: snap.snapshot_date,
+      value: deriveSnapshotValue(snap),
+    }));
+  }, [snapshots, range]);
+
+  const totalValue =
+    coerceNumber(metrics?.total_value) ??
+    coerceNumber(valueSeries.at(-1)?.value) ??
+    0;
+  const invested = coerceNumber(metrics?.invested) ?? 0;
+  const realizedPl = coerceNumber(metrics?.realized_pl) ?? 0;
+  const unrealizedPl = coerceNumber(metrics?.unrealized_pl) ?? 0;
+  const twr = coerceNumber(metrics?.twr);
+  const irr = coerceNumber(metrics?.irr);
+  const benchmarkChange = coerceNumber(metrics?.benchmark_change_pct);
 
   const addDraft = (rawText: string, label?: string) => {
     if (!rawText.trim()) return;
@@ -302,29 +337,6 @@ export const Investments: React.FC = () => {
       bedrock_max_tokens: draft.bedrockMaxTokens,
     });
   };
-
-  const valueSeries = useMemo(() => {
-    const sorted = [...snapshots].sort(
-      (a, b) =>
-        new Date(a.snapshot_date).getTime() -
-        new Date(b.snapshot_date).getTime(),
-    );
-    const cutoff = (() => {
-      const now = new Date();
-      if (range === "3M") return new Date(now.setMonth(now.getMonth() - 3));
-      if (range === "6M") return new Date(now.setMonth(now.getMonth() - 6));
-      if (range === "1Y")
-        return new Date(now.setFullYear(now.getFullYear() - 1));
-      return null;
-    })();
-    const filtered = cutoff
-      ? sorted.filter((snap) => new Date(snap.snapshot_date) >= cutoff)
-      : sorted;
-    return filtered.map((snap) => ({
-      date: snap.snapshot_date,
-      value: deriveSnapshotValue(snap),
-    }));
-  }, [snapshots, range]);
 
   const holdingsDelta = useMemo(() => {
     if (snapshots.length < 2) return [];
@@ -671,11 +683,7 @@ export const Investments: React.FC = () => {
           <CardContent className="space-y-1 py-4">
             <p className="text-xs text-slate-500 uppercase">Total value</p>
             <p className="text-2xl font-semibold text-slate-900">
-              {(
-                metrics?.total_value ??
-                valueSeries.at(-1)?.value ??
-                0
-              ).toLocaleString("sv-SE", { maximumFractionDigits: 0 })}{" "}
+              {totalValue.toLocaleString("sv-SE", { maximumFractionDigits: 0 })}{" "}
               SEK
             </p>
           </CardContent>
@@ -684,14 +692,14 @@ export const Investments: React.FC = () => {
           <CardContent className="space-y-1 py-4">
             <p className="text-xs text-slate-500 uppercase">Invested</p>
             <p className="text-lg font-semibold text-slate-900">
-              {(metrics?.invested ?? 0).toLocaleString("sv-SE", {
+              {invested.toLocaleString("sv-SE", {
                 maximumFractionDigits: 0,
               })}{" "}
               SEK
             </p>
             <p className="text-xs text-slate-500">
               Realized P/L:{" "}
-              {(metrics?.realized_pl ?? 0).toLocaleString("sv-SE", {
+              {realizedPl.toLocaleString("sv-SE", {
                 maximumFractionDigits: 0,
               })}{" "}
               SEK
@@ -704,20 +712,18 @@ export const Investments: React.FC = () => {
             <p
               className={cn(
                 "text-lg font-semibold",
-                (metrics?.unrealized_pl ?? 0) >= 0
-                  ? "text-emerald-700"
-                  : "text-rose-700",
+                unrealizedPl >= 0 ? "text-emerald-700" : "text-rose-700",
               )}
             >
-              {(metrics?.unrealized_pl ?? 0).toLocaleString("sv-SE", {
+              {unrealizedPl.toLocaleString("sv-SE", {
                 maximumFractionDigits: 0,
               })}{" "}
               SEK
             </p>
             <p className="text-xs text-slate-500">
               TWR:{" "}
-              {metrics?.twr !== undefined && metrics?.twr !== null
-                ? `${(metrics.twr * 100).toFixed(1)}%`
+              {twr !== undefined && twr !== null
+                ? `${(twr * 100).toFixed(1)}%`
                 : "—"}
             </p>
           </CardContent>
@@ -726,15 +732,14 @@ export const Investments: React.FC = () => {
           <CardContent className="space-y-1 py-4">
             <p className="text-xs text-slate-500 uppercase">IRR</p>
             <p className="text-lg font-semibold text-slate-900">
-              {metrics?.irr !== undefined && metrics?.irr !== null
-                ? `${(metrics.irr * 100).toFixed(1)}%`
+              {irr !== undefined && irr !== null
+                ? `${(irr * 100).toFixed(1)}%`
                 : "—"}
             </p>
             <p className="text-xs text-slate-500">
               Benchmark:{" "}
-              {metrics?.benchmark_change_pct !== undefined &&
-              metrics?.benchmark_change_pct !== null
-                ? `${(metrics.benchmark_change_pct * 100).toFixed(1)}%`
+              {benchmarkChange !== undefined && benchmarkChange !== null
+                ? `${(benchmarkChange * 100).toFixed(1)}%`
                 : "—"}
             </p>
           </CardContent>
@@ -1060,7 +1065,15 @@ export const Investments: React.FC = () => {
                 variant="outline"
                 onClick={() =>
                   exportCsv(
-                    transactions.slice(0, 200) as Record<string, unknown>[],
+                    transactions.slice(0, 200).map((tx) => ({
+                      date: tx.occurred_at,
+                      description: tx.description ?? "",
+                      account: tx.account_name ?? "",
+                      asset: tx.asset ?? "",
+                      amount: tx.amount,
+                      amount_sek: tx.amount_sek ?? "",
+                      type: tx.transaction_type ?? "",
+                    })),
                     "investment-transactions.csv",
                   )
                 }

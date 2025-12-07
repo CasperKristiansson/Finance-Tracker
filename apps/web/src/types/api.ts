@@ -73,6 +73,45 @@ export interface InvestmentSnapshotListResponse {
   snapshots: InvestmentSnapshot[];
 }
 
+export interface InvestmentTransactionRead {
+  id: string;
+  occurred_at: string;
+  description?: string | null;
+  account_name?: string | null;
+  asset?: string | null;
+  amount: string | number;
+  transaction_type?: string | null;
+  holding_name?: string | null;
+  amount_sek?: string | number | null;
+  [key: string]: unknown;
+}
+
+export interface InvestmentTransactionListResponse {
+  transactions: InvestmentTransactionRead[];
+}
+
+export interface InvestmentPerformance {
+  portfolio_value?: number | string;
+  change_absolute?: number | string;
+  change_percent?: number | string;
+  by_asset?: Array<Record<string, unknown>> | Record<string, unknown>;
+  timeseries?: Array<Record<string, unknown>>;
+  total_value?: number | string;
+  invested?: number | string;
+  realized_pl?: number | string;
+  unrealized_pl?: number | string;
+  twr?: number | string;
+  irr?: number | string;
+  benchmark_change_pct?: number | string;
+}
+
+export interface InvestmentMetricsResponse {
+  performance?: InvestmentPerformance;
+  snapshots?: InvestmentSnapshot[];
+  holdings?: InvestmentHoldingRead[];
+  transactions?: InvestmentTransactionRead[];
+}
+
 export interface NordnetParseRequest {
   raw_text: string;
   manual_payload?: Record<string, unknown>;
@@ -111,6 +150,7 @@ export interface InvestmentHoldingRead {
   price?: string | number | null;
   value_sek?: string | number | null;
   notes?: string | null;
+  [key: string]: unknown;
 }
 
 export interface LoanRead {
@@ -421,7 +461,7 @@ export interface SubscriptionRead {
   id: string;
   name: string;
   matcher_text: string;
-  matcher_amount_tolerance?: string | null;
+  matcher_amount_tolerance?: number | null;
   matcher_day_of_month?: number | null;
   category_id?: string | null;
   is_active: boolean;

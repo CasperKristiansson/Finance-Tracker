@@ -2,13 +2,13 @@
   "name": "finance-tracker",
   "version": "3.0.0",
   "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview",
-    "format": "prettier --write ."
-  },
+    "scripts": {
+      "dev": "vite",
+      "build": "tsc -b && vite build",
+      "lint": "eslint . && tsc --noEmit",
+      "preview": "vite preview",
+      "format": "prettier --write ."
+    },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.3",
     "@radix-ui/react-collapsible": "^1.1.3",
