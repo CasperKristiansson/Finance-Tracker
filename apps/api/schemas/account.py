@@ -15,9 +15,9 @@ from ..shared import AccountType, InterestCompound
 class LoanCreate(BaseModel):
     """Loan details supplied when creating a debt account."""
 
-    origin_principal: Decimal = Field(gt=Decimal("0"))
+    origin_principal: Decimal = Field(ge=Decimal("0"))
     current_principal: Decimal = Field(ge=Decimal("0"))
-    interest_rate_annual: Decimal = Field(gt=Decimal("0"))
+    interest_rate_annual: Decimal = Field(ge=Decimal("0"))
     interest_compound: InterestCompound
     minimum_payment: Optional[Decimal] = Field(default=None, ge=Decimal("0"))
     expected_maturity_date: Optional[date] = None

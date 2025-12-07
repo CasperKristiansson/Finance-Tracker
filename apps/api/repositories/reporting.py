@@ -14,7 +14,7 @@ from sqlmodel import Session, select
 
 from ..models import Account, Transaction, TransactionLeg
 from ..models.investment_snapshot import InvestmentSnapshot
-from ..shared import TransactionType, coerce_decimal, get_default_user_id
+from ..shared import coerce_decimal, get_default_user_id
 
 DecimalTotals = Tuple[Decimal, Decimal]
 

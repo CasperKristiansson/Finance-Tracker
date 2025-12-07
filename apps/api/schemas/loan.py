@@ -22,7 +22,7 @@ class LoanCreateRequest(LoanCreate):
 class LoanUpdate(BaseModel):
     """Patch payload for updating loan configuration."""
 
-    origin_principal: Optional[Decimal] = Field(default=None, gt=Decimal("0"))
+    origin_principal: Optional[Decimal] = Field(default=None, ge=Decimal("0"))
     current_principal: Optional[Decimal] = Field(default=None, ge=Decimal("0"))
     interest_rate_annual: Optional[Decimal] = Field(default=None, ge=Decimal("0"))
     interest_compound: Optional[InterestCompound] = None
