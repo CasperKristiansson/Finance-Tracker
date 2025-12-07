@@ -18,6 +18,7 @@ import type {
   LoanCreateRequest,
   LoanUpdateRequest,
 } from "@/types/api";
+import { accountListSchema } from "@/types/schemas";
 
 export const FetchAccounts = createAction<
   Partial<Pick<AccountsState, "includeInactive" | "asOfDate">> | undefined
@@ -54,7 +55,7 @@ function* handleFetchAccounts(action: ReturnType<typeof FetchAccounts>) {
 
     const response: AccountListResponse = yield call(
       callApiWithAuth,
-      { path: "/accounts", query },
+      { path: "/accounts", query, schema: accountListSchema },
       { loadingKey: "accounts" },
     );
 

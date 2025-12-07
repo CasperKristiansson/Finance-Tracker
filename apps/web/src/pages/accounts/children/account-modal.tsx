@@ -1,6 +1,9 @@
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect } from "react";
+import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -19,35 +22,40 @@ type Props = {
   account?: AccountWithBalance;
 };
 
-type FormState = {
-  name: string;
-  account_type: AccountType;
-  is_active: boolean;
-  icon: string;
-  loan: {
-    origin_principal: string;
-    current_principal: string;
-    interest_rate_annual: string;
-    interest_compound: InterestCompound;
-    minimum_payment: string;
-    expected_maturity_date: string;
-  };
-};
+const accountFormSchema = z
+  .object({
+    name: z.string().min(1, "Name is required").trim(),
+    account_type: z.nativeEnum(AccountType),
+    is_active: z.boolean(),
+    icon: z.string().optional(),
+    loan: z.object({
+      origin_principal: z.string().optional(),
+      current_principal: z.string().optional(),
+      interest_rate_annual: z.string().optional(),
+      interest_compound: z.nativeEnum(InterestCompound),
+      minimum_payment: z.string().optional(),
+      expected_maturity_date: z.string().optional(),
+    }),
+  })
+  .superRefine((val, ctx) => {
+    if (val.account_type !== AccountType.DEBT) return;
+    const required = [
+      "origin_principal",
+      "current_principal",
+      "interest_rate_annual",
+    ] as const;
+    required.forEach((field) => {
+      if (!val.loan[field]) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["loan", field],
+          message: "Required for debt accounts",
+        });
+      }
+    });
+  });
 
-const defaultFormState: FormState = {
-  name: "",
-  account_type: AccountType.NORMAL,
-  is_active: true,
-  icon: "",
-  loan: {
-    origin_principal: "",
-    current_principal: "",
-    interest_rate_annual: "",
-    interest_compound: InterestCompound.MONTHLY,
-    minimum_payment: "",
-    expected_maturity_date: "",
-  },
-};
+type AccountFormValues = z.infer<typeof accountFormSchema>;
 
 const isDebt = (type: AccountType) => type === AccountType.DEBT;
 
@@ -62,94 +70,63 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
     updateLoading,
   } = useAccountsApi();
 
-  const [form, setForm] = useState<FormState>(defaultFormState);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const getDefaults = useCallback((): AccountFormValues => {
+    return {
+      name: account?.name ?? "",
+      account_type: account?.account_type ?? AccountType.NORMAL,
+      is_active: account?.is_active ?? true,
+      icon: account?.icon ?? "",
+      loan: {
+        origin_principal: account?.loan?.origin_principal ?? "",
+        current_principal: account?.loan?.current_principal ?? "",
+        interest_rate_annual: account?.loan?.interest_rate_annual ?? "",
+        interest_compound:
+          account?.loan?.interest_compound ?? InterestCompound.MONTHLY,
+        minimum_payment: account?.loan?.minimum_payment ?? "",
+        expected_maturity_date: account?.loan?.expected_maturity_date ?? "",
+      },
+    };
+  }, [account]);
+
+  const {
+    register,
+    watch,
+    handleSubmit,
+    reset,
+    setValue,
+    formState: { errors: formErrors, isSubmitting },
+  } = useForm<AccountFormValues>({
+    resolver: zodResolver(accountFormSchema),
+    defaultValues: getDefaults(),
+  });
 
   useEffect(() => {
-    if (account) {
-      setForm({
-        name: account.name,
-        account_type: account.account_type,
-        is_active: account.is_active,
-        icon: account.icon ?? "",
-        loan: {
-          origin_principal: account.loan?.origin_principal ?? "",
-          current_principal: account.loan?.current_principal ?? "",
-          interest_rate_annual: account.loan?.interest_rate_annual ?? "",
-          interest_compound:
-            account.loan?.interest_compound ?? InterestCompound.MONTHLY,
-          minimum_payment: account.loan?.minimum_payment ?? "",
-          expected_maturity_date: account.loan?.expected_maturity_date ?? "",
-        },
-      });
-    } else {
-      setForm(defaultFormState);
-    }
-    setErrors({});
-  }, [account, open]);
+    reset(getDefaults());
+  }, [account, getDefaults, open, reset]);
 
-  const isSubmitting = createLoading || updateLoading;
+  const accountType = watch("account_type");
+  const isActive = watch("is_active");
+  const accountTypeField = register("account_type");
+  const isActiveField = register("is_active");
 
-  const handleChange = (
-    field: keyof FormState,
-    value: string | boolean | AccountType,
-  ) => {
-    setForm((prev) => ({
-      ...prev,
-      [field]: value as never,
-    }));
-  };
-
-  const handleLoanChange = (field: keyof FormState["loan"], value: string) => {
-    setForm((prev) => ({
-      ...prev,
-      loan: {
-        ...prev.loan,
-        [field]: value,
-      },
-    }));
-  };
-
-  const validate = () => {
-    const nextErrors: Record<string, string> = {};
-    if (!form.name.trim()) {
-      nextErrors.name = "Name is required";
-    }
-    if (isDebt(form.account_type)) {
-      const requiredLoanFields: Array<keyof FormState["loan"]> = [
-        "origin_principal",
-        "current_principal",
-        "interest_rate_annual",
-      ];
-      requiredLoanFields.forEach((key) => {
-        if (!form.loan[key]) {
-          nextErrors[key] = "Required for debt accounts";
-        }
-      });
-    }
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
-
-  const handleSubmit = async () => {
-    if (!validate()) return;
-
+  const onSubmit = async (values: AccountFormValues) => {
     const payload: AccountCreateRequest = {
-      name: form.name.trim(),
-      account_type: form.account_type,
-      is_active: form.is_active,
-      icon: form.icon || null,
+      name: values.name.trim(),
+      account_type: values.account_type,
+      is_active: values.is_active,
+      icon: values.icon?.trim() ? values.icon.trim() : null,
       loan: null,
     };
 
-    if (isDebt(form.account_type)) {
+    if (isDebt(values.account_type)) {
       payload.loan = {
-        origin_principal: form.loan.origin_principal,
-        current_principal: form.loan.current_principal,
-        interest_rate_annual: form.loan.interest_rate_annual,
-        interest_compound: form.loan.interest_compound,
-        minimum_payment: form.loan.minimum_payment || null,
-        expected_maturity_date: form.loan.expected_maturity_date || null,
+        origin_principal: values.loan.origin_principal ?? "",
+        current_principal: values.loan.current_principal ?? "",
+        interest_rate_annual: values.loan.interest_rate_annual ?? "",
+        interest_compound: values.loan.interest_compound,
+        minimum_payment: values.loan.minimum_payment?.trim() || null,
+        expected_maturity_date:
+          values.loan.expected_maturity_date?.trim() || null,
       };
     } else {
       payload.loan = null;
@@ -162,7 +139,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
           is_active: payload.is_active,
           icon: payload.icon ?? undefined,
         });
-        if (isDebt(form.account_type)) {
+        if (isDebt(values.account_type)) {
           if (account.loan) {
             updateLoan(account.id, {
               origin_principal: payload.loan?.origin_principal,
@@ -198,6 +175,8 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
     }
   };
 
+  const mutationBusy = isSubmitting || createLoading || updateLoading;
+
   if (!open) return null;
 
   return (
@@ -218,13 +197,12 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
             </label>
             <Input
               id="name"
-              value={form.name}
-              onChange={(e) => handleChange("name", e.target.value)}
+              {...register("name")}
               placeholder="e.g., Swedbank"
               autoFocus
             />
-            {errors.name ? (
-              <p className="text-xs text-red-600">{errors.name}</p>
+            {formErrors.name ? (
+              <p className="text-xs text-red-600">{formErrors.name.message}</p>
             ) : null}
           </div>
           <div className="space-y-1.5">
@@ -233,8 +211,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
             </label>
             <Input
               id="icon"
-              value={form.icon}
-              onChange={(e) => handleChange("icon", e.target.value)}
+              {...register("icon")}
               placeholder="e.g., banks/swedbank.png"
               list="bank-icons"
             />
@@ -254,10 +231,13 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
               <select
                 id="account_type"
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-                value={form.account_type}
-                onChange={(e) =>
-                  handleChange("account_type", e.target.value as AccountType)
-                }
+                value={accountType}
+                onChange={(e) => {
+                  accountTypeField.onChange(e);
+                  setValue("account_type", e.target.value as AccountType);
+                }}
+                onBlur={accountTypeField.onBlur}
+                name={accountTypeField.name}
               >
                 <option value={AccountType.NORMAL}>Cash</option>
                 <option value={AccountType.DEBT}>Debt</option>
@@ -269,13 +249,18 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
-              checked={form.is_active}
-              onChange={(e) => handleChange("is_active", e.target.checked)}
+              checked={isActive}
+              onChange={(e) => {
+                isActiveField.onChange(e);
+                setValue("is_active", e.target.checked);
+              }}
+              onBlur={isActiveField.onBlur}
+              name={isActiveField.name}
             />
             Active
           </label>
 
-          {isDebt(form.account_type) ? (
+          {isDebt(accountType) ? (
             <>
               <Separator />
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -288,17 +273,14 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
                   </label>
                   <Input
                     id="origin_principal"
-                    value={form.loan.origin_principal}
-                    onChange={(e) =>
-                      handleLoanChange("origin_principal", e.target.value)
-                    }
+                    {...register("loan.origin_principal")}
                     type="number"
                     inputMode="decimal"
                     placeholder="e.g., 100000"
                   />
-                  {errors.origin_principal ? (
+                  {formErrors.loan?.origin_principal ? (
                     <p className="text-xs text-red-600">
-                      {errors.origin_principal}
+                      {formErrors.loan.origin_principal.message}
                     </p>
                   ) : null}
                 </div>
@@ -311,17 +293,14 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
                   </label>
                   <Input
                     id="current_principal"
-                    value={form.loan.current_principal}
-                    onChange={(e) =>
-                      handleLoanChange("current_principal", e.target.value)
-                    }
+                    {...register("loan.current_principal")}
                     type="number"
                     inputMode="decimal"
                     placeholder="e.g., 92000"
                   />
-                  {errors.current_principal ? (
+                  {formErrors.loan?.current_principal ? (
                     <p className="text-xs text-red-600">
-                      {errors.current_principal}
+                      {formErrors.loan.current_principal.message}
                     </p>
                   ) : null}
                 </div>
@@ -334,18 +313,15 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
                   </label>
                   <Input
                     id="interest_rate_annual"
-                    value={form.loan.interest_rate_annual}
-                    onChange={(e) =>
-                      handleLoanChange("interest_rate_annual", e.target.value)
-                    }
+                    {...register("loan.interest_rate_annual")}
                     type="number"
                     step="0.01"
                     inputMode="decimal"
                     placeholder="e.g., 4.25"
                   />
-                  {errors.interest_rate_annual ? (
+                  {formErrors.loan?.interest_rate_annual ? (
                     <p className="text-xs text-red-600">
-                      {errors.interest_rate_annual}
+                      {formErrors.loan.interest_rate_annual.message}
                     </p>
                   ) : null}
                 </div>
@@ -359,13 +335,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
                   <select
                     id="interest_compound"
                     className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
-                    value={form.loan.interest_compound}
-                    onChange={(e) =>
-                      handleLoanChange(
-                        "interest_compound",
-                        e.target.value as InterestCompound,
-                      )
-                    }
+                    {...register("loan.interest_compound")}
                   >
                     <option value={InterestCompound.MONTHLY}>Monthly</option>
                     <option value={InterestCompound.DAILY}>Daily</option>
@@ -381,10 +351,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
                   </label>
                   <Input
                     id="minimum_payment"
-                    value={form.loan.minimum_payment}
-                    onChange={(e) =>
-                      handleLoanChange("minimum_payment", e.target.value)
-                    }
+                    {...register("loan.minimum_payment")}
                     type="number"
                     inputMode="decimal"
                     placeholder="e.g., 1500"
@@ -400,10 +367,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
                   <Input
                     id="expected_maturity_date"
                     type="date"
-                    value={form.loan.expected_maturity_date}
-                    onChange={(e) =>
-                      handleLoanChange("expected_maturity_date", e.target.value)
-                    }
+                    {...register("loan.expected_maturity_date")}
                   />
                 </div>
               </div>
@@ -417,15 +381,15 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
           ) : null}
 
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
+            <Button variant="outline" onClick={onClose} disabled={mutationBusy}>
               Cancel
             </Button>
             <Button
-              onClick={handleSubmit}
-              disabled={isSubmitting}
+              onClick={handleSubmit(onSubmit)}
+              disabled={mutationBusy}
               className="gap-2"
             >
-              {isSubmitting ? (
+              {mutationBusy ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <>{account ? "Save changes" : "Create account"}</>

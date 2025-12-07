@@ -25,6 +25,7 @@ import type {
   TransactionStatus,
   TransactionUpdateRequest,
 } from "@/types/api";
+import { transactionListSchema, transactionSchema } from "@/types/schemas";
 
 export const FetchTransactions = createAction<TransactionFilters | undefined>(
   "transactions/fetch",
@@ -86,7 +87,7 @@ function* handleFetchTransactions(
 
     const response: TransactionListResponse = yield call(
       callApiWithAuth,
-      { path: "/transactions", query },
+      { path: "/transactions", query, schema: transactionListSchema },
       { loadingKey: "transactions" },
     );
 
@@ -134,7 +135,7 @@ function* handleFetchRecentTransactions(
 
     const response: TransactionListResponse = yield call(
       callApiWithAuth,
-      { path: "/transactions", query },
+      { path: "/transactions", query, schema: transactionListSchema },
       { loadingKey: "transactions-recent" },
     );
 
@@ -159,7 +160,12 @@ function* handleCreateTransaction(
   try {
     const response: TransactionRead = yield call(
       callApiWithAuth,
-      { path: "/transactions", method: "POST", body: action.payload },
+      {
+        path: "/transactions",
+        method: "POST",
+        body: action.payload,
+        schema: transactionSchema,
+      },
       { loadingKey: "transaction-create" },
     );
     yield put(upsertTransaction(response));
@@ -184,6 +190,7 @@ function* handleUpdateTransaction(
         path: `/transactions/${action.payload.id}`,
         method: "PATCH",
         body: action.payload.data,
+        schema: transactionSchema,
       },
       { loadingKey: "transaction-update" },
     );

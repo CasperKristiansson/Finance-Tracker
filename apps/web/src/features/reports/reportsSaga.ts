@@ -38,6 +38,13 @@ import type {
   TotalReportRead,
   YearlyReportEntry,
 } from "@/types/api";
+import {
+  monthlyReportSchema,
+  netWorthHistorySchema,
+  quarterlyReportSchema,
+  totalReportSchema,
+  yearlyReportSchema,
+} from "@/types/schemas";
 
 export const FetchMonthlyReport = createAction<ReportFilters | undefined>(
   "reports/fetchMonthly",
@@ -99,7 +106,7 @@ function* handleFetchMonthly(action: ReturnType<typeof FetchMonthlyReport>) {
 
     const response: { results: MonthlyReportEntry[] } = yield call(
       callApiWithAuth,
-      { path: "/reports/monthly", query },
+      { path: "/reports/monthly", query, schema: monthlyReportSchema },
       { loadingKey: "report-monthly" },
     );
 
@@ -138,7 +145,7 @@ function* handleFetchYearly(action: ReturnType<typeof FetchYearlyReport>) {
 
     const response: { results: YearlyReportEntry[] } = yield call(
       callApiWithAuth,
-      { path: "/reports/yearly", query },
+      { path: "/reports/yearly", query, schema: yearlyReportSchema },
       { loadingKey: "report-yearly" },
     );
 
@@ -175,7 +182,7 @@ function* handleFetchTotal(action: ReturnType<typeof FetchTotalReport>) {
 
     const response: TotalReportRead = yield call(
       callApiWithAuth,
-      { path: "/reports/total", query },
+      { path: "/reports/total", query, schema: totalReportSchema },
       { loadingKey: "report-total" },
     );
 
@@ -209,7 +216,7 @@ function* handleFetchNetWorth(action: ReturnType<typeof FetchNetWorthHistory>) {
 
     const response: NetWorthHistoryResponse = yield call(
       callApiWithAuth,
-      { path: "/reports/net-worth", query },
+      { path: "/reports/net-worth", query, schema: netWorthHistorySchema },
       { loadingKey: "report-net-worth" },
     );
 
@@ -247,7 +254,7 @@ function* handleFetchQuarterly(
     };
     const response: { results: QuarterlyReportEntry[] } = yield call(
       callApiWithAuth,
-      { path: "/reports/quarterly", query },
+      { path: "/reports/quarterly", query, schema: quarterlyReportSchema },
       { loadingKey: "report-quarterly" },
     );
     yield put(setQuarterlyReport({ key, data: response.results }));

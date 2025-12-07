@@ -13,6 +13,7 @@ import type {
   CategoryListResponse,
   CategoryUpdateRequest,
 } from "@/types/api";
+import { categoryListSchema } from "@/types/schemas";
 
 export const FetchCategories = createAction<
   Partial<Pick<CategoriesState, "includeArchived">> | undefined
@@ -43,7 +44,7 @@ function* handleFetchCategories(action: ReturnType<typeof FetchCategories>) {
 
     const response: CategoryListResponse = yield call(
       callApiWithAuth,
-      { path: "/categories", query },
+      { path: "/categories", query, schema: categoryListSchema },
       { loadingKey: "categories" },
     );
 

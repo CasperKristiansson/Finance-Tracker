@@ -16,6 +16,9 @@ export interface ApiRequest {
   headers?: Record<string, string>;
   token?: string | null;
   retryCount?: number;
+  // Optional response validation using zod
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  schema?: import("zod").ZodSchema<any>;
 }
 
 export class ApiError extends Error {
@@ -114,6 +117,22 @@ export const apiFetch = async <T>(
       const payload = await parseResponse(response);
 
       if (response.ok) {
+        if (request.schema) {
+          const parsed = request.schema.safeParse(payload);
+          if (!parsed.success) {
+            throw new ApiError(
+              response.status,
+              "Response validation failed",
+              url,
+              parsed.error.flatten(),
+            );
+          }
+          return {
+            data: parsed.data as T,
+            status: response.status,
+            response,
+          };
+        }
         return { data: payload as T, status: response.status, response };
       }
 

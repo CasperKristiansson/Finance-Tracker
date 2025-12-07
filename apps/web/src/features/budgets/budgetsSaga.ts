@@ -11,6 +11,7 @@ import type {
   BudgetProgressListResponse,
   BudgetUpdateRequest,
 } from "@/types/api";
+import { budgetProgressListSchema } from "@/types/schemas";
 
 export const FetchBudgets = createAction("budgets/fetch");
 export const CreateBudget = createAction<BudgetCreateRequest>("budgets/create");
@@ -25,7 +26,7 @@ function* handleFetchBudgets() {
   try {
     const response: BudgetProgressListResponse = yield call(
       callApiWithAuth,
-      { path: "/budgets/progress" },
+      { path: "/budgets/progress", schema: budgetProgressListSchema },
       { loadingKey: "budgets" },
     );
     yield put(setBudgets(response.budgets));

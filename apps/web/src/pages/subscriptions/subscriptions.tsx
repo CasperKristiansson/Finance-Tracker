@@ -27,6 +27,7 @@ import type {
   SubscriptionSummaryRead,
   SubscriptionSummaryResponse,
 } from "@/types/api";
+import { subscriptionSummaryResponseSchema } from "@/types/schemas";
 
 const numberValue = (value: string | number | null | undefined) =>
   value === null || value === undefined ? 0 : Number(value);
@@ -91,6 +92,7 @@ export const Subscriptions: React.FC = () => {
     try {
       const { data } = await apiFetch<SubscriptionSummaryResponse>({
         path: "/subscriptions/summary",
+        schema: subscriptionSummaryResponseSchema,
         token,
       });
       setSubscriptions(data.subscriptions ?? []);
