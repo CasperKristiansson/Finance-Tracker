@@ -4,6 +4,7 @@ import React from "react";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { AppSidebar } from "@/components/app-sidebar";
 import { pageFade } from "@/components/motion-presets";
+import { Spinner } from "@/components/spinner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Breadcrumb,
@@ -70,7 +71,6 @@ const ProfileGate: React.FC = () => {
     saveSettings();
   };
 
-  // If settings were already saved and profile is complete, allow passing through
   React.useEffect(() => {
     if (!missingProfile && lastSavedAt) {
       setSubmitted(true);
@@ -79,32 +79,36 @@ const ProfileGate: React.FC = () => {
 
   if (!shouldBlock) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 px-4 py-8 backdrop-blur-sm">
-      <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
-              Profile required
-            </p>
-            <h2 className="text-xl font-semibold text-slate-900">
-              Finish your details
-            </h2>
-            <p className="text-sm text-slate-600">
-              Add your first and last name to personalize your workspace.
-            </p>
-          </div>
-          {saving ? (
-            <Loader2 className="h-5 w-5 animate-spin text-slate-400" />
-          ) : null}
-        </div>
+  const showSpinner = loading || saving;
 
-        {loading ? (
-          <div className="mt-6 flex items-center gap-2 text-sm text-slate-600">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading your profile…
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
+      {showSpinner ? (
+        <>
+          <Spinner
+            ariaLabel="Loading profile"
+            height={32}
+            width={32}
+            color="#64748b"
+            duration={1.2}
+          />
+          <span className="sr-only">Loading profile</span>
+        </>
+      ) : (
+        <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                Profile required
+              </p>
+              <h2 className="text-xl font-semibold text-slate-900">
+                Finish your details
+              </h2>
+              <p className="text-sm text-slate-600">
+                Add your first and last name to personalize your workspace.
+              </p>
+            </div>
           </div>
-        ) : (
           <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -140,8 +144,8 @@ const ProfileGate: React.FC = () => {
               </Button>
             </div>
           </form>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };
