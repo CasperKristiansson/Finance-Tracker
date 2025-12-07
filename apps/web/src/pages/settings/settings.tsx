@@ -12,6 +12,7 @@ import {
 import { useTheme } from "next-themes";
 import React, { useEffect, useMemo, useState } from "react";
 import { useAppSelector } from "@/app/hooks";
+import { MotionPage } from "@/components/motion-presets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -112,7 +113,7 @@ export const Settings: React.FC = () => {
   }, [error, loading, saving]);
 
   return (
-    <div className="space-y-4">
+    <MotionPage className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs tracking-wide text-slate-500 uppercase">
@@ -352,6 +353,6 @@ export const Settings: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </MotionPage>
   );
 };

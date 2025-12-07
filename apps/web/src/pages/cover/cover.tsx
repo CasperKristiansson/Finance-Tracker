@@ -1,11 +1,16 @@
+import { motion } from "framer-motion";
 import React from "react";
+import { MotionPage, fadeInUp } from "@/components/motion-presets";
 
 export const Cover: React.FC = () => {
   return (
-    <div className="h-screen bg-black">
-      <main
+    <MotionPage className="h-screen bg-black">
+      <motion.main
         id="content"
         className="relative z-10 mx-auto flex size-full max-w-3xl flex-col justify-center px-4 before:absolute before:start-1/2 before:top-0 before:-z-1 before:size-full before:-translate-x-1/2 before:transform before:bg-[url('https://preline.co/assets/svg/examples-dark/squared-bg-element.svg')] before:bg-top before:bg-no-repeat sm:items-center sm:px-6 lg:px-8"
+        variants={fadeInUp}
+        initial="hidden"
+        animate="show"
       >
         <div className="px-4 py-8 text-center sm:px-6 lg:px-8">
           <h1 className="text-2xl text-white sm:text-4xl">
@@ -88,9 +93,11 @@ export const Cover: React.FC = () => {
               </div>
 
               <div className="grid">
-                <button
+                <motion.button
                   type="submit"
                   className="inline-flex items-center justify-center gap-x-2 rounded-lg border border-transparent bg-white/10 px-4 py-3 text-sm font-medium text-white hover:bg-white/20 focus:bg-white/20 focus:outline-hidden disabled:pointer-events-none disabled:opacity-50 sm:p-4"
+                  whileHover={{ y: -2, scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                 >
                   Join the waitlist
                   <svg
@@ -107,12 +114,12 @@ export const Cover: React.FC = () => {
                   >
                     <path d="m9 18 6-6-6-6" />
                   </svg>
-                </button>
+                </motion.button>
               </div>
             </div>
           </form>
         </div>
-      </main>
-    </div>
+      </motion.main>
+    </MotionPage>
   );
 };

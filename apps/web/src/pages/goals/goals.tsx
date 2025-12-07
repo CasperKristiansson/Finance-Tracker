@@ -2,6 +2,7 @@ import { CheckCircle, Goal as GoalIcon, Plus } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
+import { MotionPage } from "@/components/motion-presets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -127,7 +128,7 @@ export const Goals: React.FC = () => {
   }, [goals]);
 
   return (
-    <div className="space-y-4">
+    <MotionPage className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs tracking-wide text-slate-500 uppercase">
@@ -307,6 +308,6 @@ export const Goals: React.FC = () => {
           })}
         </div>
       )}
-    </div>
+    </MotionPage>
   );
 };

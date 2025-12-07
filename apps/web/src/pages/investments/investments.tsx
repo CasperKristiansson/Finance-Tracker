@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import {
   Check,
   Loader2,
@@ -17,6 +18,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import {
+  MotionPage,
+  StaggerWrap,
+  fadeInUp,
+  subtleHover,
+} from "@/components/motion-presets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -391,267 +398,270 @@ export const Investments: React.FC = () => {
           : "bg-slate-100 text-slate-700";
 
     return (
-      <Card
-        key={draft.id}
-        className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.45)]"
-      >
-        <CardHeader className="flex flex-col gap-2 pb-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <CardTitle className="text-base text-slate-800">
-              {draft.label}
-            </CardTitle>
-            <p className="text-sm text-slate-500">
-              Paste raw text, adjust fields, parse, then save.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge className={cn("text-xs", badgeTone)}>
-              {status === "parsed"
-                ? "Parsed"
-                : status === "parsing"
-                  ? "Parsing"
-                  : "Draft"}
-            </Badge>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-slate-500 hover:text-slate-800"
-              onClick={() =>
-                setDrafts((prev) => prev.filter((d) => d.id !== draft.id))
-              }
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label className="text-xs tracking-wide text-slate-600 uppercase">
-                Raw export
-              </Label>
-              <Textarea
-                value={draft.rawText}
-                onChange={(e) =>
-                  updateDraft(draft.id, { rawText: e.target.value })
+      <motion.div variants={fadeInUp} {...subtleHover}>
+        <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.45)]">
+          <CardHeader className="flex flex-col gap-2 pb-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <CardTitle className="text-base text-slate-800">
+                {draft.label}
+              </CardTitle>
+              <p className="text-sm text-slate-500">
+                Paste raw text, adjust fields, parse, then save.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge className={cn("text-xs", badgeTone)}>
+                {status === "parsed"
+                  ? "Parsed"
+                  : status === "parsing"
+                    ? "Parsing"
+                    : "Draft"}
+              </Badge>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-slate-500 hover:text-slate-800"
+                onClick={() =>
+                  setDrafts((prev) => prev.filter((d) => d.id !== draft.id))
                 }
-                rows={8}
-                className="font-mono text-sm"
-              />
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs text-slate-600">
-                    Snapshot date
-                  </Label>
-                  <Input
-                    type="date"
-                    value={draft.snapshotDate ?? ""}
-                    onChange={(e) =>
-                      updateDraft(draft.id, { snapshotDate: e.target.value })
-                    }
-                    className="h-9 w-36"
-                  />
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs tracking-wide text-slate-600 uppercase">
+                  Raw export
+                </Label>
+                <Textarea
+                  value={draft.rawText}
+                  onChange={(e) =>
+                    updateDraft(draft.id, { rawText: e.target.value })
+                  }
+                  rows={8}
+                  className="font-mono text-sm"
+                />
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs text-slate-600">
+                      Snapshot date
+                    </Label>
+                    <Input
+                      type="date"
+                      value={draft.snapshotDate ?? ""}
+                      onChange={(e) =>
+                        updateDraft(draft.id, { snapshotDate: e.target.value })
+                      }
+                      className="h-9 w-36"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs text-slate-600">
+                      Value (SEK)
+                    </Label>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      value={draft.portfolioValue ?? ""}
+                      onChange={(e) =>
+                        updateDraft(draft.id, {
+                          portfolioValue: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      className="h-9 w-32"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs text-slate-600">
+                      Use Bedrock
+                    </Label>
+                    <Switch
+                      checked={Boolean(draft.useBedrock)}
+                      onCheckedChange={(val) =>
+                        updateDraft(draft.id, { useBedrock: val })
+                      }
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs text-slate-600">Model</Label>
+                    <select
+                      className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800 shadow-sm"
+                      value={draft.bedrockModelId ?? ""}
+                      onChange={(e) =>
+                        updateDraft(draft.id, {
+                          bedrockModelId: e.target.value || undefined,
+                        })
+                      }
+                    >
+                      <option value="">Default (Haiku)</option>
+                      <option value="anthropic.claude-haiku-4-5-20251001-v1:0">
+                        Claude 4.5 Haiku
+                      </option>
+                      <option value="anthropic.claude-3-5-sonnet-20241022-v2:0">
+                        Claude 3.5 Sonnet
+                      </option>
+                    </select>
+                    <Label className="text-xs text-slate-600">Max tokens</Label>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      className="h-9 w-20"
+                      value={draft.bedrockMaxTokens ?? ""}
+                      onChange={(e) =>
+                        updateDraft(draft.id, {
+                          bedrockMaxTokens: e.target.value
+                            ? Number(e.target.value)
+                            : undefined,
+                        })
+                      }
+                      min={100}
+                      max={2000}
+                    />
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Label className="text-xs text-slate-600">Value (SEK)</Label>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    value={draft.portfolioValue ?? ""}
-                    onChange={(e) =>
-                      updateDraft(draft.id, {
-                        portfolioValue: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    className="h-9 w-32"
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs text-slate-600">Use Bedrock</Label>
-                  <Switch
-                    checked={Boolean(draft.useBedrock)}
-                    onCheckedChange={(val) =>
-                      updateDraft(draft.id, { useBedrock: val })
-                    }
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label className="text-xs text-slate-600">Model</Label>
-                  <select
-                    className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800 shadow-sm"
-                    value={draft.bedrockModelId ?? ""}
-                    onChange={(e) =>
-                      updateDraft(draft.id, {
-                        bedrockModelId: e.target.value || undefined,
-                      })
-                    }
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleParse(draft)}
+                    disabled={isParsing}
                   >
-                    <option value="">Default (Haiku)</option>
-                    <option value="anthropic.claude-haiku-4-5-20251001-v1:0">
-                      Claude 4.5 Haiku
-                    </option>
-                    <option value="anthropic.claude-3-5-sonnet-20241022-v2:0">
-                      Claude 3.5 Sonnet
-                    </option>
-                  </select>
-                  <Label className="text-xs text-slate-600">Max tokens</Label>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    className="h-9 w-20"
-                    value={draft.bedrockMaxTokens ?? ""}
-                    onChange={(e) =>
-                      updateDraft(draft.id, {
-                        bedrockMaxTokens: e.target.value
-                          ? Number(e.target.value)
-                          : undefined,
-                      })
-                    }
-                    min={100}
-                    max={2000}
-                  />
+                    {isParsing ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Wand2 className="mr-2 h-4 w-4" />
+                    )}
+                    Parse
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleSave(draft)}
+                    disabled={saving || status === "parsing"}
+                  >
+                    {saving ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="mr-2 h-4 w-4" />
+                    )}
+                    Save snapshot
+                  </Button>
                 </div>
+                {draft.error ? (
+                  <p className="text-sm text-rose-600">{draft.error}</p>
+                ) : null}
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleParse(draft)}
-                  disabled={isParsing}
-                >
-                  {isParsing ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Wand2 className="mr-2 h-4 w-4" />
-                  )}
-                  Parse
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => handleSave(draft)}
-                  disabled={saving || status === "parsing"}
-                >
-                  {saving ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="mr-2 h-4 w-4" />
-                  )}
-                  Save snapshot
-                </Button>
-              </div>
-              {draft.error ? (
-                <p className="text-sm text-rose-600">{draft.error}</p>
-              ) : null}
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs tracking-wide text-slate-600 uppercase">
-                Parsed preview (edit before saving)
-              </Label>
-              {holdings.length ? (
-                <div className="rounded-lg border border-slate-200">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-1/3">Holding</TableHead>
-                        <TableHead className="w-1/5">Qty</TableHead>
-                        <TableHead className="w-1/5">Value (SEK)</TableHead>
-                        <TableHead className="w-1/5">Currency</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {holdings.map((holding, idx) => (
-                        <TableRow key={`${draft.id}-${idx}`}>
-                          <TableCell>
-                            <Input
-                              value={(holding.name as string) ?? ""}
-                              onChange={(e) =>
-                                updateHolding(
-                                  draft.id,
-                                  idx,
-                                  "name",
-                                  e.target.value,
-                                )
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="text"
-                              value={
-                                holding.quantity !== undefined &&
-                                holding.quantity !== null
-                                  ? String(holding.quantity)
-                                  : ""
-                              }
-                              onChange={(e) =>
-                                updateHolding(
-                                  draft.id,
-                                  idx,
-                                  "quantity",
-                                  e.target.value,
-                                )
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              inputMode="decimal"
-                              value={
-                                coerceNumber(holding.market_value_sek) ??
-                                coerceNumber(holding.value_sek) ??
-                                ""
-                              }
-                              onChange={(e) =>
-                                updateHolding(
-                                  draft.id,
-                                  idx,
-                                  "market_value_sek",
-                                  e.target.value,
-                                )
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <Input
-                              value={(holding.currency as string) ?? "SEK"}
-                              onChange={(e) =>
-                                updateHolding(
-                                  draft.id,
-                                  idx,
-                                  "currency",
-                                  e.target.value,
-                                )
-                              }
-                            />
-                          </TableCell>
+              <div className="space-y-2">
+                <Label className="text-xs tracking-wide text-slate-600 uppercase">
+                  Parsed preview (edit before saving)
+                </Label>
+                {holdings.length ? (
+                  <div className="rounded-lg border border-slate-200">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-1/3">Holding</TableHead>
+                          <TableHead className="w-1/5">Qty</TableHead>
+                          <TableHead className="w-1/5">Value (SEK)</TableHead>
+                          <TableHead className="w-1/5">Currency</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              ) : (
-                <Card className="border-dashed border-slate-200 bg-slate-50/50">
-                  <CardContent className="py-6 text-sm text-slate-600">
-                    No holdings parsed yet. Click <strong>Parse</strong> to
-                    extract holdings. You can still save with raw text if you
-                    prefer.
-                  </CardContent>
-                </Card>
-              )}
+                      </TableHeader>
+                      <TableBody>
+                        {holdings.map((holding, idx) => (
+                          <TableRow key={`${draft.id}-${idx}`}>
+                            <TableCell>
+                              <Input
+                                value={(holding.name as string) ?? ""}
+                                onChange={(e) =>
+                                  updateHolding(
+                                    draft.id,
+                                    idx,
+                                    "name",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="text"
+                                value={
+                                  holding.quantity !== undefined &&
+                                  holding.quantity !== null
+                                    ? String(holding.quantity)
+                                    : ""
+                                }
+                                onChange={(e) =>
+                                  updateHolding(
+                                    draft.id,
+                                    idx,
+                                    "quantity",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                type="number"
+                                inputMode="decimal"
+                                value={
+                                  coerceNumber(holding.market_value_sek) ??
+                                  coerceNumber(holding.value_sek) ??
+                                  ""
+                                }
+                                onChange={(e) =>
+                                  updateHolding(
+                                    draft.id,
+                                    idx,
+                                    "market_value_sek",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <Input
+                                value={(holding.currency as string) ?? "SEK"}
+                                onChange={(e) =>
+                                  updateHolding(
+                                    draft.id,
+                                    idx,
+                                    "currency",
+                                    e.target.value,
+                                  )
+                                }
+                              />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <Card className="border-dashed border-slate-200 bg-slate-50/50">
+                    <CardContent className="py-6 text-sm text-slate-600">
+                      No holdings parsed yet. Click <strong>Parse</strong> to
+                      extract holdings. You can still save with raw text if you
+                      prefer.
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </motion.div>
     );
   };
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div>
+    <MotionPage className="space-y-4">
+      <StaggerWrap className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <motion.div variants={fadeInUp}>
           <p className="text-xs tracking-wide text-slate-500 uppercase">
             Investments
           </p>
@@ -662,8 +672,11 @@ export const Investments: React.FC = () => {
             Handle multiple exports in one session, edit holdings inline, and
             save dated snapshots to see value trends.
           </p>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-slate-600">
+        </motion.div>
+        <motion.div
+          variants={fadeInUp}
+          className="flex items-center gap-2 text-sm text-slate-600"
+        >
           {loading || isUploading ? (
             <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
               <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
@@ -676,75 +689,85 @@ export const Investments: React.FC = () => {
               Saving
             </span>
           ) : null}
-        </div>
-      </div>
-      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="border-slate-200">
-          <CardContent className="space-y-1 py-4">
-            <p className="text-xs text-slate-500 uppercase">Total value</p>
-            <p className="text-2xl font-semibold text-slate-900">
-              {totalValue.toLocaleString("sv-SE", { maximumFractionDigits: 0 })}{" "}
-              SEK
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200">
-          <CardContent className="space-y-1 py-4">
-            <p className="text-xs text-slate-500 uppercase">Invested</p>
-            <p className="text-lg font-semibold text-slate-900">
-              {invested.toLocaleString("sv-SE", {
-                maximumFractionDigits: 0,
-              })}{" "}
-              SEK
-            </p>
-            <p className="text-xs text-slate-500">
-              Realized P/L:{" "}
-              {realizedPl.toLocaleString("sv-SE", {
-                maximumFractionDigits: 0,
-              })}{" "}
-              SEK
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200">
-          <CardContent className="space-y-1 py-4">
-            <p className="text-xs text-slate-500 uppercase">Unrealized P/L</p>
-            <p
-              className={cn(
-                "text-lg font-semibold",
-                unrealizedPl >= 0 ? "text-emerald-700" : "text-rose-700",
-              )}
-            >
-              {unrealizedPl.toLocaleString("sv-SE", {
-                maximumFractionDigits: 0,
-              })}{" "}
-              SEK
-            </p>
-            <p className="text-xs text-slate-500">
-              TWR:{" "}
-              {twr !== undefined && twr !== null
-                ? `${(twr * 100).toFixed(1)}%`
-                : "—"}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-slate-200">
-          <CardContent className="space-y-1 py-4">
-            <p className="text-xs text-slate-500 uppercase">IRR</p>
-            <p className="text-lg font-semibold text-slate-900">
-              {irr !== undefined && irr !== null
-                ? `${(irr * 100).toFixed(1)}%`
-                : "—"}
-            </p>
-            <p className="text-xs text-slate-500">
-              Benchmark:{" "}
-              {benchmarkChange !== undefined && benchmarkChange !== null
-                ? `${(benchmarkChange * 100).toFixed(1)}%`
-                : "—"}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+        </motion.div>
+      </StaggerWrap>
+      <StaggerWrap className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <motion.div variants={fadeInUp} {...subtleHover}>
+          <Card className="border-slate-200">
+            <CardContent className="space-y-1 py-4">
+              <p className="text-xs text-slate-500 uppercase">Total value</p>
+              <p className="text-2xl font-semibold text-slate-900">
+                {totalValue.toLocaleString("sv-SE", {
+                  maximumFractionDigits: 0,
+                })}{" "}
+                SEK
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
+        <motion.div variants={fadeInUp} {...subtleHover}>
+          <Card className="border-slate-200">
+            <CardContent className="space-y-1 py-4">
+              <p className="text-xs text-slate-500 uppercase">Invested</p>
+              <p className="text-lg font-semibold text-slate-900">
+                {invested.toLocaleString("sv-SE", {
+                  maximumFractionDigits: 0,
+                })}{" "}
+                SEK
+              </p>
+              <p className="text-xs text-slate-500">
+                Realized P/L:{" "}
+                {realizedPl.toLocaleString("sv-SE", {
+                  maximumFractionDigits: 0,
+                })}{" "}
+                SEK
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
+        <motion.div variants={fadeInUp} {...subtleHover}>
+          <Card className="border-slate-200">
+            <CardContent className="space-y-1 py-4">
+              <p className="text-xs text-slate-500 uppercase">Unrealized P/L</p>
+              <p
+                className={cn(
+                  "text-lg font-semibold",
+                  unrealizedPl >= 0 ? "text-emerald-700" : "text-rose-700",
+                )}
+              >
+                {unrealizedPl.toLocaleString("sv-SE", {
+                  maximumFractionDigits: 0,
+                })}{" "}
+                SEK
+              </p>
+              <p className="text-xs text-slate-500">
+                TWR:{" "}
+                {twr !== undefined && twr !== null
+                  ? `${(twr * 100).toFixed(1)}%`
+                  : "—"}
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
+        <motion.div variants={fadeInUp} {...subtleHover}>
+          <Card className="border-slate-200">
+            <CardContent className="space-y-1 py-4">
+              <p className="text-xs text-slate-500 uppercase">IRR</p>
+              <p className="text-lg font-semibold text-slate-900">
+                {irr !== undefined && irr !== null
+                  ? `${(irr * 100).toFixed(1)}%`
+                  : "—"}
+              </p>
+              <p className="text-xs text-slate-500">
+                Benchmark:{" "}
+                {benchmarkChange !== undefined && benchmarkChange !== null
+                  ? `${(benchmarkChange * 100).toFixed(1)}%`
+                  : "—"}
+              </p>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </StaggerWrap>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)] lg:col-span-2">
@@ -1130,7 +1153,7 @@ export const Investments: React.FC = () => {
           </Card>
         </div>
       </div>
-    </div>
+    </MotionPage>
   );
 };
 

@@ -1,13 +1,14 @@
+import { motion } from "framer-motion";
 import {
   ArrowDownRight,
   ArrowUpRight,
+  FileBarChart,
   PiggyBank,
   Plus,
+  Receipt,
+  Settings,
   Upload,
   Wallet,
-  FileBarChart,
-  Settings,
-  Receipt,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -28,6 +29,12 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
+import {
+  MotionPage,
+  StaggerWrap,
+  fadeInUp,
+  subtleHover,
+} from "@/components/motion-presets";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
@@ -424,9 +431,9 @@ export const Dashboard: React.FC = () => {
   }, [recentTab, recentTransactions]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div>
+    <MotionPage className="space-y-4">
+      <StaggerWrap className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <motion.div variants={fadeInUp}>
           <p className="text-xs tracking-wide text-slate-500 uppercase">
             Overview
           </p>
@@ -436,8 +443,12 @@ export const Dashboard: React.FC = () => {
           <p className="text-sm text-slate-500">
             Live net worth, cash flow, and savings snapshot.
           </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+        </motion.div>
+        <motion.div
+          variants={fadeInUp}
+          className="flex flex-wrap gap-2"
+          {...subtleHover}
+        >
           <Button
             variant="default"
             className="gap-2"
@@ -462,626 +473,661 @@ export const Dashboard: React.FC = () => {
             <Upload className="h-4 w-4" />
             Import file
           </Button>
-        </div>
-      </div>
+        </motion.div>
+      </StaggerWrap>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        {kpis.map((kpi) => (
-          <Card
+      <StaggerWrap className="grid gap-3 md:grid-cols-3">
+        {kpis.map((kpi, index) => (
+          <motion.div
             key={kpi.title}
-            className="border-slate-200 bg-white shadow-[0_10px_30px_-24px_rgba(30,64,175,0.6)]"
+            variants={fadeInUp}
+            {...subtleHover}
+            transition={{
+              duration: 0.35,
+              ease: "easeOut",
+              delay: index * 0.05,
+            }}
           >
-            <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
-                    {kpi.title}
-                  </p>
-                  <p className="mt-1 text-2xl font-semibold text-slate-900">
-                    {kpi.value}
-                  </p>
-                  {kpi.helper ? (
-                    <p className="text-xs text-slate-500">{kpi.helper}</p>
+            <Card className="border-slate-200 bg-white shadow-[0_10px_30px_-24px_rgba(30,64,175,0.6)]">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+                      {kpi.title}
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold text-slate-900">
+                      {kpi.value}
+                    </p>
+                    {kpi.helper ? (
+                      <p className="text-xs text-slate-500">{kpi.helper}</p>
+                    ) : null}
+                  </div>
+                  {kpi.delta ? (
+                    <span
+                      className={`flex items-center rounded-full px-2 py-1 text-xs font-semibold ${
+                        kpi.trend === "up"
+                          ? "bg-green-50 text-green-700"
+                          : "bg-red-50 text-red-700"
+                      }`}
+                    >
+                      {kpi.trend === "up" ? (
+                        <ArrowUpRight className="mr-1 h-4 w-4" />
+                      ) : (
+                        <ArrowDownRight className="mr-1 h-4 w-4" />
+                      )}
+                      {kpi.delta}
+                    </span>
                   ) : null}
                 </div>
-                {kpi.delta ? (
-                  <span
-                    className={`flex items-center rounded-full px-2 py-1 text-xs font-semibold ${
-                      kpi.trend === "up"
-                        ? "bg-green-50 text-green-700"
-                        : "bg-red-50 text-red-700"
-                    }`}
-                  >
-                    {kpi.trend === "up" ? (
-                      <ArrowUpRight className="mr-1 h-4 w-4" />
-                    ) : (
-                      <ArrowDownRight className="mr-1 h-4 w-4" />
-                    )}
-                    {kpi.delta}
-                  </span>
-                ) : null}
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </StaggerWrap>
+
+      <StaggerWrap className="grid gap-4 md:grid-cols-2">
+        <motion.div variants={fadeInUp}>
+          <ChartCard
+            title="Income vs Expense"
+            description="Stacked by month"
+            loading={monthly.loading}
+          >
+            <ChartContainer
+              className="h-full w-full"
+              config={{
+                income: {
+                  label: "Income",
+                  color: "var(--chart-income, #22c55e)",
+                },
+                expense: {
+                  label: "Expense",
+                  color: "var(--chart-expense, #ef4444)",
+                },
+              }}
+            >
+              <AreaChart data={incomeExpenseChart}>
+                <defs>
+                  <linearGradient id="incomeFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="expenseFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="month" tickLine={false} axisLine={false} />
+                <YAxis tickLine={false} axisLine={false} />
+                <Tooltip content={<ChartTooltipContent />} />
+                <Area
+                  type="monotone"
+                  dataKey="income"
+                  stroke="#22c55e"
+                  fill="url(#incomeFill)"
+                  strokeWidth={2}
+                  name="Income"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="expense"
+                  stroke="#ef4444"
+                  fill="url(#expenseFill)"
+                  strokeWidth={2}
+                  name="Expense"
+                />
+              </AreaChart>
+            </ChartContainer>
+          </ChartCard>
+        </motion.div>
+
+        <motion.div variants={fadeInUp}>
+          <ChartCard
+            title="Net Worth"
+            description="Trajectory over time"
+            loading={netWorth.loading}
+          >
+            <ChartContainer
+              className="h-full w-full"
+              config={{
+                net: {
+                  label: "Net worth",
+                  color: "#4f46e5",
+                },
+              }}
+            >
+              <AreaChart
+                data={netWorthData}
+                margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient id="netFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={(value) =>
+                    new Date(value).toLocaleDateString("en-US", {
+                      month: "short",
+                    })
+                  }
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  domain={netWorthDomain}
+                  allowDataOverflow
+                  tickMargin={12}
+                  width={90}
+                  tickFormatter={(v) => compactCurrency(Number(v))}
+                />
+                <Tooltip content={<ChartTooltipContent />} />
+                {Array.from(new Set(netWorthData.map((d) => d.year))).map(
+                  (year) => {
+                    const firstPoint = netWorthData.find(
+                      (d) => d.year === year,
+                    );
+                    return firstPoint ? (
+                      <ReferenceLine
+                        key={year}
+                        x={firstPoint.date}
+                        stroke="#cbd5e1"
+                        strokeDasharray="4 4"
+                        label={{
+                          value: `${year}`,
+                          position: "insideTopLeft",
+                          fill: "#475569",
+                          fontSize: 10,
+                        }}
+                      />
+                    ) : null;
+                  },
+                )}
+                <Area
+                  type="monotoneX"
+                  connectNulls
+                  dataKey="net"
+                  stroke="#4f46e5"
+                  fill="url(#netFill)"
+                  strokeWidth={2}
+                  name="Net worth"
+                />
+              </AreaChart>
+            </ChartContainer>
+          </ChartCard>
+        </motion.div>
+      </StaggerWrap>
+
+      <StaggerWrap className="grid gap-4 xl:grid-cols-[1fr_1.5fr_1fr]">
+        <motion.div variants={fadeInUp}>
+          <ChartCard
+            title="Category mix"
+            description="Income vs expenses"
+            loading={yearly.loading}
+            action={
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  Income
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-rose-500" />
+                  Expenses
+                </span>
+              </div>
+            }
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={categoryBreakdown}
+                  dataKey="value"
+                  nameKey="name"
+                  innerRadius={60}
+                  outerRadius={90}
+                  paddingAngle={4}
+                >
+                  {categoryBreakdown.map((_, index) => (
+                    <Cell
+                      key={index}
+                      fill={index === 0 ? "#10b981" : "#ef4444"}
+                      stroke="transparent"
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const item = payload[0];
+                    return (
+                      <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                        <p className="font-semibold text-slate-800">
+                          {item.name}
+                        </p>
+                        <p className="text-slate-600">
+                          {currency(Number(item.value))}
+                        </p>
+                      </div>
+                    );
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        </motion.div>
+
+        <motion.div variants={fadeInUp}>
+          <ChartCard
+            title="Savings rate"
+            description="Per month"
+            loading={monthly.loading}
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={savingsRateData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="month" tickLine={false} axisLine={false} />
+                <YAxis
+                  tickFormatter={(v) => `${v}%`}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null;
+                    const item = payload[0];
+                    return (
+                      <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                        <p className="font-semibold text-slate-800">
+                          {item.payload.month}
+                        </p>
+                        <p className="text-slate-600">{item.value}%</p>
+                      </div>
+                    );
+                  }}
+                />
+                <Bar dataKey="rate" fill="#0ea5e9" radius={[6, 6, 4, 4]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartCard>
+        </motion.div>
+
+        <motion.div variants={fadeInUp} {...subtleHover}>
+          <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.25)]">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div>
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Quick actions
+                </CardTitle>
+                <p className="text-xs text-slate-500">Jump into common flows</p>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Button
+                asChild
+                variant="outline"
+                className="w-full justify-start gap-2"
+              >
+                <Link
+                  to={PageRoutes.transactions}
+                  className="flex items-center gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add transaction
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="w-full justify-start gap-2"
+              >
+                <Link
+                  to={PageRoutes.imports}
+                  className="flex items-center gap-2"
+                >
+                  <Upload className="h-4 w-4" />
+                  Import bank file
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="w-full justify-start gap-2"
+              >
+                <Link
+                  to={PageRoutes.accounts}
+                  className="flex items-center gap-2"
+                >
+                  <Wallet className="h-4 w-4" />
+                  View accounts
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="w-full justify-start gap-2"
+              >
+                <Link
+                  to={PageRoutes.budgets}
+                  className="flex items-center gap-2"
+                >
+                  <Receipt className="h-4 w-4" />
+                  Budgets
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="w-full justify-start gap-2"
+              >
+                <Link
+                  to={PageRoutes.reports}
+                  className="flex items-center gap-2"
+                >
+                  <FileBarChart className="h-4 w-4" />
+                  Reports
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="w-full justify-start gap-2"
+              >
+                <Link to={PageRoutes.goals} className="flex items-center gap-2">
+                  <PiggyBank className="h-4 w-4" />
+                  Goals
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="w-full justify-start gap-2"
+              >
+                <Link
+                  to={PageRoutes.settings}
+                  className="flex items-center gap-2"
+                >
+                  <Settings className="h-4 w-4" />
+                  Settings
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </StaggerWrap>
+
+      <StaggerWrap className="grid gap-4 md:grid-cols-2">
+        <motion.div variants={fadeInUp}>
+          <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)]">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-slate-900">
+                Cash on hand
+              </CardTitle>
+              <p className="text-sm text-slate-500">Active accounts combined</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {accountsLoading ? (
+                <Skeleton className="h-10 w-40" />
+              ) : (
+                <div className="text-3xl font-semibold text-slate-900">
+                  {currency(cashOnHand)}
+                </div>
+              )}
+              <div className="space-y-3">
+                {activeAccounts.map((account) => {
+                  const delta = accountDeltas[account.id] ?? 0;
+                  const isPositive = delta >= 0;
+                  return (
+                    <div
+                      key={account.id}
+                      className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"
+                    >
+                      <div className="flex items-center gap-3">
+                        {account.icon ? (
+                          <img
+                            src={`/${account.icon}`}
+                            alt={account.name}
+                            className="h-8 w-8 rounded-full border border-slate-100 bg-white object-contain p-1"
+                          />
+                        ) : (
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">
+                            {account.name.charAt(0)}
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-sm font-semibold text-slate-900">
+                            {account.name}
+                          </p>
+                          <p
+                            className={`text-xs ${isPositive ? "text-emerald-600" : "text-rose-600"}`}
+                          >
+                            {isPositive ? "+" : "−"}
+                            {currency(Math.abs(delta))} this year
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-sm font-semibold text-slate-900">
+                        {currency(Number(account.balance))}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
-        ))}
-      </div>
+        </motion.div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <ChartCard
-          title="Income vs Expense"
-          description="Stacked by month"
-          loading={monthly.loading}
-        >
-          <ChartContainer
-            className="h-full w-full"
-            config={{
-              income: {
-                label: "Income",
-                color: "var(--chart-income, #22c55e)",
-              },
-              expense: {
-                label: "Expense",
-                color: "var(--chart-expense, #ef4444)",
-              },
-            }}
-          >
-            <AreaChart data={incomeExpenseChart}>
-              <defs>
-                <linearGradient id="incomeFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.25} />
-                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="expenseFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
-                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="month" tickLine={false} axisLine={false} />
-              <YAxis tickLine={false} axisLine={false} />
-              <Tooltip content={<ChartTooltipContent />} />
-              <Area
-                type="monotone"
-                dataKey="income"
-                stroke="#22c55e"
-                fill="url(#incomeFill)"
-                strokeWidth={2}
-                name="Income"
-              />
-              <Area
-                type="monotone"
-                dataKey="expense"
-                stroke="#ef4444"
-                fill="url(#expenseFill)"
-                strokeWidth={2}
-                name="Expense"
-              />
-            </AreaChart>
-          </ChartContainer>
-        </ChartCard>
-
-        <ChartCard
-          title="Net Worth"
-          description="Trajectory over time"
-          loading={netWorth.loading}
-        >
-          <ChartContainer
-            className="h-full w-full"
-            config={{
-              net: {
-                label: "Net worth",
-                color: "#4f46e5",
-              },
-            }}
-          >
-            <AreaChart
-              data={netWorthData}
-              margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
-            >
-              <defs>
-                <linearGradient id="netFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis
-                dataKey="date"
-                tickFormatter={(value) =>
-                  new Date(value).toLocaleDateString("en-US", {
-                    month: "short",
-                  })
-                }
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                tickLine={false}
-                axisLine={false}
-                domain={netWorthDomain}
-                allowDataOverflow
-                tickMargin={12}
-                width={90}
-                tickFormatter={(v) => compactCurrency(Number(v))}
-              />
-              <Tooltip content={<ChartTooltipContent />} />
-              {Array.from(new Set(netWorthData.map((d) => d.year))).map(
-                (year) => {
-                  const firstPoint = netWorthData.find((d) => d.year === year);
-                  return firstPoint ? (
-                    <ReferenceLine
-                      key={year}
-                      x={firstPoint.date}
-                      stroke="#cbd5e1"
-                      strokeDasharray="4 4"
-                      label={{
-                        value: `${year}`,
-                        position: "insideTopLeft",
-                        fill: "#475569",
-                        fontSize: 10,
-                      }}
-                    />
-                  ) : null;
-                },
+        <motion.div variants={fadeInUp}>
+          <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)]">
+            <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+              <div>
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Cash runway
+                </CardTitle>
+                <p className="text-sm text-slate-500">
+                  Based on average burn (non-investment accounts)
+                </p>
+              </div>
+              {runwayMetrics.trend === "up" ? (
+                <ArrowUpRight className="h-5 w-5 text-emerald-500" />
+              ) : runwayMetrics.trend === "down" ? (
+                <ArrowDownRight className="h-5 w-5 text-rose-500" />
+              ) : null}
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {monthly.loading || accountsLoading ? (
+                <Skeleton className="h-10 w-48" />
+              ) : runwayMetrics.months === null ? (
+                <p className="text-sm text-slate-500">
+                  Add expense history to estimate runway.
+                </p>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+                    Runway
+                  </div>
+                  <div className="text-3xl font-semibold text-slate-900">
+                    {`${runwayMetrics.months.toFixed(1)} months`}
+                  </div>
+                </div>
               )}
-              <Area
-                type="monotoneX"
-                connectNulls
-                dataKey="net"
-                stroke="#4f46e5"
-                fill="url(#netFill)"
-                strokeWidth={2}
-                name="Net worth"
-              />
-            </AreaChart>
-          </ChartContainer>
-        </ChartCard>
-      </div>
+              <div className="grid grid-cols-2 gap-3 text-sm text-slate-700">
+                <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
+                  <p className="text-xs text-slate-500">Avg monthly burn</p>
+                  <p className="text-base font-semibold text-rose-600">
+                    {currency(runwayMetrics.avgBurn)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
+                  <p className="text-xs text-slate-500">Avg monthly income</p>
+                  <p className="text-base font-semibold text-emerald-600">
+                    {currency(runwayMetrics.avgIncome)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
+                  <p className="text-xs text-slate-500">Last month net</p>
+                  <p
+                    className={`text-base font-semibold ${
+                      runwayMetrics.lastNet >= 0
+                        ? "text-emerald-600"
+                        : "text-rose-600"
+                    }`}
+                  >
+                    {currency(runwayMetrics.lastNet)}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
+                  <p className="text-xs text-slate-500">Previous month net</p>
+                  <p
+                    className={`text-base font-semibold ${
+                      runwayMetrics.prevNet >= 0
+                        ? "text-emerald-600"
+                        : "text-rose-600"
+                    }`}
+                  >
+                    {currency(runwayMetrics.prevNet)}
+                  </p>
+                </div>
+              </div>
+              {runwayMetrics.sparkline.length ? (
+                <div className="rounded-lg border border-slate-100 p-3">
+                  <ChartContainer
+                    className="!aspect-auto h-36 w-full"
+                    config={{
+                      balance: { label: "Cash trend", color: "#0ea5e9" },
+                    }}
+                  >
+                    <AreaChart
+                      data={runwayMetrics.sparkline}
+                      margin={{ left: 0, right: 0, top: 6, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient
+                          id="cashSpark"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor="#0ea5e9"
+                            stopOpacity={0.25}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor="#0ea5e9"
+                            stopOpacity={0}
+                          />
+                        </linearGradient>
+                      </defs>
+                      <XAxis dataKey="month" hide />
+                      <YAxis hide />
+                      <Tooltip content={<ChartTooltipContent />} />
+                      <Area
+                        type="monotoneX"
+                        dataKey="balance"
+                        stroke="#0ea5e9"
+                        fill="url(#cashSpark)"
+                        strokeWidth={2}
+                        name="Cash trend"
+                        dot={false}
+                      />
+                    </AreaChart>
+                  </ChartContainer>
+                </div>
+              ) : (
+                <Skeleton className="h-36 w-full" />
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+      </StaggerWrap>
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_1.5fr_1fr]">
-        <ChartCard
-          title="Category mix"
-          description="Income vs expenses"
-          loading={yearly.loading}
-          action={
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                Income
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-rose-500" />
-                Expenses
-              </span>
-            </div>
-          }
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
-              <Pie
-                data={categoryBreakdown}
-                dataKey="value"
-                nameKey="name"
-                innerRadius={60}
-                outerRadius={90}
-                paddingAngle={4}
-              >
-                {categoryBreakdown.map((_, index) => (
-                  <Cell
-                    key={index}
-                    fill={index === 0 ? "#10b981" : "#ef4444"}
-                    stroke="transparent"
-                  />
-                ))}
-              </Pie>
-              <Tooltip
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const item = payload[0];
-                  return (
-                    <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                      <p className="font-semibold text-slate-800">
-                        {item.name}
-                      </p>
-                      <p className="text-slate-600">
-                        {currency(Number(item.value))}
-                      </p>
-                    </div>
-                  );
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <ChartCard
-          title="Savings rate"
-          description="Per month"
-          loading={monthly.loading}
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={savingsRateData}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="month" tickLine={false} axisLine={false} />
-              <YAxis
-                tickFormatter={(v) => `${v}%`}
-                tickLine={false}
-                axisLine={false}
-              />
-              <Tooltip
-                content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
-                  const item = payload[0];
-                  return (
-                    <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                      <p className="font-semibold text-slate-800">
-                        {item.payload.month}
-                      </p>
-                      <p className="text-slate-600">{item.value}%</p>
-                    </div>
-                  );
-                }}
-              />
-              <Bar dataKey="rate" fill="#0ea5e9" radius={[6, 6, 4, 4]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartCard>
-
-        <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.25)]">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <motion.div variants={fadeInUp}>
+        <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.25)]">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
             <div>
               <CardTitle className="text-base font-semibold text-slate-900">
-                Quick actions
+                Recent transactions
               </CardTitle>
-              <p className="text-xs text-slate-500">Jump into common flows</p>
+              <p className="text-xs text-slate-500">
+                Latest activity across tracked accounts
+              </p>
             </div>
+            <Tabs
+              value={recentTab}
+              onValueChange={(val) => setRecentTab(val as typeof recentTab)}
+              className="w-auto"
+            >
+              <TabsList className="bg-slate-100">
+                <TabsTrigger value="all">All</TabsTrigger>
+                <TabsTrigger value="income">Income</TabsTrigger>
+                <TabsTrigger value="expense">Expense</TabsTrigger>
+              </TabsList>
+            </Tabs>
           </CardHeader>
           <CardContent className="space-y-2">
-            <Button
-              asChild
-              variant="outline"
-              className="w-full justify-start gap-2"
-            >
-              <Link
-                to={PageRoutes.transactions}
-                className="flex items-center gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                Add transaction
-              </Link>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className="w-full justify-start gap-2"
-            >
-              <Link to={PageRoutes.imports} className="flex items-center gap-2">
-                <Upload className="h-4 w-4" />
-                Import bank file
-              </Link>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className="w-full justify-start gap-2"
-            >
-              <Link
-                to={PageRoutes.accounts}
-                className="flex items-center gap-2"
-              >
-                <Wallet className="h-4 w-4" />
-                View accounts
-              </Link>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className="w-full justify-start gap-2"
-            >
-              <Link to={PageRoutes.budgets} className="flex items-center gap-2">
-                <Receipt className="h-4 w-4" />
-                Budgets
-              </Link>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className="w-full justify-start gap-2"
-            >
-              <Link to={PageRoutes.reports} className="flex items-center gap-2">
-                <FileBarChart className="h-4 w-4" />
-                Reports
-              </Link>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className="w-full justify-start gap-2"
-            >
-              <Link to={PageRoutes.goals} className="flex items-center gap-2">
-                <PiggyBank className="h-4 w-4" />
-                Goals
-              </Link>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className="w-full justify-start gap-2"
-            >
-              <Link
-                to={PageRoutes.settings}
-                className="flex items-center gap-2"
-              >
-                <Settings className="h-4 w-4" />
-                Settings
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base font-semibold text-slate-900">
-              Cash on hand
-            </CardTitle>
-            <p className="text-sm text-slate-500">Active accounts combined</p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {accountsLoading ? (
-              <Skeleton className="h-10 w-40" />
-            ) : (
-              <div className="text-3xl font-semibold text-slate-900">
-                {currency(cashOnHand)}
+            {recent.loading ? (
+              <div className="space-y-2">
+                {[...Array(4)].map((_, idx) => (
+                  <Skeleton key={idx} className="h-12 w-full" />
+                ))}
               </div>
-            )}
-            <div className="space-y-3">
-              {activeAccounts.map((account) => {
-                const delta = accountDeltas[account.id] ?? 0;
-                const isPositive = delta >= 0;
-                return (
+            ) : filteredRecentTransactions.length === 0 ? (
+              <p className="text-sm text-slate-500">
+                No recent transactions yet.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {filteredRecentTransactions.map((tx) => (
                   <div
-                    key={account.id}
-                    className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"
+                    key={tx.id}
+                    className="flex items-center justify-between rounded-lg border border-slate-100 bg-white px-3 py-2 shadow-[0_8px_20px_-18px_rgba(15,23,42,0.4)]"
                   >
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {tx.description}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {new Date(tx.occurred_at).toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </p>
+                    </div>
                     <div className="flex items-center gap-3">
-                      {account.icon ? (
-                        <img
-                          src={`/${account.icon}`}
-                          alt={account.name}
-                          className="h-8 w-8 rounded-full border border-slate-100 bg-white object-contain p-1"
-                        />
+                      {tx.type === TransactionType.TRANSFER ? (
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                          {currency(Math.abs(tx.amount))}
+                        </span>
                       ) : (
-                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-700">
-                          {account.name.charAt(0)}
-                        </div>
-                      )}
-                      <div>
-                        <p className="text-sm font-semibold text-slate-900">
-                          {account.name}
-                        </p>
-                        <p
-                          className={`text-xs ${isPositive ? "text-emerald-600" : "text-rose-600"}`}
+                        <span
+                          className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                            tx.amount >= 0
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-rose-50 text-rose-700"
+                          }`}
                         >
-                          {isPositive ? "+" : "−"}
-                          {currency(Math.abs(delta))} this year
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-sm font-semibold text-slate-900">
-                      {currency(Number(account.balance))}
+                          {tx.amount >= 0 ? "+" : "-"}
+                          {currency(Math.abs(tx.amount))}
+                        </span>
+                      )}
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700">
+                        {tx.status}
+                      </span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)]">
-          <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-            <div>
-              <CardTitle className="text-base font-semibold text-slate-900">
-                Cash runway
-              </CardTitle>
-              <p className="text-sm text-slate-500">
-                Based on average burn (non-investment accounts)
-              </p>
-            </div>
-            {runwayMetrics.trend === "up" ? (
-              <ArrowUpRight className="h-5 w-5 text-emerald-500" />
-            ) : runwayMetrics.trend === "down" ? (
-              <ArrowDownRight className="h-5 w-5 text-rose-500" />
-            ) : null}
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {monthly.loading || accountsLoading ? (
-              <Skeleton className="h-10 w-48" />
-            ) : runwayMetrics.months === null ? (
-              <p className="text-sm text-slate-500">
-                Add expense history to estimate runway.
-              </p>
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
-                  Runway
-                </div>
-                <div className="text-3xl font-semibold text-slate-900">
-                  {`${runwayMetrics.months.toFixed(1)} months`}
-                </div>
+                ))}
               </div>
-            )}
-            <div className="grid grid-cols-2 gap-3 text-sm text-slate-700">
-              <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
-                <p className="text-xs text-slate-500">Avg monthly burn</p>
-                <p className="text-base font-semibold text-rose-600">
-                  {currency(runwayMetrics.avgBurn)}
-                </p>
-              </div>
-              <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
-                <p className="text-xs text-slate-500">Avg monthly income</p>
-                <p className="text-base font-semibold text-emerald-600">
-                  {currency(runwayMetrics.avgIncome)}
-                </p>
-              </div>
-              <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
-                <p className="text-xs text-slate-500">Last month net</p>
-                <p
-                  className={`text-base font-semibold ${
-                    runwayMetrics.lastNet >= 0
-                      ? "text-emerald-600"
-                      : "text-rose-600"
-                  }`}
-                >
-                  {currency(runwayMetrics.lastNet)}
-                </p>
-              </div>
-              <div className="rounded-lg border border-slate-100 bg-slate-50/80 p-3">
-                <p className="text-xs text-slate-500">Previous month net</p>
-                <p
-                  className={`text-base font-semibold ${
-                    runwayMetrics.prevNet >= 0
-                      ? "text-emerald-600"
-                      : "text-rose-600"
-                  }`}
-                >
-                  {currency(runwayMetrics.prevNet)}
-                </p>
-              </div>
-            </div>
-            {runwayMetrics.sparkline.length ? (
-              <div className="rounded-lg border border-slate-100 p-3">
-                <ChartContainer
-                  className="!aspect-auto h-36 w-full"
-                  config={{
-                    balance: { label: "Cash trend", color: "#0ea5e9" },
-                  }}
-                >
-                  <AreaChart
-                    data={runwayMetrics.sparkline}
-                    margin={{ left: 0, right: 0, top: 6, bottom: 0 }}
-                  >
-                    <defs>
-                      <linearGradient
-                        id="cashSpark"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="#0ea5e9"
-                          stopOpacity={0.25}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#0ea5e9"
-                          stopOpacity={0}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="month" hide />
-                    <YAxis hide />
-                    <Tooltip content={<ChartTooltipContent />} />
-                    <Area
-                      type="monotoneX"
-                      dataKey="balance"
-                      stroke="#0ea5e9"
-                      fill="url(#cashSpark)"
-                      strokeWidth={2}
-                      name="Cash trend"
-                      dot={false}
-                    />
-                  </AreaChart>
-                </ChartContainer>
-              </div>
-            ) : (
-              <Skeleton className="h-36 w-full" />
             )}
           </CardContent>
         </Card>
-      </div>
-
-      <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.25)]">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-          <div>
-            <CardTitle className="text-base font-semibold text-slate-900">
-              Recent transactions
-            </CardTitle>
-            <p className="text-xs text-slate-500">
-              Latest activity across tracked accounts
-            </p>
-          </div>
-          <Tabs
-            value={recentTab}
-            onValueChange={(val) => setRecentTab(val as typeof recentTab)}
-            className="w-auto"
-          >
-            <TabsList className="bg-slate-100">
-              <TabsTrigger value="all">All</TabsTrigger>
-              <TabsTrigger value="income">Income</TabsTrigger>
-              <TabsTrigger value="expense">Expense</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {recent.loading ? (
-            <div className="space-y-2">
-              {[...Array(4)].map((_, idx) => (
-                <Skeleton key={idx} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : filteredRecentTransactions.length === 0 ? (
-            <p className="text-sm text-slate-500">
-              No recent transactions yet.
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {filteredRecentTransactions.map((tx) => (
-                <div
-                  key={tx.id}
-                  className="flex items-center justify-between rounded-lg border border-slate-100 bg-white px-3 py-2 shadow-[0_8px_20px_-18px_rgba(15,23,42,0.4)]"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">
-                      {tx.description}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {new Date(tx.occurred_at).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                      })}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {tx.type === TransactionType.TRANSFER ? (
-                      <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
-                        {currency(Math.abs(tx.amount))}
-                      </span>
-                    ) : (
-                      <span
-                        className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                          tx.amount >= 0
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-rose-50 text-rose-700"
-                        }`}
-                      >
-                        {tx.amount >= 0 ? "+" : "-"}
-                        {currency(Math.abs(tx.amount))}
-                      </span>
-                    )}
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700">
-                      {tx.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+      </motion.div>
+    </MotionPage>
   );
 };

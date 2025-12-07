@@ -2,6 +2,7 @@ import { Check, Loader2, Plus, Trash2, UploadCloud } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
+import { MotionPage } from "@/components/motion-presets";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -303,7 +304,7 @@ export const Imports: React.FC = () => {
   const summaryFiles = currentSession?.files || [];
 
   return (
-    <div className="space-y-4">
+    <MotionPage className="space-y-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs tracking-wide text-slate-500 uppercase">
@@ -786,7 +787,7 @@ export const Imports: React.FC = () => {
           )}
         </CardContent>
       </Card>
-    </div>
+    </MotionPage>
   );
 };
 

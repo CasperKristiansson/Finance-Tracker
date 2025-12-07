@@ -1,6 +1,7 @@
 import { Loader2, Plus, RefreshCw, Save, Sparkles } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { MotionPage } from "@/components/motion-presets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -233,7 +234,7 @@ export const Categories: React.FC = () => {
   };
 
   return (
-    <div className="space-y-4">
+    <MotionPage className="space-y-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs tracking-wide text-slate-500 uppercase">
@@ -636,6 +637,6 @@ export const Categories: React.FC = () => {
           </div>
         </div>
       ) : null}
-    </div>
+    </MotionPage>
   );
 };

@@ -13,6 +13,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { MotionPage } from "@/components/motion-presets";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
@@ -338,7 +339,7 @@ export const Transactions: React.FC = () => {
   );
 
   return (
-    <div className="space-y-4">
+    <MotionPage className="space-y-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs tracking-wide text-slate-500 uppercase">
@@ -746,7 +747,7 @@ export const Transactions: React.FC = () => {
       </Card>
       <TransactionModal open={modalOpen} onClose={() => setModalOpen(false)} />
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-    </div>
+    </MotionPage>
   );
 };
 

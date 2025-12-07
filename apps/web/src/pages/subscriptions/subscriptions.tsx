@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import {
   Loader2,
   RefreshCw,
@@ -8,6 +9,12 @@ import {
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
+import {
+  MotionPage,
+  StaggerWrap,
+  fadeInUp,
+  subtleHover,
+} from "@/components/motion-presets";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -183,8 +190,8 @@ export const Subscriptions: React.FC = () => {
       );
     }
     return (
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {list.map((sub) => {
+      <StaggerWrap className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {list.map((sub, index) => {
           const edit = editing[sub.id] || {};
           const categoryName =
             categories.find(
@@ -195,158 +202,169 @@ export const Subscriptions: React.FC = () => {
             "Unassigned";
 
           return (
-            <Card key={sub.id} className="border-slate-200 shadow-sm">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <CardTitle className="text-base text-slate-900">
-                      {sub.name}
-                    </CardTitle>
-                    <p className="text-xs tracking-wide text-slate-500 uppercase">
-                      {categoryName}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => toggleActive(sub)}
-                    disabled={savingId === sub.id}
-                    className="text-slate-500"
-                    title={sub.is_active ? "Archive" : "Reactivate"}
-                  >
-                    {sub.is_active ? (
-                      <ToggleRight className="h-4 w-4" />
-                    ) : (
-                      <ToggleLeft className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex items-center justify-between text-slate-600">
-                  <span>Current month</span>
-                  <span className="font-semibold text-slate-900">
-                    {formatAmount(sub.current_month_spend)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-slate-600">
-                  <span>Trailing 3 / 12</span>
-                  <span className="font-semibold text-slate-900">
-                    {formatAmount(sub.trailing_three_month_spend)} ·{" "}
-                    {formatAmount(sub.trailing_twelve_month_spend)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-slate-600">
-                  <span>Last charge</span>
-                  <span className="font-semibold text-slate-900">
-                    {sub.last_charge_at
-                      ? new Date(sub.last_charge_at).toLocaleDateString()
-                      : "—"}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-slate-600">
-                  <span>Trend</span>
-                  <Sparkline data={sub.trend} />
-                </div>
-
-                <div className="rounded border border-slate-100 bg-slate-50 p-3">
-                  <p className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
-                    Matcher
-                  </p>
-                  <div className="space-y-2">
-                    <Input
-                      size="sm"
-                      value={edit.matcher_text ?? sub.matcher_text}
-                      onChange={(e) =>
-                        onEditChange(sub.id, { matcher_text: e.target.value })
-                      }
-                      placeholder="Matcher text or regex"
-                      className="h-8"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <Input
-                        size="sm"
-                        type="number"
-                        value={`${edit.matcher_amount_tolerance ?? sub.matcher_amount_tolerance ?? ""}`}
-                        onChange={(e) =>
-                          onEditChange(sub.id, {
-                            matcher_amount_tolerance: e.target.value
-                              ? Number(e.target.value)
-                              : null,
-                          })
-                        }
-                        placeholder="Amount tolerance"
-                        className="h-8"
-                      />
-                      <Input
-                        size="sm"
-                        type="number"
-                        value={`${edit.matcher_day_of_month ?? sub.matcher_day_of_month ?? ""}`}
-                        onChange={(e) =>
-                          onEditChange(sub.id, {
-                            matcher_day_of_month: e.target.value
-                              ? Number(e.target.value)
-                              : null,
-                          })
-                        }
-                        placeholder="Day of month"
-                        className="h-8"
-                      />
+            <motion.div
+              key={sub.id}
+              variants={fadeInUp}
+              {...subtleHover}
+              transition={{
+                duration: 0.35,
+                ease: "easeOut",
+                delay: index * 0.04,
+              }}
+            >
+              <Card className="border-slate-200 shadow-sm">
+                <CardHeader className="pb-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-base text-slate-900">
+                        {sub.name}
+                      </CardTitle>
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        {categoryName}
+                      </p>
                     </div>
-                    <select
-                      className="h-8 rounded border border-slate-200 px-2 text-sm"
-                      value={edit.category_id ?? sub.category_id ?? ""}
-                      onChange={(e) =>
-                        onEditChange(sub.id, {
-                          category_id: e.target.value || null,
-                        })
-                      }
-                    >
-                      <option value="">No category</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="mt-3 flex items-center justify-between gap-2">
                     <Button
-                      size="sm"
-                      variant="secondary"
-                      className="gap-1"
-                      onClick={() => saveMatcher(sub)}
-                      disabled={savingId === sub.id}
-                    >
-                      {savingId === sub.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-4 w-4" />
-                      )}
-                      Save matchers
-                    </Button>
-                    <Button
-                      size="icon"
                       variant="ghost"
-                      onClick={() => onEditChange(sub.id, {})}
+                      size="icon"
+                      onClick={() => toggleActive(sub)}
+                      disabled={savingId === sub.id}
                       className="text-slate-500"
+                      title={sub.is_active ? "Archive" : "Reactivate"}
                     >
-                      <RefreshCw className="h-4 w-4" />
+                      {sub.is_active ? (
+                        <ToggleRight className="h-4 w-4" />
+                      ) : (
+                        <ToggleLeft className="h-4 w-4" />
+                      )}
                     </Button>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span>Current month</span>
+                    <span className="font-semibold text-slate-900">
+                      {formatAmount(sub.current_month_spend)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span>Trailing 3 / 12</span>
+                    <span className="font-semibold text-slate-900">
+                      {formatAmount(sub.trailing_three_month_spend)} ·{" "}
+                      {formatAmount(sub.trailing_twelve_month_spend)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span>Last charge</span>
+                    <span className="font-semibold text-slate-900">
+                      {sub.last_charge_at
+                        ? new Date(sub.last_charge_at).toLocaleDateString()
+                        : "—"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-600">
+                    <span>Trend</span>
+                    <Sparkline data={sub.trend} />
+                  </div>
+
+                  <div className="rounded border border-slate-100 bg-slate-50 p-3">
+                    <p className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                      Matcher
+                    </p>
+                    <div className="space-y-2">
+                      <Input
+                        size="sm"
+                        value={edit.matcher_text ?? sub.matcher_text}
+                        onChange={(e) =>
+                          onEditChange(sub.id, { matcher_text: e.target.value })
+                        }
+                        placeholder="Matcher text or regex"
+                        className="h-8"
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          size="sm"
+                          type="number"
+                          value={`${edit.matcher_amount_tolerance ?? sub.matcher_amount_tolerance ?? ""}`}
+                          onChange={(e) =>
+                            onEditChange(sub.id, {
+                              matcher_amount_tolerance: e.target.value
+                                ? Number(e.target.value)
+                                : null,
+                            })
+                          }
+                          placeholder="Amount tolerance"
+                          className="h-8"
+                        />
+                        <Input
+                          size="sm"
+                          type="number"
+                          value={`${edit.matcher_day_of_month ?? sub.matcher_day_of_month ?? ""}`}
+                          onChange={(e) =>
+                            onEditChange(sub.id, {
+                              matcher_day_of_month: e.target.value
+                                ? Number(e.target.value)
+                                : null,
+                            })
+                          }
+                          placeholder="Day of month"
+                          className="h-8"
+                        />
+                      </div>
+                      <select
+                        className="h-8 rounded border border-slate-200 px-2 text-sm"
+                        value={edit.category_id ?? sub.category_id ?? ""}
+                        onChange={(e) =>
+                          onEditChange(sub.id, {
+                            category_id: e.target.value || null,
+                          })
+                        }
+                      >
+                        <option value="">No category</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>
+                            {cat.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        className="gap-1"
+                        onClick={() => saveMatcher(sub)}
+                        disabled={savingId === sub.id}
+                      >
+                        {savingId === sub.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-4 w-4" />
+                        )}
+                        Save matchers
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => onEditChange(sub.id, {})}
+                        className="text-slate-500"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
           );
         })}
-      </div>
+      </StaggerWrap>
     );
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div>
+    <MotionPage className="space-y-6">
+      <StaggerWrap className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <motion.div variants={fadeInUp}>
           <p className="text-xs tracking-wide text-slate-500 uppercase">
             Subscriptions
           </p>
@@ -357,8 +375,8 @@ export const Subscriptions: React.FC = () => {
             Track recurring charges, update matchers, and archive old
             subscriptions.
           </p>
-        </div>
-        <div className="flex items-center gap-2">
+        </motion.div>
+        <motion.div variants={fadeInUp} className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -372,8 +390,8 @@ export const Subscriptions: React.FC = () => {
             )}
             Refresh
           </Button>
-        </div>
-      </div>
+        </motion.div>
+      </StaggerWrap>
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
@@ -398,7 +416,7 @@ export const Subscriptions: React.FC = () => {
         </div>
         {renderGroup("Archived", grouped.archived)}
       </div>
-    </div>
+    </MotionPage>
   );
 };
 
