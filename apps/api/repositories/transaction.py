@@ -34,6 +34,7 @@ class TransactionRepository:
         category_ids: Optional[Iterable[UUID]] = None,
         subscription_ids: Optional[Iterable[UUID]] = None,
         status: Optional[Iterable[TransactionStatus]] = None,
+        transaction_types: Optional[Iterable["TransactionType"]] = None,
         min_amount: Optional[Decimal] = None,
         max_amount: Optional[Decimal] = None,
         search: Optional[str] = None,
@@ -62,6 +63,10 @@ class TransactionRepository:
             )
         if status:
             statement = statement.where(cast(Any, Transaction.status).in_(list(status)))
+        if transaction_types:
+            statement = statement.where(
+                cast(Any, Transaction.transaction_type).in_(list(transaction_types))
+            )
         if search:
             pattern = f"%{search}%"
             statement = statement.where(

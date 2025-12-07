@@ -119,7 +119,10 @@ class ImportService:
 
         for parsed in parsed_files:
             rule_matches = self._rule_matches(
-                parsed.rows, parsed.column_map or {}, category_lookup_by_id, subscription_lookup_by_id
+                parsed.rows,
+                parsed.column_map or {},
+                category_lookup_by_id,
+                subscription_lookup_by_id,
             )
             suggestions = self._suggest_rows(
                 parsed.rows, parsed.column_map or {}, payload.examples or [], rule_matches
@@ -382,7 +385,10 @@ class ImportService:
 
         for parsed in parsed_files:
             rule_matches = self._rule_matches(
-                parsed.rows, parsed.column_map or {}, category_lookup_by_id, subscription_lookup_by_id
+                parsed.rows,
+                parsed.column_map or {},
+                category_lookup_by_id,
+                subscription_lookup_by_id,
             )
             suggestions = self._suggest_rows(
                 parsed.rows, parsed.column_map or {}, examples or [], rule_matches
@@ -803,7 +809,7 @@ class ImportService:
         occurred_at: Optional[datetime],
         category_lookup: Dict[UUID, Category],
         subscription_lookup: Dict[UUID, Subscription],
-    ) -> Optional[RuleMatch]:
+    ) -> Optional[RuleMatch]:  # pylint: disable=too-many-positional-arguments
         if not rule.is_active:
             return None
 
@@ -866,9 +872,7 @@ class ImportService:
 
     def _subscription_lookup_by_id(self) -> dict[UUID, Subscription]:
         subscriptions = self.session.exec(select(Subscription)).all()
-        return {
-            sub.id: sub for sub in subscriptions if getattr(sub, "id", None) is not None
-        }
+        return {sub.id: sub for sub in subscriptions if getattr(sub, "id", None) is not None}
 
     def _suggest_rows(
         self,
@@ -1166,7 +1170,7 @@ class ImportService:
         occurred_at: Optional[datetime],
         category_id: Optional[UUID],
         subscription_id: Optional[UUID],
-    ) -> None:
+    ) -> None:  # pylint: disable=too-many-positional-arguments
         if not description or (category_id is None and subscription_id is None):
             return
 

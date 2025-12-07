@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING, Any, List, Optional
 from uuid import UUID
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Column,
     DateTime,
     ForeignKey,
     Integer,
-    JSON,
     Numeric,
     String,
     UniqueConstraint,
@@ -25,9 +25,9 @@ from sqlmodel import Field, Relationship, SQLModel
 from ..shared import TimestampMixin, UserOwnedMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .transaction import Transaction
     from .category import Category
     from .subscription import Subscription
+    from .transaction import Transaction
 
 
 class ImportFile(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
@@ -139,7 +139,9 @@ class ImportRow(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, t
     )
 
 
-class TransactionImportBatch(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
+class TransactionImportBatch(
+    UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True
+):
     """Groups transactions imported together for auditing."""
 
     __tablename__ = "transaction_import_batches"
@@ -183,9 +185,7 @@ class ImportRule(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, 
     )
     subscription_id: Optional[UUID] = Field(
         default=None,
-        sa_column=Column(
-            PGUUID(as_uuid=True), ForeignKey("subscriptions.id", ondelete="SET NULL")
-        ),
+        sa_column=Column(PGUUID(as_uuid=True), ForeignKey("subscriptions.id", ondelete="SET NULL")),
     )
     hit_count: int = Field(
         default=0,

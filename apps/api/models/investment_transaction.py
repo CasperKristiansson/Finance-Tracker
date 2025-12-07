@@ -14,7 +14,9 @@ from sqlmodel import Field, SQLModel
 from ..shared import TimestampMixin, UserOwnedMixin, UUIDPrimaryKeyMixin
 
 
-class InvestmentTransaction(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True):
+class InvestmentTransaction(
+    UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=True
+):
     """Normalized investment transaction (buy/sell/dividend/fee/transfer)."""
 
     __tablename__ = "investment_transactions"

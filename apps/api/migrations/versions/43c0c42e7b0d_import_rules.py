@@ -7,10 +7,9 @@ Create Date: 2025-02-15 00:00:00.000000
 
 from __future__ import annotations
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
-
 
 # revision identifiers, used by Alembic.
 revision = "43c0c42e7b0d"
@@ -38,9 +37,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["subscription_id"], ["subscriptions.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        "ix_import_rules_matcher_text", "import_rules", ["matcher_text"], unique=True
-    )
+    op.create_index("ix_import_rules_matcher_text", "import_rules", ["matcher_text"], unique=True)
 
     op.add_column(
         "import_rows",
@@ -51,18 +48,19 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
-    op.add_column(
-        "import_rows", sa.Column("rule_type", sa.String(length=40), nullable=True)
-    )
-    op.add_column(
-        "import_rows", sa.Column("rule_summary", sa.String(length=255), nullable=True)
-    )
+    op.add_column("import_rows", sa.Column("rule_type", sa.String(length=40), nullable=True))
+    op.add_column("import_rows", sa.Column("rule_summary", sa.String(length=255), nullable=True))
     op.add_column(
         "import_rows",
         sa.Column("rule_id", postgresql.UUID(as_uuid=True), nullable=True),
     )
     op.create_foreign_key(
-        "fk_import_rows_rule_id", "import_rows", "import_rules", ["rule_id"], ["id"], ondelete="SET NULL"
+        "fk_import_rows_rule_id",
+        "import_rows",
+        "import_rules",
+        ["rule_id"],
+        ["id"],
+        ondelete="SET NULL",
     )
     op.alter_column("import_rows", "rule_applied", server_default=None)
 

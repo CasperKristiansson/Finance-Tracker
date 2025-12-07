@@ -81,6 +81,9 @@ class TransactionListQuery(BaseModel):
     category_ids: Optional[List[UUID]] = Field(default=None, alias="category_ids")
     subscription_ids: Optional[List[UUID]] = Field(default=None, alias="subscription_ids")
     status: Optional[List[TransactionStatus]] = None
+    transaction_type: Optional[List[TransactionType]] = Field(
+        default=None, alias="transaction_type"
+    )
     min_amount: Optional[Decimal] = Field(default=None, alias="min_amount")
     max_amount: Optional[Decimal] = Field(default=None, alias="max_amount")
     search: Optional[str] = None
@@ -171,6 +174,30 @@ class TransactionListQuery(BaseModel):
                         cls,
                     ) from exc
             values["status"] = converted_status
+        if (
+            isinstance(values, dict)
+            and "transaction_type" in values
+            and isinstance(values["transaction_type"], str)
+        ):
+            type_values = [
+                part.strip() for part in str(values["transaction_type"]).split(",") if part.strip()
+            ]
+            converted_types: List[TransactionType] = []
+            for tx_type in type_values:
+                try:
+                    converted_types.append(TransactionType(tx_type))
+                except ValueError as exc:  # pragma: no cover - validation
+                    raise ValidationError(
+                        [
+                            {
+                                "loc": ("transaction_type",),
+                                "msg": "Invalid transaction_type provided",
+                                "type": "value_error",
+                            }
+                        ],
+                        cls,
+                    ) from exc
+            values["transaction_type"] = converted_types
         return values
 
 

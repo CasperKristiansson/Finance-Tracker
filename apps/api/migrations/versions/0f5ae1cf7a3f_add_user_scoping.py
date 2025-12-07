@@ -12,7 +12,6 @@ import os
 import sqlalchemy as sa
 from alembic import op
 
-
 revision = "0f5ae1cf7a3f"
 down_revision = "c75e94af3ebf"
 branch_labels = None
@@ -23,7 +22,12 @@ _INTEGRATION_USER_ID = os.getenv("INTEGRATION_USER_ID", "integration-user")
 
 
 def _add_user_column(table: str) -> None:
-    op.add_column(table, sa.Column("user_id", sa.String(length=64), nullable=False, server_default=_INTEGRATION_USER_ID))
+    op.add_column(
+        table,
+        sa.Column(
+            "user_id", sa.String(length=64), nullable=False, server_default=_INTEGRATION_USER_ID
+        ),
+    )
     op.create_index(f"ix_{table}_user_id", table, ["user_id"], unique=False)
     op.alter_column(table, "user_id", server_default=None)
 

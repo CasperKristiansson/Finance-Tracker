@@ -200,7 +200,9 @@ class ReportingRepository:
         if account_ids:
             statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
         elif self._excluded_account_ids:
-            statement = statement.where(~leg_table.c.account_id.in_(list(self._excluded_account_ids)))
+            statement = statement.where(
+                ~leg_table.c.account_id.in_(list(self._excluded_account_ids))
+            )
 
         rows = self.session.exec(statement).all()
 
@@ -250,7 +252,9 @@ class ReportingRepository:
         if account_ids:
             statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
         elif self._excluded_account_ids:
-            statement = statement.where(~leg_table.c.account_id.in_(list(self._excluded_account_ids)))
+            statement = statement.where(
+                ~leg_table.c.account_id.in_(list(self._excluded_account_ids))
+            )
         scalar_result = cast(Any, self.session.exec(statement))
 
         if hasattr(scalar_result, "scalar_one"):
@@ -388,7 +392,9 @@ class ReportingRepository:
         if account_ids:
             statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
         elif self._excluded_account_ids:
-            statement = statement.where(~leg_table.c.account_id.in_(list(self._excluded_account_ids)))
+            statement = statement.where(
+                ~leg_table.c.account_id.in_(list(self._excluded_account_ids))
+            )
         if category_ids:
             statement = statement.where(transaction_table.c.category_id.in_(list(category_ids)))
         if subscription_ids:

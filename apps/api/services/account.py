@@ -179,9 +179,7 @@ class AccountService:
         if hasattr(self, "_offset_account"):
             return getattr(self, "_offset_account")
         account = self.repository.session.exec(
-            select(Account).where(
-                cast(Any, Account.is_active).is_(False), Account.name == "Offset"
-            )
+            select(Account).where(cast(Any, Account.is_active).is_(False), Account.name == "Offset")
         ).one_or_none()
         if account is None:
             account = Account(

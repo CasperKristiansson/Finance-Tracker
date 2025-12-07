@@ -56,6 +56,7 @@ class AccountCreate(BaseModel):
         if self.account_type != AccountType.DEBT and self.loan is not None:
             raise ValueError("Loan details are only allowed for debt accounts")
         return self
+
     @model_validator(mode="after")
     def validate_name(self) -> "AccountCreate":
         if not self.name or not self.name.strip():

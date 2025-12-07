@@ -2,9 +2,8 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime
-from uuid import uuid4
 from typing import List
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import openpyxl
 

@@ -161,17 +161,27 @@ export const Dashboard: React.FC = () => {
     fetchYearlyReport();
     fetchTotalReport();
     fetchNetWorthReport();
-    fetchRecentTransactions({ limit: 20 });
     fetchAccounts();
   }, [
     fetchMonthlyReport,
     fetchYearlyReport,
     fetchTotalReport,
     fetchNetWorthReport,
-    fetchRecentTransactions,
     fetchAccounts,
     isAuthenticated,
   ]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const limit = 20;
+    const transactionTypes =
+      recentTab === "all"
+        ? undefined
+        : recentTab === "income"
+          ? [TransactionType.INCOME]
+          : [TransactionType.EXPENSE];
+    fetchRecentTransactions({ limit, transactionTypes });
+  }, [fetchRecentTransactions, isAuthenticated, recentTab]);
 
   useEffect(() => {
     const loadFilteredMonthly = async () => {

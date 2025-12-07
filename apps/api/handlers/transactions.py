@@ -54,6 +54,7 @@ def list_transactions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             category_ids=query.category_ids,
             subscription_ids=query.subscription_ids,
             status=query.status,
+            transaction_types=query.transaction_type,
             min_amount=query.min_amount,
             max_amount=query.max_amount,
             search=query.search,

@@ -228,9 +228,7 @@ class InvestmentSnapshotService:
         if key in self._account_cache:
             return self._account_cache[key]
         account = self.session.exec(
-            select(Account).where(
-                cast(Any, Account.is_active).is_(False), Account.name == "Offset"
-            )
+            select(Account).where(cast(Any, Account.is_active).is_(False), Account.name == "Offset")
         ).one_or_none()
         if account is None:
             account = Account(

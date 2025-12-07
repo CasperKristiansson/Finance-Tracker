@@ -55,8 +55,9 @@ from .reporting import (
     total_report,
     yearly_report,
 )
-from .settings import get_settings, save_settings
+from .settings import get_settings
 from .settings import reset_handler_state as reset_settings_handler_state
+from .settings import save_settings
 from .subscriptions import (
     attach_subscription,
     create_subscription,

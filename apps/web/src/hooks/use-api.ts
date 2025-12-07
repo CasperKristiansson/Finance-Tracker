@@ -265,7 +265,13 @@ export const useTransactionsApi = () => {
     [dispatch],
   );
   const fetchRecentTransactions = useCallback(
-    (params: { limit?: number; accountIds?: string[] } = {}) => {
+    (
+      params: {
+        limit?: number;
+        accountIds?: string[];
+        transactionTypes?: string[];
+      } = {},
+    ) => {
       dispatch(FetchRecentTransactions(params));
     },
     [dispatch],

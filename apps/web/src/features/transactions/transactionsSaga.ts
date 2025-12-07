@@ -39,6 +39,7 @@ export const FetchTransactions = createAction<TransactionFilters | undefined>(
 export const FetchRecentTransactions = createAction<{
   limit?: number;
   accountIds?: string[];
+  transactionTypes?: string[];
 }>("transactions/fetchRecent");
 export const CreateTransaction = createAction<TransactionCreate>(
   "transactions/create",
@@ -136,6 +137,9 @@ function* handleFetchRecentTransactions(
       limit,
       ...(serializeAccounts(action.payload?.accountIds)
         ? { account_ids: serializeAccounts(action.payload?.accountIds) }
+        : {}),
+      ...(action.payload?.transactionTypes?.length
+        ? { transaction_type: action.payload.transactionTypes.join(",") }
         : {}),
     };
 

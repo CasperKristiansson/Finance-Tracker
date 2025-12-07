@@ -1,5 +1,6 @@
 """Shared utilities for the Finance Tracker backend."""
 
+from .auth import INTEGRATION_USER_ID_ENV, get_default_user_id
 from .enums import (
     AccountType,
     BankImportType,
@@ -8,12 +9,11 @@ from .enums import (
     CreatedSource,
     InterestCompound,
     LoanEventType,
-    ThemePreference,
     SystemAccountCode,
+    ThemePreference,
     TransactionStatus,
     TransactionType,
 )
-from .auth import INTEGRATION_USER_ID_ENV, get_default_user_id
 from .finance import (
     BASE_CURRENCY,
     DECIMAL_PLACES,
@@ -27,8 +27,8 @@ from .session import (
     configure_engine_from_env,
     get_engine,
     get_session,
-    scope_session_to_user,
     init_db,
+    scope_session_to_user,
     session_scope,
 )
 from .settings import (

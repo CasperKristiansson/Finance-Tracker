@@ -8,7 +8,16 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, List, Optional
 from uuid import UUID
 
-from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Numeric, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.types import Enum as SAEnum

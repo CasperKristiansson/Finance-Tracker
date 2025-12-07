@@ -67,7 +67,6 @@ from .loan import (
     LoanScheduleRead,
     LoanUpdate,
 )
-from .settings import SettingsPayload, SettingsRequest, SettingsResponse
 from .reporting import (
     CashflowForecastResponse,
     DateRangeReportQuery,
@@ -90,6 +89,7 @@ from .reporting import (
     YearlyReportQuery,
     YearlyReportResponse,
 )
+from .settings import SettingsPayload, SettingsRequest, SettingsResponse
 from .subscription import (
     AttachSubscriptionRequest,
     SubscriptionCreate,

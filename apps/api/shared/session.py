@@ -6,8 +6,10 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Generator, Iterable, Optional, Set
 
-from sqlalchemy import event, inspect as sa_inspect
+from sqlalchemy import event
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.engine import Engine
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import with_loader_criteria
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -82,7 +84,7 @@ def _user_scoped_models() -> list[type[SQLModel]]:
             continue
         try:
             sa_inspect(model)
-        except Exception:
+        except SQLAlchemyError:
             continue
         models.append(model)
 
@@ -100,7 +102,9 @@ def scope_session_to_user(session: Session, user_id: Optional[str]) -> None:
     models = _user_scoped_models()
     if models:
         options = [
-            with_loader_criteria(model, lambda cls: cls.user_id == resolved_user, include_aliases=True)
+            with_loader_criteria(
+                model, lambda cls: cls.user_id == resolved_user, include_aliases=True
+            )
             for model in models
         ]
 
