@@ -42,6 +42,7 @@ import {
   AccountType,
   type MonthlyReportEntry,
   type TransactionListResponse,
+  TransactionType,
 } from "@/types/api";
 
 type KPI = {
@@ -400,6 +401,7 @@ export const Dashboard: React.FC = () => {
     return recent.items.map((tx) => {
       const primaryLeg = tx.legs?.[0];
       const amount = primaryLeg ? Number(primaryLeg.amount) : 0;
+      const txType = tx.transaction_type || (amount >= 0 ? TransactionType.INCOME : TransactionType.EXPENSE);
 
       return {
         id: tx.id,
@@ -408,7 +410,7 @@ export const Dashboard: React.FC = () => {
         occurred_at: tx.occurred_at,
         account_id: primaryLeg?.account_id || "",
         category: tx.category_id || "—",
-        type: tx.transaction_type || (amount >= 0 ? "INCOME" : "EXPENSE"),
+        type: txType,
         status: "reviewed",
       };
     });
@@ -417,9 +419,11 @@ export const Dashboard: React.FC = () => {
   const filteredRecentTransactions = useMemo(() => {
     if (recentTab === "all") return recentTransactions;
     return recentTransactions.filter((tx) =>
-      recentTab === "income"
-        ? tx.type === "INCOME" || tx.amount > 0
-        : tx.type === "EXPENSE" || tx.amount < 0,
+      tx.type === TransactionType.TRANSFER
+        ? false
+        : recentTab === "income"
+          ? tx.type === TransactionType.INCOME || tx.amount > 0
+          : tx.type === TransactionType.EXPENSE || tx.amount < 0,
     );
   }, [recentTab, recentTransactions]);
 
@@ -513,7 +517,7 @@ export const Dashboard: React.FC = () => {
           loading={monthly.loading}
         >
           <ChartContainer
-            className="h-full"
+            className="h-full w-full"
             config={{
               income: {
                 label: "Income",
@@ -566,7 +570,7 @@ export const Dashboard: React.FC = () => {
           loading={netWorth.loading}
         >
           <ChartContainer
-            className="h-full"
+            className="h-full w-full"
             config={{
               net: {
                 label: "Net worth",
@@ -638,7 +642,7 @@ export const Dashboard: React.FC = () => {
         </ChartCard>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[1.4fr_1fr_1fr]">
+      <div className="grid gap-4 xl:grid-cols-[1fr_1.5fr_1fr]">
         <ChartCard
           title="Category mix"
           description="Income vs expenses"

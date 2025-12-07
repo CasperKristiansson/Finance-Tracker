@@ -42,8 +42,8 @@ from apps.api.shared import (
     scope_session_to_user,
 )
 from apps.api.shared.session import get_session
-TX_PATH = REPO_ROOT / "docs" / "data" / "transactions" / "Transactions Export.xlsx"
-LOAN_PATH = REPO_ROOT / "docs" / "data" / "transactions" / "Loans Export.xlsx"
+TX_PATH = REPO_ROOT / "docs" / "data" / "Transactions Export.xlsx"
+LOAN_PATH = REPO_ROOT / "docs" / "data" / "Loans Export.xlsx"
 
 
 def fetch_db_url_from_ssm(stage: str) -> str:
@@ -282,6 +282,59 @@ def import_loans(
     print(f"Loans inserted: {inserted}/{total}")
 
 
+def adjust_study_grants_with_loans(tx_df: pd.DataFrame, loan_df: pd.DataFrame) -> pd.DataFrame:
+    """Reduce Study Grant income rows by nearby loan payouts to avoid double-counting cash."""
+
+    if tx_df.empty or loan_df.empty:
+        return tx_df
+
+    adjusted = tx_df.copy()
+    study_mask = adjusted["Category"].astype(str).str.strip().eq("Study Grant")
+    if not study_mask.any():
+        return adjusted
+
+    study_dates = pd.to_datetime(adjusted.loc[study_mask, "Date"], errors="coerce", format="mixed")
+    study_remaining: dict[int, Decimal] = {}
+    for idx, amount in adjusted.loc[study_mask, "Amount"].items():
+        try:
+            study_remaining[idx] = Decimal(str(amount))
+        except Exception:
+            study_remaining[idx] = Decimal("0")
+
+    loan_dates = pd.to_datetime(loan_df["date"], errors="coerce", format="mixed")
+
+    for loan_idx, loan_row in loan_df.iterrows():
+        try:
+            loan_amount = Decimal(str(loan_row["amount"]))
+        except Exception:
+            continue
+        if loan_amount <= 0:
+            continue
+
+        loan_date = loan_dates.iloc[loan_idx]
+        if pd.isna(loan_date):
+            continue
+
+        diffs = (study_dates - loan_date).abs()
+        if diffs.isna().all():
+            continue
+        study_idx = diffs.idxmin()
+
+        remaining = study_remaining.get(study_idx)
+        if remaining is None:
+            continue
+
+        new_value = remaining - loan_amount
+        if new_value < 0:
+            new_value = Decimal("0")
+        study_remaining[study_idx] = new_value
+
+    for idx, value in study_remaining.items():
+        adjusted.at[idx, "Amount"] = float(value)
+
+    return adjusted
+
+
 def import_transactions(
     session,
     rename_map: Dict[str, str],
@@ -304,7 +357,12 @@ def import_transactions(
         if value is None or pd.isna(value):
             return None
         s = str(value).strip()
-        return s if s and s.lower() != "nan" else None
+        if not s:
+            return None
+        lowered = s.lower()
+        if lowered in {"nan", "undefined", "none"}:
+            return None
+        return s
 
     transactions: list[Transaction] = []
     legs_pending: list[tuple[int, list[TransactionLeg]]] = []
@@ -379,6 +437,7 @@ def import_transactions(
             continue
         seen_external.add(external_id)
 
+        description = note_str or category_name
         if ttype == "Transfer-Out":
             dest_name = rename_map.get(category_name, category_name) if category_name else None
             dest_id = account_ids.get(dest_name or "")
@@ -387,11 +446,22 @@ def import_transactions(
                     f"Transfer-Out missing destination account mapping for category '{category_name}'"
                 )
             amt = abs(amount).quantize(quantize)
-            legs = [
-                TransactionLeg(account_id=account_id, amount=-amt),
-                TransactionLeg(account_id=dest_id, amount=amt),
-            ]
-            tx_type = TransactionType.TRANSFER
+            if dest_id == account_id:
+                tx_type = TransactionType.ADJUSTMENT
+                legs = [
+                    TransactionLeg(account_id=account_id, amount=-amt),
+                    TransactionLeg(account_id=offset_id, amount=amt),
+                ]
+                description = note_str or "Adjustment (self transfer)"
+            else:
+                legs = [
+                    TransactionLeg(account_id=account_id, amount=-amt),
+                    TransactionLeg(account_id=dest_id, amount=amt),
+                ]
+                tx_type = TransactionType.TRANSFER
+            category_id = None
+            category_type = None
+            description = note_str or f"Transfer to {dest_name}"
         elif ttype == "Income":
             if amount < 0:
                 tx_type = TransactionType.ADJUSTMENT
@@ -416,14 +486,16 @@ def import_transactions(
                 TransactionLeg(account_id=offset_id, amount=amt),
             ]
 
-        category_type = cat_types.get(category_name) if category_name else None
+        category_type = (
+            cat_types.get(category_name) if category_name and ttype != "Transfer-Out" else None
+        )
         inferred_type = infer_transaction_type(legs, category_type, tx_type)
         validate_legs(inferred_type, legs)
 
         tx = Transaction(
             category_id=category_id,
             transaction_type=inferred_type,
-            description=note_str or category_name,
+            description=description,
             occurred_at=occurred_at,
             posted_at=occurred_at,
             status=TransactionStatus.IMPORTED,
@@ -482,6 +554,9 @@ def main() -> None:
     scope_session_to_user(session, args.user)
 
     tx_df = pd.read_excel(TX_PATH)
+    loan_df = pd.read_excel(LOAN_PATH)
+    tx_df = adjust_study_grants_with_loans(tx_df, loan_df)
+
     rename_map, account_ids = ensure_accounts(session, args.user)
     cat_ids, cat_types = ensure_categories(session, args.user, tx_df)
 
