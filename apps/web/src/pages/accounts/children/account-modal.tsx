@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
+import * as LucideIcons from "lucide-react";
 import React, { useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -21,6 +22,14 @@ type Props = {
   onClose: () => void;
   account?: AccountWithBalance;
 };
+
+const iconPresets = [
+  { label: "Swedbank", value: "banks/swedbank.png" },
+  { label: "Nordnet", value: "banks/nordnet.jpg" },
+  { label: "SEB", value: "banks/seb.png" },
+  { label: "Danske Bank", value: "banks/danskebank.png" },
+  { label: "Circle K", value: "banks/circlek.png" },
+];
 
 const accountFormSchema = z
   .object({
@@ -58,6 +67,9 @@ const accountFormSchema = z
 type AccountFormValues = z.infer<typeof accountFormSchema>;
 
 const isDebt = (type: AccountType) => type === AccountType.DEBT;
+const lucideIconNames = Object.keys(LucideIcons).filter((name) =>
+  /^[A-Z]/.test(name),
+);
 
 export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
   const {
@@ -221,6 +233,39 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
               <option value="banks/seb.png" />
               <option value="banks/danskebank.png" />
               <option value="banks/circlek.png" />
+            </datalist>
+            <div className="flex flex-wrap gap-2">
+              {iconPresets.map((preset) => (
+                <Button
+                  key={preset.value}
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="border border-slate-200 text-xs"
+                  onClick={() => setValue("icon", preset.value)}
+                >
+                  {preset.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-500" htmlFor="lucide-icon">
+              Or pick a Lucide icon (search by name)
+            </label>
+            <Input
+              id="lucide-icon"
+              list="lucide-icons"
+              placeholder="e.g., Wallet, PiggyBank, Cash"
+              onChange={(e) => {
+                const value = e.target.value.trim();
+                setValue("icon", value ? `lucide:${value}` : "");
+              }}
+            />
+            <datalist id="lucide-icons">
+              {lucideIconNames.map((name) => (
+                <option key={name} value={name} />
+              ))}
             </datalist>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

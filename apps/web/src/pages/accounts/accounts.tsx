@@ -1,5 +1,7 @@
 import { motion } from "framer-motion";
 import { Archive, Loader2, Plus, RefreshCw, Undo } from "lucide-react";
+import * as LucideIcons from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -46,6 +48,35 @@ const formatAccountType = (type: AccountType) => {
     default:
       return "Cash";
   }
+};
+
+const renderAccountIcon = (icon: string | null | undefined, name: string) => {
+  if (icon?.startsWith("lucide:")) {
+    const key = icon.slice("lucide:".length);
+    const IconComp = (
+      LucideIcons as unknown as Record<string, LucideIcon | undefined>
+    )[key];
+    if (IconComp) {
+      const Icon = IconComp as LucideIcon;
+      return (
+        <Icon className="h-8 w-8 rounded-full border border-slate-100 bg-white p-1 text-slate-700" />
+      );
+    }
+  }
+  if (icon) {
+    return (
+      <img
+        src={`/${icon}`}
+        alt={name}
+        className="h-8 w-8 rounded-full border border-slate-100 bg-white object-contain p-1"
+      />
+    );
+  }
+  return (
+    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
+      {name.charAt(0)}
+    </div>
+  );
 };
 
 export const Accounts: React.FC = () => {
@@ -173,37 +204,38 @@ export const Accounts: React.FC = () => {
 
       {/* Reconciliation banner removed */}
 
-      <StaggerWrap className="grid gap-3 md:grid-cols-3">
+      <StaggerWrap className="grid gap-3 md:grid-cols-2">
         <motion.div variants={fadeInUp} {...subtleHover}>
-          <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.4)]">
+          <Card className="flex h-full flex-col border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.4)]">
             <CardHeader>
               <CardTitle className="text-sm text-slate-500">
-                Total balance
+                Accounts overview
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-2xl font-semibold text-slate-900">
-              {formatCurrency(totalBalance)}
+            <CardContent className="space-y-3 text-slate-900">
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-xs tracking-wide text-slate-500 uppercase">
+                  Total balance
+                </span>
+                <span className="text-xl font-semibold">
+                  {formatCurrency(totalBalance)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+                <span className="text-xs tracking-wide text-slate-500 uppercase">
+                  Active accounts
+                </span>
+                <span className="text-xl font-semibold">{activeCount}</span>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
         <motion.div variants={fadeInUp} {...subtleHover}>
-          <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.4)]">
-            <CardHeader>
-              <CardTitle className="text-sm text-slate-500">
-                Active accounts
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-2xl font-semibold text-slate-900">
-              {activeCount}
-            </CardContent>
-          </Card>
-        </motion.div>
-        <motion.div variants={fadeInUp} {...subtleHover}>
-          <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.4)]">
+          <Card className="flex h-full flex-col border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.4)]">
             <CardHeader>
               <CardTitle className="text-sm text-slate-500">Filters</CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-col gap-2 text-sm text-slate-700">
+            <CardContent className="flex flex-col gap-3 text-sm text-slate-700">
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -212,17 +244,25 @@ export const Accounts: React.FC = () => {
                 />
                 Include inactive
               </label>
-              <label className="flex flex-col gap-1 text-xs text-slate-500">
-                As of date
-                <Input
-                  type="date"
-                  value={asOfInput}
-                  onChange={(e) => setAsOfInput(e.target.value)}
-                />
-              </label>
-              <Button size="sm" variant="outline" onClick={handleApplyFilters}>
-                Apply
-              </Button>
+              <div className="flex flex-col gap-2">
+                <label className="flex flex-col gap-1 text-xs text-slate-500">
+                  As of date
+                  <Input
+                    type="date"
+                    value={asOfInput}
+                    onChange={(e) => setAsOfInput(e.target.value)}
+                    className="max-w-xs"
+                  />
+                </label>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleApplyFilters}
+                  className="max-w-xs"
+                >
+                  Apply
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -310,17 +350,7 @@ export const Accounts: React.FC = () => {
                         <TableRow key={account.id} className="align-top">
                           <TableCell className="px-4 font-medium text-slate-900">
                             <div className="flex items-center gap-3">
-                              {account.icon ? (
-                                <img
-                                  src={`/${account.icon}`}
-                                  alt={account.name}
-                                  className="h-8 w-8 rounded-full border border-slate-100 bg-white object-contain p-1"
-                                />
-                              ) : (
-                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
-                                  {account.name.charAt(0)}
-                                </div>
-                              )}
+                              {renderAccountIcon(account.icon, account.name)}
                               <span>{account.name}</span>
                             </div>
                           </TableCell>
