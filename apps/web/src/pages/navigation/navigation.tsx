@@ -87,10 +87,10 @@ const ProfileGate: React.FC = () => {
         <>
           <Spinner
             ariaLabel="Loading profile"
-            height={32}
-            width={32}
-            color="#64748b"
-            duration={1.2}
+            height={72}
+            width={72}
+            color="#2563eb"
+            duration={1.4}
           />
           <span className="sr-only">Loading profile</span>
         </>
