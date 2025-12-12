@@ -17,6 +17,14 @@ import { MotionPage } from "@/components/motion-presets";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
@@ -24,6 +32,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   useAccountsApi,
   useCategoriesApi,
@@ -143,7 +153,13 @@ export const Transactions: React.FC = () => {
     updateTransactionStatus,
     deleteTransaction,
   } = useTransactionsApi();
-  const { items: accounts, fetchAccounts } = useAccountsApi();
+  const {
+    items: accounts,
+    fetchAccounts,
+    reconcileAccounts,
+    reconcileLoading,
+    reconcileError,
+  } = useAccountsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -171,8 +187,17 @@ export const Transactions: React.FC = () => {
   const [endDate, setEndDate] = useState<string>("");
   const [modalOpen, setModalOpen] = useState(false);
   const [bulkCategory, setBulkCategory] = useState<string>("");
+  const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [reconcileDrafts, setReconcileDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [reconcileSubmitted, setReconcileSubmitted] = useState(false);
   const needsReconcile = useMemo(
     () => accounts.some((acc) => acc.needs_reconciliation),
+    [accounts],
+  );
+  const reconcileTargets = useMemo(
+    () => accounts.filter((acc) => acc.needs_reconciliation),
     [accounts],
   );
 
@@ -201,6 +226,51 @@ export const Transactions: React.FC = () => {
     return () => clearTimeout(debounce);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    accountFilter,
+    categoryFilter,
+    statusFilter,
+    search,
+    minAmount,
+    maxAmount,
+    startDate,
+    endDate,
+  ]);
+
+  useEffect(() => {
+    if (!reconcileOpen) return;
+    const defaults = Object.fromEntries(
+      reconcileTargets.map((acc) => [acc.id, acc.balance]),
+    );
+    setReconcileDrafts(defaults);
+    setReconcileSubmitted(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reconcileOpen]);
+
+  useEffect(() => {
+    if (!reconcileOpen || !reconcileSubmitted) return;
+    if (reconcileLoading) return;
+    if (reconcileError) return;
+    setReconcileOpen(false);
+    setReconcileSubmitted(false);
+    fetchTransactions({
+      limit: pagination.limit,
+      offset: 0,
+      accountIds: accountFilter ? [accountFilter] : undefined,
+      categoryIds: categoryFilter ? [categoryFilter] : undefined,
+      status: statusFilter ? [statusFilter] : undefined,
+      search: search || undefined,
+      minAmount: minAmount || undefined,
+      maxAmount: maxAmount || undefined,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+    });
+  }, [
+    reconcileOpen,
+    reconcileSubmitted,
+    reconcileLoading,
+    reconcileError,
+    fetchTransactions,
+    pagination.limit,
     accountFilter,
     categoryFilter,
     statusFilter,
@@ -384,15 +454,129 @@ export const Transactions: React.FC = () => {
       {needsReconcile ? (
         <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 shadow-[0_8px_24px_-20px_rgba(146,64,14,0.45)]">
           <AlertCircle className="mt-0.5 h-5 w-5" />
-          <div>
+          <div className="flex-1">
             <div className="font-semibold">Accounts need reconciliation</div>
             <p className="text-amber-800">
               Balances may be stale. Reconcile from Accounts to keep running
               balances accurate.
             </p>
           </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 gap-2 border-amber-200 bg-white text-amber-900 hover:bg-amber-100"
+            onClick={() => setReconcileOpen(true)}
+            disabled={reconcileLoading}
+          >
+            {reconcileLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : null}
+            Reconcile
+          </Button>
         </div>
       ) : null}
+
+      <Dialog
+        open={reconcileOpen}
+        onOpenChange={(open) => {
+          if (reconcileLoading) return;
+          setReconcileOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Reconcile accounts</DialogTitle>
+            <DialogDescription>
+              Enter the current balance from your bank/provider. Any difference
+              will be posted as an adjustment transaction.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {reconcileTargets.length === 0 ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                No accounts currently require reconciliation.
+              </div>
+            ) : (
+              reconcileTargets.map((account) => (
+                <div
+                  key={account.id}
+                  className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-medium text-slate-900">
+                      {account.name}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Ledger balance: {formatCurrency(Number(account.balance))}
+                    </div>
+                  </div>
+                  <div className="sm:w-52">
+                    <Label
+                      htmlFor={`reconcile-balance-${account.id}`}
+                      className="text-xs tracking-wide text-slate-500 uppercase"
+                    >
+                      Reported balance
+                    </Label>
+                    <Input
+                      id={`reconcile-balance-${account.id}`}
+                      inputMode="decimal"
+                      value={reconcileDrafts[account.id] ?? ""}
+                      onChange={(e) =>
+                        setReconcileDrafts((prev) => ({
+                          ...prev,
+                          [account.id]: e.target.value,
+                        }))
+                      }
+                      placeholder={account.balance}
+                      disabled={reconcileLoading}
+                    />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {reconcileError ? (
+            <div className="text-sm text-rose-600">{reconcileError}</div>
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setReconcileOpen(false)}
+              disabled={reconcileLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="gap-2"
+              onClick={() => {
+                const capturedAt = new Date().toISOString();
+                reconcileAccounts({
+                  items: reconcileTargets.map((acc) => ({
+                    accountId: acc.id,
+                    capturedAt,
+                    reportedBalance:
+                      reconcileDrafts[acc.id]?.trim() || acc.balance,
+                    description: "Reconciled from Transactions",
+                    categoryId: null,
+                  })),
+                });
+                setReconcileSubmitted(true);
+              }}
+              disabled={reconcileLoading || reconcileTargets.length === 0}
+            >
+              {reconcileLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : null}
+              Reconcile now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
         <CardHeader className="flex flex-col gap-3">

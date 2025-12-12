@@ -1,13 +1,16 @@
 import { createAction } from "@reduxjs/toolkit";
-import { call, put, takeLatest } from "redux-saga/effects";
+import { call, put, select, takeLatest } from "redux-saga/effects";
 import {
   setAccountCreateLoading,
   setAccountMutationError,
+  setAccountReconcileError,
+  setAccountReconcileLoading,
   setAccountUpdateLoading,
   setAccounts,
   setAccountsError,
   setAccountsFilters,
   setAccountsLoading,
+  selectAccountsState,
   type AccountsState,
 } from "@/features/accounts/accountsSlice";
 import { callApiWithAuth } from "@/features/api/apiSaga";
@@ -22,6 +25,8 @@ import {
   accountCreateRequestSchema,
   accountListSchema,
   accountUpdateRequestSchema,
+  reconcileAccountRequestSchema,
+  reconcileAccountResponseSchema,
   loanCreateRequestSchema,
   loanUpdateRequestSchema,
 } from "@/types/schemas";
@@ -45,9 +50,24 @@ export const UpdateLoan = createAction<{
   accountId: string;
   data: LoanUpdateRequest;
 }>("accounts/updateLoan");
+export const ReconcileAccounts = createAction<{
+  items: Array<{
+    accountId: string;
+    capturedAt: string;
+    reportedBalance: string;
+    description?: string;
+    categoryId?: string | null;
+  }>;
+}>("accounts/reconcile");
 
 function* handleFetchAccounts(action: ReturnType<typeof FetchAccounts>) {
-  const filters = action.payload ?? {};
+  const stored: AccountsState = yield select(selectAccountsState);
+  const filters =
+    action.payload ??
+    ({
+      includeInactive: stored.includeInactive,
+      asOfDate: stored.asOfDate,
+    } satisfies Partial<Pick<AccountsState, "includeInactive" | "asOfDate">>);
   yield put(setAccountsLoading(true));
   if (action.payload) {
     yield put(setAccountsFilters(action.payload));
@@ -177,6 +197,42 @@ function* handleUpdateLoan(action: ReturnType<typeof UpdateLoan>) {
   }
 }
 
+function* handleReconcileAccounts(
+  action: ReturnType<typeof ReconcileAccounts>,
+) {
+  yield put(setAccountReconcileLoading(true));
+  yield put(setAccountReconcileError(undefined));
+  try {
+    for (const item of action.payload.items) {
+      const body = reconcileAccountRequestSchema.parse({
+        captured_at: item.capturedAt,
+        reported_balance: item.reportedBalance,
+        description: item.description,
+        category_id: item.categoryId ?? null,
+      });
+      yield call(
+        callApiWithAuth,
+        {
+          path: `/accounts/${item.accountId}/reconcile`,
+          method: "POST",
+          body,
+          schema: reconcileAccountResponseSchema,
+        },
+        { loadingKey: "accounts-reconcile" },
+      );
+    }
+    yield put(FetchAccounts(undefined));
+  } catch (error) {
+    yield put(
+      setAccountReconcileError(
+        error instanceof Error ? error.message : "Failed to reconcile accounts",
+      ),
+    );
+  } finally {
+    yield put(setAccountReconcileLoading(false));
+  }
+}
+
 export function* AccountsSaga() {
   yield takeLatest(FetchAccounts.type, handleFetchAccounts);
   yield takeLatest(CreateAccount.type, handleCreateAccount);
@@ -184,4 +240,5 @@ export function* AccountsSaga() {
   yield takeLatest(ArchiveAccount.type, handleArchiveAccount);
   yield takeLatest(AttachLoan.type, handleAttachLoan);
   yield takeLatest(UpdateLoan.type, handleUpdateLoan);
+  yield takeLatest(ReconcileAccounts.type, handleReconcileAccounts);
 }

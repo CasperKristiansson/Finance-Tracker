@@ -5,6 +5,7 @@ import {
   AttachLoan,
   CreateAccount,
   FetchAccounts,
+  ReconcileAccounts,
   UpdateAccount,
   UpdateLoan,
 } from "@/features/accounts/accountsSaga";
@@ -179,6 +180,12 @@ export const useAccountsApi = () => {
     [dispatch],
   );
 
+  const reconcileAccounts = useCallback(
+    (payload: Parameters<typeof ReconcileAccounts>[0]) =>
+      dispatch(ReconcileAccounts(payload)),
+    [dispatch],
+  );
+
   return {
     ...state,
     fetchAccounts,
@@ -187,6 +194,7 @@ export const useAccountsApi = () => {
     archiveAccount,
     attachLoan,
     updateLoan,
+    reconcileAccounts,
     accountMutationError: state.mutationError,
     createLoading: state.createLoading,
     updateLoading: state.updateLoading,

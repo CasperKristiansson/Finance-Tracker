@@ -1,5 +1,12 @@
 import { motion } from "framer-motion";
-import { Archive, Loader2, Plus, RefreshCw, Undo } from "lucide-react";
+import {
+  AlertCircle,
+  Archive,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Undo,
+} from "lucide-react";
 import * as LucideIcons from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
@@ -14,7 +21,16 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -88,6 +104,9 @@ export const Accounts: React.FC = () => {
     fetchAccounts,
     archiveAccount,
     updateAccount,
+    reconcileAccounts,
+    reconcileLoading,
+    reconcileError,
   } = useAccountsApi();
   const [asOfInput, setAsOfInput] = useState<string>(asOfDate ?? "");
   const [showInactive, setShowInactive] = useState(includeInactive);
@@ -95,6 +114,14 @@ export const Accounts: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
+  const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [reconcileDrafts, setReconcileDrafts] = useState<
+    Record<string, string>
+  >({});
+  const [reconcileSelectedIds, setReconcileSelectedIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [reconcileSubmitted, setReconcileSubmitted] = useState(false);
 
   useEffect(() => {
     fetchAccounts({});
@@ -108,6 +135,20 @@ export const Accounts: React.FC = () => {
   const activeCount = useMemo(
     () => items.filter((acc) => acc.is_active).length,
     [items],
+  );
+
+  const needsReconcile = useMemo(
+    () => items.some((acc) => acc.needs_reconciliation),
+    [items],
+  );
+
+  const reconcileTargets = useMemo(
+    () => items.filter((acc) => acc.needs_reconciliation),
+    [items],
+  );
+  const reconcileSelectedTargets = useMemo(
+    () => items.filter((acc) => reconcileSelectedIds.has(acc.id)),
+    [items, reconcileSelectedIds],
   );
 
   const editingAccount = useMemo(
@@ -136,6 +177,39 @@ export const Accounts: React.FC = () => {
       asOfDate: asOfInput || null,
     });
   };
+
+  useEffect(() => {
+    if (!reconcileOpen) return;
+    const defaults = Object.fromEntries(
+      items.map((acc) => [acc.id, acc.balance]),
+    );
+    setReconcileDrafts(defaults);
+    setReconcileSelectedIds(
+      new Set(reconcileTargets.map((account) => account.id)),
+    );
+    setReconcileSubmitted(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reconcileOpen]);
+
+  useEffect(() => {
+    if (!reconcileOpen || !reconcileSubmitted) return;
+    if (reconcileLoading) return;
+    if (reconcileError) return;
+    setReconcileOpen(false);
+    setReconcileSubmitted(false);
+    fetchAccounts({
+      includeInactive: showInactive,
+      asOfDate: asOfInput || null,
+    });
+  }, [
+    reconcileOpen,
+    reconcileSubmitted,
+    reconcileLoading,
+    reconcileError,
+    fetchAccounts,
+    showInactive,
+    asOfInput,
+  ]);
 
   const sortedItems = useMemo(() => {
     const copy = [...items];
@@ -189,6 +263,19 @@ export const Accounts: React.FC = () => {
           <Button
             variant="outline"
             className="gap-2 border-slate-300 text-slate-800"
+            onClick={() => setReconcileOpen(true)}
+            disabled={reconcileLoading}
+          >
+            {reconcileLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <AlertCircle className="h-4 w-4" />
+            )}
+            Reconcile
+          </Button>
+          <Button
+            variant="outline"
+            className="gap-2 border-slate-300 text-slate-800"
             onClick={() =>
               fetchAccounts({
                 includeInactive: showInactive,
@@ -202,7 +289,158 @@ export const Accounts: React.FC = () => {
         </motion.div>
       </StaggerWrap>
 
-      {/* Reconciliation banner removed */}
+      {needsReconcile ? (
+        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 shadow-[0_8px_24px_-20px_rgba(146,64,14,0.45)]">
+          <AlertCircle className="mt-0.5 h-5 w-5" />
+          <div className="flex-1">
+            <div className="font-semibold">Accounts need reconciliation</div>
+            <p className="text-amber-800">
+              Balances may be stale. Reconcile to keep running balances
+              accurate.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 gap-2 border-amber-200 bg-white text-amber-900 hover:bg-amber-100"
+            onClick={() => setReconcileOpen(true)}
+            disabled={reconcileLoading}
+          >
+            {reconcileLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : null}
+            Reconcile
+          </Button>
+        </div>
+      ) : null}
+
+      <Dialog
+        open={reconcileOpen}
+        onOpenChange={(open) => {
+          if (reconcileLoading) return;
+          setReconcileOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Reconcile accounts</DialogTitle>
+            <DialogDescription>
+              Enter the current balance from your bank/provider. Any difference
+              will be posted as an adjustment transaction.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {items.length === 0 ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                No accounts available to reconcile.
+              </div>
+            ) : (
+              items.map((account) => (
+                <div
+                  key={account.id}
+                  className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={reconcileSelectedIds.has(account.id)}
+                        onChange={(e) => {
+                          const next = new Set(reconcileSelectedIds);
+                          if (e.target.checked) {
+                            next.add(account.id);
+                          } else {
+                            next.delete(account.id);
+                          }
+                          setReconcileSelectedIds(next);
+                        }}
+                        disabled={reconcileLoading}
+                      />
+                      <span className="truncate font-medium text-slate-900">
+                        {account.name}
+                      </span>
+                      {account.needs_reconciliation ? (
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                          Stale
+                        </span>
+                      ) : null}
+                    </label>
+                    <div className="text-xs text-slate-500">
+                      Ledger balance: {formatCurrency(Number(account.balance))}
+                    </div>
+                  </div>
+                  <div className="sm:w-52">
+                    <Label
+                      htmlFor={`reconcile-balance-${account.id}`}
+                      className="text-xs tracking-wide text-slate-500 uppercase"
+                    >
+                      Reported balance
+                    </Label>
+                    <Input
+                      id={`reconcile-balance-${account.id}`}
+                      inputMode="decimal"
+                      value={reconcileDrafts[account.id] ?? ""}
+                      onChange={(e) =>
+                        setReconcileDrafts((prev) => ({
+                          ...prev,
+                          [account.id]: e.target.value,
+                        }))
+                      }
+                      placeholder={account.balance}
+                      disabled={
+                        reconcileLoading ||
+                        !reconcileSelectedIds.has(account.id)
+                      }
+                    />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {reconcileError ? (
+            <div className="text-sm text-rose-600">{reconcileError}</div>
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setReconcileOpen(false)}
+              disabled={reconcileLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              className="gap-2"
+              onClick={() => {
+                const capturedAt = new Date().toISOString();
+                reconcileAccounts({
+                  items: reconcileSelectedTargets.map((acc) => ({
+                    accountId: acc.id,
+                    capturedAt,
+                    reportedBalance:
+                      reconcileDrafts[acc.id]?.trim() || acc.balance,
+                    description: "Reconciled from Accounts",
+                    categoryId: null,
+                  })),
+                });
+                setReconcileSubmitted(true);
+              }}
+              disabled={
+                reconcileLoading || reconcileSelectedTargets.length === 0
+              }
+            >
+              {reconcileLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : null}
+              Reconcile now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <StaggerWrap className="grid gap-3 md:grid-cols-2">
         <motion.div variants={fadeInUp} {...subtleHover}>

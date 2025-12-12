@@ -89,6 +89,23 @@ export const accountListSchema = z.object({
   accounts: z.array(accountWithBalanceSchema),
 });
 
+export const reconcileAccountRequestSchema = z.object({
+  captured_at: dateString,
+  reported_balance: z.string(),
+  description: z.string().optional(),
+  category_id: z.string().nullable().optional(),
+});
+
+export const reconcileAccountResponseSchema = z.object({
+  account_id: z.string(),
+  reported_balance: z.string(),
+  ledger_balance: z.string(),
+  delta_posted: z.string(),
+  snapshot_id: z.string(),
+  transaction_id: z.string().nullable().optional(),
+  captured_at: dateString,
+});
+
 export const loanScheduleEntrySchema = z.object({
   period: numeric,
   due_date: dateString,
