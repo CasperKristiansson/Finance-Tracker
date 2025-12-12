@@ -52,6 +52,9 @@ const warmupSlice = createSlice({
       state.status = "failed";
       state.lastError = action.payload;
     },
+    resetWarmup() {
+      return initialState;
+    },
   },
   selectors: {
     selectWarmupState: (state) => state,
@@ -64,6 +67,7 @@ export const {
   updateWarmupNote,
   warmupReady,
   warmupFailed,
+  resetWarmup,
 } = warmupSlice.actions;
 
 export const { selectWarmupState } = warmupSlice.selectors;

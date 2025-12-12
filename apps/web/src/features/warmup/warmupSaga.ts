@@ -1,6 +1,7 @@
 import { createAction } from "@reduxjs/toolkit";
 import { call, delay, put, takeLatest } from "redux-saga/effects";
 import { TypedSelect } from "@/app/rootSaga";
+import { selectToken } from "@/features/auth/authSlice";
 import { apiFetch, ApiError } from "@/lib/apiClient";
 import type { WarmupResponse } from "@/types/api";
 import { warmupResponseSchema } from "@/types/schemas";
@@ -32,6 +33,16 @@ function* performWarmup() {
   const state: WarmupState = yield* TypedSelect(selectWarmupState);
   if (state.status === "warming" || state.status === "ready") return;
 
+  const token: string | undefined = yield* TypedSelect(selectToken);
+  if (!token) {
+    yield put(
+      warmupFailed(
+        "Authentication is required before waking the database. Please sign in.",
+      ),
+    );
+    return;
+  }
+
   yield put(startWarmup());
 
   for (let attempt = 1; attempt <= WARMUP_MAX_ATTEMPTS; attempt += 1) {
@@ -46,6 +57,7 @@ function* performWarmup() {
         path: "/warmup",
         method: "GET",
         retryCount: 1,
+        token,
         schema: warmupResponseSchema,
       })) as { data: WarmupResponse };
 

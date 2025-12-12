@@ -6,7 +6,11 @@ import { resetReports } from "@/features/reports/reportsSlice";
 import { resetTransactions } from "@/features/transactions/transactionsSlice";
 import { authSessionSchema } from "@/types/schemas";
 import { setLoading } from "../app/appSlice";
-import authService, { type AuthenticatedUser } from "./authHelpers";
+import { resetWarmup } from "../warmup/warmupSlice";
+import authService, {
+  PendingApprovalError,
+  type AuthenticatedUser,
+} from "./authHelpers";
 import {
   loginSuccess,
   logoutSuccess,
@@ -26,6 +30,14 @@ export const AuthLoginDemo = createAction("auth/loginDemo");
 
 const REMEMBER_KEY = "finance-tracker-remember";
 const REMEMBER_USERNAME_KEY = "finance-tracker-last-username";
+const PENDING_APPROVAL_MESSAGE =
+  "Your account is pending approval. An admin must approve access before you can sign in.";
+
+const isPendingApprovalError = (error: unknown): boolean =>
+  error instanceof PendingApprovalError ||
+  (error instanceof Error &&
+    (error.message?.includes("USER_NOT_APPROVED") ||
+      error.message?.includes("pending approval")));
 
 const persistRememberMe = (remember: boolean, username?: string) => {
   if (remember) {
@@ -63,6 +75,20 @@ function* handleLoginWithGoogle() {
 
     yield call(() => authService.signInWithGoogle());
   } catch (error) {
+    if (isPendingApprovalError(error)) {
+      yield put(setLoginError(PENDING_APPROVAL_MESSAGE));
+      toast.error("Account pending approval", {
+        description: PENDING_APPROVAL_MESSAGE,
+      });
+      try {
+        yield call(() => authService.signOut());
+      } catch {
+        // ignore sign-out cleanup errors
+      }
+      yield put(setLoading({ key: "login", isLoading: false }));
+      return;
+    }
+
     const message =
       error instanceof Error ? error.message : "Failed to start Google sign-in";
     const alreadySignedIn = message.toLowerCase().includes("signed in user");
@@ -101,6 +127,7 @@ function* handleLogout() {
     yield put(resetAccounts());
     yield put(resetTransactions());
     yield put(resetReports());
+    yield put(resetWarmup());
     toast.success("Logout Successful");
   } catch (error) {
     if (error instanceof Error) {
@@ -141,6 +168,20 @@ function* initializeAuth() {
       }
     }
   } catch (error) {
+    if (isPendingApprovalError(error)) {
+      yield put(setLoginError(PENDING_APPROVAL_MESSAGE));
+      toast.error("Account pending approval", {
+        description: PENDING_APPROVAL_MESSAGE,
+      });
+      try {
+        yield call(() => authService.signOut());
+      } catch {
+        // ignore cleanup failures during sign-out
+      }
+      yield put(setInitialLoaded());
+      return;
+    }
+
     console.error("Failed to restore session", error);
     if (error instanceof Error) {
       toast.error("Failed to restore session", {
@@ -168,6 +209,7 @@ function* handleLoginDemo() {
       accessToken: "demo-access-token",
       idToken: "demo-id-token",
       refreshToken: "demo-refresh-token",
+      approved: true,
       isDemo: true,
     }),
   );

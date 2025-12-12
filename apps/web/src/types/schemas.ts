@@ -610,6 +610,7 @@ export const authSessionSchema = z.object({
   idToken: z.string().min(1),
   refreshToken: z.string().optional().default(""),
   isDemo: z.boolean().optional(),
+  approved: z.boolean().optional().default(false),
 });
 
 export type LoanCreateRequest = z.infer<typeof loanCreateRequestSchema>;

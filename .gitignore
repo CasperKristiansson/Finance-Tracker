@@ -10,6 +10,7 @@
 infra/terraform/*.tfvars
 *.pyc
 infra/layers/layer-backend.zip
+infra/terraform/resources/lambda/*.zip
 *.serverless
 docs/data
 apps/web/build

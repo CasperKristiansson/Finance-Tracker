@@ -1,7 +1,7 @@
 import { call, put, select } from "redux-saga/effects";
 import { toast } from "sonner";
 import { setLoading } from "@/features/app/appSlice";
-import authService from "@/features/auth/authHelpers";
+import authService, { PendingApprovalError } from "@/features/auth/authHelpers";
 import {
   loginSuccess,
   logoutSuccess,
@@ -56,40 +56,57 @@ export function* callApiWithAuth<T>(
       options.retryOnUnauthorized !== false;
 
     if (shouldRetry) {
-      const refreshedSession = (yield call(() =>
-        authService.fetchAuthenticatedUser(true),
-      )) as Awaited<ReturnType<typeof authService.fetchAuthenticatedUser>>;
+      try {
+        const refreshedSession = (yield call(() =>
+          authService.fetchAuthenticatedUser(true),
+        )) as Awaited<ReturnType<typeof authService.fetchAuthenticatedUser>>;
 
-      if (refreshedSession) {
-        yield put(loginSuccess(refreshedSession));
-        try {
-          const { data } = (yield call(apiFetch<T>, {
-            ...request,
-            token: refreshedSession.accessToken,
-            retryCount: 1,
-          })) as { data: T };
-          return data;
-        } catch (retryError) {
-          if (
-            retryError instanceof ApiError &&
-            retryError.status === 401 &&
-            options.silent !== true
-          ) {
+        if (refreshedSession) {
+          yield put(loginSuccess(refreshedSession));
+          try {
+            const { data } = (yield call(apiFetch<T>, {
+              ...request,
+              token: refreshedSession.accessToken,
+              retryCount: 1,
+            })) as { data: T };
+            return data;
+          } catch (retryError) {
+            if (
+              retryError instanceof ApiError &&
+              retryError.status === 401 &&
+              options.silent !== true
+            ) {
+              toast.error("Session expired", {
+                description: "Please sign in again.",
+              });
+            }
+            yield put(logoutSuccess());
+            throw retryError;
+          }
+        } else {
+          if (options.silent !== true) {
             toast.error("Session expired", {
               description: "Please sign in again.",
             });
           }
           yield put(logoutSuccess());
-          throw retryError;
+          throw error;
         }
-      } else {
-        if (options.silent !== true) {
-          toast.error("Session expired", {
-            description: "Please sign in again.",
+      } catch (refreshError) {
+        if (!(refreshError instanceof PendingApprovalError)) {
+          if (options.silent !== true) {
+            toast.error("Session expired", {
+              description: "Please sign in again.",
+            });
+          }
+        } else if (options.silent !== true) {
+          toast.error("Account pending approval", {
+            description:
+              "Your account must be approved before continuing. Please sign in again once approved.",
           });
         }
         yield put(logoutSuccess());
-        throw error;
+        throw refreshError;
       }
     }
 

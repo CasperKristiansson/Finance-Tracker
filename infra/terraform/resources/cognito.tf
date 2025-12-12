@@ -54,7 +54,7 @@ resource "aws_cognito_user_pool" "finance_tracker" {
   }
 
   admin_create_user_config {
-    allow_admin_create_user_only = true
+    allow_admin_create_user_only = false
   }
 
   account_recovery_setting {
@@ -62,6 +62,17 @@ resource "aws_cognito_user_pool" "finance_tracker" {
       name     = "verified_email"
       priority = 1
     }
+  }
+
+  schema {
+    name                = "approved"
+    attribute_data_type = "Boolean"
+    mutable             = true
+    required            = false
+  }
+
+  lambda_config {
+    pre_token_generation = aws_lambda_function.cognito_pre_token_approval.arn
   }
 
   tags = merge(
@@ -108,6 +119,7 @@ resource "aws_cognito_user_pool_client" "finance_tracker_web" {
     "email_verified",
     "name",
     "preferred_username",
+    "custom:approved",
   ]
 
   write_attributes = [

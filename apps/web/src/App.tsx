@@ -10,6 +10,7 @@ import { AuthInitialize } from "./features/auth/authSaga.ts";
 import {
   selectInitialLoaded,
   selectIsAuthenticated,
+  selectIsDemo,
 } from "./features/auth/authSlice.ts";
 import { LoadSettings } from "./features/settings/settingsSaga.ts";
 import { BeginWarmup } from "./features/warmup/warmupSaga.ts";
@@ -44,27 +45,30 @@ export const App: React.FC = () => {
     (state) => selectLoading(state)["logout"],
   );
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
+  const isDemo = useAppSelector(selectIsDemo);
   const warmupState = useAppSelector(selectWarmupState);
+  const shouldShowWarmup =
+    isAuthenticated && !isDemo && warmupState.status !== "ready";
   const [showDetailedWarmup, setShowDetailedWarmup] = useState(false);
 
   useEffect(() => {
-    dispatch(BeginWarmup());
+    dispatch(AuthInitialize());
   }, [dispatch]);
 
   useEffect(() => {
-    if (warmupState.status === "ready") {
-      dispatch(AuthInitialize());
-      dispatch(LoadSettings());
+    if (!isAuthenticated || isDemo) return;
+    if (warmupState.status === "idle") {
+      dispatch(BeginWarmup());
     }
-  }, [dispatch, warmupState.status]);
+  }, [dispatch, isAuthenticated, isDemo, warmupState.status]);
 
   useEffect(() => {
-    if (warmupState.status !== "ready" || !isAuthenticated) return;
+    if (isDemo || warmupState.status !== "ready" || !isAuthenticated) return;
     dispatch(LoadSettings());
-  }, [dispatch, isAuthenticated, warmupState.status]);
+  }, [dispatch, isAuthenticated, isDemo, warmupState.status]);
 
   useEffect(() => {
-    if (warmupState.status === "ready") {
+    if (!shouldShowWarmup) {
       setShowDetailedWarmup(false);
       return;
     }
@@ -77,9 +81,9 @@ export const App: React.FC = () => {
     setShowDetailedWarmup(false);
     const timer = window.setTimeout(() => setShowDetailedWarmup(true), 5000);
     return () => window.clearTimeout(timer);
-  }, [warmupState.status]);
+  }, [shouldShowWarmup, warmupState.status]);
 
-  if (warmupState.status !== "ready") {
+  if (shouldShowWarmup) {
     if (!showDetailedWarmup) {
       return (
         <div className="flex min-h-screen items-center justify-center bg-white">

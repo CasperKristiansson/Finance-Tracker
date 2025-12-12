@@ -71,6 +71,7 @@ functions:
       - httpApi:
           path: /warmup
           method: GET
+          authorizer: cognitoJwt
 
   listAccounts:
     handler: apps/api/handlers/accounts.list_accounts

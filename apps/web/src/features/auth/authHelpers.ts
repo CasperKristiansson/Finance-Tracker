@@ -14,6 +14,14 @@ export interface AuthTokens {
 
 export interface AuthenticatedUser extends AuthTokens {
   email: string;
+  approved: boolean;
+}
+
+export class PendingApprovalError extends Error {
+  constructor(message = "USER_NOT_APPROVED") {
+    super(message);
+    this.name = "PendingApprovalError";
+  }
 }
 
 const authEnvKeys = {
@@ -153,6 +161,38 @@ const toAuthTokens = (
   };
 };
 
+const decodeBase64Url = (value: string): string => {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+
+  if (typeof atob === "function") {
+    return atob(padded);
+  }
+
+  return Buffer.from(padded, "base64").toString("binary");
+};
+
+const decodeJwtPayload = (token: string): Record<string, unknown> => {
+  const parts = token.split(".");
+  if (parts.length < 2) {
+    throw new Error("Invalid ID token format.");
+  }
+
+  const payload = decodeBase64Url(parts[1]);
+  return JSON.parse(payload) as Record<string, unknown>;
+};
+
+const isApprovedFromToken = (idToken: string): boolean => {
+  const payload = decodeJwtPayload(idToken);
+  const approvedClaim = payload["custom:approved"];
+  return (
+    approvedClaim === true ||
+    approvedClaim === "true" ||
+    approvedClaim === 1 ||
+    approvedClaim === "1"
+  );
+};
+
 class AmplifyAuthService {
   constructor() {
     ensureAmplifyConfigured();
@@ -166,8 +206,14 @@ class AmplifyAuthService {
       const session = await amplifyFetchAuthSession({ forceRefresh });
       const tokens = toAuthTokens(session);
 
+      const approved = isApprovedFromToken(tokens.idToken);
+      if (!approved) {
+        throw new PendingApprovalError();
+      }
+
       return {
         email: user.username,
+        approved,
         ...tokens,
       };
     } catch (error) {

@@ -12,6 +12,7 @@ export interface AuthState {
     accessToken: string;
     idToken: string;
     refreshToken: string;
+    approved: boolean;
   };
 }
 
@@ -23,6 +24,7 @@ export const initialState: AuthState = {
     accessToken: "",
     idToken: "",
     refreshToken: "",
+    approved: false,
   },
   isDemo: false,
   loginError: null,
@@ -38,7 +40,7 @@ const authSlice = createSlice({
       state,
       action: PayloadAction<AuthState["user"] & { isDemo?: boolean }>,
     ) => {
-      state.isAuthenticated = true;
+      state.isAuthenticated = Boolean(action.payload.approved);
       state.isDemo = Boolean(action.payload.isDemo);
       state.user = action.payload;
       state.loginError = null;
@@ -71,6 +73,7 @@ const authSlice = createSlice({
     selectRememberMe: (state) => state.rememberMe,
     selectLastUsername: (state) => state.lastUsername,
     selectIsDemo: (state) => state.isDemo,
+    selectIsApproved: (state) => state.user.approved,
   },
 });
 
@@ -91,5 +94,6 @@ export const {
   selectRememberMe,
   selectLastUsername,
   selectIsDemo,
+  selectIsApproved,
 } = authSlice.selectors;
 export const AuthReducer = authSlice.reducer;
