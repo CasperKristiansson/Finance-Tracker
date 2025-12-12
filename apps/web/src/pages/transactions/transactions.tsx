@@ -29,6 +29,7 @@ import {
   useCategoriesApi,
   useTransactionsApi,
 } from "@/hooks/use-api";
+import { formatCategoryLabel } from "@/lib/category-icons";
 import { cn } from "@/lib/utils";
 import { TransactionStatus, type CategoryRead } from "@/types/api";
 import TransactionModal from "./transaction-modal";
@@ -225,7 +226,7 @@ export const Transactions: React.FC = () => {
       new Map<string, string>(
         categories?.map((c: CategoryRead) => [
           c.id,
-          `${c.icon ? `${c.icon} ` : ""}${c.name}`,
+          formatCategoryLabel(c.name, c.icon),
         ]) ?? [],
       ),
     [categories],

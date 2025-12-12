@@ -1,13 +1,22 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Plus, RefreshCw, Save, Sparkles } from "lucide-react";
+import { Loader2, Pencil, Plus, RefreshCw, Sparkles } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { LucideIconPicker } from "@/components/lucide-icon-picker";
 import { MotionPage } from "@/components/motion-presets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,21 +24,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { useCategoriesApi } from "@/hooks/use-api";
+import { formatCategoryLabel, renderCategoryIcon } from "@/lib/category-icons";
 import { CategoryType, type CategoryRead } from "@/types/api";
 import { categorySchema } from "@/types/schemas";
 
-const categoryBadges: Record<CategoryType, string> = {
-  [CategoryType.INCOME]:
-    "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100",
-  [CategoryType.EXPENSE]: "bg-rose-50 text-rose-700 ring-1 ring-rose-100",
-  [CategoryType.ADJUSTMENT]: "bg-slate-50 text-slate-700 ring-1 ring-slate-100",
-  [CategoryType.LOAN]: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100",
-  [CategoryType.INTEREST]: "bg-amber-50 text-amber-700 ring-1 ring-amber-100",
-};
-
 const formatCategory = (cat: CategoryRead) =>
-  `${cat.icon ? `${cat.icon} ` : ""}${cat.name}`;
+  formatCategoryLabel(cat.name, cat.icon);
 
 const emojiPalette = [
   "💸",
@@ -66,13 +68,6 @@ const selectableCategoryTypes = [
   CategoryType.EXPENSE,
 ] as const;
 
-const selectableCategoryTypeSet = new Set<CategoryType>(
-  selectableCategoryTypes,
-);
-
-const isSelectableCategoryType = (value: CategoryType) =>
-  selectableCategoryTypeSet.has(value);
-
 const categoryTypeOptions = [
   { label: "All types", value: "all" },
   ...selectableCategoryTypes.map((value) => ({ label: value, value })),
@@ -87,16 +82,14 @@ const categoryFormSchema = categorySchema
 
 type CategoryFormValues = z.infer<typeof categoryFormSchema>;
 
-const categoryGridSchema = z.object({
-  categories: z.array(
-    categorySchema.extend({
-      name: z.string().min(1, "Name is required").trim(),
-      icon: z.string().nullable().optional(),
-    }),
-  ),
+const categoryEditFormSchema = z.object({
+  name: z.string().min(1, "Name is required").trim(),
+  category_type: z.nativeEnum(CategoryType),
+  icon: z.string().optional(),
+  is_archived: z.boolean(),
 });
 
-type CategoryGridValues = z.infer<typeof categoryGridSchema>;
+type CategoryEditFormValues = z.infer<typeof categoryEditFormSchema>;
 
 const mergeSchema = z
   .object({
@@ -144,10 +137,24 @@ export const Categories: React.FC = () => {
     },
   });
 
-  const gridForm = useForm<CategoryGridValues>({
-    resolver: zodResolver(categoryGridSchema),
-    defaultValues: { categories: items },
-    mode: "onBlur",
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  const editingCategory = useMemo(
+    () =>
+      editingId
+        ? (items.find((category) => category.id === editingId) ?? null)
+        : null,
+    [editingId, items],
+  );
+
+  const editForm = useForm<CategoryEditFormValues>({
+    resolver: zodResolver(categoryEditFormSchema),
+    defaultValues: {
+      name: "",
+      category_type: CategoryType.EXPENSE,
+      icon: "",
+      is_archived: false,
+    },
   });
 
   const mergeForm = useForm<MergeFormValues>({
@@ -159,16 +166,20 @@ export const Categories: React.FC = () => {
     },
   });
 
-  const watchedCategories = gridForm.watch("categories");
-
   useEffect(() => {
     fetchCategories({ includeArchived: showArchived });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    gridForm.reset({ categories: items });
-  }, [gridForm, items]);
+    if (!editingCategory) return;
+    editForm.reset({
+      name: editingCategory.name,
+      category_type: editingCategory.category_type,
+      icon: editingCategory.icon ?? "",
+      is_archived: editingCategory.is_archived,
+    });
+  }, [editForm, editingCategory]);
 
   const handleRefresh = () => {
     fetchCategories({ includeArchived: showArchived });
@@ -263,44 +274,41 @@ export const Categories: React.FC = () => {
 
   const visibleCategories = useMemo(
     () =>
-      (watchedCategories && watchedCategories.length
-        ? watchedCategories
-        : items
-      )
-        .filter((c) => (showArchived ? true : !c.is_archived))
-        .filter((c) =>
-          typeFilter === "all" ? true : c.category_type === typeFilter,
+      items
+        .filter((category) => (showArchived ? true : !category.is_archived))
+        .filter((category) =>
+          typeFilter === "all" ? true : category.category_type === typeFilter,
         ),
-    [items, showArchived, typeFilter, watchedCategories],
+    [items, showArchived, typeFilter],
   );
 
-  const saveInline = (id: string) => {
-    const currentList = gridForm.getValues("categories") ?? [];
-    const current = currentList.find((c) => c.id === id);
-    if (!current) return;
-    const trimmedName = current.name?.trim();
-    if (!trimmedName) {
-      toast.error("Name cannot be empty");
-      return;
-    }
-    const original = items.find((cat) => cat.id === id);
-    const payload: Partial<CategoryRead> = {};
-    if (!original || original.name !== trimmedName) {
-      payload.name = trimmedName;
-    }
-    if (!original || original.category_type !== current.category_type) {
-      payload.category_type = current.category_type as CategoryType;
-    }
-    if ((original?.icon ?? "") !== (current.icon ?? "")) {
-      payload.icon = current.icon?.trim() || null;
-    }
-    if (Object.keys(payload).length === 0) {
-      toast.message("No changes to save");
-      return;
-    }
-    updateCategory(id, payload);
+  const incomeCategories = useMemo(
+    () =>
+      visibleCategories.filter(
+        (category) => category.category_type === CategoryType.INCOME,
+      ),
+    [visibleCategories],
+  );
+
+  const expenseCategories = useMemo(
+    () =>
+      visibleCategories.filter(
+        (category) => category.category_type === CategoryType.EXPENSE,
+      ),
+    [visibleCategories],
+  );
+
+  const handleEditSave = editForm.handleSubmit((values) => {
+    if (!editingCategory) return;
+    updateCategory(editingCategory.id, {
+      name: values.name.trim(),
+      category_type: values.category_type,
+      icon: values.icon?.trim() ? values.icon.trim() : null,
+      is_archived: values.is_archived,
+    });
     toast.success("Category updated");
-  };
+    setEditingId(null);
+  });
 
   return (
     <MotionPage className="space-y-4">
@@ -404,75 +412,176 @@ export const Categories: React.FC = () => {
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="divide-y divide-slate-100">
-            {visibleCategories.map((cat) => {
-              const index = (watchedCategories ?? items).findIndex(
-                (c) => c.id === cat.id,
-              );
-              if (index < 0) return null;
-              const rowDirty = Boolean(
-                gridForm.formState.dirtyFields.categories?.[index],
-              );
-              const iconValue =
-                watchedCategories?.[index]?.icon ?? cat.icon ?? "🎯";
-              const currentType = (watchedCategories?.[index]?.category_type ??
-                cat.category_type) as CategoryType;
-              const selectableType = isSelectableCategoryType(currentType);
-              const rowTypeOptions: readonly CategoryType[] = selectableType
-                ? selectableCategoryTypes
-                : [currentType];
-
-              return (
-                <div
-                  key={cat.id}
-                  className="flex flex-col gap-2 py-3 md:flex-row md:items-center md:justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl leading-none">{iconValue}</span>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-slate-900">
-                          {watchedCategories?.[index]?.name ?? cat.name}
-                        </span>
-                        <Badge
-                          className={
-                            categoryBadges[
-                              (watchedCategories?.[index]?.category_type ||
-                                cat.category_type) as CategoryType
-                            ]
-                          }
-                          variant="outline"
-                        >
-                          {watchedCategories?.[index]?.category_type ??
-                            cat.category_type}
-                        </Badge>
-                        {cat.is_archived ? (
-                          <Badge variant="secondary">Archived</Badge>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Input
-                      className="w-40"
-                      placeholder="Name"
-                      {...gridForm.register(
-                        `categories.${index}.name` as const,
-                      )}
-                    />
-                    <select
-                      className="w-32 rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                      disabled={!selectableType}
-                      {...gridForm.register(
-                        `categories.${index}.category_type` as const,
-                      )}
+          <CardContent className="space-y-4">
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-900">Income</p>
+                  <Badge variant="secondary" className="text-xs">
+                    {incomeCategories.length}
+                  </Badge>
+                </div>
+                <div className="divide-y divide-slate-100 rounded-md border border-slate-100 bg-white">
+                  {incomeCategories.map((cat) => (
+                    <div
+                      key={cat.id}
+                      className="flex items-center justify-between gap-3 px-3 py-2"
                     >
-                      {rowTypeOptions.map((value) => (
+                      <div className="flex min-w-0 items-center gap-3">
+                        {renderCategoryIcon(
+                          cat.icon ?? "",
+                          cat.name,
+                          "h-6 w-6 text-slate-700 flex items-center justify-center",
+                        )}
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-slate-900">
+                            {cat.name}
+                          </div>
+                          {cat.is_archived ? (
+                            <p className="text-xs text-slate-500">Archived</p>
+                          ) : null}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1"
+                        onClick={() => setEditingId(cat.id)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit
+                      </Button>
+                    </div>
+                  ))}
+                  {incomeCategories.length === 0 ? (
+                    <p className="px-3 py-6 text-sm text-slate-500">
+                      No income categories to show.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-900">
+                    Expense
+                  </p>
+                  <Badge variant="secondary" className="text-xs">
+                    {expenseCategories.length}
+                  </Badge>
+                </div>
+                <div className="divide-y divide-slate-100 rounded-md border border-slate-100 bg-white">
+                  {expenseCategories.map((cat) => (
+                    <div
+                      key={cat.id}
+                      className="flex items-center justify-between gap-3 px-3 py-2"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        {renderCategoryIcon(
+                          cat.icon ?? "",
+                          cat.name,
+                          "h-6 w-6 text-slate-700 flex items-center justify-center",
+                        )}
+                        <div className="min-w-0">
+                          <div className="truncate font-medium text-slate-900">
+                            {cat.name}
+                          </div>
+                          {cat.is_archived ? (
+                            <p className="text-xs text-slate-500">Archived</p>
+                          ) : null}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1"
+                        onClick={() => setEditingId(cat.id)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit
+                      </Button>
+                    </div>
+                  ))}
+                  {expenseCategories.length === 0 ? (
+                    <p className="px-3 py-6 text-sm text-slate-500">
+                      No expense categories to show.
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Dialog
+          open={Boolean(editingCategory)}
+          onOpenChange={(open) => {
+            if (!open) setEditingId(null);
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit category</DialogTitle>
+              <DialogDescription>
+                Update name, type, icon, or archive this category.
+              </DialogDescription>
+            </DialogHeader>
+            {editingCategory ? (
+              <form className="space-y-4" onSubmit={handleEditSave}>
+                <div className="space-y-1.5">
+                  <label
+                    className="text-sm text-slate-700"
+                    htmlFor="edit-category-name"
+                  >
+                    Name
+                  </label>
+                  <Input
+                    id="edit-category-name"
+                    placeholder="e.g., Groceries"
+                    {...editForm.register("name")}
+                  />
+                  {editForm.formState.errors.name ? (
+                    <p className="text-xs text-rose-600">
+                      {editForm.formState.errors.name.message}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label className="text-sm text-slate-700">Type</label>
+                    <select
+                      className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800"
+                      {...editForm.register("category_type")}
+                    >
+                      {selectableCategoryTypes.map((value) => (
                         <option key={value} value={value}>
                           {value}
                         </option>
                       ))}
                     </select>
+                  </div>
+                  <label className="flex h-10 items-center justify-between rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700">
+                    Archived
+                    <Switch
+                      checked={editForm.watch("is_archived")}
+                      onCheckedChange={(checked) =>
+                        editForm.setValue("is_archived", checked, {
+                          shouldDirty: true,
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm text-slate-700">Icon</label>
+                  <div className="flex items-center gap-2">
+                    {renderCategoryIcon(
+                      editForm.watch("icon") || "🎯",
+                      editForm.watch("name") || "Category",
+                      "h-6 w-6 text-xl leading-none text-slate-700 flex items-center justify-center",
+                    )}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button
@@ -481,24 +590,24 @@ export const Categories: React.FC = () => {
                           className="gap-2"
                           aria-label="Pick emoji"
                         >
-                          <span className="text-lg leading-none">
-                            {iconValue || "🎯"}
-                          </span>
+                          {renderCategoryIcon(
+                            editForm.watch("icon") || "🎯",
+                            editForm.watch("name") || "Category",
+                            "h-5 w-5 text-lg leading-none text-slate-700 flex items-center justify-center",
+                          )}
                           <Sparkles className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="p-2">
+                      <DropdownMenuContent align="start" className="p-2">
                         <div className="grid grid-cols-4 gap-1">
                           {emojiPalette.map((emoji) => (
                             <DropdownMenuItem
                               key={emoji}
                               className="flex h-10 w-10 items-center justify-center text-lg"
                               onSelect={() =>
-                                gridForm.setValue(
-                                  `categories.${index}.icon`,
-                                  emoji,
-                                  { shouldDirty: true },
-                                )
+                                editForm.setValue("icon", emoji, {
+                                  shouldDirty: true,
+                                })
                               }
                             >
                               {emoji}
@@ -507,41 +616,31 @@ export const Categories: React.FC = () => {
                         </div>
                       </DropdownMenuContent>
                     </DropdownMenu>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        updateCategory(cat.id, {
-                          is_archived: !cat.is_archived,
-                        });
-                        gridForm.setValue(
-                          `categories.${index}.is_archived`,
-                          !cat.is_archived,
-                          { shouldDirty: false },
-                        );
-                      }}
-                    >
-                      {cat.is_archived ? "Restore" : "Archive"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={() => saveInline(cat.id)}
-                      disabled={!rowDirty}
-                    >
-                      <Save className="mr-2 h-4 w-4" />
-                      Save
-                    </Button>
                   </div>
+                  <LucideIconPicker
+                    inputId="edit-lucide-icon"
+                    maxLength={16}
+                    value={editForm.watch("icon")}
+                    onChange={(icon) =>
+                      editForm.setValue("icon", icon, { shouldDirty: true })
+                    }
+                  />
                 </div>
-              );
-            })}
-            {visibleCategories.length === 0 ? (
-              <p className="py-6 text-sm text-slate-500">
-                No categories to show.
-              </p>
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setEditingId(null)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit">Save changes</Button>
+                </DialogFooter>
+              </form>
             ) : null}
-          </CardContent>
-        </Card>
+          </DialogContent>
+        </Dialog>
 
         <Card>
           <CardHeader>
@@ -663,9 +762,11 @@ export const Categories: React.FC = () => {
                       className="gap-2"
                       aria-label="Pick emoji"
                     >
-                      <span className="text-lg leading-none">
-                        {createForm.watch("icon") || "🎯"}
-                      </span>
+                      {renderCategoryIcon(
+                        createForm.watch("icon") || "🎯",
+                        createForm.watch("name") || "Category",
+                        "h-5 w-5 text-lg leading-none text-slate-700 flex items-center justify-center",
+                      )}
                       <Sparkles className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
@@ -687,6 +788,22 @@ export const Categories: React.FC = () => {
                     </div>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <div className="space-y-1.5">
+                  <label
+                    className="text-xs text-slate-500"
+                    htmlFor="category-lucide-icon"
+                  >
+                    Or browse Lucide icons
+                  </label>
+                  <LucideIconPicker
+                    inputId="category-lucide-icon"
+                    maxLength={16}
+                    value={createForm.watch("icon")}
+                    onChange={(icon) =>
+                      createForm.setValue("icon", icon, { shouldDirty: true })
+                    }
+                  />
+                </div>
               </div>
               <div className="flex justify-end gap-2">
                 <Button

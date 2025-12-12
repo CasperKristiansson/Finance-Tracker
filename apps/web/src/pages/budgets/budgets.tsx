@@ -19,6 +19,7 @@ import {
   useCategoriesApi,
   useReportsApi,
 } from "@/hooks/use-api";
+import { formatCategoryLabel } from "@/lib/category-icons";
 import {
   BudgetPeriod,
   CategoryType,
@@ -41,7 +42,7 @@ const formatCurrency = (value: string | number) =>
   });
 
 const categoryLabel = (cat: CategoryRead) =>
-  `${cat.icon ? `${cat.icon} ` : ""}${cat.name}`;
+  formatCategoryLabel(cat.name, cat.icon);
 
 const budgetFormSchema = budgetSchema
   .pick({ category_id: true, period: true, amount: true, note: true })

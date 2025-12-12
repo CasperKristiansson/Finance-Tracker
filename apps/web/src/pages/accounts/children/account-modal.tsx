@@ -1,10 +1,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
-import * as LucideIcons from "lucide-react";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { LucideIconPicker } from "@/components/lucide-icon-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,8 +22,6 @@ type Props = {
   onClose: () => void;
   account?: AccountWithBalance;
 };
-
-type IconComponent = React.FC<React.SVGProps<SVGSVGElement>>;
 
 const iconPresets = [
   { label: "Swedbank", value: "banks/swedbank.png" },
@@ -69,10 +67,6 @@ const accountFormSchema = z
 type AccountFormValues = z.infer<typeof accountFormSchema>;
 
 const isDebt = (type: AccountType) => type === AccountType.DEBT;
-type LucideEntry = { name: string; Icon: IconComponent };
-const lucideEntries: LucideEntry[] = Object.entries(LucideIcons)
-  .filter(([name]) => /^[A-Z]/.test(name) && name !== "Icon")
-  .map(([name, component]) => ({ name, Icon: component as IconComponent }));
 
 export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
   const {
@@ -84,9 +78,6 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
     createLoading,
     updateLoading,
   } = useAccountsApi();
-  const [lucideOpen, setLucideOpen] = useState(false);
-  const [lucideQuery, setLucideQuery] = useState("");
-  const [lucidePage, setLucidePage] = useState(0);
 
   const getDefaults = useCallback((): AccountFormValues => {
     return {
@@ -120,38 +111,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
 
   useEffect(() => {
     reset(getDefaults());
-    const currentIcon = account?.icon;
-    if (currentIcon?.startsWith("lucide:")) {
-      setLucideQuery(currentIcon.replace("lucide:", ""));
-    } else {
-      setLucideQuery("");
-    }
-    setLucideOpen(false);
-    setLucidePage(0);
   }, [account, getDefaults, open, reset]);
-
-  useEffect(() => {
-    setLucidePage(0);
-  }, [lucideQuery]);
-
-  const filteredLucideIcons = useMemo(() => {
-    const q = lucideQuery.trim().toLowerCase();
-    if (!q) return lucideEntries;
-    const filtered = lucideEntries.filter((entry) =>
-      entry.name.toLowerCase().includes(q),
-    );
-    return filtered.length ? filtered : lucideEntries;
-  }, [lucideQuery]);
-
-  const pageSize = 72; // 6 cols * 12 rows max
-  const maxPage = Math.max(
-    0,
-    Math.ceil(filteredLucideIcons.length / pageSize) - 1,
-  );
-  const pagedIcons = filteredLucideIcons.slice(
-    lucidePage * pageSize,
-    lucidePage * pageSize + pageSize,
-  );
 
   const accountType = watch("account_type");
   const isActive = watch("is_active");
@@ -289,93 +249,13 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
               <label className="text-xs text-slate-500" htmlFor="lucide-icon">
                 Or browse Lucide icons
               </label>
-              <div className="relative">
-                <Input
-                  id="lucide-icon"
-                  placeholder="Search icons (e.g., Wallet, PiggyBank)"
-                  value={lucideQuery}
-                  onFocus={() => setLucideOpen(true)}
-                  onChange={(e) => setLucideQuery(e.target.value)}
-                  className="pr-24"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="absolute top-1/2 right-1 -translate-y-1/2"
-                  onClick={() => setLucideOpen((prev) => !prev)}
-                >
-                  {lucideOpen ? "Close" : "Browse"}
-                </Button>
-                {lucideOpen ? (
-                  <div className="absolute z-20 mt-2 w-[420px] max-w-[90vw] rounded-lg border border-slate-200 bg-white p-2 shadow-xl">
-                    <div className="max-h-64 overflow-y-auto">
-                      <div className="grid grid-cols-6 gap-2">
-                        {pagedIcons.map(({ name, Icon }) => {
-                          return (
-                            <button
-                              key={name}
-                              type="button"
-                              className="flex h-10 w-10 items-center justify-center rounded-md border border-slate-100 text-slate-700 hover:border-slate-300 hover:bg-slate-50"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => {
-                                setValue("icon", `lucide:${name}`);
-                                setLucideOpen(false);
-                                setLucideQuery(name);
-                              }}
-                              aria-label={name}
-                              title={name}
-                            >
-                              <Icon className="h-5 w-5" />
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {filteredLucideIcons.length === 0 ? (
-                        <p className="p-2 text-center text-xs text-slate-500">
-                          No icons match your search.
-                        </p>
-                      ) : null}
-                    </div>
-                    <div className="mt-2 flex items-center justify-between text-xs text-slate-600">
-                      <span>
-                        {filteredLucideIcons.length === 0
-                          ? "0 of 0"
-                          : `${lucidePage * pageSize + 1}-${Math.min(
-                              filteredLucideIcons.length,
-                              (lucidePage + 1) * pageSize,
-                            )} of ${filteredLucideIcons.length}`}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2"
-                          onClick={() =>
-                            setLucidePage((p) => Math.max(0, p - 1))
-                          }
-                          disabled={lucidePage === 0}
-                        >
-                          Prev
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 px-2"
-                          onClick={() =>
-                            setLucidePage((p) => Math.min(maxPage, p + 1))
-                          }
-                          disabled={lucidePage >= maxPage}
-                        >
-                          Next
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
+              <LucideIconPicker
+                inputId="lucide-icon"
+                value={watch("icon")}
+                onChange={(icon) =>
+                  setValue("icon", icon, { shouldDirty: true })
+                }
+              />
             </div>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
