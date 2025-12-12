@@ -41,14 +41,25 @@ import {
 } from "@/hooks/use-api";
 import { formatCategoryLabel } from "@/lib/category-icons";
 import { cn } from "@/lib/utils";
-import { TransactionStatus, type CategoryRead } from "@/types/api";
+import {
+  TransactionStatus,
+  TransactionType,
+  type CategoryRead,
+} from "@/types/api";
 import TransactionModal from "./transaction-modal";
 
-type SortKey = "date" | "description" | "amount" | "status" | "category";
+type SortKey =
+  | "date"
+  | "description"
+  | "amount"
+  | "status"
+  | "category"
+  | "type";
 
 type ColumnKey =
   | "select"
   | "date"
+  | "type"
   | "description"
   | "accounts"
   | "category"
@@ -65,6 +76,7 @@ type ColumnConfig = {
 const columns: ColumnConfig[] = [
   { key: "select", label: "" },
   { key: "date", label: "Date" },
+  { key: "type", label: "Type" },
   { key: "description", label: "Payee / Description" },
   { key: "accounts", label: "Account" },
   { key: "category", label: "Category" },
@@ -73,11 +85,23 @@ const columns: ColumnConfig[] = [
   { key: "notes", label: "Notes" },
 ];
 
+const columnWidthClass: Partial<Record<ColumnKey, string>> = {
+  select: "w-10",
+  date: "w-40",
+  type: "w-28",
+  accounts: "w-72",
+  category: "w-48",
+  amount: "w-36",
+  status: "w-32",
+  notes: "w-56",
+};
+
 const formatCurrency = (value: number) =>
-  value.toLocaleString("en-US", {
+  value.toLocaleString("sv-SE", {
     style: "currency",
-    currency: "USD",
+    currency: "SEK",
     minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   });
 
 const formatDate = (iso?: string) =>
@@ -104,6 +128,33 @@ const badge = (status: TransactionStatus) => (
     )}
   >
     {status.charAt(0).toUpperCase() + status.slice(1)}
+  </span>
+);
+
+const typeTone: Record<TransactionType, string> = {
+  [TransactionType.INCOME]: "bg-emerald-100 text-emerald-800",
+  [TransactionType.EXPENSE]: "bg-rose-100 text-rose-800",
+  [TransactionType.TRANSFER]: "bg-slate-100 text-slate-700",
+  [TransactionType.ADJUSTMENT]: "bg-amber-100 text-amber-800",
+  [TransactionType.INVESTMENT_EVENT]: "bg-indigo-100 text-indigo-800",
+};
+
+const typeLabel: Record<TransactionType, string> = {
+  [TransactionType.INCOME]: "Income",
+  [TransactionType.EXPENSE]: "Expense",
+  [TransactionType.TRANSFER]: "Transfer",
+  [TransactionType.ADJUSTMENT]: "Adjustment",
+  [TransactionType.INVESTMENT_EVENT]: "Investment",
+};
+
+const typeBadge = (type: TransactionType) => (
+  <span
+    className={cn(
+      "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+      typeTone[type],
+    )}
+  >
+    {typeLabel[type] ?? type}
   </span>
 );
 
@@ -170,12 +221,13 @@ export const Transactions: React.FC = () => {
   >({
     select: true,
     date: true,
+    type: true,
     description: true,
     accounts: true,
     category: true,
     amount: true,
     status: true,
-    notes: true,
+    notes: false,
   });
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [accountFilter, setAccountFilter] = useState<string>("");
@@ -282,13 +334,7 @@ export const Transactions: React.FC = () => {
   ]);
 
   const accountLookup = useMemo(
-    () =>
-      Object.fromEntries(
-        accounts.map((acc) => [
-          acc.id,
-          `${acc.account_type} • ${acc.id.slice(0, 6)}`,
-        ]),
-      ),
+    () => Object.fromEntries(accounts.map((acc) => [acc.id, acc.name])),
     [accounts],
   );
   const categoryLookup = useMemo(
@@ -330,6 +376,11 @@ export const Transactions: React.FC = () => {
         }
         if (sortKey === "status") {
           return a.status.localeCompare(b.status) * direction;
+        }
+        if (sortKey === "type") {
+          return (
+            a.transaction_type.localeCompare(b.transaction_type) * direction
+          );
         }
         if (sortKey === "category") {
           return (
@@ -409,8 +460,24 @@ export const Transactions: React.FC = () => {
     (col) => columnVisibility[col.key] !== false,
   );
 
+  const headerCellClass = (col: ColumnConfig) =>
+    cn(
+      "py-2 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase",
+      col.key === "select" ? "px-2" : "px-3",
+      columnWidthClass[col.key],
+      col.align === "right" && "text-right",
+    );
+
+  const bodyCellClass = (key: ColumnKey, extra?: string) =>
+    cn(
+      "py-2 align-top",
+      key === "select" ? "px-2" : "px-3",
+      columnWidthClass[key],
+      extra,
+    );
+
   return (
-    <MotionPage className="space-y-4">
+    <MotionPage className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs tracking-wide text-slate-500 uppercase">
@@ -578,20 +645,21 @@ export const Transactions: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
-        <CardHeader className="flex flex-col gap-3">
+      <Card className="flex min-h-0 flex-1 flex-col border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
+        <CardHeader className="flex shrink-0 flex-col gap-3">
           <div className="flex flex-wrap items-center gap-3">
             <Layers className="h-4 w-4 text-slate-500" />
-            <div className="flex items-center gap-2 text-xs text-slate-600">
-              {Object.entries(runningBalances).map(([accountId, balance]) => (
-                <span
-                  key={accountId}
-                  className="rounded-full bg-slate-100 px-2 py-1 font-medium text-slate-800"
-                >
-                  {accountLookup[accountId] || accountId.slice(0, 6)}:{" "}
-                  {formatCurrency(balance)}
-                </span>
-              ))}
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              {Object.entries(runningBalances)
+                .filter(([accountId]) => Boolean(accountLookup[accountId]))
+                .map(([accountId, balance]) => (
+                  <span
+                    key={accountId}
+                    className="rounded-full bg-slate-100 px-2 py-1 font-medium text-slate-800"
+                  >
+                    {accountLookup[accountId]}: {formatCurrency(balance)}
+                  </span>
+                ))}
               {Object.keys(runningBalances).length === 0
                 ? "No balances yet"
                 : null}
@@ -650,11 +718,13 @@ export const Transactions: React.FC = () => {
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
                 <option value="">All status</option>
-                {Object.values(TransactionStatus).map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
+                {Object.values(TransactionStatus)
+                  .filter((status) => status !== TransactionStatus.REVIEWED)
+                  .map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
               </select>
               <input
                 type="number"
@@ -701,14 +771,6 @@ export const Transactions: React.FC = () => {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => applyBulkStatus(TransactionStatus.REVIEWED)}
-                disabled={selectedIds.size === 0}
-              >
-                Mark reviewed
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
                 onClick={() => applyBulkStatus(TransactionStatus.FLAGGED)}
                 disabled={selectedIds.size === 0}
               >
@@ -725,9 +787,12 @@ export const Transactions: React.FC = () => {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="p-0">
-          <div ref={parentRef} className="h-[640px] overflow-auto">
-            <table className="w-full min-w-max table-fixed text-sm">
+        <CardContent className="flex min-h-0 flex-1 flex-col p-0">
+          <div
+            ref={parentRef}
+            className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+          >
+            <table className="w-full table-fixed text-sm">
               <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_rgba(0,0,0,0.05)]">
                 <tr
                   className="border-b"
@@ -738,13 +803,7 @@ export const Transactions: React.FC = () => {
                   }}
                 >
                   {visibleColumns.map((col) => (
-                    <th
-                      key={col.key}
-                      className={cn(
-                        "px-3 py-2 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase",
-                        col.align === "right" && "text-right",
-                      )}
-                    >
+                    <th key={col.key} className={headerCellClass(col)}>
                       {col.key === "select" ? (
                         <input
                           type="checkbox"
@@ -785,16 +844,63 @@ export const Transactions: React.FC = () => {
                 {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                   const row = filtered[virtualRow.index];
                   if (!row) return null;
-                  const amount = row.legs.reduce(
-                    (sum, leg) => sum + Number(leg.amount),
-                    0,
+                  const knownLegs = row.legs.filter((leg) =>
+                    Boolean(accountLookup[leg.account_id]),
                   );
-                  const accountsLabel = row.legs
-                    .map(
-                      (leg) =>
-                        `${accountLookup[leg.account_id] || leg.account_id.slice(0, 6)} (${Number(leg.amount) >= 0 ? "+" : ""}${Number(leg.amount).toFixed(2)})`,
-                    )
-                    .join(", ");
+                  const displayAmount = (() => {
+                    if (accountFilter) {
+                      return knownLegs
+                        .filter((leg) => leg.account_id === accountFilter)
+                        .reduce((sum, leg) => sum + Number(leg.amount), 0);
+                    }
+
+                    const sumKnown = knownLegs.reduce(
+                      (sum, leg) => sum + Number(leg.amount),
+                      0,
+                    );
+                    if (sumKnown !== 0) return sumKnown;
+
+                    const largest = knownLegs.reduce<null | { amount: number }>(
+                      (best, leg) => {
+                        const numeric = Number(leg.amount);
+                        if (!best) return { amount: numeric };
+                        return Math.abs(numeric) > Math.abs(best.amount)
+                          ? { amount: numeric }
+                          : best;
+                      },
+                      null,
+                    );
+                    return largest ? Math.abs(largest.amount) : 0;
+                  })();
+
+                  const accountsLabel = (() => {
+                    if (row.transaction_type === TransactionType.TRANSFER) {
+                      const fromLeg =
+                        knownLegs.find((leg) => Number(leg.amount) < 0) ??
+                        knownLegs[0];
+                      const toLeg =
+                        knownLegs.find((leg) => Number(leg.amount) > 0) ??
+                        knownLegs[1];
+
+                      const fromName = fromLeg
+                        ? accountLookup[fromLeg.account_id]
+                        : undefined;
+                      const toName = toLeg
+                        ? accountLookup[toLeg.account_id]
+                        : undefined;
+
+                      if (fromName && toName) return `${fromName} → ${toName}`;
+                      if (fromName) return `${fromName} → (unknown)`;
+                      if (toName) return `(unknown) → ${toName}`;
+                      return "Internal transfer";
+                    }
+
+                    const primary = knownLegs[0];
+                    if (!primary) return "Internal transfer";
+                    return (
+                      accountLookup[primary.account_id] ?? "Internal transfer"
+                    );
+                  })();
 
                   return (
                     <tr
@@ -812,7 +918,10 @@ export const Transactions: React.FC = () => {
                       {visibleColumns.map((col) => {
                         if (col.key === "select") {
                           return (
-                            <td key={`${row.id}-select`} className="px-3 py-2">
+                            <td
+                              key={`${row.id}-select`}
+                              className={bodyCellClass("select")}
+                            >
                               <input
                                 type="checkbox"
                                 checked={selectedIds.has(row.id)}
@@ -823,25 +932,43 @@ export const Transactions: React.FC = () => {
                         }
                         if (col.key === "date") {
                           return (
-                            <td key={`${row.id}-date`} className="px-3 py-2">
+                            <td
+                              key={`${row.id}-date`}
+                              className={bodyCellClass("date")}
+                            >
                               <div className="text-sm font-medium text-slate-900">
                                 {formatDate(row.occurred_at)}
                               </div>
-                              <div className="text-xs text-slate-500">
-                                {row.external_id || ""}
-                              </div>
+                            </td>
+                          );
+                        }
+                        if (col.key === "type") {
+                          return (
+                            <td
+                              key={`${row.id}-type`}
+                              className={bodyCellClass("type")}
+                            >
+                              {typeBadge(row.transaction_type)}
                             </td>
                           );
                         }
                         if (col.key === "description") {
                           return (
-                            <td key={`${row.id}-desc`} className="px-3 py-2">
-                              <div className="font-semibold text-slate-900">
+                            <td
+                              key={`${row.id}-desc`}
+                              className={bodyCellClass(
+                                "description",
+                                "min-w-0",
+                              )}
+                            >
+                              <div className="truncate font-semibold text-slate-900">
                                 {row.description || "(No description)"}
                               </div>
-                              <div className="text-xs text-slate-500">
-                                {row.notes || ""}
-                              </div>
+                              {row.notes ? (
+                                <div className="truncate text-xs text-slate-500">
+                                  {row.notes}
+                                </div>
+                              ) : null}
                             </td>
                           );
                         }
@@ -849,9 +976,12 @@ export const Transactions: React.FC = () => {
                           return (
                             <td
                               key={`${row.id}-accounts`}
-                              className="px-3 py-2 text-slate-700"
+                              className={bodyCellClass(
+                                "accounts",
+                                "min-w-0 text-slate-700",
+                              )}
                             >
-                              {accountsLabel}
+                              <div className="truncate">{accountsLabel}</div>
                             </td>
                           );
                         }
@@ -859,12 +989,20 @@ export const Transactions: React.FC = () => {
                           return (
                             <td
                               key={`${row.id}-category`}
-                              className="px-3 py-2 text-slate-700"
+                              className={bodyCellClass(
+                                "category",
+                                "min-w-0 text-slate-700",
+                              )}
                             >
-                              {row.category_id
-                                ? categoryLookup.get(row.category_id) ||
-                                  "Assigned"
-                                : "Unassigned"}
+                              <div className="truncate">
+                                {row.transaction_type ===
+                                TransactionType.TRANSFER
+                                  ? "—"
+                                  : row.category_id
+                                    ? categoryLookup.get(row.category_id) ||
+                                      "Assigned"
+                                    : "Unassigned"}
+                              </div>
                             </td>
                           );
                         }
@@ -872,15 +1010,21 @@ export const Transactions: React.FC = () => {
                           return (
                             <td
                               key={`${row.id}-amount`}
-                              className="px-3 py-2 text-right font-semibold text-slate-900"
+                              className={bodyCellClass(
+                                "amount",
+                                "text-right font-semibold text-slate-900",
+                              )}
                             >
-                              {formatCurrency(amount)}
+                              {formatCurrency(displayAmount)}
                             </td>
                           );
                         }
                         if (col.key === "status") {
                           return (
-                            <td key={`${row.id}-status`} className="px-3 py-2">
+                            <td
+                              key={`${row.id}-status`}
+                              className={bodyCellClass("status")}
+                            >
                               {badge(row.status)}
                             </td>
                           );
@@ -888,9 +1032,12 @@ export const Transactions: React.FC = () => {
                         return (
                           <td
                             key={`${row.id}-notes`}
-                            className="px-3 py-2 text-slate-600"
+                            className={bodyCellClass(
+                              "notes",
+                              "min-w-0 text-slate-600",
+                            )}
                           >
-                            {row.notes || ""}
+                            <div className="truncate">{row.notes || ""}</div>
                           </td>
                         );
                       })}
