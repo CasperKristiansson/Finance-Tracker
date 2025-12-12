@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlmodel import Session, select
 
 from ..models import Category
+from ..shared import CategoryType
 
 
 class CategoryRepository:
@@ -20,8 +21,16 @@ class CategoryRepository:
     def get(self, category_id: UUID) -> Optional[Category]:
         return self.session.get(Category, category_id)
 
-    def list(self, include_archived: bool = False) -> List[Category]:
+    def list(
+        self,
+        include_archived: bool = False,
+        include_special: bool = False,
+    ) -> List[Category]:
         statement = select(Category)
+        if not include_special:
+            statement = statement.where(
+                Category.category_type.in_([CategoryType.INCOME, CategoryType.EXPENSE])
+            )
         if not include_archived:
             statement = statement.where(Category.is_archived.is_(False))
         statement = statement.order_by(Category.name)

@@ -61,9 +61,21 @@ const emojiPalette = [
   "🍼",
 ];
 
+const selectableCategoryTypes = [
+  CategoryType.INCOME,
+  CategoryType.EXPENSE,
+] as const;
+
+const selectableCategoryTypeSet = new Set<CategoryType>(
+  selectableCategoryTypes,
+);
+
+const isSelectableCategoryType = (value: CategoryType) =>
+  selectableCategoryTypeSet.has(value);
+
 const categoryTypeOptions = [
   { label: "All types", value: "all" },
-  ...Object.values(CategoryType).map((value) => ({ label: value, value })),
+  ...selectableCategoryTypes.map((value) => ({ label: value, value })),
 ] as const;
 
 const categoryFormSchema = categorySchema
@@ -403,6 +415,12 @@ export const Categories: React.FC = () => {
               );
               const iconValue =
                 watchedCategories?.[index]?.icon ?? cat.icon ?? "🎯";
+              const currentType = (watchedCategories?.[index]?.category_type ??
+                cat.category_type) as CategoryType;
+              const selectableType = isSelectableCategoryType(currentType);
+              const rowTypeOptions: readonly CategoryType[] = selectableType
+                ? selectableCategoryTypes
+                : [currentType];
 
               return (
                 <div
@@ -444,11 +462,12 @@ export const Categories: React.FC = () => {
                     />
                     <select
                       className="w-32 rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
+                      disabled={!selectableType}
                       {...gridForm.register(
                         `categories.${index}.category_type` as const,
                       )}
                     >
-                      {Object.values(CategoryType).map((value) => (
+                      {rowTypeOptions.map((value) => (
                         <option key={value} value={value}>
                           {value}
                         </option>
@@ -628,7 +647,7 @@ export const Categories: React.FC = () => {
                   className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                   {...createForm.register("category_type")}
                 >
-                  {Object.values(CategoryType).map((value) => (
+                  {selectableCategoryTypes.map((value) => (
                     <option key={value} value={value}>
                       {value}
                     </option>

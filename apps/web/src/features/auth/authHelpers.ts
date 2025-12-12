@@ -70,6 +70,14 @@ const normalizeRedirect = (value: string | undefined): string => {
   return `${protocol}${trimmed}`;
 };
 
+const splitRedirects = (value: string | undefined): string[] => {
+  if (!value) return [];
+  return value
+    .split(/[,\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+};
+
 const ensureAmplifyConfigured = () => {
   if (amplifyConfigured || !isBrowser()) return;
 
@@ -80,12 +88,28 @@ const ensureAmplifyConfigured = () => {
     import.meta.env[authEnvKeys.cognitoDomain],
     region,
   );
-  const redirectSignIn = [
-    normalizeRedirect(import.meta.env[authEnvKeys.redirectSignIn]),
+  const currentOrigin = window.location.origin;
+  const defaultRedirects = [
+    `${currentOrigin}/login`,
+    currentOrigin,
+    `${currentOrigin}/`,
   ];
-  const redirectSignOut = [
-    normalizeRedirect(import.meta.env[authEnvKeys.redirectSignOut]),
-  ];
+  const redirectSignIn = Array.from(
+    new Set(
+      [
+        ...splitRedirects(import.meta.env[authEnvKeys.redirectSignIn]),
+        ...defaultRedirects,
+      ].map(normalizeRedirect),
+    ),
+  );
+  const redirectSignOut = Array.from(
+    new Set(
+      [
+        ...splitRedirects(import.meta.env[authEnvKeys.redirectSignOut]),
+        ...defaultRedirects,
+      ].map(normalizeRedirect),
+    ),
+  );
 
   if (!userPoolId || !userPoolClientId || !cognitoDomain) {
     throw new Error(

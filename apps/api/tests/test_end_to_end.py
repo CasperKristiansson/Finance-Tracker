@@ -85,7 +85,7 @@ def test_end_to_end_transaction_reporting_flow() -> None:
 
     # Create a category for reference
     category_event = {
-        "body": json.dumps({"name": "Transfers", "category_type": "adjustment"}),
+        "body": json.dumps({"name": "Transfers", "category_type": "expense"}),
         "isBase64Encoded": False,
     }
     create_category(category_event, None)

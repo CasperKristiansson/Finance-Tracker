@@ -19,8 +19,15 @@ class CategoryService:
         self.session = session
         self.repository = CategoryRepository(session)
 
-    def list_categories(self, include_archived: bool = False) -> List[Category]:
-        return self.repository.list(include_archived=include_archived)
+    def list_categories(
+        self,
+        include_archived: bool = False,
+        include_special: bool = False,
+    ) -> List[Category]:
+        return self.repository.list(
+            include_archived=include_archived,
+            include_special=include_special,
+        )
 
     def get_category(self, category_id: UUID) -> Category:
         category = self.repository.get(category_id)

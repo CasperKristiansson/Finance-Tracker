@@ -61,6 +61,7 @@ class ListCategoriesQuery(BaseModel):
     """Query parameters for listing categories."""
 
     include_archived: bool = Field(default=False, alias="include_archived")
+    include_special: bool = Field(default=False, alias="include_special")
 
 
 class CategoryPathParams(BaseModel):

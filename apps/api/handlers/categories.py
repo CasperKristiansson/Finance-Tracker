@@ -48,7 +48,10 @@ def list_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
     with session_scope(user_id=user_id) as session:
         service = CategoryService(session)
-        categories = service.list_categories(include_archived=query.include_archived)
+        categories = service.list_categories(
+            include_archived=query.include_archived,
+            include_special=query.include_special,
+        )
         response = CategoryListResponse(
             categories=[_category_to_schema(category) for category in categories]
         )
