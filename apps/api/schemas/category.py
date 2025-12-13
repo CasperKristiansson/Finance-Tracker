@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
@@ -55,6 +57,11 @@ class CategoryRead(BaseModel):
     color_hex: Optional[str] = None
     icon: Optional[str] = None
     is_archived: bool
+    created_at: datetime
+    updated_at: datetime
+    transaction_count: int = 0
+    last_used_at: Optional[datetime] = None
+    lifetime_total: Decimal = Decimal("0")
 
 
 class ListCategoriesQuery(BaseModel):

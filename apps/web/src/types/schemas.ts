@@ -145,6 +145,11 @@ export const categorySchema = z.object({
   color_hex: nullableString,
   icon: nullableString,
   is_archived: z.boolean(),
+  created_at: dateString,
+  updated_at: dateString,
+  transaction_count: numeric,
+  last_used_at: nullableString,
+  lifetime_total: money,
 });
 
 export const categoryCreateRequestSchema = z.object({

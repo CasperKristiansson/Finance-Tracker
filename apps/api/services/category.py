@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Any, List, cast
+from typing import Any, Dict, List, cast
 from uuid import UUID
 
 from sqlalchemy import update
 from sqlmodel import Session, select
 
 from ..models import Budget, Category, Transaction
-from ..repositories.category import CategoryRepository
+from ..repositories.category import CategoryRepository, CategoryUsage
 
 
 class CategoryService:
@@ -55,6 +55,8 @@ class CategoryService:
     ) -> Category:
         source = self.get_category(source_category_id)
         target = self.get_category(target_category_id)
+        if source.category_type != target.category_type:
+            raise ValueError("Categories must have the same type to merge")
 
         if rename_target_to and rename_target_to != target.name:
             if self.repository.find_by_name(rename_target_to):
@@ -94,6 +96,9 @@ class CategoryService:
         self.session.commit()
         self.session.refresh(target)
         return target
+
+    def get_category_usage(self, category_ids: List[UUID]) -> Dict[UUID, CategoryUsage]:
+        return self.repository.usage_by_category_ids(category_ids)
 
 
 __all__ = ["CategoryService"]

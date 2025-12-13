@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/table";
 import { PageRoutes } from "@/data/routes";
 import { selectToken } from "@/features/auth/authSlice";
-import { useAccountsApi } from "@/hooks/use-api";
+import { useAccountsApi, useInvestmentsApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import { AccountType, type YearlyOverviewResponse } from "@/types/api";
 import { yearlyOverviewSchema } from "@/types/schemas";
@@ -108,6 +108,9 @@ const sparklinePath = (values: number[], width: number, height: number) => {
     .join(" ");
 };
 
+const normalizeKey = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
 export const Accounts: React.FC = () => {
   const {
     items,
@@ -121,6 +124,11 @@ export const Accounts: React.FC = () => {
     reconcileLoading,
     reconcileError,
   } = useAccountsApi();
+  const {
+    overview: investmentsOverview,
+    loading: investmentsLoading,
+    fetchOverview,
+  } = useInvestmentsApi();
   const token = useAppSelector(selectToken);
   const [asOfInput, setAsOfInput] = useState<string>(asOfDate ?? "");
   const [showInactive, setShowInactive] = useState(includeInactive);
@@ -137,6 +145,16 @@ export const Accounts: React.FC = () => {
     fetchAccounts({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    const hasInvestments = items.some(
+      (acc) => acc.account_type === AccountType.INVESTMENT,
+    );
+    if (!hasInvestments) return;
+    if (investmentsOverview) return;
+    fetchOverview();
+  }, [fetchOverview, investmentsOverview, items, token]);
 
   useEffect(() => {
     const loadYearlyOverview = async () => {
@@ -214,6 +232,53 @@ export const Accounts: React.FC = () => {
     });
     return map;
   }, [asOfDate, yearlyOverview]);
+
+  const investmentTrendById = useMemo(() => {
+    const map = new Map<string, number[]>();
+    const accounts = investmentsOverview?.accounts ?? [];
+    if (!accounts.length) return map;
+
+    const baseDate = asOfDate ? new Date(asOfDate) : new Date();
+    const asOfTime = baseDate.getTime();
+
+    accounts.forEach((account) => {
+      const points = (account.series ?? [])
+        .map((p) => ({
+          date: new Date(p.date),
+          value: Number(p.value),
+        }))
+        .filter(
+          (p) =>
+            Number.isFinite(p.date.getTime()) &&
+            p.date.getTime() <= asOfTime &&
+            Number.isFinite(p.value),
+        );
+
+      if (points.length < 2) return;
+
+      const byMonth = new Map<number, { t: number; value: number }>();
+      points.forEach((p) => {
+        const monthKey = p.date.getFullYear() * 12 + p.date.getMonth();
+        const t = p.date.getTime();
+        const existing = byMonth.get(monthKey);
+        if (!existing || t > existing.t) {
+          byMonth.set(monthKey, { t, value: p.value });
+        }
+      });
+
+      const monthValues = [...byMonth.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([, v]) => v.value);
+
+      const series = monthValues.slice(-6);
+      if (series.length >= 2) {
+        map.set(account.account_id, series);
+        map.set(`name:${normalizeKey(account.name)}`, series);
+      }
+    });
+
+    return map;
+  }, [asOfDate, investmentsOverview?.accounts]);
   const totalBalance = useMemo(() => {
     return items.reduce((sum, acc) => sum + Number(acc.balance || 0), 0);
   }, [items]);
@@ -403,7 +468,9 @@ export const Accounts: React.FC = () => {
                 Cash
               </p>
               <p className="mt-1 text-2xl font-semibold text-slate-900">
-                {formatCurrency(accountHealth.cash)}
+                <span className="text-sky-700">
+                  {formatCurrency(accountHealth.cash)}
+                </span>
               </p>
             </div>
             <div className="rounded-lg border border-slate-100 bg-white px-4 py-3 shadow-[0_10px_30px_-28px_rgba(88,28,135,0.45)]">
@@ -411,7 +478,9 @@ export const Accounts: React.FC = () => {
                 Investments
               </p>
               <p className="mt-1 text-2xl font-semibold text-slate-900">
-                {formatCurrency(accountHealth.investments)}
+                <span className="text-violet-700">
+                  {formatCurrency(accountHealth.investments)}
+                </span>
               </p>
             </div>
             <div className="rounded-lg border border-slate-100 bg-white px-4 py-3 shadow-[0_10px_30px_-28px_rgba(190,18,60,0.45)]">
@@ -419,7 +488,9 @@ export const Accounts: React.FC = () => {
                 Debt
               </p>
               <p className="mt-1 text-2xl font-semibold text-slate-900">
-                {formatCurrency(accountHealth.debt)}
+                <span className="text-rose-700">
+                  {formatCurrency(accountHealth.debt)}
+                </span>
               </p>
             </div>
             <div className="rounded-lg border border-slate-100 bg-white px-4 py-3 shadow-[0_10px_30px_-28px_rgba(30,64,175,0.45)]">
@@ -427,7 +498,15 @@ export const Accounts: React.FC = () => {
                 Net worth
               </p>
               <p className="mt-1 text-2xl font-semibold text-slate-900">
-                {formatCurrency(accountHealth.netWorth)}
+                <span
+                  className={
+                    accountHealth.netWorth >= 0
+                      ? "text-emerald-700"
+                      : "text-rose-700"
+                  }
+                >
+                  {formatCurrency(accountHealth.netWorth)}
+                </span>
               </p>
             </div>
           </CardContent>
@@ -581,7 +660,13 @@ export const Accounts: React.FC = () => {
                   <TableBody>
                     {sortedItems.map((account) => {
                       const isActive = account.is_active;
-                      const series = accountTrendById.get(account.id) ?? [];
+                      const series =
+                        accountTrendById.get(account.id) ??
+                        investmentTrendById.get(account.id) ??
+                        investmentTrendById.get(
+                          `name:${normalizeKey(account.name)}`,
+                        ) ??
+                        [];
                       const hasSeries = series.length >= 2;
                       const delta = hasSeries
                         ? series[series.length - 1] - series[0]
@@ -616,7 +701,9 @@ export const Accounts: React.FC = () => {
                             </Badge>
                           </TableCell>
                           <TableCell className="hidden px-4 text-right lg:table-cell">
-                            {yearlyOverviewLoading ? (
+                            {yearlyOverviewLoading ||
+                            (account.account_type === AccountType.INVESTMENT &&
+                              investmentsLoading) ? (
                               <div className="ml-auto h-8 w-28 animate-pulse rounded-md bg-slate-100" />
                             ) : hasSeries ? (
                               <div className="ml-auto flex w-28 flex-col items-end gap-1">
