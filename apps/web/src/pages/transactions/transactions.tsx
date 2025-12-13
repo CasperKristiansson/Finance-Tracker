@@ -13,6 +13,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { MotionPage } from "@/components/motion-presets";
 import { ReconcileAccountsDialog } from "@/components/reconcile-accounts-dialog";
 import { Button } from "@/components/ui/button";
@@ -184,6 +185,7 @@ const ColumnToggle: React.FC<{
 };
 
 export const Transactions: React.FC = () => {
+  const location = useLocation();
   const {
     items,
     loading,
@@ -241,7 +243,15 @@ export const Transactions: React.FC = () => {
   );
 
   useEffect(() => {
-    fetchTransactions({ limit: pagination.limit, offset: 0 });
+    const urlSearch = new URLSearchParams(location.search).get("search") ?? "";
+    if (urlSearch) {
+      setSearch(urlSearch);
+    }
+    fetchTransactions({
+      limit: pagination.limit,
+      offset: 0,
+      search: urlSearch || undefined,
+    });
     fetchAccounts({});
     fetchCategories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
