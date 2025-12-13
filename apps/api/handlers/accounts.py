@@ -20,7 +20,7 @@ from ..schemas import (
     ReconcileAccountResponse,
 )
 from ..services import AccountService
-from ..shared import session_scope
+from ..shared import AccountType, session_scope
 from .utils import (
     ensure_engine,
     extract_path_uuid,
@@ -53,6 +53,52 @@ def _account_to_schema(
     return AccountWithBalance.model_validate(payload)
 
 
+def _needs_reconciliation(
+    *,
+    account: Account,
+    balance: Decimal,
+    reconciliation: dict[str, Any],
+    now: datetime,
+) -> bool:
+    """Return whether an account should be flagged for reconciliation.
+
+    Rules of thumb:
+    - Ignore special/internal accounts and inactive accounts.
+    - Always flag meaningful balance gaps (> 1).
+    - For non-investment accounts, also flag stale snapshots (older than 35 days),
+      but only if the account has a meaningful balance (otherwise avoid nagging for
+      zeroed accounts).
+    - For investment accounts, balances come from snapshots; do not apply the staleness rule here.
+      Missing investment snapshots should still be flagged.
+    """
+
+    if (account.name or "") in {"Offset", "Unassigned"}:
+        return False
+
+    if not account.is_active:
+        return False
+
+    delta = cast(Decimal, reconciliation.get("delta_since_snapshot") or Decimal(0))
+    if abs(delta) > 1:
+        return True
+
+    last_captured = reconciliation.get("last_captured_at")
+    if last_captured is None:
+        return abs(balance) > 1
+
+    if not isinstance(last_captured, datetime):
+        return True
+
+    if account.account_type == AccountType.INVESTMENT:
+        return False
+
+    age = now - last_captured
+    if age > timedelta(days=35):
+        return abs(balance) > 1
+
+    return False
+
+
 def list_accounts(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     """HTTP GET /accounts."""
 
@@ -73,23 +119,15 @@ def list_accounts(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         )
 
         data = []
+        now = datetime.now(timezone.utc)
         for account, balance in accounts_with_balances:
             reconciliation = service.reconciliation_state(account.id)
-            # Flag recon needed if delta significant (>1) or snapshot older than 35 days.
-            needs = False
-            delta = cast(Decimal, reconciliation.get("delta_since_snapshot") or Decimal(0))
-            last_captured = reconciliation.get("last_captured_at")
-            if delta is not None and abs(delta) > 1:
-                needs = True
-            if last_captured is None:
-                needs = True
-            else:
-                if isinstance(last_captured, datetime):
-                    age = datetime.now(timezone.utc) - last_captured
-                    if age > timedelta(days=35):
-                        needs = True
-                else:
-                    needs = True
+            needs = _needs_reconciliation(
+                account=account,
+                balance=balance,
+                reconciliation=reconciliation,
+                now=now,
+            )
             reconciliation["needs_reconciliation"] = needs
             data.append(_account_to_schema(account, balance, reconciliation))
     response = ListAccountsResponse(accounts=data)

@@ -12,6 +12,7 @@ import type { LucideIcon } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { useAppSelector } from "@/app/hooks";
 import {
   MotionPage,
   StaggerWrap,
@@ -34,8 +35,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageRoutes } from "@/data/routes";
+import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi } from "@/hooks/use-api";
-import { AccountType } from "@/types/api";
+import { apiFetch } from "@/lib/apiClient";
+import { AccountType, type YearlyOverviewResponse } from "@/types/api";
+import { yearlyOverviewSchema } from "@/types/schemas";
 import { AccountModal } from "./children/account-modal";
 
 type SortKey = "name" | "type" | "status" | "balance";
@@ -87,6 +91,23 @@ const renderAccountIcon = (icon: string | null | undefined, name: string) => {
   );
 };
 
+const sparklinePath = (values: number[], width: number, height: number) => {
+  if (values.length < 2) return "";
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const pad = 2;
+  const xStep = (width - pad * 2) / (values.length - 1);
+
+  return values
+    .map((value, idx) => {
+      const x = pad + idx * xStep;
+      const y = pad + (1 - (value - min) / range) * (height - pad * 2);
+      return `${idx === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+};
+
 export const Accounts: React.FC = () => {
   const {
     items,
@@ -100,6 +121,7 @@ export const Accounts: React.FC = () => {
     reconcileLoading,
     reconcileError,
   } = useAccountsApi();
+  const token = useAppSelector(selectToken);
   const [asOfInput, setAsOfInput] = useState<string>(asOfDate ?? "");
   const [showInactive, setShowInactive] = useState(includeInactive);
   const [modalOpen, setModalOpen] = useState(false);
@@ -107,12 +129,91 @@ export const Accounts: React.FC = () => {
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
   const [reconcileOpen, setReconcileOpen] = useState(false);
+  const [yearlyOverview, setYearlyOverview] =
+    useState<YearlyOverviewResponse | null>(null);
+  const [yearlyOverviewLoading, setYearlyOverviewLoading] = useState(false);
 
   useEffect(() => {
     fetchAccounts({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const loadYearlyOverview = async () => {
+      if (!token) return;
+      const baseDate = asOfDate ? new Date(asOfDate) : new Date();
+      const year = baseDate.getFullYear();
+      setYearlyOverviewLoading(true);
+      try {
+        const { data } = await apiFetch<YearlyOverviewResponse>({
+          path: "/reports/yearly-overview",
+          schema: yearlyOverviewSchema,
+          query: { year },
+          token,
+        });
+        setYearlyOverview(data);
+      } catch (err) {
+        console.error("Failed to fetch yearly overview", err);
+        setYearlyOverview(null);
+      } finally {
+        setYearlyOverviewLoading(false);
+      }
+    };
+    void loadYearlyOverview();
+  }, [asOfDate, token]);
+
+  const accountHealth = useMemo(() => {
+    const balances = items.map((acc) => ({
+      type: acc.account_type,
+      balance: Number(acc.balance) || 0,
+      active: Boolean(acc.is_active),
+    }));
+
+    const visible = balances;
+    const cash = visible
+      .filter(
+        (acc) =>
+          acc.type !== AccountType.DEBT && acc.type !== AccountType.INVESTMENT,
+      )
+      .reduce((sum, acc) => sum + acc.balance, 0);
+    const investments = visible
+      .filter((acc) => acc.type === AccountType.INVESTMENT)
+      .reduce((sum, acc) => sum + acc.balance, 0);
+    const debt = visible
+      .filter((acc) => acc.type === AccountType.DEBT)
+      .reduce((sum, acc) => sum + Math.abs(acc.balance), 0);
+    const netWorth = cash + investments - debt;
+
+    return { cash, investments, debt, netWorth };
+  }, [items]);
+
+  const accountTrendById = useMemo(() => {
+    if (!yearlyOverview) return new Map<string, number[]>();
+    const baseDate = asOfDate ? new Date(asOfDate) : new Date();
+    const isPastYear = baseDate.getFullYear() < new Date().getFullYear();
+    const endMonthIndex = isPastYear ? 11 : baseDate.getMonth();
+    const startMonthIndex = Math.max(0, endMonthIndex - 5);
+    const monthRange = Array.from(
+      { length: endMonthIndex - startMonthIndex + 1 },
+      (_, i) => startMonthIndex + i,
+    );
+
+    const map = new Map<string, number[]>();
+    yearlyOverview.account_flows.forEach((flow) => {
+      const startBalance = Number(flow.start_balance);
+      const changes = flow.monthly_change.map((v) => Number(v) || 0);
+      const balancesByMonth = changes.reduce<number[]>((acc, change, idx) => {
+        const prev = idx === 0 ? startBalance : (acc[idx - 1] ?? startBalance);
+        acc[idx] = prev + change;
+        return acc;
+      }, []);
+      const series = monthRange.map(
+        (monthIdx) => balancesByMonth[monthIdx] ?? 0,
+      );
+      map.set(flow.account_id, series);
+    });
+    return map;
+  }, [asOfDate, yearlyOverview]);
   const totalBalance = useMemo(() => {
     return items.reduce((sum, acc) => sum + Number(acc.balance || 0), 0);
   }, [items]);
@@ -280,6 +381,59 @@ export const Accounts: React.FC = () => {
         }
       />
 
+      <motion.div variants={fadeInUp} {...subtleHover}>
+        <Card className="border-slate-200 shadow-[0_10px_40px_-24px_rgba(15,23,42,0.4)]">
+          <CardHeader className="flex flex-row items-start justify-between space-y-0">
+            <div>
+              <CardTitle className="text-sm text-slate-500">
+                Account health
+              </CardTitle>
+              <p className="text-xs text-slate-500">
+                {asOfDate ? `As of ${asOfDate}` : "As of today"}
+                {includeInactive ? " (including inactive)" : ""}
+              </p>
+            </div>
+            {yearlyOverviewLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+            ) : null}
+          </CardHeader>
+          <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-lg border border-slate-100 bg-white px-4 py-3 shadow-[0_10px_30px_-28px_rgba(14,116,144,0.45)]">
+              <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+                Cash
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">
+                {formatCurrency(accountHealth.cash)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-100 bg-white px-4 py-3 shadow-[0_10px_30px_-28px_rgba(88,28,135,0.45)]">
+              <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+                Investments
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">
+                {formatCurrency(accountHealth.investments)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-100 bg-white px-4 py-3 shadow-[0_10px_30px_-28px_rgba(190,18,60,0.45)]">
+              <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+                Debt
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">
+                {formatCurrency(accountHealth.debt)}
+              </p>
+            </div>
+            <div className="rounded-lg border border-slate-100 bg-white px-4 py-3 shadow-[0_10px_30px_-28px_rgba(30,64,175,0.45)]">
+              <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+                Net worth
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-slate-900">
+                {formatCurrency(accountHealth.netWorth)}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
       <StaggerWrap className="grid gap-3 md:grid-cols-2">
         <motion.div variants={fadeInUp} {...subtleHover}>
           <Card className="flex h-full flex-col border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.4)]">
@@ -408,6 +562,11 @@ export const Accounts: React.FC = () => {
                           Status
                         </button>
                       </TableHead>
+                      <TableHead className="hidden px-4 text-right lg:table-cell">
+                        <span className="ml-auto flex items-center justify-end text-xs font-medium tracking-wide text-slate-500 uppercase">
+                          Trend
+                        </span>
+                      </TableHead>
                       <TableHead className="px-4 text-right">
                         <button
                           className="ml-auto flex items-center gap-1 text-xs font-medium tracking-wide text-slate-500 uppercase"
@@ -422,6 +581,17 @@ export const Accounts: React.FC = () => {
                   <TableBody>
                     {sortedItems.map((account) => {
                       const isActive = account.is_active;
+                      const series = accountTrendById.get(account.id) ?? [];
+                      const hasSeries = series.length >= 2;
+                      const delta = hasSeries
+                        ? series[series.length - 1] - series[0]
+                        : 0;
+                      const deltaPct =
+                        hasSeries && series[0] !== 0
+                          ? (delta / Math.abs(series[0])) * 100
+                          : null;
+                      const trendUp = delta >= 0;
+                      const trendColor = trendUp ? "#10b981" : "#ef4444";
                       return (
                         <TableRow key={account.id} className="align-top">
                           <TableCell className="px-4 font-medium text-slate-900">
@@ -444,6 +614,42 @@ export const Accounts: React.FC = () => {
                             >
                               {isActive ? "Active" : "Archived"}
                             </Badge>
+                          </TableCell>
+                          <TableCell className="hidden px-4 text-right lg:table-cell">
+                            {yearlyOverviewLoading ? (
+                              <div className="ml-auto h-8 w-28 animate-pulse rounded-md bg-slate-100" />
+                            ) : hasSeries ? (
+                              <div className="ml-auto flex w-28 flex-col items-end gap-1">
+                                <svg
+                                  width="112"
+                                  height="28"
+                                  viewBox="0 0 112 28"
+                                  className="overflow-visible"
+                                >
+                                  <path
+                                    d={sparklinePath(series, 112, 28)}
+                                    fill="none"
+                                    stroke={trendColor}
+                                    strokeWidth="2"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                  />
+                                </svg>
+                                <span
+                                  className={`text-[11px] font-semibold tabular-nums ${
+                                    trendUp
+                                      ? "text-emerald-600"
+                                      : "text-rose-600"
+                                  }`}
+                                >
+                                  {deltaPct !== null
+                                    ? `${trendUp ? "+" : ""}${deltaPct.toFixed(1)}%`
+                                    : formatCurrency(delta)}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-slate-400">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="px-4 text-right font-semibold text-slate-900">
                             {formatCurrency(Number(account.balance))}
