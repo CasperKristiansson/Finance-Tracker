@@ -6,6 +6,8 @@ Purpose-built notes for automation agents working on this repo. Assume you often
 
 - Use the context7 MCP to pull up-to-date docs for libraries/services (shadcn/Radix UI, Vite/React 19, Redux Toolkit/Saga, AWS Amplify, Terraform, etc.) instead of relying on memory.
 - Default to least surprise: avoid destructive commands; if unsure about user intent, ask.
+- **Never create, update, or push to PRs** unless explicitly instructed by a human.
+- **Assume multiple coding agents may work in parallel**: if `git status` shows other modified/untracked files you didn’t touch, do not remove/revert/stash/reset them—only change files required for your task.
 - AWS: when running AWS/Terraform/Serverless CLI commands, use profile `Personal` (matches `Makefile` defaults) and region `eu-north-1` unless told otherwise.
 - Frontend: ship visually pleasing, modern UI—lean on shadcn/Radix patterns, strong empty/loading states, intentional color/typography choices (see brand docs) rather than defaults.
 
