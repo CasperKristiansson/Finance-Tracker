@@ -301,129 +301,34 @@ export const totalReportSchema = z.object({
 
 export const totalOverviewSchema = z.object({
   as_of: z.string(),
-  net_worth: z.string(),
-  net_worth_change: z.object({
-    days_30: z.string(),
-    days_90: z.string(),
-    days_365: z.string(),
-    since_start: z.string(),
-  }),
-  lifetime: z.object({
-    income: z.string(),
-    expense: z.string(),
-    saved: z.string(),
-    savings_rate_pct: z.string().nullable().optional(),
-  }),
-  last_12m: z.object({
-    income: z.string(),
-    expense: z.string(),
-    saved: z.string(),
-    savings_rate_pct: z.string().nullable().optional(),
-  }),
-  run_rate_6m: z.object({
-    avg_monthly_income: z.string(),
-    avg_monthly_expense: z.string(),
-    avg_monthly_net: z.string(),
-    savings_rate_pct: z.string().nullable().optional(),
-  }),
-  run_rate_12m: z.object({
-    avg_monthly_income: z.string(),
-    avg_monthly_expense: z.string(),
-    avg_monthly_net: z.string(),
-    savings_rate_pct: z.string().nullable().optional(),
-  }),
-  cash_runway: z.object({
+  kpis: z.object({
+    net_worth: z.string(),
     cash_balance: z.string(),
-    avg_monthly_expense_6m: z.string(),
-    runway_months: z.string().nullable().optional(),
+    debt_total: z.string(),
+    investments_value: z.string().nullable().optional(),
+    lifetime_income: z.string(),
+    lifetime_expense: z.string(),
+    lifetime_saved: z.string(),
+    lifetime_savings_rate_pct: z.string().nullable().optional(),
   }),
-  investments: z.object({
-    as_of: z.string(),
-    current_value: z.string(),
-    value_12m_ago: z.string(),
-    change_12m: z.string(),
-    change_pct_12m: z.string().nullable().optional(),
-    contributions_lifetime: z.string(),
-    withdrawals_lifetime: z.string(),
-    net_contributions_lifetime: z.string(),
-    contributions_12m: z.string(),
-    withdrawals_12m: z.string(),
-    net_contributions_12m: z.string(),
-    monthly_values_12m: z.array(z.string()),
-    accounts: z.array(
-      z.object({
-        account_name: z.string(),
-        start_value: z.string(),
-        end_value: z.string(),
-        change: z.string(),
-      }),
-    ),
-  }),
-  debt: z.object({
-    total: z.string(),
-    value_12m_ago: z.string(),
-    change_12m: z.string(),
-    debt_to_income_12m: z.string().nullable().optional(),
-    accounts: z.array(
-      z.object({
-        account_id: z.string(),
-        name: z.string(),
-        start_debt: z.string(),
-        end_debt: z.string(),
-        delta: z.string(),
-        monthly_debt: z.array(z.string()),
-      }),
-    ),
-  }),
-  account_flows: z.array(
+  net_worth_series: z.array(
     z.object({
-      account_id: z.string(),
-      name: z.string(),
-      account_type: z.nativeEnum(AccountType),
-      start_balance: z.string(),
-      end_balance: z.string(),
-      change: z.string(),
+      date: z.string(),
+      net_worth: z.string(),
+    }),
+  ),
+  yearly: z.array(
+    z.object({
+      year: z.number(),
       income: z.string(),
       expense: z.string(),
-      transfers_in: z.string(),
-      transfers_out: z.string(),
-      net_operating: z.string(),
-      net_transfers: z.string(),
-      monthly_income: z.array(z.string()),
-      monthly_expense: z.array(z.string()),
-      monthly_transfers_in: z.array(z.string()),
-      monthly_transfers_out: z.array(z.string()),
-      monthly_change: z.array(z.string()),
+      net: z.string(),
+      savings_rate_pct: z.string().nullable().optional(),
     }),
   ),
-  income_sources: z.array(
-    z.object({
-      source: z.string(),
-      total: z.string(),
-      monthly: z.array(z.string()),
-      transaction_count: z.number(),
-    }),
-  ),
-  expense_sources: z.array(
-    z.object({
-      source: z.string(),
-      total: z.string(),
-      monthly: z.array(z.string()),
-      transaction_count: z.number(),
-    }),
-  ),
-  top_categories_12m: z.array(
-    z.object({
-      category_id: z.string().nullable().optional(),
-      name: z.string(),
-      total: z.string(),
-      monthly: z.array(z.string()),
-      icon: z.string().nullable().optional(),
-      color_hex: z.string().nullable().optional(),
-      transaction_count: z.number(),
-    }),
-  ),
-  top_categories_lifetime: z.array(
+  best_year: z.number().nullable().optional(),
+  worst_year: z.number().nullable().optional(),
+  expense_categories_lifetime: z.array(
     z.object({
       category_id: z.string().nullable().optional(),
       name: z.string(),
@@ -433,7 +338,47 @@ export const totalOverviewSchema = z.object({
       transaction_count: z.number(),
     }),
   ),
-  category_changes_12m: z.array(
+  income_categories_lifetime: z.array(
+    z.object({
+      category_id: z.string().nullable().optional(),
+      name: z.string(),
+      total: z.string(),
+      icon: z.string().nullable().optional(),
+      color_hex: z.string().nullable().optional(),
+      transaction_count: z.number(),
+    }),
+  ),
+  expense_category_mix_by_year: z.array(
+    z.object({
+      year: z.number(),
+      categories: z.array(
+        z.object({
+          category_id: z.string().nullable().optional(),
+          name: z.string(),
+          total: z.string(),
+          icon: z.string().nullable().optional(),
+          color_hex: z.string().nullable().optional(),
+          transaction_count: z.number(),
+        }),
+      ),
+    }),
+  ),
+  income_category_mix_by_year: z.array(
+    z.object({
+      year: z.number(),
+      categories: z.array(
+        z.object({
+          category_id: z.string().nullable().optional(),
+          name: z.string(),
+          total: z.string(),
+          icon: z.string().nullable().optional(),
+          color_hex: z.string().nullable().optional(),
+          transaction_count: z.number(),
+        }),
+      ),
+    }),
+  ),
+  expense_category_changes_yoy: z.array(
     z.object({
       category_id: z.string().nullable().optional(),
       name: z.string(),
@@ -443,10 +388,114 @@ export const totalOverviewSchema = z.object({
       delta_pct: z.string().nullable().optional(),
     }),
   ),
-  monthly_income_12m: z.array(z.string()),
-  monthly_expense_12m: z.array(z.string()),
-  monthly_income_prev_12m: z.array(z.string()),
-  monthly_expense_prev_12m: z.array(z.string()),
+  income_category_changes_yoy: z.array(
+    z.object({
+      category_id: z.string().nullable().optional(),
+      name: z.string(),
+      amount: z.string(),
+      prev_amount: z.string(),
+      delta: z.string(),
+      delta_pct: z.string().nullable().optional(),
+    }),
+  ),
+  income_sources_lifetime: z.array(
+    z.object({
+      source: z.string(),
+      total: z.string(),
+      transaction_count: z.number(),
+    }),
+  ),
+  expense_sources_lifetime: z.array(
+    z.object({
+      source: z.string(),
+      total: z.string(),
+      transaction_count: z.number(),
+    }),
+  ),
+  income_source_changes_yoy: z.array(
+    z.object({
+      source: z.string(),
+      amount: z.string(),
+      prev_amount: z.string(),
+      delta: z.string(),
+      delta_pct: z.string().nullable().optional(),
+    }),
+  ),
+  expense_source_changes_yoy: z.array(
+    z.object({
+      source: z.string(),
+      amount: z.string(),
+      prev_amount: z.string(),
+      delta: z.string(),
+      delta_pct: z.string().nullable().optional(),
+    }),
+  ),
+  accounts: z.array(
+    z.object({
+      account_id: z.string(),
+      name: z.string(),
+      account_type: z.nativeEnum(AccountType),
+      current_balance: z.string(),
+      operating_income: z.string(),
+      operating_expense: z.string(),
+      net_operating: z.string(),
+      transfers_in: z.string(),
+      transfers_out: z.string(),
+      net_transfers: z.string(),
+      first_transaction_date: z.string().nullable().optional(),
+    }),
+  ),
+  investments: z
+    .object({
+      series: z.array(
+        z.object({
+          date: z.string(),
+          value: z.string(),
+        }),
+      ),
+      yearly: z.array(
+        z.object({
+          year: z.number(),
+          end_value: z.string(),
+          contributions: z.string(),
+          withdrawals: z.string(),
+          net_contributions: z.string(),
+          implied_return: z.string().nullable().optional(),
+        }),
+      ),
+      contributions_lifetime: z.string(),
+      withdrawals_lifetime: z.string(),
+      net_contributions_lifetime: z.string(),
+      accounts_latest: z.array(
+        z.object({
+          account_name: z.string(),
+          value: z.string(),
+        }),
+      ),
+    })
+    .nullable()
+    .optional(),
+  debt: z.object({
+    total_current: z.string(),
+    total_prev_year_end: z.string().nullable().optional(),
+    change_since_prev_year_end: z.string().nullable().optional(),
+    debt_to_income_latest_year: z.string().nullable().optional(),
+    series: z.array(
+      z.object({
+        date: z.string(),
+        debt: z.string(),
+      }),
+    ),
+    accounts: z.array(
+      z.object({
+        account_id: z.string(),
+        name: z.string(),
+        current_debt: z.string(),
+        prev_year_end_debt: z.string().nullable().optional(),
+        delta: z.string().nullable().optional(),
+      }),
+    ),
+  }),
   insights: z.array(z.string()),
 });
 

@@ -7,6 +7,7 @@ TF_CMD = terraform -chdir=$(TF_DIR)
 AWS_PROFILE ?= Personal
 AWS_REGION  ?= eu-north-1
 PYTHON ?= python3
+PYLINTHOME ?= $(CURDIR)/.cache/pylint
 
 # Terraform helpers
 
@@ -49,7 +50,8 @@ tf-disable-public-db:
 type-check:
 	black --check apps/api
 	isort --check-only apps/api
-	PYTHONPATH=. pylint apps/api
+	@mkdir -p "$(PYLINTHOME)"
+	PYLINTHOME="$(PYLINTHOME)" PYTHONPATH=. pylint apps/api
 	pyright apps/api
 	mypy apps/api
 

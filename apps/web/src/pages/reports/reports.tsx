@@ -42,13 +42,11 @@ import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import type {
-  SubscriptionSummaryResponse,
+  TotalOverviewResponse,
   YearlyCategoryDetailResponse,
   YearlyOverviewResponse,
-  TotalOverviewResponse,
 } from "@/types/api";
 import {
-  subscriptionSummaryResponseSchema,
   totalOverviewSchema,
   yearlyCategoryDetailSchema,
   yearlyOverviewSchema,
@@ -108,25 +106,6 @@ type DetailDialogState =
       monthly: Array<{ month: string; total: number }>;
       total: number;
       txCount: number;
-    }
-  | {
-      kind: "category";
-      title: string;
-      subtitle: string;
-      monthly?: Array<{ month: string; total: number }>;
-      total: number;
-      prevTotal?: number;
-      delta?: number;
-      deltaPct?: number | null;
-      txCount?: number;
-    }
-  | {
-      kind: "subscription";
-      title: string;
-      subtitle: string;
-      monthly: Array<{ month: string; total: number }>;
-      trailing12m: number;
-      currentMonth: number;
     };
 
 const currency = (value: number) =>
@@ -149,16 +128,6 @@ const monthName = (year: number, month: number) =>
   new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("sv-SE", {
     month: "long",
   });
-
-const trailingMonthStarts = (asOfIso: string, count: number) => {
-  const asOf = new Date(asOfIso);
-  const year = asOf.getUTCFullYear();
-  const month = asOf.getUTCMonth();
-  return Array.from({ length: count }, (_, idx) => {
-    const back = count - 1 - idx;
-    return new Date(Date.UTC(year, month - back, 1));
-  });
-};
 
 const percent = (value: number) =>
   `${value.toLocaleString("sv-SE", { maximumFractionDigits: 0 })}%`;
@@ -207,10 +176,6 @@ export const Reports: React.FC = () => {
   const [totalOverview, setTotalOverview] =
     useState<TotalOverviewResponse | null>(null);
   const [totalOverviewLoading, setTotalOverviewLoading] = useState(false);
-  const [subscriptionSummary, setSubscriptionSummary] =
-    useState<SubscriptionSummaryResponse | null>(null);
-  const [subscriptionSummaryLoading, setSubscriptionSummaryLoading] =
-    useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   );
@@ -292,28 +257,6 @@ export const Reports: React.FC = () => {
     };
     void loadTotalOverview();
   }, [routeMode, selectedAccounts, token]);
-
-  useEffect(() => {
-    const loadSubscriptionSummary = async () => {
-      if (!token) return;
-      if (routeMode !== "total") return;
-      setSubscriptionSummaryLoading(true);
-      try {
-        const { data } = await apiFetch<SubscriptionSummaryResponse>({
-          path: "/subscriptions/summary",
-          schema: subscriptionSummaryResponseSchema,
-          token,
-        });
-        setSubscriptionSummary(data);
-      } catch (error) {
-        console.error(error);
-        setSubscriptionSummary(null);
-      } finally {
-        setSubscriptionSummaryLoading(false);
-      }
-    };
-    void loadSubscriptionSummary();
-  }, [routeMode, token]);
 
   useEffect(() => {
     const loadCategoryDetail = async () => {
@@ -574,134 +517,153 @@ export const Reports: React.FC = () => {
       .sort((a, b) => b.total - a.total);
   }, [overview?.expense_sources, year]);
 
-  const totalMonthStarts = useMemo(() => {
-    if (!totalOverview?.as_of) return [];
-    return trailingMonthStarts(totalOverview.as_of, 12);
-  }, [totalOverview?.as_of]);
-
-  const totalIncomeExpenseChart = useMemo(() => {
-    if (!totalOverview) return [];
-    return totalMonthStarts.map((d, idx) => ({
-      month: d.toLocaleDateString("sv-SE", { month: "short" }),
-      income: Number(totalOverview.monthly_income_12m[idx] ?? 0),
-      expense: Number(totalOverview.monthly_expense_12m[idx] ?? 0),
-      net:
-        Number(totalOverview.monthly_income_12m[idx] ?? 0) -
-        Number(totalOverview.monthly_expense_12m[idx] ?? 0),
-    }));
-  }, [totalMonthStarts, totalOverview]);
-
   const totalKpis = useMemo(() => {
     if (!totalOverview) return null;
-    const nw = Number(totalOverview.net_worth);
-    const nw365 = Number(totalOverview.net_worth_change.days_365 ?? 0);
-    const saved12 = Number(totalOverview.last_12m.saved ?? 0);
-    const sr12 = totalOverview.last_12m.savings_rate_pct
-      ? Number(totalOverview.last_12m.savings_rate_pct)
-      : null;
-    const runway = totalOverview.cash_runway.runway_months
-      ? Number(totalOverview.cash_runway.runway_months)
-      : null;
-    const debt = Number(totalOverview.debt.total ?? 0);
-    const inv = Number(totalOverview.investments.current_value ?? 0);
+    const kpis = totalOverview.kpis;
     return {
-      netWorth: nw,
-      netWorthChange365: nw365,
-      saved12m: saved12,
-      savingsRate12m: sr12,
-      runwayMonths: runway,
-      debtTotal: debt,
-      investmentsValue: inv,
+      netWorth: Number(kpis.net_worth),
+      cashBalance: Number(kpis.cash_balance),
+      debtTotal: Number(kpis.debt_total),
+      investmentsValue: kpis.investments_value
+        ? Number(kpis.investments_value)
+        : null,
+      lifetimeIncome: Number(kpis.lifetime_income),
+      lifetimeExpense: Number(kpis.lifetime_expense),
+      lifetimeSaved: Number(kpis.lifetime_saved),
+      lifetimeSavingsRate: kpis.lifetime_savings_rate_pct
+        ? Number(kpis.lifetime_savings_rate_pct)
+        : null,
     };
   }, [totalOverview]);
 
-  const totalBestWorst = useMemo(() => {
-    if (!totalOverview || !totalIncomeExpenseChart.length) return null;
-    const nets = totalIncomeExpenseChart.map((m) => m.net);
-    const bestIdx = nets.reduce(
-      (best, value, idx) => (value > nets[best] ? idx : best),
-      0,
-    );
-    const worstIdx = nets.reduce(
-      (worst, value, idx) => (value < nets[worst] ? idx : worst),
-      0,
-    );
+  const totalNetWorthSeries = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.net_worth_series.map((row) => ({
+      date: monthLabel(row.date),
+      netWorth: Number(row.net_worth),
+    }));
+  }, [totalOverview]);
+
+  const totalYearly = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.yearly
+      .map((row) => ({
+        year: row.year,
+        income: Number(row.income),
+        expense: Number(row.expense),
+        net: Number(row.net),
+        savingsRate: row.savings_rate_pct ? Number(row.savings_rate_pct) : null,
+      }))
+      .sort((a, b) => a.year - b.year);
+  }, [totalOverview]);
+
+  const totalExpenseMix = useMemo(() => {
+    if (!totalOverview) {
+      return { data: [], keys: [], colors: {} as Record<string, string> };
+    }
+    const recent = totalOverview.expense_category_mix_by_year.slice(-6);
+    const latest = recent[recent.length - 1];
+    const keys = (latest?.categories ?? [])
+      .filter((c) => c.name !== "Other")
+      .sort((a, b) => Number(b.total) - Number(a.total))
+      .map((c) => c.name);
+    const colors: Record<string, string> = {};
+    (latest?.categories ?? []).forEach((c) => {
+      colors[c.name] = c.color_hex ?? "#ef4444";
+    });
+    if ((latest?.categories ?? []).some((c) => c.name === "Other")) {
+      keys.push("Other");
+      colors["Other"] ??= "#94a3b8";
+    }
+    const data = recent.map((row) => {
+      const total = row.categories.reduce((sum, c) => sum + Number(c.total), 0);
+      const entry: Record<string, number | string> = { year: String(row.year) };
+      row.categories.forEach((c) => {
+        entry[c.name] = total > 0 ? (Number(c.total) / total) * 100 : 0;
+      });
+      return entry;
+    });
+    return { data, keys, colors };
+  }, [totalOverview]);
+
+  const totalIncomeMix = useMemo(() => {
+    if (!totalOverview) {
+      return { data: [], keys: [], colors: {} as Record<string, string> };
+    }
+    const recent = totalOverview.income_category_mix_by_year.slice(-6);
+    const latest = recent[recent.length - 1];
+    const keys = (latest?.categories ?? [])
+      .filter((c) => c.name !== "Other")
+      .sort((a, b) => Number(b.total) - Number(a.total))
+      .map((c) => c.name);
+    const colors: Record<string, string> = {};
+    (latest?.categories ?? []).forEach((c) => {
+      colors[c.name] = c.color_hex ?? "#10b981";
+    });
+    if ((latest?.categories ?? []).some((c) => c.name === "Other")) {
+      keys.push("Other");
+      colors["Other"] ??= "#94a3b8";
+    }
+    const data = recent.map((row) => {
+      const total = row.categories.reduce((sum, c) => sum + Number(c.total), 0);
+      const entry: Record<string, number | string> = { year: String(row.year) };
+      row.categories.forEach((c) => {
+        entry[c.name] = total > 0 ? (Number(c.total) / total) * 100 : 0;
+      });
+      return entry;
+    });
+    return { data, keys, colors };
+  }, [totalOverview]);
+
+  const totalInvestments = useMemo(() => {
+    if (!totalOverview?.investments) return null;
     return {
-      best: totalIncomeExpenseChart[bestIdx],
-      worst: totalIncomeExpenseChart[worstIdx],
+      series: totalOverview.investments.series.map((row) => ({
+        date: monthLabel(row.date),
+        value: Number(row.value),
+      })),
+      yearly: totalOverview.investments.yearly.map((row) => ({
+        year: row.year,
+        endValue: Number(row.end_value),
+        netContributions: Number(row.net_contributions),
+        impliedReturn: row.implied_return ? Number(row.implied_return) : null,
+      })),
+      accounts: totalOverview.investments.accounts_latest.map((row) => ({
+        name: row.account_name,
+        value: Number(row.value),
+      })),
     };
-  }, [totalIncomeExpenseChart, totalOverview]);
+  }, [totalOverview?.investments]);
 
-  const totalIncomeSources = useMemo(() => {
+  const totalExpenseCategoriesLifetime = useMemo(() => {
     if (!totalOverview) return [];
-    return totalOverview.income_sources
-      .map((row) => ({
-        source: row.source,
-        total: Number(row.total),
-        txCount: row.transaction_count,
-        monthly: row.monthly.map((v, idx) => ({
-          month:
-            totalMonthStarts[idx]?.toLocaleDateString("sv-SE", {
-              month: "short",
-            }) ?? "",
-          total: Number(v),
-        })),
-      }))
-      .sort((a, b) => b.total - a.total);
-  }, [totalMonthStarts, totalOverview]);
-
-  const totalExpenseSources = useMemo(() => {
-    if (!totalOverview) return [];
-    return totalOverview.expense_sources
-      .map((row) => ({
-        source: row.source,
-        total: Number(row.total),
-        txCount: row.transaction_count,
-        monthly: row.monthly.map((v, idx) => ({
-          month:
-            totalMonthStarts[idx]?.toLocaleDateString("sv-SE", {
-              month: "short",
-            }) ?? "",
-          total: Number(v),
-        })),
-      }))
-      .sort((a, b) => b.total - a.total);
-  }, [totalMonthStarts, totalOverview]);
-
-  const totalTopCategories12m = useMemo(() => {
-    if (!totalOverview) return [];
-    return totalOverview.top_categories_12m
+    return totalOverview.expense_categories_lifetime
       .map((row) => ({
         id: row.category_id ?? null,
         name: row.name,
         total: Number(row.total),
-        monthly: row.monthly.map((v, idx) => ({
-          month:
-            totalMonthStarts[idx]?.toLocaleDateString("sv-SE", {
-              month: "short",
-            }) ?? "",
-          total: Number(v),
-        })),
-        txCount: row.transaction_count,
-      }))
-      .sort((a, b) => b.total - a.total);
-  }, [totalMonthStarts, totalOverview]);
-
-  const totalTopCategoriesLifetime = useMemo(() => {
-    if (!totalOverview) return [];
-    return totalOverview.top_categories_lifetime
-      .map((row) => ({
-        id: row.category_id ?? null,
-        name: row.name,
-        total: Number(row.total),
+        color: row.color_hex ?? "#ef4444",
         txCount: row.transaction_count,
       }))
       .sort((a, b) => b.total - a.total);
   }, [totalOverview]);
 
-  const totalCategoryChanges = useMemo(() => {
+  const totalIncomeCategoriesLifetime = useMemo(() => {
     if (!totalOverview) return [];
-    return totalOverview.category_changes_12m
+    return totalOverview.income_categories_lifetime
+      .map((row) => ({
+        id: row.category_id ?? null,
+        name: row.name,
+        total: Number(row.total),
+        color: row.color_hex ?? "#10b981",
+        txCount: row.transaction_count,
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [totalOverview]);
+
+  const totalExpenseCategoryChanges = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.expense_category_changes_yoy
       .map((row) => ({
         id: row.category_id ?? null,
         name: row.name,
@@ -710,7 +672,92 @@ export const Reports: React.FC = () => {
         delta: Number(row.delta),
         deltaPct: row.delta_pct ? Number(row.delta_pct) : null,
       }))
-      .sort((a, b) => b.delta - a.delta);
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  }, [totalOverview]);
+
+  const totalIncomeCategoryChanges = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.income_category_changes_yoy
+      .map((row) => ({
+        id: row.category_id ?? null,
+        name: row.name,
+        amount: Number(row.amount),
+        prev: Number(row.prev_amount),
+        delta: Number(row.delta),
+        deltaPct: row.delta_pct ? Number(row.delta_pct) : null,
+      }))
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  }, [totalOverview]);
+
+  const totalIncomeSourcesLifetime = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.income_sources_lifetime
+      .map((row) => ({
+        source: row.source,
+        total: Number(row.total),
+        txCount: row.transaction_count,
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [totalOverview]);
+
+  const totalExpenseSourcesLifetime = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.expense_sources_lifetime
+      .map((row) => ({
+        source: row.source,
+        total: Number(row.total),
+        txCount: row.transaction_count,
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [totalOverview]);
+
+  const totalIncomeSourceChanges = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.income_source_changes_yoy
+      .map((row) => ({
+        source: row.source,
+        amount: Number(row.amount),
+        prev: Number(row.prev_amount),
+        delta: Number(row.delta),
+        deltaPct: row.delta_pct ? Number(row.delta_pct) : null,
+      }))
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  }, [totalOverview]);
+
+  const totalExpenseSourceChanges = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.expense_source_changes_yoy
+      .map((row) => ({
+        source: row.source,
+        amount: Number(row.amount),
+        prev: Number(row.prev_amount),
+        delta: Number(row.delta),
+        deltaPct: row.delta_pct ? Number(row.delta_pct) : null,
+      }))
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  }, [totalOverview]);
+
+  const totalAccountsOverview = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.accounts
+      .map((row) => ({
+        id: row.account_id,
+        name: row.name,
+        type: row.account_type,
+        balance: Number(row.current_balance),
+        netOperating: Number(row.net_operating),
+        netTransfers: Number(row.net_transfers),
+        firstDate: row.first_transaction_date ?? null,
+      }))
+      .sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance));
+  }, [totalOverview]);
+
+  const totalDebtSeries = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.debt.series.map((row) => ({
+      date: monthLabel(row.date),
+      debt: Number(row.debt),
+    }));
   }, [totalOverview]);
 
   const totalDebtAccounts = useMemo(() => {
@@ -719,116 +766,12 @@ export const Reports: React.FC = () => {
       .map((row) => ({
         id: row.account_id,
         name: row.name,
-        start: Number(row.start_debt),
-        end: Number(row.end_debt),
-        delta: Number(row.delta),
-        monthly: row.monthly_debt.map((v, idx) => ({
-          month:
-            totalMonthStarts[idx]?.toLocaleDateString("sv-SE", {
-              month: "short",
-            }) ?? "",
-          value: Number(v),
-        })),
+        current: Number(row.current_debt),
+        prev: row.prev_year_end_debt ? Number(row.prev_year_end_debt) : null,
+        delta: row.delta ? Number(row.delta) : null,
       }))
-      .sort((a, b) => b.end - a.end);
-  }, [totalMonthStarts, totalOverview]);
-
-  const totalAccountFlows = useMemo(() => {
-    if (!totalOverview) return [];
-    return totalOverview.account_flows
-      .map((row) => ({
-        id: row.account_id,
-        name: row.name,
-        accountType: row.account_type,
-        startBalance: Number(row.start_balance),
-        endBalance: Number(row.end_balance),
-        change: Number(row.change),
-        netOperating: Number(row.net_operating),
-        netTransfers: Number(row.net_transfers),
-        monthly: Array.from({ length: 12 }, (_, idx) => ({
-          month:
-            totalMonthStarts[idx]?.toLocaleDateString("sv-SE", {
-              month: "short",
-            }) ?? "",
-          income: Number(row.monthly_income[idx] ?? 0),
-          expense: Number(row.monthly_expense[idx] ?? 0),
-          transfersIn: Number(row.monthly_transfers_in[idx] ?? 0),
-          transfersOut: Number(row.monthly_transfers_out[idx] ?? 0),
-          change: Number(row.monthly_change[idx] ?? 0),
-        })),
-      }))
-      .sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
-  }, [totalMonthStarts, totalOverview]);
-
-  const totalInvestments = useMemo(() => {
-    if (!totalOverview) return null;
-    const monthly = totalOverview.investments.monthly_values_12m.map(
-      (v, idx) => ({
-        month:
-          totalMonthStarts[idx]?.toLocaleDateString("sv-SE", {
-            month: "short",
-          }) ?? "",
-        value: Number(v),
-      }),
-    );
-    return {
-      asOf: totalOverview.investments.as_of,
-      value: Number(totalOverview.investments.current_value),
-      change12m: Number(totalOverview.investments.change_12m),
-      changePct12m: totalOverview.investments.change_pct_12m
-        ? Number(totalOverview.investments.change_pct_12m)
-        : null,
-      contributions12m: Number(totalOverview.investments.contributions_12m),
-      withdrawals12m: Number(totalOverview.investments.withdrawals_12m),
-      contributionsLife: Number(
-        totalOverview.investments.contributions_lifetime,
-      ),
-      withdrawalsLife: Number(totalOverview.investments.withdrawals_lifetime),
-      monthly,
-      accounts: totalOverview.investments.accounts.map((row) => ({
-        name: row.account_name,
-        start: Number(row.start_value),
-        end: Number(row.end_value),
-        change: Number(row.change),
-      })),
-    };
-  }, [totalMonthStarts, totalOverview]);
-
-  const totalSubscriptions = useMemo(() => {
-    if (!subscriptionSummary?.subscriptions?.length || !totalMonthStarts.length)
-      return null;
-    const sorted = [...subscriptionSummary.subscriptions].sort(
-      (a, b) =>
-        Number(b.trailing_twelve_month_spend) -
-        Number(a.trailing_twelve_month_spend),
-    );
-    const total12m = sorted.reduce(
-      (sum, sub) => sum + Number(sub.trailing_twelve_month_spend ?? 0),
-      0,
-    );
-    const totalCurrent = sorted.reduce(
-      (sum, sub) => sum + Number(sub.current_month_spend ?? 0),
-      0,
-    );
-    return {
-      total12m,
-      totalCurrent,
-      top: sorted.slice(0, 12).map((sub) => ({
-        id: sub.id,
-        name: sub.name,
-        category: sub.category_name ?? null,
-        currentMonth: Number(sub.current_month_spend ?? 0),
-        trailing12m: Number(sub.trailing_twelve_month_spend ?? 0),
-        monthly: (sub.trend ?? []).slice(-12).map((v, idx) => ({
-          month:
-            totalMonthStarts[idx]?.toLocaleDateString("sv-SE", {
-              month: "short",
-            }) ?? "",
-          total: Number(v ?? 0),
-        })),
-      })),
-    };
-  }, [subscriptionSummary?.subscriptions, totalMonthStarts]);
+      .sort((a, b) => b.current - a.current);
+  }, [totalOverview]);
 
   const openDetailDialog = (state: DetailDialogState) => {
     setDetailDialog(state);
@@ -960,35 +903,46 @@ export const Reports: React.FC = () => {
             ))}
           </CardContent>
         ) : routeMode === "total" && totalKpis ? (
-          <CardContent className="grid gap-3 md:grid-cols-5">
+          <CardContent className="grid gap-3 md:grid-cols-6">
             {[
               {
                 label: "Net worth",
                 value: totalKpis.netWorth,
+                format: "currency" as const,
                 color: "text-slate-900",
               },
               {
-                label: "Saved (12m)",
-                value: totalKpis.saved12m,
+                label: "Lifetime saved",
+                value: totalKpis.lifetimeSaved,
+                format: "currency" as const,
                 color:
-                  totalKpis.saved12m >= 0
+                  totalKpis.lifetimeSaved >= 0
                     ? "text-emerald-700"
                     : "text-rose-700",
               },
               {
-                label: "Savings rate (12m)",
-                value: totalKpis.savingsRate12m,
+                label: "Savings rate (lifetime)",
+                value: totalKpis.lifetimeSavingsRate,
+                format: "percent" as const,
                 color: "text-slate-900",
               },
               {
-                label: "Cash runway",
-                value: totalKpis.runwayMonths,
+                label: "Cash balance",
+                value: totalKpis.cashBalance,
+                format: "currency" as const,
                 color: "text-slate-900",
               },
               {
                 label: "Debt",
                 value: totalKpis.debtTotal,
+                format: "currency" as const,
                 color: "text-orange-700",
+              },
+              {
+                label: "Investments",
+                value: totalKpis.investmentsValue,
+                format: "currency" as const,
+                color: "text-indigo-700",
               },
             ].map((item) => (
               <div
@@ -1001,13 +955,9 @@ export const Reports: React.FC = () => {
                 <div className={`text-2xl font-semibold ${item.color}`}>
                   {item.value === null
                     ? "—"
-                    : item.label.includes("Savings rate")
+                    : item.format === "percent"
                       ? percent(item.value)
-                      : item.label === "Cash runway"
-                        ? `${Number(item.value).toLocaleString("sv-SE", {
-                            maximumFractionDigits: 1,
-                          })} mo`
-                        : currency(item.value)}
+                      : currency(item.value)}
                 </div>
               </div>
             ))}
@@ -1374,6 +1324,234 @@ export const Reports: React.FC = () => {
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
+            <ChartCard
+              title="Category breakdown (expenses)"
+              description="Top categories + Other. Click to drill down."
+              loading={overviewLoading}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={categoryChartData.map((row) => ({
+                    ...row,
+                    total: row.total,
+                  }))}
+                  layout="vertical"
+                  margin={{ left: 16, right: 12, top: 8, bottom: 8 }}
+                  onClick={(
+                    state: {
+                      activePayload?: Array<{ payload?: { id?: unknown } }>;
+                    } | null,
+                  ) => {
+                    const id = state?.activePayload?.[0]?.payload?.id;
+                    if (typeof id === "string" && id.length) {
+                      setSelectedCategoryFlow("expense");
+                      setSelectedCategoryId(id);
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" hide />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    tickLine={false}
+                    axisLine={false}
+                    width={120}
+                    tick={{ fill: "#475569", fontSize: 12 }}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const item = payload[0]?.payload;
+                      if (!isRecord(item)) return null;
+                      const name =
+                        typeof item.name === "string" ? item.name : "Category";
+                      const total = Number(item.total ?? 0);
+                      return (
+                        <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                          <p className="font-semibold text-slate-800">{name}</p>
+                          <p className="text-slate-600">{currency(total)}</p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar dataKey="total" radius={[6, 6, 6, 6]}>
+                    {categoryChartData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+
+            <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Spending heatmap
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Seasonality by category and month.
+                </p>
+              </CardHeader>
+              <CardContent className="overflow-auto">
+                {!overview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : (
+                  <div className="min-w-[560px]">
+                    <div className="grid grid-cols-[160px_repeat(12,minmax(28px,1fr))] gap-1 text-[11px] text-slate-600">
+                      <div />
+                      {Array.from({ length: 12 }, (_, idx) => (
+                        <div key={idx} className="text-center">
+                          {monthLabel(
+                            new Date(Date.UTC(year, idx, 1)).toISOString(),
+                          )}
+                        </div>
+                      ))}
+                      {heatmap.rows.map((row) => (
+                        <React.Fragment key={row.name}>
+                          <div className="truncate pr-2 text-slate-700">
+                            {row.name}
+                          </div>
+                          {row.monthly.map((value, idx) => {
+                            const intensity =
+                              heatmap.max > 0 ? value / heatmap.max : 0;
+                            const bg = `rgba(239, 68, 68, ${Math.min(0.08 + intensity * 0.6, 0.7)})`;
+                            return (
+                              <div
+                                key={idx}
+                                title={`${row.name} — ${monthName(year, idx + 1)}: ${currency(value)}`}
+                                className="h-7 rounded-sm border border-slate-100"
+                                style={{
+                                  backgroundColor: value > 0 ? bg : undefined,
+                                }}
+                              />
+                            );
+                          })}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <ChartCard
+              title="Category breakdown (income)"
+              description="Top categories + Other. Click to drill down."
+              loading={overviewLoading}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={incomeCategoryChartData.map((row) => ({
+                    ...row,
+                    total: row.total,
+                  }))}
+                  layout="vertical"
+                  margin={{ left: 16, right: 12, top: 8, bottom: 8 }}
+                  onClick={(
+                    state: {
+                      activePayload?: Array<{ payload?: { id?: unknown } }>;
+                    } | null,
+                  ) => {
+                    const id = state?.activePayload?.[0]?.payload?.id;
+                    if (typeof id === "string" && id.length) {
+                      setSelectedCategoryFlow("income");
+                      setSelectedCategoryId(id);
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" hide />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    tickLine={false}
+                    axisLine={false}
+                    width={120}
+                    tick={{ fill: "#475569", fontSize: 12 }}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const item = payload[0]?.payload;
+                      if (!isRecord(item)) return null;
+                      const name =
+                        typeof item.name === "string" ? item.name : "Category";
+                      const total = Number(item.total ?? 0);
+                      return (
+                        <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                          <p className="font-semibold text-slate-800">{name}</p>
+                          <p className="text-slate-600">{currency(total)}</p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar dataKey="total" radius={[6, 6, 6, 6]}>
+                    {incomeCategoryChartData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+
+            <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Income heatmap
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Seasonality by category and month.
+                </p>
+              </CardHeader>
+              <CardContent className="overflow-auto">
+                {!overview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : (
+                  <div className="min-w-[560px]">
+                    <div className="grid grid-cols-[160px_repeat(12,minmax(28px,1fr))] gap-1 text-[11px] text-slate-600">
+                      <div />
+                      {Array.from({ length: 12 }, (_, idx) => (
+                        <div key={idx} className="text-center">
+                          {monthLabel(
+                            new Date(Date.UTC(year, idx, 1)).toISOString(),
+                          )}
+                        </div>
+                      ))}
+                      {incomeHeatmap.rows.map((row) => (
+                        <React.Fragment key={row.name}>
+                          <div className="truncate pr-2 text-slate-700">
+                            {row.name}
+                          </div>
+                          {row.monthly.map((value, idx) => {
+                            const intensity =
+                              incomeHeatmap.max > 0
+                                ? value / incomeHeatmap.max
+                                : 0;
+                            const bg = `rgba(16, 185, 129, ${Math.min(0.08 + intensity * 0.6, 0.7)})`;
+                            return (
+                              <div
+                                key={idx}
+                                title={`${row.name} — ${monthName(year, idx + 1)}: ${currency(value)}`}
+                                className="h-7 rounded-sm border border-slate-100"
+                                style={{
+                                  backgroundColor: value > 0 ? bg : undefined,
+                                }}
+                              />
+                            );
+                          })}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
             <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
               <CardHeader className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div>
@@ -1662,86 +1840,6 @@ export const Reports: React.FC = () => {
             </Card>
           </div>
 
-          <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold text-slate-900">
-                Account flows
-              </CardTitle>
-              <p className="text-xs text-slate-500">
-                Net operating (income − expense) vs net transfers. Click a row
-                for monthly detail.
-              </p>
-            </CardHeader>
-            <CardContent className="max-h-[32rem] overflow-auto">
-              {!overview ? (
-                <Skeleton className="h-56 w-full" />
-              ) : accountFlowRows.length ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Account</TableHead>
-                      <TableHead className="hidden text-right md:table-cell">
-                        Net operating
-                      </TableHead>
-                      <TableHead className="hidden text-right md:table-cell">
-                        Net transfers
-                      </TableHead>
-                      <TableHead className="text-right">Δ</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {accountFlowRows.map((row) => (
-                      <TableRow
-                        key={row.id}
-                        className="cursor-pointer"
-                        onClick={() => {
-                          openDetailDialog({
-                            kind: "account",
-                            title: `${row.name} (${year})`,
-                            accountType: row.accountType,
-                            startBalance: row.startBalance,
-                            endBalance: row.endBalance,
-                            change: row.change,
-                            monthly: row.monthly,
-                          });
-                        }}
-                      >
-                        <TableCell className="max-w-[220px] truncate font-medium">
-                          {row.name}
-                          <span className="ml-2 text-xs text-slate-500">
-                            ({row.accountType})
-                          </span>
-                        </TableCell>
-                        <TableCell className="hidden text-right md:table-cell">
-                          {currency(row.netOperating)}
-                        </TableCell>
-                        <TableCell className="hidden text-right md:table-cell">
-                          {currency(row.netTransfers)}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold">
-                          <span
-                            className={
-                              row.change >= 0
-                                ? "text-emerald-700"
-                                : "text-rose-700"
-                            }
-                          >
-                            {row.change >= 0 ? "+" : "−"}
-                            {currency(Math.abs(row.change))}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-                  No account flows available.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
           <div className="grid gap-3 lg:grid-cols-2">
             <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
               <CardHeader className="pb-2">
@@ -1864,233 +1962,85 @@ export const Reports: React.FC = () => {
             </Card>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-2">
-            <ChartCard
-              title="Category breakdown (expenses)"
-              description="Top categories + Other. Click to drill down."
-              loading={overviewLoading}
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={categoryChartData.map((row) => ({
-                    ...row,
-                    total: row.total,
-                  }))}
-                  layout="vertical"
-                  margin={{ left: 16, right: 12, top: 8, bottom: 8 }}
-                  onClick={(
-                    state: {
-                      activePayload?: Array<{ payload?: { id?: unknown } }>;
-                    } | null,
-                  ) => {
-                    const id = state?.activePayload?.[0]?.payload?.id;
-                    if (typeof id === "string" && id.length) {
-                      setSelectedCategoryFlow("expense");
-                      setSelectedCategoryId(id);
-                    }
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" hide />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    tickLine={false}
-                    axisLine={false}
-                    width={120}
-                    tick={{ fill: "#475569", fontSize: 12 }}
-                  />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const item = payload[0]?.payload;
-                      if (!isRecord(item)) return null;
-                      const name =
-                        typeof item.name === "string" ? item.name : "Category";
-                      const total = Number(item.total ?? 0);
-                      return (
-                        <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                          <p className="font-semibold text-slate-800">{name}</p>
-                          <p className="text-slate-600">{currency(total)}</p>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Bar dataKey="total" radius={[6, 6, 6, 6]}>
-                    {categoryChartData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
+          <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-slate-900">
+                Account flows
+              </CardTitle>
+              <p className="text-xs text-slate-500">
+                Net operating (income − expense) vs net transfers. Click a row
+                for monthly detail.
+              </p>
+            </CardHeader>
+            <CardContent className="max-h-[32rem] overflow-auto">
+              {!overview ? (
+                <Skeleton className="h-56 w-full" />
+              ) : accountFlowRows.length ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Account</TableHead>
+                      <TableHead className="hidden text-right md:table-cell">
+                        Net operating
+                      </TableHead>
+                      <TableHead className="hidden text-right md:table-cell">
+                        Net transfers
+                      </TableHead>
+                      <TableHead className="text-right">Δ</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {accountFlowRows.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        className="cursor-pointer"
+                        onClick={() => {
+                          openDetailDialog({
+                            kind: "account",
+                            title: `${row.name} (${year})`,
+                            accountType: row.accountType,
+                            startBalance: row.startBalance,
+                            endBalance: row.endBalance,
+                            change: row.change,
+                            monthly: row.monthly,
+                          });
+                        }}
+                      >
+                        <TableCell className="max-w-[220px] truncate font-medium">
+                          {row.name}
+                          <span className="ml-2 text-xs text-slate-500">
+                            ({row.accountType})
+                          </span>
+                        </TableCell>
+                        <TableCell className="hidden text-right md:table-cell">
+                          {currency(row.netOperating)}
+                        </TableCell>
+                        <TableCell className="hidden text-right md:table-cell">
+                          {currency(row.netTransfers)}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">
+                          <span
+                            className={
+                              row.change >= 0
+                                ? "text-emerald-700"
+                                : "text-rose-700"
+                            }
+                          >
+                            {row.change >= 0 ? "+" : "−"}
+                            {currency(Math.abs(row.change))}
+                          </span>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartCard>
-
-            <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold text-slate-900">
-                  Spending heatmap
-                </CardTitle>
-                <p className="text-xs text-slate-500">
-                  Seasonality by category and month.
-                </p>
-              </CardHeader>
-              <CardContent className="overflow-auto">
-                {!overview ? (
-                  <Skeleton className="h-56 w-full" />
-                ) : (
-                  <div className="min-w-[560px]">
-                    <div className="grid grid-cols-[160px_repeat(12,minmax(28px,1fr))] gap-1 text-[11px] text-slate-600">
-                      <div />
-                      {Array.from({ length: 12 }, (_, idx) => (
-                        <div key={idx} className="text-center">
-                          {monthLabel(
-                            new Date(Date.UTC(year, idx, 1)).toISOString(),
-                          )}
-                        </div>
-                      ))}
-                      {heatmap.rows.map((row) => (
-                        <React.Fragment key={row.name}>
-                          <div className="truncate pr-2 text-slate-700">
-                            {row.name}
-                          </div>
-                          {row.monthly.map((value, idx) => {
-                            const intensity =
-                              heatmap.max > 0 ? value / heatmap.max : 0;
-                            const bg = `rgba(239, 68, 68, ${Math.min(0.08 + intensity * 0.6, 0.7)})`;
-                            return (
-                              <div
-                                key={idx}
-                                title={`${row.name} — ${monthName(year, idx + 1)}: ${currency(value)}`}
-                                className="h-7 rounded-sm border border-slate-100"
-                                style={{
-                                  backgroundColor: value > 0 ? bg : undefined,
-                                }}
-                              />
-                            );
-                          })}
-                        </React.Fragment>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-3 lg:grid-cols-2">
-            <ChartCard
-              title="Category breakdown (income)"
-              description="Top categories + Other. Click to drill down."
-              loading={overviewLoading}
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={incomeCategoryChartData.map((row) => ({
-                    ...row,
-                    total: row.total,
-                  }))}
-                  layout="vertical"
-                  margin={{ left: 16, right: 12, top: 8, bottom: 8 }}
-                  onClick={(
-                    state: {
-                      activePayload?: Array<{ payload?: { id?: unknown } }>;
-                    } | null,
-                  ) => {
-                    const id = state?.activePayload?.[0]?.payload?.id;
-                    if (typeof id === "string" && id.length) {
-                      setSelectedCategoryFlow("income");
-                      setSelectedCategoryId(id);
-                    }
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" hide />
-                  <YAxis
-                    type="category"
-                    dataKey="name"
-                    tickLine={false}
-                    axisLine={false}
-                    width={120}
-                    tick={{ fill: "#475569", fontSize: 12 }}
-                  />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const item = payload[0]?.payload;
-                      if (!isRecord(item)) return null;
-                      const name =
-                        typeof item.name === "string" ? item.name : "Category";
-                      const total = Number(item.total ?? 0);
-                      return (
-                        <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                          <p className="font-semibold text-slate-800">{name}</p>
-                          <p className="text-slate-600">{currency(total)}</p>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Bar dataKey="total" radius={[6, 6, 6, 6]}>
-                    {incomeCategoryChartData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartCard>
-
-            <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold text-slate-900">
-                  Income heatmap
-                </CardTitle>
-                <p className="text-xs text-slate-500">
-                  Seasonality by category and month.
-                </p>
-              </CardHeader>
-              <CardContent className="overflow-auto">
-                {!overview ? (
-                  <Skeleton className="h-56 w-full" />
-                ) : (
-                  <div className="min-w-[560px]">
-                    <div className="grid grid-cols-[160px_repeat(12,minmax(28px,1fr))] gap-1 text-[11px] text-slate-600">
-                      <div />
-                      {Array.from({ length: 12 }, (_, idx) => (
-                        <div key={idx} className="text-center">
-                          {monthLabel(
-                            new Date(Date.UTC(year, idx, 1)).toISOString(),
-                          )}
-                        </div>
-                      ))}
-                      {incomeHeatmap.rows.map((row) => (
-                        <React.Fragment key={row.name}>
-                          <div className="truncate pr-2 text-slate-700">
-                            {row.name}
-                          </div>
-                          {row.monthly.map((value, idx) => {
-                            const intensity =
-                              incomeHeatmap.max > 0
-                                ? value / incomeHeatmap.max
-                                : 0;
-                            const bg = `rgba(16, 185, 129, ${Math.min(0.08 + intensity * 0.6, 0.7)})`;
-                            return (
-                              <div
-                                key={idx}
-                                title={`${row.name} — ${monthName(year, idx + 1)}: ${currency(value)}`}
-                                className="h-7 rounded-sm border border-slate-100"
-                                style={{
-                                  backgroundColor: value > 0 ? bg : undefined,
-                                }}
-                              />
-                            );
-                          })}
-                        </React.Fragment>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                  No account flows available.
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           <div className="grid gap-3 lg:grid-cols-3">
             <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
@@ -2737,8 +2687,8 @@ export const Reports: React.FC = () => {
         <>
           <div className="grid gap-3 lg:grid-cols-2">
             <ChartCard
-              title="Income vs expense (last 12 months)"
-              description="Run-rate view (not calendar-year)."
+              title="Net worth (lifetime)"
+              description="Monthly net worth snapshot (ledger + investments)."
               loading={totalOverviewLoading}
             >
               {!totalOverview && !totalOverviewLoading ? (
@@ -2756,12 +2706,16 @@ export const Reports: React.FC = () => {
                     </Button>
                   </div>
                 </div>
+              ) : !totalNetWorthSeries.length ? (
+                <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-slate-600">
+                  <p>No net worth history yet.</p>
+                </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={totalIncomeExpenseChart}>
+                  <AreaChart data={totalNetWorthSeries}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis
-                      dataKey="month"
+                      dataKey="date"
                       tickLine={false}
                       axisLine={false}
                       tick={{ fill: "#475569", fontSize: 12 }}
@@ -2770,43 +2724,21 @@ export const Reports: React.FC = () => {
                       tickLine={false}
                       axisLine={false}
                       tick={{ fill: "#475569", fontSize: 12 }}
+                      tickFormatter={(v) => compactCurrency(Number(v))}
                     />
                     <Tooltip
-                      content={({ active, payload }) => {
-                        if (!active || !payload?.length) return null;
-                        const label = payload[0]?.payload?.month;
-                        return (
-                          <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                            <p className="font-semibold text-slate-800">
-                              {label}
-                            </p>
-                            {payload.map((item) => (
-                              <p
-                                key={String(item.dataKey)}
-                                className="text-slate-600"
-                              >
-                                {item.name}: {currency(Number(item.value))}
-                              </p>
-                            ))}
-                          </div>
-                        );
-                      }}
+                      formatter={(value) => currency(Number(value))}
+                      contentStyle={{ fontSize: 12 }}
                     />
-                    <Bar
-                      dataKey="income"
-                      name="Income"
-                      fill="#10b981"
-                      radius={[6, 6, 4, 4]}
-                      barSize={12}
+                    <Area
+                      type="monotone"
+                      dataKey="netWorth"
+                      stroke="#0f172a"
+                      fill="rgba(15,23,42,0.12)"
+                      strokeWidth={2}
+                      name="Net worth"
                     />
-                    <Bar
-                      dataKey="expense"
-                      name="Expense"
-                      fill="#ef4444"
-                      radius={[6, 6, 4, 4]}
-                      barSize={12}
-                    />
-                  </BarChart>
+                  </AreaChart>
                 </ResponsiveContainer>
               )}
             </ChartCard>
@@ -2814,10 +2746,11 @@ export const Reports: React.FC = () => {
             <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold text-slate-900">
-                  Run-rate & savings quality
+                  Year-by-year performance
                 </CardTitle>
                 <p className="text-xs text-slate-500">
-                  Averages over the last 6 and 12 months.
+                  Income vs expense per year. Click a year to open the yearly
+                  report.
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -2825,76 +2758,147 @@ export const Reports: React.FC = () => {
                   <Skeleton className="h-56 w-full" />
                 ) : (
                   <>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                        <p className="text-xs tracking-wide text-slate-500 uppercase">
-                          Avg monthly net (6m)
-                        </p>
-                        <p className="text-xl font-semibold text-slate-900">
-                          {currency(
-                            Number(totalOverview.run_rate_6m.avg_monthly_net),
-                          )}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          Savings rate:{" "}
-                          {totalOverview.run_rate_6m.savings_rate_pct
-                            ? percent(
-                                Number(
-                                  totalOverview.run_rate_6m.savings_rate_pct,
-                                ),
-                              )
-                            : "—"}
-                        </p>
-                      </div>
-                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                        <p className="text-xs tracking-wide text-slate-500 uppercase">
-                          Avg monthly net (12m)
-                        </p>
-                        <p className="text-xl font-semibold text-slate-900">
-                          {currency(
-                            Number(totalOverview.run_rate_12m.avg_monthly_net),
-                          )}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          Savings rate:{" "}
-                          {totalOverview.run_rate_12m.savings_rate_pct
-                            ? percent(
-                                Number(
-                                  totalOverview.run_rate_12m.savings_rate_pct,
-                                ),
-                              )
-                            : "—"}
-                        </p>
-                      </div>
+                    <div className="h-56 rounded-md border border-slate-100 bg-white p-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={totalYearly}>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="year"
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                          />
+                          <YAxis
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                            tickFormatter={(v) => compactCurrency(Number(v))}
+                          />
+                          <Tooltip
+                            content={({ active, payload }) => {
+                              if (!active || !payload?.length) return null;
+                              const yearLabel = payload[0]?.payload?.year;
+                              const income = Number(
+                                payload[0]?.payload?.income ?? 0,
+                              );
+                              const expense = Number(
+                                payload[0]?.payload?.expense ?? 0,
+                              );
+                              const net = Number(payload[0]?.payload?.net ?? 0);
+                              return (
+                                <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                                  <p className="font-semibold text-slate-800">
+                                    {yearLabel}
+                                  </p>
+                                  <p className="text-slate-600">
+                                    Income: {currency(income)}
+                                  </p>
+                                  <p className="text-slate-600">
+                                    Expense: {currency(expense)}
+                                  </p>
+                                  <p className="text-slate-600">
+                                    Net: {currency(net)}
+                                  </p>
+                                </div>
+                              );
+                            }}
+                          />
+                          <Bar
+                            dataKey="income"
+                            name="Income"
+                            fill="#10b981"
+                            radius={[6, 6, 4, 4]}
+                            barSize={12}
+                          />
+                          <Bar
+                            dataKey="expense"
+                            name="Expense"
+                            fill="#ef4444"
+                            radius={[6, 6, 4, 4]}
+                            barSize={12}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
 
-                    {totalBestWorst ? (
-                      <div className="rounded-md border border-slate-100 bg-white p-3 text-sm text-slate-700">
-                        <p className="mb-2 text-xs font-semibold text-slate-700 uppercase">
-                          Best / worst months (net)
-                        </p>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-600">
-                            Best: {totalBestWorst.best.month}
-                          </span>
-                          <span className="font-semibold text-emerald-700">
-                            {currency(totalBestWorst.best.net)}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-slate-600">
-                            Worst: {totalBestWorst.worst.month}
-                          </span>
-                          <span className="font-semibold text-rose-700">
-                            {currency(totalBestWorst.worst.net)}
-                          </span>
-                        </div>
-                      </div>
-                    ) : null}
+                    <div className="max-h-56 overflow-auto rounded-md border border-slate-100 bg-white">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Year</TableHead>
+                            <TableHead className="text-right">Income</TableHead>
+                            <TableHead className="text-right">
+                              Expense
+                            </TableHead>
+                            <TableHead className="text-right">Net</TableHead>
+                            <TableHead className="hidden text-right md:table-cell">
+                              Savings rate
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {totalYearly.map((row) => (
+                            <TableRow
+                              key={row.year}
+                              className="cursor-pointer"
+                              onClick={() =>
+                                navigate(
+                                  `${PageRoutes.reportsYearly}/${row.year}`,
+                                )
+                              }
+                            >
+                              <TableCell className="font-medium">
+                                {row.year}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold text-emerald-700">
+                                {currency(row.income)}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold text-rose-700">
+                                {currency(row.expense)}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                <span
+                                  className={
+                                    row.net >= 0
+                                      ? "text-emerald-700"
+                                      : "text-rose-700"
+                                  }
+                                >
+                                  {row.net >= 0 ? "+" : "−"}
+                                  {currency(Math.abs(row.net))}
+                                </span>
+                              </TableCell>
+                              <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
+                                {row.savingsRate === null
+                                  ? "—"
+                                  : percent(row.savingsRate)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
 
-                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
-                      Tip: use this view to judge “typical months”, not one-off
-                      spikes.
+                    <div className="flex flex-wrap gap-2 text-xs text-slate-600">
+                      {totalOverview.best_year ? (
+                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
+                          Best: {totalOverview.best_year}
+                        </span>
+                      ) : null}
+                      {totalOverview.worst_year ? (
+                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
+                          Worst: {totalOverview.worst_year}
+                        </span>
+                      ) : null}
+                      {totalKpis?.lifetimeSavingsRate != null ? (
+                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
+                          Lifetime savings rate:{" "}
+                          {percent(totalKpis?.lifetimeSavingsRate ?? 0)}
+                        </span>
+                      ) : null}
                     </div>
                   </>
                 )}
@@ -2904,51 +2908,14 @@ export const Reports: React.FC = () => {
 
           <div className="grid gap-3 lg:grid-cols-2">
             <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
-              <CardHeader className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <CardTitle className="text-base font-semibold text-slate-900">
-                    Investments (snapshot-based)
-                  </CardTitle>
-                  <p className="text-xs text-slate-500">
-                    Not a spending category. Clear account filters to include.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={!totalInvestments || selectedAccounts.length > 0}
-                  onClick={() => {
-                    if (!totalInvestments) return;
-                    openDetailDialog({
-                      kind: "investments",
-                      title: "Investments (last 12m)",
-                      asOf: totalInvestments.asOf,
-                      monthly: totalInvestments.monthly.map((row) => ({
-                        month: row.month ?? "",
-                        value: row.value,
-                      })),
-                      accounts: totalInvestments.accounts.map((row) => ({
-                        name: row.name,
-                        start: row.start,
-                        end: row.end,
-                        change: row.change,
-                      })),
-                      summary: {
-                        start: Number(
-                          totalOverview?.investments.value_12m_ago ?? 0,
-                        ),
-                        end: totalInvestments.value,
-                        change: totalInvestments.change12m,
-                        changePct: totalInvestments.changePct12m,
-                        contributions: totalInvestments.contributions12m,
-                        withdrawals: totalInvestments.withdrawals12m,
-                      },
-                    });
-                  }}
-                >
-                  Details
-                </Button>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Investments (snapshot-based)
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Value is tracked via snapshots. Clear account filters to
+                  include.
+                </p>
               </CardHeader>
               <CardContent className="space-y-4">
                 {!totalOverview ? (
@@ -2963,48 +2930,15 @@ export const Reports: React.FC = () => {
                   </div>
                 ) : (
                   <>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                        <p className="text-xs tracking-wide text-slate-500 uppercase">
-                          Value
-                        </p>
-                        <p className="font-semibold text-slate-900">
-                          {currency(totalInvestments.value)}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {totalInvestments.change12m >= 0 ? "+" : "−"}
-                          {currency(Math.abs(totalInvestments.change12m))}{" "}
-                          {totalInvestments.changePct12m !== null
-                            ? `(${percent(totalInvestments.changePct12m)})`
-                            : ""}
-                        </p>
-                      </div>
-                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                        <p className="text-xs tracking-wide text-slate-500 uppercase">
-                          Net contributions (12m)
-                        </p>
-                        <p className="font-semibold text-slate-900">
-                          {currency(
-                            totalInvestments.contributions12m -
-                              totalInvestments.withdrawals12m,
-                          )}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          In: {currency(totalInvestments.contributions12m)} •
-                          Out: {currency(totalInvestments.withdrawals12m)}
-                        </p>
-                      </div>
-                    </div>
-
                     <div className="h-44 rounded-md border border-slate-100 bg-white p-2">
                       <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={totalInvestments.monthly}>
+                        <AreaChart data={totalInvestments.series}>
                           <CartesianGrid
                             strokeDasharray="3 3"
                             vertical={false}
                           />
                           <XAxis
-                            dataKey="month"
+                            dataKey="date"
                             tickLine={false}
                             axisLine={false}
                             tick={{ fill: "#475569", fontSize: 12 }}
@@ -3030,6 +2964,64 @@ export const Reports: React.FC = () => {
                         </AreaChart>
                       </ResponsiveContainer>
                     </div>
+                    <div className="max-h-56 overflow-auto rounded-md border border-slate-100 bg-white">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Year</TableHead>
+                            <TableHead className="text-right">End</TableHead>
+                            <TableHead className="hidden text-right md:table-cell">
+                              Net contrib
+                            </TableHead>
+                            <TableHead className="hidden text-right md:table-cell">
+                              Implied return
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {totalInvestments.yearly.map((row) => (
+                            <TableRow key={row.year}>
+                              <TableCell className="font-medium">
+                                {row.year}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {currency(row.endValue)}
+                              </TableCell>
+                              <TableCell className="hidden text-right md:table-cell">
+                                {currency(row.netContributions)}
+                              </TableCell>
+                              <TableCell className="hidden text-right md:table-cell">
+                                {row.impliedReturn === null
+                                  ? "—"
+                                  : currency(row.impliedReturn)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <div className="max-h-44 overflow-auto rounded-md border border-slate-100 bg-white">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Account</TableHead>
+                            <TableHead className="text-right">Value</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {totalInvestments.accounts.map((row) => (
+                            <TableRow key={row.name}>
+                              <TableCell className="max-w-[220px] truncate font-medium">
+                                {row.name}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {currency(row.value)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
                   </>
                 )}
               </CardContent>
@@ -3038,54 +3030,60 @@ export const Reports: React.FC = () => {
             <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold text-slate-900">
-                  Debt overview (12m)
+                  Debt overview
                 </CardTitle>
                 <p className="text-xs text-slate-500">
-                  End balance and change vs 12 months ago.
+                  Total debt and debt accounts. Values are as-of now, with a
+                  year-over-year anchor when available.
                 </p>
               </CardHeader>
-              <CardContent className="space-y-3">
+              <CardContent className="space-y-4">
                 {!totalOverview ? (
                   <Skeleton className="h-56 w-full" />
                 ) : (
                   <>
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-3 sm:grid-cols-3">
                       <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
                         <p className="text-xs tracking-wide text-slate-500 uppercase">
                           Total debt
                         </p>
                         <p className="font-semibold text-slate-900">
-                          {currency(Number(totalOverview.debt.total))}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          Δ 12m:{" "}
-                          {currency(
-                            Math.abs(Number(totalOverview.debt.change_12m)),
-                          )}{" "}
-                          <span
-                            className={
-                              Number(totalOverview.debt.change_12m) <= 0
-                                ? "text-emerald-700"
-                                : "text-rose-700"
-                            }
-                          >
-                            (
-                            {Number(totalOverview.debt.change_12m) <= 0
-                              ? "down"
-                              : "up"}
-                            )
-                          </span>
+                          {currency(Number(totalOverview.debt.total_current))}
                         </p>
                       </div>
                       <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
                         <p className="text-xs tracking-wide text-slate-500 uppercase">
-                          Debt / income (12m)
+                          Δ vs prev year end
                         </p>
                         <p className="font-semibold text-slate-900">
-                          {totalOverview.debt.debt_to_income_12m
+                          {totalOverview.debt.change_since_prev_year_end
+                            ? `${
+                                Number(
+                                  totalOverview.debt.change_since_prev_year_end,
+                                ) >= 0
+                                  ? "+"
+                                  : "−"
+                              }${currency(
+                                Math.abs(
+                                  Number(
+                                    totalOverview.debt
+                                      .change_since_prev_year_end,
+                                  ),
+                                ),
+                              )}`
+                            : "—"}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Debt / income
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {totalOverview.debt.debt_to_income_latest_year
                             ? `${(
-                                Number(totalOverview.debt.debt_to_income_12m) *
-                                100
+                                Number(
+                                  totalOverview.debt.debt_to_income_latest_year,
+                                ) * 100
                               ).toLocaleString("sv-SE", {
                                 maximumFractionDigits: 0,
                               })}%`
@@ -3093,13 +3091,49 @@ export const Reports: React.FC = () => {
                         </p>
                       </div>
                     </div>
+                    <div className="h-44 rounded-md border border-slate-100 bg-white p-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={totalDebtSeries}>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="date"
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                          />
+                          <YAxis
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                            tickFormatter={(v) => compactCurrency(Number(v))}
+                          />
+                          <Tooltip
+                            formatter={(value) => currency(Number(value))}
+                            contentStyle={{ fontSize: 12 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="debt"
+                            stroke="#f97316"
+                            strokeWidth={2}
+                            dot={false}
+                            name="Debt"
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
                     <div className="max-h-56 overflow-auto rounded-md border border-slate-100 bg-white">
                       {totalDebtAccounts.length ? (
                         <Table>
                           <TableHeader>
                             <TableRow>
                               <TableHead>Account</TableHead>
-                              <TableHead className="text-right">End</TableHead>
+                              <TableHead className="text-right">
+                                Current
+                              </TableHead>
                               <TableHead className="hidden text-right md:table-cell">
                                 Δ
                               </TableHead>
@@ -3107,40 +3141,28 @@ export const Reports: React.FC = () => {
                           </TableHeader>
                           <TableBody>
                             {totalDebtAccounts.map((row) => (
-                              <TableRow
-                                key={row.id}
-                                className="cursor-pointer"
-                                onClick={() =>
-                                  openDetailDialog({
-                                    kind: "debt",
-                                    title: `${row.name} (12m)`,
-                                    monthly: row.monthly.map((m) => ({
-                                      month: m.month ?? "",
-                                      value: m.value,
-                                    })),
-                                    startDebt: row.start,
-                                    endDebt: row.end,
-                                    delta: row.delta,
-                                  })
-                                }
-                              >
+                              <TableRow key={row.id}>
                                 <TableCell className="max-w-[180px] truncate font-medium">
                                   {row.name}
                                 </TableCell>
                                 <TableCell className="text-right font-semibold">
-                                  {currency(row.end)}
+                                  {currency(row.current)}
                                 </TableCell>
                                 <TableCell className="hidden text-right text-xs md:table-cell">
-                                  <span
-                                    className={
-                                      row.delta <= 0
-                                        ? "text-emerald-700"
-                                        : "text-rose-700"
-                                    }
-                                  >
-                                    {row.delta >= 0 ? "+" : "−"}
-                                    {currency(Math.abs(row.delta))}
-                                  </span>
+                                  {row.delta === null ? (
+                                    "—"
+                                  ) : (
+                                    <span
+                                      className={
+                                        row.delta <= 0
+                                          ? "text-emerald-700"
+                                          : "text-rose-700"
+                                      }
+                                    >
+                                      {row.delta >= 0 ? "+" : "−"}
+                                      {currency(Math.abs(row.delta))}
+                                    </span>
+                                  )}
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -3161,59 +3183,46 @@ export const Reports: React.FC = () => {
           <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
             <CardHeader className="pb-2">
               <CardTitle className="text-base font-semibold text-slate-900">
-                Account flows (12m)
+                Accounts overview
               </CardTitle>
               <p className="text-xs text-slate-500">
-                Net operating (income − expense) vs net transfers. Click a row
-                for monthly detail.
+                Current balance plus lifetime operating and transfers totals.
               </p>
             </CardHeader>
             <CardContent className="max-h-[32rem] overflow-auto">
               {!totalOverview ? (
                 <Skeleton className="h-56 w-full" />
-              ) : totalAccountFlows.length ? (
+              ) : totalAccountsOverview.length ? (
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Account</TableHead>
+                      <TableHead className="hidden md:table-cell">
+                        Type
+                      </TableHead>
+                      <TableHead className="text-right">Balance</TableHead>
                       <TableHead className="hidden text-right md:table-cell">
                         Net operating
                       </TableHead>
                       <TableHead className="hidden text-right md:table-cell">
                         Net transfers
                       </TableHead>
-                      <TableHead className="text-right">Δ</TableHead>
+                      <TableHead className="hidden md:table-cell">
+                        First tx
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {totalAccountFlows.map((row) => (
-                      <TableRow
-                        key={row.id}
-                        className="cursor-pointer"
-                        onClick={() =>
-                          openDetailDialog({
-                            kind: "account",
-                            title: `${row.name} (12m)`,
-                            accountType: row.accountType,
-                            startBalance: row.startBalance,
-                            endBalance: row.endBalance,
-                            change: row.change,
-                            monthly: row.monthly.map((m) => ({
-                              month: m.month ?? "",
-                              income: m.income,
-                              expense: m.expense,
-                              transfersIn: m.transfersIn,
-                              transfersOut: m.transfersOut,
-                              change: m.change,
-                            })),
-                          })
-                        }
-                      >
+                    {totalAccountsOverview.map((row) => (
+                      <TableRow key={row.id}>
                         <TableCell className="max-w-[220px] truncate font-medium">
                           {row.name}
-                          <span className="ml-2 text-xs text-slate-500">
-                            ({row.accountType})
-                          </span>
+                        </TableCell>
+                        <TableCell className="hidden text-xs text-slate-600 md:table-cell">
+                          {row.type}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">
+                          {currency(row.balance)}
                         </TableCell>
                         <TableCell className="hidden text-right md:table-cell">
                           {currency(row.netOperating)}
@@ -3221,17 +3230,10 @@ export const Reports: React.FC = () => {
                         <TableCell className="hidden text-right md:table-cell">
                           {currency(row.netTransfers)}
                         </TableCell>
-                        <TableCell className="text-right font-semibold">
-                          <span
-                            className={
-                              row.change >= 0
-                                ? "text-emerald-700"
-                                : "text-rose-700"
-                            }
-                          >
-                            {row.change >= 0 ? "+" : "−"}
-                            {currency(Math.abs(row.change))}
-                          </span>
+                        <TableCell className="hidden text-xs text-slate-600 md:table-cell">
+                          {row.firstDate
+                            ? new Date(row.firstDate).getFullYear()
+                            : "—"}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -3239,7 +3241,7 @@ export const Reports: React.FC = () => {
                 </Table>
               ) : (
                 <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-                  No account flows available.
+                  No accounts available.
                 </div>
               )}
             </CardContent>
@@ -3249,58 +3251,94 @@ export const Reports: React.FC = () => {
             <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold text-slate-900">
-                  Income sources (12m)
+                  Income sources
                 </CardTitle>
                 <p className="text-xs text-slate-500">
-                  Grouped by description. Click for seasonality.
+                  Lifetime totals with biggest year-over-year shifts.
                 </p>
               </CardHeader>
-              <CardContent className="max-h-[26rem] overflow-auto">
+              <CardContent className="space-y-3">
                 {!totalOverview ? (
                   <Skeleton className="h-56 w-full" />
-                ) : totalIncomeSources.length ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Source</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                        <TableHead className="hidden text-right md:table-cell">
-                          Tx
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {totalIncomeSources.slice(0, 14).map((row) => (
-                        <TableRow
-                          key={row.source}
-                          className="cursor-pointer"
-                          onClick={() =>
-                            openDetailDialog({
-                              kind: "source",
-                              title: row.source,
-                              subtitle: "Income • last 12m",
-                              monthly: row.monthly.map((m) => ({
-                                month: m.month ?? "",
-                                total: m.total,
-                              })),
-                              total: row.total,
-                              txCount: row.txCount,
-                            })
-                          }
-                        >
-                          <TableCell className="max-w-[220px] truncate font-medium">
-                            {row.source}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold">
-                            {currency(row.total)}
-                          </TableCell>
-                          <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
-                            {row.txCount}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                ) : totalIncomeSourcesLifetime.length ? (
+                  <>
+                    <div className="max-h-52 overflow-auto rounded-md border border-slate-100 bg-white">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Source</TableHead>
+                            <TableHead className="text-right">
+                              Lifetime
+                            </TableHead>
+                            <TableHead className="hidden text-right md:table-cell">
+                              Tx
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {totalIncomeSourcesLifetime
+                            .slice(0, 12)
+                            .map((row) => (
+                              <TableRow key={row.source}>
+                                <TableCell className="max-w-[220px] truncate font-medium">
+                                  {row.source}
+                                </TableCell>
+                                <TableCell className="text-right font-semibold">
+                                  {currency(row.total)}
+                                </TableCell>
+                                <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
+                                  {row.txCount}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <div className="rounded-md border border-slate-100 bg-white">
+                      <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                        Biggest YoY changes
+                      </div>
+                      <div className="max-h-44 overflow-auto">
+                        {totalIncomeSourceChanges.length ? (
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Source</TableHead>
+                                <TableHead className="text-right">Δ</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {totalIncomeSourceChanges
+                                .slice(0, 10)
+                                .map((row) => (
+                                  <TableRow key={row.source}>
+                                    <TableCell className="max-w-[220px] truncate font-medium">
+                                      {row.source}
+                                    </TableCell>
+                                    <TableCell className="text-right font-semibold">
+                                      <span
+                                        className={
+                                          row.delta >= 0
+                                            ? "text-emerald-700"
+                                            : "text-rose-700"
+                                        }
+                                      >
+                                        {row.delta >= 0 ? "+" : "−"}
+                                        {currency(Math.abs(row.delta))}
+                                      </span>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                            </TableBody>
+                          </Table>
+                        ) : (
+                          <div className="p-4 text-sm text-slate-600">
+                            Not enough history for YoY source changes yet.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
                 ) : (
                   <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
                     No income sources yet.
@@ -3312,58 +3350,94 @@ export const Reports: React.FC = () => {
             <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold text-slate-900">
-                  Expense sources (12m)
+                  Expense sources
                 </CardTitle>
                 <p className="text-xs text-slate-500">
-                  Grouped by description. Click for seasonality.
+                  Lifetime totals with biggest year-over-year shifts.
                 </p>
               </CardHeader>
-              <CardContent className="max-h-[26rem] overflow-auto">
+              <CardContent className="space-y-3">
                 {!totalOverview ? (
                   <Skeleton className="h-56 w-full" />
-                ) : totalExpenseSources.length ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Source</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                        <TableHead className="hidden text-right md:table-cell">
-                          Tx
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {totalExpenseSources.slice(0, 14).map((row) => (
-                        <TableRow
-                          key={row.source}
-                          className="cursor-pointer"
-                          onClick={() =>
-                            openDetailDialog({
-                              kind: "source",
-                              title: row.source,
-                              subtitle: "Expense • last 12m",
-                              monthly: row.monthly.map((m) => ({
-                                month: m.month ?? "",
-                                total: m.total,
-                              })),
-                              total: row.total,
-                              txCount: row.txCount,
-                            })
-                          }
-                        >
-                          <TableCell className="max-w-[220px] truncate font-medium">
-                            {row.source}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold">
-                            {currency(row.total)}
-                          </TableCell>
-                          <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
-                            {row.txCount}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                ) : totalExpenseSourcesLifetime.length ? (
+                  <>
+                    <div className="max-h-52 overflow-auto rounded-md border border-slate-100 bg-white">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Source</TableHead>
+                            <TableHead className="text-right">
+                              Lifetime
+                            </TableHead>
+                            <TableHead className="hidden text-right md:table-cell">
+                              Tx
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {totalExpenseSourcesLifetime
+                            .slice(0, 12)
+                            .map((row) => (
+                              <TableRow key={row.source}>
+                                <TableCell className="max-w-[220px] truncate font-medium">
+                                  {row.source}
+                                </TableCell>
+                                <TableCell className="text-right font-semibold">
+                                  {currency(row.total)}
+                                </TableCell>
+                                <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
+                                  {row.txCount}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <div className="rounded-md border border-slate-100 bg-white">
+                      <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                        Biggest YoY changes
+                      </div>
+                      <div className="max-h-44 overflow-auto">
+                        {totalExpenseSourceChanges.length ? (
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Source</TableHead>
+                                <TableHead className="text-right">Δ</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {totalExpenseSourceChanges
+                                .slice(0, 10)
+                                .map((row) => (
+                                  <TableRow key={row.source}>
+                                    <TableCell className="max-w-[220px] truncate font-medium">
+                                      {row.source}
+                                    </TableCell>
+                                    <TableCell className="text-right font-semibold">
+                                      <span
+                                        className={
+                                          row.delta <= 0
+                                            ? "text-emerald-700"
+                                            : "text-rose-700"
+                                        }
+                                      >
+                                        {row.delta >= 0 ? "+" : "−"}
+                                        {currency(Math.abs(row.delta))}
+                                      </span>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                            </TableBody>
+                          </Table>
+                        ) : (
+                          <div className="p-4 text-sm text-slate-600">
+                            Not enough history for YoY source changes yet.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
                 ) : (
                   <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
                     No expense sources yet.
@@ -3377,69 +3451,64 @@ export const Reports: React.FC = () => {
             <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold text-slate-900">
-                  Top categories (12m)
+                  Expense categories (lifetime)
                 </CardTitle>
                 <p className="text-xs text-slate-500">
-                  Click a category to see seasonality.
+                  Biggest lifetime expense categories.
                 </p>
               </CardHeader>
-              <CardContent className="max-h-[28rem] overflow-auto">
+              <CardContent className="h-80">
                 {!totalOverview ? (
                   <Skeleton className="h-56 w-full" />
-                ) : totalTopCategories12m.length ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Category</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                        <TableHead className="hidden text-right md:table-cell">
-                          Tx
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {totalTopCategories12m.slice(0, 14).map((row) => {
-                        const change = totalCategoryChanges.find(
-                          (c) => c.id === row.id,
-                        );
-                        return (
-                          <TableRow
-                            key={row.name}
-                            className="cursor-pointer"
-                            onClick={() =>
-                              openDetailDialog({
-                                kind: "category",
-                                title: row.name,
-                                subtitle: "Expense category • last 12m",
-                                monthly: row.monthly.map((m) => ({
-                                  month: m.month ?? "",
-                                  total: m.total,
-                                })),
-                                total: row.total,
-                                prevTotal: change?.prev,
-                                delta: change?.delta,
-                                deltaPct: change?.deltaPct ?? null,
-                                txCount: row.txCount,
-                              })
-                            }
-                          >
-                            <TableCell className="max-w-[220px] truncate font-medium">
-                              {row.name}
-                            </TableCell>
-                            <TableCell className="text-right font-semibold">
-                              {currency(row.total)}
-                            </TableCell>
-                            <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
-                              {row.txCount}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                ) : totalExpenseCategoriesLifetime.length ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={totalExpenseCategoriesLifetime}
+                      layout="vertical"
+                      margin={{ left: 16, right: 12, top: 8, bottom: 8 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" hide />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        tickLine={false}
+                        axisLine={false}
+                        width={140}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                      />
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (!active || !payload?.length) return null;
+                          const item = payload[0]?.payload;
+                          if (!isRecord(item)) return null;
+                          const name =
+                            typeof item.name === "string"
+                              ? item.name
+                              : "Category";
+                          const total = Number(item.total ?? 0);
+                          return (
+                            <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                              <p className="font-semibold text-slate-800">
+                                {name}
+                              </p>
+                              <p className="text-slate-600">
+                                {currency(total)}
+                              </p>
+                            </div>
+                          );
+                        }}
+                      />
+                      <Bar dataKey="total" radius={[6, 6, 6, 6]}>
+                        {totalExpenseCategoriesLifetime.map((entry) => (
+                          <Cell key={entry.name} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 ) : (
                   <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-                    No category data yet.
+                    No lifetime category data yet.
                   </div>
                 )}
               </CardContent>
@@ -3448,16 +3517,247 @@ export const Reports: React.FC = () => {
             <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold text-slate-900">
-                  Category changes (12m vs prior 12m)
+                  Expense mix (last 6 years)
                 </CardTitle>
                 <p className="text-xs text-slate-500">
-                  Ranked by increased spend.
+                  Share of expenses by category (top + other).
                 </p>
               </CardHeader>
-              <CardContent className="max-h-[28rem] overflow-auto">
+              <CardContent className="h-80">
                 {!totalOverview ? (
                   <Skeleton className="h-56 w-full" />
-                ) : totalCategoryChanges.length ? (
+                ) : totalExpenseMix.data.length ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={totalExpenseMix.data}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="year"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                        domain={[0, 100]}
+                        tickFormatter={(v) =>
+                          `${Number(v).toLocaleString("sv-SE", {
+                            maximumFractionDigits: 0,
+                          })}%`
+                        }
+                      />
+                      <Tooltip
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload?.length) return null;
+                          return (
+                            <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                              <p className="font-semibold text-slate-800">
+                                {label}
+                              </p>
+                              {payload
+                                .filter((p) => Number(p.value ?? 0) > 0.1)
+                                .map((p) => (
+                                  <p
+                                    key={String(p.dataKey)}
+                                    className="text-slate-600"
+                                  >
+                                    {p.name}:{" "}
+                                    {Number(p.value ?? 0).toLocaleString(
+                                      "sv-SE",
+                                      { maximumFractionDigits: 1 },
+                                    )}
+                                    %
+                                  </p>
+                                ))}
+                            </div>
+                          );
+                        }}
+                      />
+                      {totalExpenseMix.keys.map((key) => (
+                        <Bar
+                          key={key}
+                          dataKey={key}
+                          stackId="mix"
+                          fill={totalExpenseMix.colors[key] ?? "#94a3b8"}
+                          name={key}
+                          isAnimationActive={false}
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No category mix data yet.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Income categories (lifetime)
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Biggest lifetime income categories.
+                </p>
+              </CardHeader>
+              <CardContent className="h-80">
+                {!totalOverview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : totalIncomeCategoriesLifetime.length ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={totalIncomeCategoriesLifetime}
+                      layout="vertical"
+                      margin={{ left: 16, right: 12, top: 8, bottom: 8 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis type="number" hide />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        tickLine={false}
+                        axisLine={false}
+                        width={140}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                      />
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (!active || !payload?.length) return null;
+                          const item = payload[0]?.payload;
+                          if (!isRecord(item)) return null;
+                          const name =
+                            typeof item.name === "string"
+                              ? item.name
+                              : "Category";
+                          const total = Number(item.total ?? 0);
+                          return (
+                            <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                              <p className="font-semibold text-slate-800">
+                                {name}
+                              </p>
+                              <p className="text-slate-600">
+                                {currency(total)}
+                              </p>
+                            </div>
+                          );
+                        }}
+                      />
+                      <Bar dataKey="total" radius={[6, 6, 6, 6]}>
+                        {totalIncomeCategoriesLifetime.map((entry) => (
+                          <Cell key={entry.name} fill={entry.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No lifetime category data yet.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Income mix (last 6 years)
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Share of income by category (top + other).
+                </p>
+              </CardHeader>
+              <CardContent className="h-80">
+                {!totalOverview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : totalIncomeMix.data.length ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={totalIncomeMix.data}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="year"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                        domain={[0, 100]}
+                        tickFormatter={(v) =>
+                          `${Number(v).toLocaleString("sv-SE", {
+                            maximumFractionDigits: 0,
+                          })}%`
+                        }
+                      />
+                      <Tooltip
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload?.length) return null;
+                          return (
+                            <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                              <p className="font-semibold text-slate-800">
+                                {label}
+                              </p>
+                              {payload
+                                .filter((p) => Number(p.value ?? 0) > 0.1)
+                                .map((p) => (
+                                  <p
+                                    key={String(p.dataKey)}
+                                    className="text-slate-600"
+                                  >
+                                    {p.name}:{" "}
+                                    {Number(p.value ?? 0).toLocaleString(
+                                      "sv-SE",
+                                      { maximumFractionDigits: 1 },
+                                    )}
+                                    %
+                                  </p>
+                                ))}
+                            </div>
+                          );
+                        }}
+                      />
+                      {totalIncomeMix.keys.map((key) => (
+                        <Bar
+                          key={key}
+                          dataKey={key}
+                          stackId="mix"
+                          fill={totalIncomeMix.colors[key] ?? "#94a3b8"}
+                          name={key}
+                          isAnimationActive={false}
+                        />
+                      ))}
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No category mix data yet.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Expense category changes (YoY)
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Biggest changes vs the previous year (latest complete year
+                  when available).
+                </p>
+              </CardHeader>
+              <CardContent className="max-h-[26rem] overflow-auto">
+                {!totalOverview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : totalExpenseCategoryChanges.length ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -3469,28 +3769,22 @@ export const Reports: React.FC = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {totalCategoryChanges.slice(0, 14).map((row) => (
-                        <TableRow
-                          key={row.name}
-                          className="cursor-pointer"
-                          onClick={() =>
-                            openDetailDialog({
-                              kind: "category",
-                              title: row.name,
-                              subtitle:
-                                "Expense category • change vs prior 12m",
-                              total: row.amount,
-                              prevTotal: row.prev,
-                              delta: row.delta,
-                              deltaPct: row.deltaPct,
-                            })
-                          }
-                        >
+                      {totalExpenseCategoryChanges.slice(0, 14).map((row) => (
+                        <TableRow key={row.name}>
                           <TableCell className="max-w-[220px] truncate font-medium">
                             {row.name}
                           </TableCell>
                           <TableCell className="text-right font-semibold">
-                            {currency(row.delta)}
+                            <span
+                              className={
+                                row.delta <= 0
+                                  ? "text-emerald-700"
+                                  : "text-rose-700"
+                              }
+                            >
+                              {row.delta >= 0 ? "+" : "−"}
+                              {currency(Math.abs(row.delta))}
+                            </span>
                           </TableCell>
                           <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
                             {row.deltaPct !== null
@@ -3508,55 +3802,53 @@ export const Reports: React.FC = () => {
                 )}
               </CardContent>
             </Card>
-          </div>
 
-          <div className="grid gap-3 lg:grid-cols-2">
             <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold text-slate-900">
-                  Top categories (lifetime)
+                  Income category changes (YoY)
                 </CardTitle>
                 <p className="text-xs text-slate-500">
-                  The long-run picture across all imported data.
+                  Biggest changes vs the previous year (latest complete year
+                  when available).
                 </p>
               </CardHeader>
               <CardContent className="max-h-[26rem] overflow-auto">
                 {!totalOverview ? (
                   <Skeleton className="h-56 w-full" />
-                ) : totalTopCategoriesLifetime.length ? (
+                ) : totalIncomeCategoryChanges.length ? (
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Category</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-right">Δ</TableHead>
                         <TableHead className="hidden text-right md:table-cell">
-                          Tx
+                          YoY
                         </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {totalTopCategoriesLifetime.slice(0, 14).map((row) => (
-                        <TableRow
-                          key={row.name}
-                          className="cursor-pointer"
-                          onClick={() =>
-                            openDetailDialog({
-                              kind: "category",
-                              title: row.name,
-                              subtitle: "Expense category • lifetime",
-                              total: row.total,
-                              txCount: row.txCount,
-                            })
-                          }
-                        >
+                      {totalIncomeCategoryChanges.slice(0, 14).map((row) => (
+                        <TableRow key={row.name}>
                           <TableCell className="max-w-[220px] truncate font-medium">
                             {row.name}
                           </TableCell>
                           <TableCell className="text-right font-semibold">
-                            {currency(row.total)}
+                            <span
+                              className={
+                                row.delta >= 0
+                                  ? "text-emerald-700"
+                                  : "text-rose-700"
+                              }
+                            >
+                              {row.delta >= 0 ? "+" : "−"}
+                              {currency(Math.abs(row.delta))}
+                            </span>
                           </TableCell>
                           <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
-                            {row.txCount}
+                            {row.deltaPct !== null
+                              ? percent(row.deltaPct)
+                              : "—"}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -3564,87 +3856,8 @@ export const Reports: React.FC = () => {
                   </Table>
                 ) : (
                   <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-                    No lifetime category data yet.
+                    No change data yet.
                   </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold text-slate-900">
-                  Subscriptions snapshot
-                </CardTitle>
-                <p className="text-xs text-slate-500">
-                  Uses subscription matching (not filtered by accounts yet).
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {subscriptionSummaryLoading ? (
-                  <Skeleton className="h-56 w-full" />
-                ) : !totalSubscriptions ? (
-                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-                    No subscription summary yet.
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                        <p className="text-xs tracking-wide text-slate-500 uppercase">
-                          Current month
-                        </p>
-                        <p className="font-semibold text-slate-900">
-                          {currency(totalSubscriptions.totalCurrent)}
-                        </p>
-                      </div>
-                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                        <p className="text-xs tracking-wide text-slate-500 uppercase">
-                          Trailing 12m
-                        </p>
-                        <p className="font-semibold text-slate-900">
-                          {currency(totalSubscriptions.total12m)}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="max-h-56 overflow-auto rounded-md border border-slate-100 bg-white">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Subscription</TableHead>
-                            <TableHead className="text-right">12m</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {totalSubscriptions.top.map((row) => (
-                            <TableRow
-                              key={row.id}
-                              className="cursor-pointer"
-                              onClick={() =>
-                                openDetailDialog({
-                                  kind: "subscription",
-                                  title: row.name,
-                                  subtitle: "Subscriptions • trailing 12m",
-                                  monthly: row.monthly.map((m) => ({
-                                    month: m.month ?? "",
-                                    total: m.total,
-                                  })),
-                                  trailing12m: row.trailing12m,
-                                  currentMonth: row.currentMonth,
-                                })
-                              }
-                            >
-                              <TableCell className="max-w-[220px] truncate font-medium">
-                                {row.name}
-                              </TableCell>
-                              <TableCell className="text-right font-semibold">
-                                {currency(row.trailing12m)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </>
                 )}
               </CardContent>
             </Card>
@@ -3679,6 +3892,7 @@ export const Reports: React.FC = () => {
         </>
       )}
 
+      {/* Legacy total detail dialog (no longer used after /reports/total rework).
       {routeMode === "total" ? (
         <Dialog
           open={detailDialogOpen}
@@ -4181,7 +4395,7 @@ export const Reports: React.FC = () => {
             )}
           </DialogContent>
         </Dialog>
-      ) : null}
+      ) : null} */}
     </MotionPage>
   );
 };

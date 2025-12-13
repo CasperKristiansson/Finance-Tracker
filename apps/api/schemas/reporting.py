@@ -217,51 +217,123 @@ class CategoryTotalEntry(BaseModel):
     transaction_count: int
 
 
-class TotalInvestmentsSummary(BaseModel):
-    as_of: str
-    current_value: Decimal
-    value_12m_ago: Decimal
-    change_12m: Decimal
-    change_pct_12m: Optional[Decimal] = None
+class TotalOverviewKpis(BaseModel):
+    net_worth: Decimal
+    cash_balance: Decimal
+    debt_total: Decimal
+    investments_value: Optional[Decimal] = None
+    lifetime_income: Decimal
+    lifetime_expense: Decimal
+    lifetime_saved: Decimal
+    lifetime_savings_rate_pct: Optional[Decimal] = None
+
+
+class TotalYearEntry(BaseModel):
+    year: int
+    income: Decimal
+    expense: Decimal
+    net: Decimal
+    savings_rate_pct: Optional[Decimal] = None
+
+
+class YearCategoryMixEntry(BaseModel):
+    year: int
+    categories: List[CategoryTotalEntry]
+
+
+class SourceChangeEntry(BaseModel):
+    source: str
+    amount: Decimal
+    prev_amount: Decimal
+    delta: Decimal
+    delta_pct: Optional[Decimal] = None
+
+
+class SourceTotalEntry(BaseModel):
+    source: str
+    total: Decimal
+    transaction_count: int
+
+
+class TotalAccountOverviewEntry(BaseModel):
+    account_id: str
+    name: str
+    account_type: AccountType
+    current_balance: Decimal
+    operating_income: Decimal
+    operating_expense: Decimal
+    net_operating: Decimal
+    transfers_in: Decimal
+    transfers_out: Decimal
+    net_transfers: Decimal
+    first_transaction_date: Optional[str] = None
+
+
+class InvestmentSeriesPoint(BaseModel):
+    date: str
+    value: Decimal
+
+
+class InvestmentYearEntry(BaseModel):
+    year: int
+    end_value: Decimal
+    contributions: Decimal
+    withdrawals: Decimal
+    net_contributions: Decimal
+    implied_return: Optional[Decimal] = None
+
+
+class InvestmentAccountValueEntry(BaseModel):
+    account_name: str
+    value: Decimal
+
+
+class TotalInvestmentsOverview(BaseModel):
+    series: List[InvestmentSeriesPoint]
+    yearly: List[InvestmentYearEntry]
     contributions_lifetime: Decimal
     withdrawals_lifetime: Decimal
     net_contributions_lifetime: Decimal
-    contributions_12m: Decimal
-    withdrawals_12m: Decimal
-    net_contributions_12m: Decimal
-    monthly_values_12m: List[Decimal]
-    accounts: List["InvestmentAccountSummaryEntry"]
+    accounts_latest: List[InvestmentAccountValueEntry]
 
 
-class TotalDebtSummary(BaseModel):
-    total: Decimal
-    value_12m_ago: Decimal
-    change_12m: Decimal
-    debt_to_income_12m: Optional[Decimal] = None
-    accounts: List["DebtOverviewEntry"]
+class TotalDebtAccountEntry(BaseModel):
+    account_id: str
+    name: str
+    current_debt: Decimal
+    prev_year_end_debt: Optional[Decimal] = None
+    delta: Optional[Decimal] = None
+
+
+class TotalDebtOverview(BaseModel):
+    total_current: Decimal
+    total_prev_year_end: Optional[Decimal] = None
+    change_since_prev_year_end: Optional[Decimal] = None
+    debt_to_income_latest_year: Optional[Decimal] = None
+    series: List["DebtSeriesPoint"]
+    accounts: List[TotalDebtAccountEntry]
 
 
 class TotalOverviewResponse(BaseModel):
     as_of: str
-    net_worth: Decimal
-    net_worth_change: NetWorthChangeWindow
-    lifetime: "SavingsIndicator"
-    last_12m: "SavingsIndicator"
-    run_rate_6m: RunRateSummary
-    run_rate_12m: RunRateSummary
-    cash_runway: CashRunwaySummary
-    investments: TotalInvestmentsSummary
-    debt: TotalDebtSummary
-    account_flows: List["AccountFlowEntry"]
-    income_sources: List["SourceSummaryEntry"]
-    expense_sources: List["SourceSummaryEntry"]
-    top_categories_12m: List["YearlyCategoryBreakdownEntry"]
-    top_categories_lifetime: List[CategoryTotalEntry]
-    category_changes_12m: List["CategoryChangeEntry"]
-    monthly_income_12m: List[Decimal]
-    monthly_expense_12m: List[Decimal]
-    monthly_income_prev_12m: List[Decimal]
-    monthly_expense_prev_12m: List[Decimal]
+    kpis: TotalOverviewKpis
+    net_worth_series: List["NetWorthSeriesPoint"]
+    yearly: List[TotalYearEntry]
+    best_year: Optional[int] = None
+    worst_year: Optional[int] = None
+    expense_categories_lifetime: List[CategoryTotalEntry]
+    income_categories_lifetime: List[CategoryTotalEntry]
+    expense_category_mix_by_year: List[YearCategoryMixEntry]
+    income_category_mix_by_year: List[YearCategoryMixEntry]
+    expense_category_changes_yoy: List["CategoryChangeEntry"]
+    income_category_changes_yoy: List["CategoryChangeEntry"]
+    income_sources_lifetime: List[SourceTotalEntry]
+    expense_sources_lifetime: List[SourceTotalEntry]
+    income_source_changes_yoy: List[SourceChangeEntry]
+    expense_source_changes_yoy: List[SourceChangeEntry]
+    accounts: List[TotalAccountOverviewEntry]
+    investments: Optional[TotalInvestmentsOverview] = None
+    debt: TotalDebtOverview
     insights: List[str]
 
 
