@@ -317,11 +317,32 @@ export const Dashboard: React.FC = () => {
 
   const incomeExpenseChart = useMemo(() => {
     const src = filteredMonthly.length ? filteredMonthly : monthly.data || [];
-    return src.map((entry) => ({
-      month: new Date(entry.period).toLocaleString("en-US", { month: "short" }),
-      income: Number(entry.income),
-      expense: Number(entry.expense) * -1,
-    }));
+    const year = src.length ? new Date(src[0].period).getFullYear() : undefined;
+    const byMonth = new Map<
+      number,
+      {
+        income: number;
+        expense: number;
+      }
+    >();
+
+    src.forEach((entry) => {
+      const date = new Date(entry.period);
+      byMonth.set(date.getMonth(), {
+        income: Number(entry.income),
+        expense: Number(entry.expense),
+      });
+    });
+
+    return Array.from({ length: 12 }, (_, monthIndex) => {
+      const month = new Date(year ?? new Date().getFullYear(), monthIndex, 1);
+      const entry = byMonth.get(monthIndex);
+      return {
+        month: month.toLocaleString("en-US", { month: "short" }),
+        income: entry?.income ?? null,
+        expense: entry?.expense ?? null,
+      };
+    });
   }, [monthly.data, filteredMonthly]);
 
   const categoryBreakdown = useMemo(() => {
@@ -591,38 +612,77 @@ export const Dashboard: React.FC = () => {
                 },
               }}
             >
-              <AreaChart data={incomeExpenseChart}>
+              <BarChart
+                data={incomeExpenseChart}
+                margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
+              >
                 <defs>
-                  <linearGradient id="incomeFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22c55e" stopOpacity={0.25} />
-                    <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                  <linearGradient
+                    id="incomeBarFill"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop
+                      offset="0%"
+                      stopColor="var(--color-income)"
+                      stopOpacity={0.95}
+                    />
+                    <stop
+                      offset="100%"
+                      stopColor="var(--color-income)"
+                      stopOpacity={0.35}
+                    />
                   </linearGradient>
-                  <linearGradient id="expenseFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                  <linearGradient
+                    id="expenseBarFill"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop
+                      offset="0%"
+                      stopColor="var(--color-expense)"
+                      stopOpacity={0.9}
+                    />
+                    <stop
+                      offset="100%"
+                      stopColor="var(--color-expense)"
+                      stopOpacity={0.3}
+                    />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                <YAxis tickLine={false} axisLine={false} />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(v) => compactCurrency(Number(v))}
+                  tickMargin={12}
+                  width={90}
+                />
                 <Tooltip content={<ChartTooltipContent />} />
-                <Area
-                  type="monotone"
+                <Bar
                   dataKey="income"
-                  stroke="#22c55e"
-                  fill="url(#incomeFill)"
-                  strokeWidth={2}
+                  fill="url(#incomeBarFill)"
+                  stroke="var(--color-income)"
+                  strokeOpacity={0.55}
+                  radius={[8, 8, 0, 0]}
+                  barSize={24}
                   name="Income"
                 />
-                <Area
-                  type="monotone"
+                <Bar
                   dataKey="expense"
-                  stroke="#ef4444"
-                  fill="url(#expenseFill)"
-                  strokeWidth={2}
+                  fill="url(#expenseBarFill)"
+                  stroke="var(--color-expense)"
+                  strokeOpacity={0.55}
+                  radius={[8, 8, 0, 0]}
+                  barSize={24}
                   name="Expense"
                 />
-              </AreaChart>
+              </BarChart>
             </ChartContainer>
           </ChartCard>
         </motion.div>
