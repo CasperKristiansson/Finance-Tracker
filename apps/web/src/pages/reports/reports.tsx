@@ -2,12 +2,15 @@ import { Loader2, Sparkles } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -17,6 +20,7 @@ import { useAppSelector } from "@/app/hooks";
 import { MotionPage } from "@/components/motion-presets";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import {
   Dialog,
   DialogContent,
@@ -54,6 +58,12 @@ const currency = (value: number) =>
     currency: "SEK",
     maximumFractionDigits: 0,
   });
+
+const compactCurrency = (value: number) =>
+  new Intl.NumberFormat("sv-SE", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
 
 const monthLabel = (dateString: string) =>
   new Date(dateString).toLocaleDateString("sv-SE", { month: "short" });
@@ -204,11 +214,36 @@ export const Reports: React.FC = () => {
   const netWorthChart = useMemo(
     () =>
       (overview?.net_worth || []).map((row) => ({
-        month: monthLabel(row.date),
-        netWorth: Number(row.net_worth),
+        date: row.date,
+        net: Number(row.net_worth),
+        year: new Date(row.date).getFullYear(),
       })),
     [overview?.net_worth],
   );
+
+  const netWorthDomain = useMemo<[number, number]>(() => {
+    if (!netWorthChart.length) return [0, 0];
+    const values = netWorthChart.map((d) => d.net);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const upperPad = Math.abs(max) * 0.05 || 1;
+    const lower = min;
+    const upper = max + upperPad;
+    return [lower, upper];
+  }, [netWorthChart]);
+
+  const netWorthQuarterMarkers = useMemo(() => {
+    const quarterStartMonths = new Set([1, 4, 7, 10]);
+    return netWorthChart
+      .map((point) => {
+        const date = new Date(point.date);
+        const month = date.getMonth() + 1;
+        const quarter = Math.floor((month - 1) / 3) + 1;
+        return { date: point.date, month, quarter };
+      })
+      .filter((point) => quarterStartMonths.has(point.month))
+      .map((point) => ({ date: point.date, label: `Q${point.quarter}` }));
+  }, [netWorthChart]);
 
   const debtChart = useMemo(
     () =>
@@ -460,46 +495,77 @@ export const Reports: React.FC = () => {
               }
               loading={overviewLoading}
             >
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={netWorthChart}>
+              <ChartContainer
+                className="h-full w-full"
+                config={{
+                  net: {
+                    label: "Net worth",
+                    color: "#4f46e5",
+                  },
+                }}
+              >
+                <AreaChart
+                  data={netWorthChart}
+                  margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient
+                      id="netFillReports"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis
-                    dataKey="month"
+                    dataKey="date"
+                    tickFormatter={(value) =>
+                      new Date(value).toLocaleDateString("en-US", {
+                        month: "short",
+                      })
+                    }
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fill: "#475569", fontSize: 12 }}
                   />
                   <YAxis
                     tickLine={false}
                     axisLine={false}
-                    tick={{ fill: "#475569", fontSize: 12 }}
-                    tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`}
+                    domain={netWorthDomain}
+                    allowDataOverflow
+                    tickMargin={12}
+                    width={90}
+                    tickFormatter={(v) => compactCurrency(Number(v))}
                   />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const label = payload[0]?.payload?.month;
-                      return (
-                        <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                          <p className="font-semibold text-slate-800">
-                            {label}
-                          </p>
-                          <p className="text-slate-600">
-                            {currency(Number(payload[0].value))}
-                          </p>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="netWorth"
-                    stroke="#0ea5e9"
+                  <Tooltip content={<ChartTooltipContent />} />
+                  {netWorthQuarterMarkers.map((marker) => (
+                    <ReferenceLine
+                      key={marker.label}
+                      x={marker.date}
+                      stroke="#cbd5e1"
+                      strokeDasharray="4 4"
+                      label={{
+                        value: marker.label,
+                        position: "insideTopLeft",
+                        fill: "#475569",
+                        fontSize: 10,
+                      }}
+                    />
+                  ))}
+                  <Area
+                    type="monotoneX"
+                    connectNulls
+                    dataKey="net"
+                    stroke="#4f46e5"
+                    fill="url(#netFillReports)"
                     strokeWidth={2}
-                    dot={false}
+                    name="Net worth"
                   />
-                </LineChart>
-              </ResponsiveContainer>
+                </AreaChart>
+              </ChartContainer>
             </ChartCard>
           </div>
 

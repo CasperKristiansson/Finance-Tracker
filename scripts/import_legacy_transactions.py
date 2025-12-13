@@ -16,8 +16,10 @@ import hashlib
 import os
 from decimal import Decimal
 import sys
+from datetime import date
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Dict, Iterable, Optional, Sequence, Tuple
+from uuid import UUID
 
 import boto3
 import pandas as pd
@@ -28,7 +30,16 @@ if str(REPO_ROOT) not in sys.path:
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import delete, select
 
-from apps.api.models import Account, Category, Loan, LoanEvent, Transaction, TransactionLeg
+from apps.api.models import (
+    Account,
+    Category,
+    InvestmentHolding,
+    InvestmentSnapshot,
+    Loan,
+    LoanEvent,
+    Transaction,
+    TransactionLeg,
+)
 from apps.api.services.transaction import TransactionService
 from apps.api.shared import (
     AccountType,
@@ -159,6 +170,8 @@ def ensure_categories(session, user_id: str, tx_df: pd.DataFrame) -> Tuple[Dict[
         if pd.isna(cat):
             continue
         cat = str(cat).strip()
+        if cat == "Investment":
+            continue
         cat_map.setdefault(cat, set()).add(ttype)
 
     category_ids: Dict[str, str] = {}
@@ -201,9 +214,11 @@ def ensure_categories(session, user_id: str, tx_df: pd.DataFrame) -> Tuple[Dict[
 
 
 def purge_all_transactional_data(session) -> int:
-    """Delete all transactional data across users (transactions, legs, loan events, loans)."""
+    """Delete all transactional data across users (transactions, legs, loans, investment snapshots)."""
 
     statements = [
+        delete(InvestmentHolding).execution_options(include_all_users=True),
+        delete(InvestmentSnapshot).execution_options(include_all_users=True),
         delete(LoanEvent).execution_options(include_all_users=True),
         delete(TransactionLeg).execution_options(include_all_users=True),
         delete(Transaction).execution_options(include_all_users=True),
@@ -215,6 +230,112 @@ def purge_all_transactional_data(session) -> int:
         total_deleted += result.rowcount or 0
     session.commit()
     return total_deleted
+
+
+def import_investment_snapshots_from_legacy(
+    session,
+    *,
+    user_id: str,
+    tx_df: pd.DataFrame,
+    rename_map: Dict[str, str],
+    investment_account_names: Sequence[str],
+) -> None:
+    """Derive aggregate investment snapshots from legacy account balances.
+
+    The legacy export models investment value changes as per-account income deltas
+    (including negative values) and transfers into/out of investment accounts.
+    In the new system, investment value belongs in `InvestmentSnapshot` (not categories).
+    """
+
+    investment_accounts = set(investment_account_names)
+    if not investment_accounts:
+        print("No investment accounts configured; skipping investment snapshots.")
+        return
+
+    def normalize(value: object) -> Optional[str]:
+        if value is None or pd.isna(value):
+            return None
+        s = str(value).strip()
+        if not s:
+            return None
+        lowered = s.lower()
+        if lowered in {"nan", "undefined", "none"}:
+            return None
+        return s
+
+    df = tx_df.copy()
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce", format="mixed")
+    df = df.dropna(subset=["Date"]).sort_values("Date")
+    if df.empty:
+        print("No transaction rows found; skipping investment snapshots.")
+        return
+
+    quantize = Decimal("0.01")
+    balances: dict[str, Decimal] = {name: Decimal("0") for name in investment_accounts}
+
+    # Accumulate end-of-day totals where investment value changes.
+    daily_totals: dict[date, Decimal] = {}
+
+    for row in df.itertuples(index=False):
+        ttype = str(row.Type)
+        src_raw = normalize(row.Account)
+        if not src_raw:
+            continue
+        src_name = rename_map.get(src_raw, src_raw)
+
+        category_raw = normalize(getattr(row, "Category", None))
+        dest_name = rename_map.get(category_raw, category_raw) if category_raw else None
+
+        try:
+            amount = Decimal(str(row.Amount))
+        except Exception:
+            continue
+
+        amt = abs(amount).quantize(quantize)
+
+        if ttype == "Transfer-Out":
+            if src_name in investment_accounts:
+                balances[src_name] -= amt
+            if dest_name and dest_name in investment_accounts:
+                balances[dest_name] += amt
+        elif ttype == "Expense":
+            if src_name in investment_accounts:
+                balances[src_name] -= amt
+        else:  # Income (including negative deltas)
+            if src_name in investment_accounts:
+                balances[src_name] += amount.quantize(quantize)
+
+        day = pd.to_datetime(row.Date).to_pydatetime().date()
+        daily_totals[day] = sum(balances.values(), Decimal("0")).quantize(quantize)
+
+    if not daily_totals:
+        print("No investment balance changes detected; skipping investment snapshots.")
+        return
+
+    days_sorted = sorted(daily_totals.keys())
+    latest_total = daily_totals[days_sorted[-1]]
+
+    inserted = 0
+    for day in days_sorted:
+        snapshot = InvestmentSnapshot(
+            provider="legacy",
+            report_type="balance_derived",
+            account_name="Legacy investments (derived)",
+            snapshot_date=day,
+            portfolio_value=daily_totals[day],
+            raw_text="Derived from legacy Transactions Export.xlsx",
+            parsed_payload={
+                "source": "Transactions Export.xlsx",
+                "method": "running_balance",
+                "investment_accounts": sorted(investment_accounts),
+                "portfolio_value": float(daily_totals[day]),
+            },
+        )
+        session.add(snapshot)
+        inserted += 1
+
+    session.commit()
+    print(f"Investment snapshots inserted: {inserted} (latest value: {latest_total})")
 
 
 def import_loans(
@@ -339,6 +460,7 @@ def import_transactions(
     session,
     rename_map: Dict[str, str],
     account_ids: Dict[str, str],
+    investment_account_ids: set[UUID],
     cat_ids: Dict[str, str],
     cat_types: Dict[str, CategoryType],
     tx_df: Optional[pd.DataFrame] = None,
@@ -348,6 +470,7 @@ def import_transactions(
     df = tx_df.copy() if tx_df is not None else pd.read_excel(TX_PATH)
     total = len(df)
     inserted = skipped = zero_skipped = dup_skipped = 0
+    investment_skipped = investment_transfer_redirected = 0
     offset_id = account_ids["_offset"]
     quantize = Decimal("0.01")
     user_id = session.info.get("user_id")
@@ -424,7 +547,17 @@ def import_transactions(
             progress("Transactions", idx, total)
             continue
 
+        if account_id in investment_account_ids and str(row.Type) != "Transfer-Out":
+            investment_skipped += 1
+            progress("Transactions", idx, total)
+            continue
+
         category_name = normalize(getattr(row, "Category", None))
+        if category_name == "Investment" and str(row.Type) != "Transfer-Out":
+            investment_skipped += 1
+            progress("Transactions", idx, total)
+            continue
+
         category_id = cat_ids.get(category_name) if category_name else None
         note_str = normalize(getattr(row, "Note", None)) or ""
         ttype = str(row.Type)
@@ -446,22 +579,49 @@ def import_transactions(
                     f"Transfer-Out missing destination account mapping for category '{category_name}'"
                 )
             amt = abs(amount).quantize(quantize)
-            if dest_id == account_id:
-                tx_type = TransactionType.ADJUSTMENT
+            src_is_invest = account_id in investment_account_ids
+            dest_is_invest = dest_id in investment_account_ids
+            if src_is_invest and dest_is_invest:
+                investment_skipped += 1
+                progress("Transactions", idx, total)
+                continue
+            if src_is_invest and not dest_is_invest:
+                legs = [
+                    TransactionLeg(account_id=dest_id, amount=amt),
+                    TransactionLeg(account_id=offset_id, amount=-amt),
+                ]
+                tx_type = TransactionType.TRANSFER
+                category_id = None
+                category_type = None
+                description = note_str or f"Transfer from investments to {dest_name}"
+                investment_transfer_redirected += 1
+            elif dest_is_invest and not src_is_invest:
                 legs = [
                     TransactionLeg(account_id=account_id, amount=-amt),
                     TransactionLeg(account_id=offset_id, amount=amt),
                 ]
-                description = note_str or "Adjustment (self transfer)"
-            else:
-                legs = [
-                    TransactionLeg(account_id=account_id, amount=-amt),
-                    TransactionLeg(account_id=dest_id, amount=amt),
-                ]
                 tx_type = TransactionType.TRANSFER
-            category_id = None
-            category_type = None
-            description = note_str or f"Transfer to {dest_name}"
+                category_id = None
+                category_type = None
+                description = note_str or f"Transfer to investments ({dest_name})"
+                investment_transfer_redirected += 1
+            else:
+                if dest_id == account_id:
+                    tx_type = TransactionType.ADJUSTMENT
+                    legs = [
+                        TransactionLeg(account_id=account_id, amount=-amt),
+                        TransactionLeg(account_id=offset_id, amount=amt),
+                    ]
+                    description = note_str or "Adjustment (self transfer)"
+                else:
+                    legs = [
+                        TransactionLeg(account_id=account_id, amount=-amt),
+                        TransactionLeg(account_id=dest_id, amount=amt),
+                    ]
+                    tx_type = TransactionType.TRANSFER
+                category_id = None
+                category_type = None
+                description = note_str or f"Transfer to {dest_name}"
         elif ttype == "Income":
             if amount < 0:
                 tx_type = TransactionType.ADJUSTMENT
@@ -531,7 +691,7 @@ def import_transactions(
         session.commit()
 
     print(
-        f"Transactions inserted: {inserted}/{total} (zero skipped: {zero_skipped}, dupes skipped: {dup_skipped}, other skipped: {skipped})"
+        f"Transactions inserted: {inserted}/{total} (zero skipped: {zero_skipped}, dupes skipped: {dup_skipped}, investment skipped: {investment_skipped}, investment transfers redirected: {investment_transfer_redirected}, other skipped: {skipped})"
     )
 
 
@@ -558,13 +718,51 @@ def main() -> None:
     tx_df = adjust_study_grants_with_loans(tx_df, loan_df)
 
     rename_map, account_ids = ensure_accounts(session, args.user)
-    cat_ids, cat_types = ensure_categories(session, args.user, tx_df)
-
     purged = purge_all_transactional_data(session)
     print(f"Purged existing transactional rows across all users: {purged}")
 
+    # Ensure legacy-specific categories don't linger.
+    session.exec(
+        delete(Category)
+        .where(Category.user_id == args.user, Category.name == "Investment")
+        .execution_options(include_all_users=True)
+    )
+    session.commit()
+
+    investment_account_ids = set(
+        session.exec(
+            select(Account.id).where(
+                Account.user_id == args.user,
+                Account.account_type == AccountType.INVESTMENT,
+            )
+        ).all()
+    )
+    investment_account_names = [
+        name
+        for name, acc_id in account_ids.items()
+        if name != "_offset" and acc_id in investment_account_ids
+    ]
+
+    import_investment_snapshots_from_legacy(
+        session,
+        user_id=args.user,
+        tx_df=tx_df,
+        rename_map=rename_map,
+        investment_account_names=investment_account_names,
+    )
+
+    cat_ids, cat_types = ensure_categories(session, args.user, tx_df)
+
     import_loans(session, args.user, account_ids, cat_ids["CSN Loan"], args.loan_cash_account)
-    import_transactions(session, rename_map, account_ids, cat_ids, cat_types, tx_df=tx_df)
+    import_transactions(
+        session,
+        rename_map,
+        account_ids,
+        investment_account_ids,
+        cat_ids,
+        cat_types,
+        tx_df=tx_df,
+    )
 
 
 if __name__ == "__main__":
