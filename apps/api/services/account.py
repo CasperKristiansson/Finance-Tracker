@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple, cast
 from uuid import UUID
@@ -10,10 +10,11 @@ from uuid import UUID
 from sqlmodel import Session, select
 
 from ..models import Account, BalanceSnapshot, Loan, Transaction, TransactionLeg
+from ..models.investment_snapshot import InvestmentSnapshot
 from ..repositories.account import AccountRepository
 from ..repositories.transaction import TransactionRepository
 from ..services.transaction import TransactionService
-from ..shared import AccountType, TransactionType
+from ..shared import AccountType, TransactionType, coerce_decimal
 
 
 class AccountService:
@@ -51,7 +52,7 @@ class AccountService:
         if account is None:
             raise LookupError("Account not found")
 
-        balance = self.repository.calculate_balance(account_id, as_of=as_of)
+        balance = self._account_balance(account, as_of=as_of)
         return account, balance
 
     def list_accounts_with_balance(
@@ -63,7 +64,7 @@ class AccountService:
         accounts = self.repository.list_accounts(include_inactive=include_inactive)
         results: List[Tuple[Account, Decimal]] = []
         for account in accounts:
-            balance = self.repository.calculate_balance(account.id, as_of=as_of)
+            balance = self._account_balance(account, as_of=as_of)
             results.append((account, balance))
         return results
 
@@ -161,6 +162,21 @@ class AccountService:
         if account is None:
             raise LookupError("Account not found")
 
+        if account.account_type == AccountType.INVESTMENT:
+            snapshot = self._latest_investment_snapshot(as_of=None)
+            balance = self._investment_balance(account.name, snapshot)
+            captured_at = (
+                datetime.combine(snapshot.snapshot_date, time.min, tzinfo=timezone.utc)
+                if snapshot is not None
+                else None
+            )
+            return {
+                "last_captured_at": captured_at,
+                "last_reported_balance": balance,
+                "current_balance": balance,
+                "delta_since_snapshot": Decimal("0"),
+            }
+
         latest = self.repository.latest_snapshot(account_id)
         current = self.repository.calculate_balance(account_id)
         last_captured_at = getattr(latest, "captured_at", None)
@@ -174,6 +190,44 @@ class AccountService:
             "current_balance": current,
             "delta_since_snapshot": delta,
         }
+
+    def _account_balance(self, account: Account, *, as_of: Optional[datetime] = None) -> Decimal:
+        if account.account_type != AccountType.INVESTMENT:
+            return self.repository.calculate_balance(account.id, as_of=as_of)
+
+        snapshot = self._latest_investment_snapshot(as_of=as_of)
+        return self._investment_balance(account.name, snapshot)
+
+    def _latest_investment_snapshot(
+        self, *, as_of: Optional[datetime]
+    ) -> InvestmentSnapshot | None:
+        target_date: date | None = as_of.date() if as_of else None
+        statement = select(InvestmentSnapshot)
+        if target_date is not None:
+            statement = statement.where(cast(Any, InvestmentSnapshot.snapshot_date) <= target_date)
+        statement = statement.order_by(cast(Any, InvestmentSnapshot.snapshot_date).desc()).limit(1)
+        return self.session.exec(statement).first()
+
+    @staticmethod
+    def _investment_balance(account_name: str, snapshot: InvestmentSnapshot | None) -> Decimal:
+        if snapshot is None:
+            return Decimal("0")
+        payload = getattr(snapshot, "parsed_payload", None) or {}
+        accounts = payload.get("accounts") if isinstance(payload, dict) else None
+        if isinstance(accounts, dict):
+            if account_name in accounts:
+                raw_value = accounts.get(account_name)
+                if isinstance(raw_value, (int, float, Decimal)):
+                    return coerce_decimal(raw_value)
+                return Decimal("0")
+            # Fallback: case-insensitive match for renamed accounts.
+            lower_map = {str(key).lower(): val for key, val in accounts.items()}
+            if account_name.lower() in lower_map:
+                raw_value = lower_map[account_name.lower()]
+                if isinstance(raw_value, (int, float, Decimal)):
+                    return coerce_decimal(raw_value)
+                return Decimal("0")
+        return Decimal("0")
 
     def _get_or_create_offset_account(self) -> Account:
         if hasattr(self, "_offset_account"):

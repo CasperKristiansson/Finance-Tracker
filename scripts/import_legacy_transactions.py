@@ -282,6 +282,7 @@ def import_investment_snapshots_from_legacy(
 
     # Accumulate end-of-day totals where investment value changes.
     daily_totals: dict[date, Decimal] = {}
+    daily_accounts: dict[date, dict[str, Decimal]] = {}
 
     for row in df.itertuples(index=False):
         ttype = str(row.Type)
@@ -314,6 +315,7 @@ def import_investment_snapshots_from_legacy(
 
         day = pd.to_datetime(row.Date).to_pydatetime().date()
         daily_totals[day] = sum(balances.values(), Decimal("0")).quantize(quantize)
+        daily_accounts[day] = {name: value.quantize(quantize) for name, value in balances.items()}
 
     if not daily_totals:
         print("No investment balance changes detected; skipping investment snapshots.")
@@ -324,6 +326,7 @@ def import_investment_snapshots_from_legacy(
 
     inserted = 0
     for day in days_sorted:
+        per_account = daily_accounts.get(day) or {}
         snapshot = InvestmentSnapshot(
             provider="legacy",
             report_type="balance_derived",
@@ -336,6 +339,7 @@ def import_investment_snapshots_from_legacy(
                 "method": "running_balance",
                 "investment_accounts": sorted(investment_accounts),
                 "portfolio_value": float(daily_totals[day]),
+                "accounts": {name: float(value) for name, value in per_account.items()},
             },
         )
         session.add(snapshot)

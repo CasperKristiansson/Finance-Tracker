@@ -66,11 +66,20 @@ def _seed_transactions(engine, account: Account, balancing: Account) -> None:
         scope_session_to_user(session, get_default_user_id())
         service = TransactionService(session)
 
+        income_category = Category(name="Salary", category_type=CategoryType.INCOME)
+        expense_category = Category(name="Food", category_type=CategoryType.EXPENSE)
+        session.add(income_category)
+        session.add(expense_category)
+        session.commit()
+        session.refresh(income_category)
+        session.refresh(expense_category)
+
         occurred_income = datetime(2024, 1, 10, tzinfo=timezone.utc)
         income_tx = Transaction(
-            transaction_type=TransactionType.TRANSFER,
+            transaction_type=TransactionType.INCOME,
             occurred_at=occurred_income,
             posted_at=occurred_income,
+            category_id=income_category.id,
         )
         income_legs = [
             TransactionLeg(account_id=account.id, amount=Decimal("500.00")),
@@ -80,9 +89,11 @@ def _seed_transactions(engine, account: Account, balancing: Account) -> None:
 
         occurred_expense = datetime(2024, 1, 20, tzinfo=timezone.utc)
         expense_tx = Transaction(
-            transaction_type=TransactionType.TRANSFER,
+            transaction_type=TransactionType.EXPENSE,
             occurred_at=occurred_expense,
             posted_at=occurred_expense,
+            description="COOP ODENPLAN",
+            category_id=expense_category.id,
         )
         expense_legs = [
             TransactionLeg(account_id=account.id, amount=Decimal("-200.00")),
@@ -217,6 +228,47 @@ def test_total_report_respects_filters():
     assert response["statusCode"] == 200
     body = _json_body(response)
     assert Decimal(body["net"]) == Decimal("300.00")
+
+
+def test_monthly_report_excludes_transfers():
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        tracked = _create_account(session)
+        balancing = _create_account(session)
+    _seed_transactions(engine, tracked, balancing)
+
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        service = TransactionService(session)
+        occurred = datetime(2024, 1, 15, tzinfo=timezone.utc)
+        transfer_tx = Transaction(
+            transaction_type=TransactionType.TRANSFER,
+            occurred_at=occurred,
+            posted_at=occurred,
+        )
+        transfer_legs = [
+            TransactionLeg(account_id=tracked.id, amount=Decimal("-999.00")),
+            TransactionLeg(account_id=balancing.id, amount=Decimal("999.00")),
+        ]
+        service.create_transaction(transfer_tx, transfer_legs)
+
+    params = {
+        "queryStringParameters": {
+            "account_ids": str(tracked.id),
+            "year": "2024",
+        }
+    }
+    response = monthly_report(params, None)
+    assert response["statusCode"] == 200
+    body = _json_body(response)
+    results = body["results"]
+    assert len(results) == 1
+    entry = results[0]
+    assert entry["period"] == "2024-01-01"
+    assert Decimal(entry["income"]) == Decimal("500.00")
+    assert Decimal(entry["expense"]) == Decimal("200.00")
+    assert Decimal(entry["net"]) == Decimal("300.00")
 
 
 def test_net_worth_history_returns_running_balance():

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 import pytest
 from sqlmodel import select
 
-from apps.api.models import Account, Loan, Transaction, TransactionLeg
+from apps.api.models import Account, InvestmentSnapshot, Loan, Transaction, TransactionLeg
 from apps.api.repositories.account import AccountRepository
 from apps.api.services import AccountService
 from apps.api.shared import AccountType, CreatedSource, InterestCompound, TransactionType
@@ -173,3 +173,22 @@ def test_account_service_create_and_balance(session):
 
     updated_account = service.update_account(created.id, is_active=False)
     assert updated_account.is_active is False
+
+
+def test_account_service_investment_balance_uses_snapshots(session):
+    service = AccountService(session)
+    investment = Account(name="Nordnet Private", account_type=AccountType.INVESTMENT)
+    created = service.create_account(investment)
+
+    snapshot = InvestmentSnapshot(
+        provider="legacy",
+        snapshot_date=date(2025, 1, 1),
+        raw_text="",
+        parsed_payload={"accounts": {"Nordnet Private": 123456.78}},
+        portfolio_value=None,
+    )
+    session.add(snapshot)
+    session.commit()
+
+    _, balance = service.get_account_with_balance(created.id)
+    assert balance == Decimal("123456.78")
