@@ -81,6 +81,8 @@ from .transactions import reset_handler_state as reset_transaction_handler_state
 from .transactions import (
     update_transaction,
 )
+from .tax import create_tax_event, list_tax_events, tax_summary
+from .tax import reset_handler_state as reset_tax_handler_state
 
 __all__ = [
     "list_accounts",
@@ -113,6 +115,9 @@ __all__ = [
     "list_transactions",
     "update_transaction",
     "delete_transaction",
+    "create_tax_event",
+    "list_tax_events",
+    "tax_summary",
     "create_import_batch",
     "list_import_batches",
     "get_import_session",
@@ -138,6 +143,7 @@ __all__ = [
     "reset_budget_handler_state",
     "reset_subscription_handler_state",
     "reset_settings_handler_state",
+    "reset_tax_handler_state",
     "create_goal",
     "list_goals",
     "update_goal",

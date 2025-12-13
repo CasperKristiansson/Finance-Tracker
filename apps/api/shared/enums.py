@@ -69,6 +69,11 @@ class LoanEventType(StrEnum):
     FEE = "fee"
 
 
+class TaxEventType(StrEnum):
+    PAYMENT = "payment"
+    REFUND = "refund"
+
+
 class BudgetPeriod(StrEnum):
     MONTHLY = "monthly"
     QUARTERLY = "quarterly"
@@ -98,6 +103,7 @@ __all__ = [
     "SystemAccountCode",
     "InterestCompound",
     "LoanEventType",
+    "TaxEventType",
     "BudgetPeriod",
     "BankImportType",
     "ThemePreference",

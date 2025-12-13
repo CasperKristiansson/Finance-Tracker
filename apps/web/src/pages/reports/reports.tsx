@@ -52,6 +52,7 @@ import {
   yearlyCategoryDetailSchema,
   yearlyOverviewSchema,
 } from "@/types/schemas";
+import { MoneyFlowSankeyCard } from "./reports-sankey";
 
 type ReportMode = "yearly" | "total";
 
@@ -1397,6 +1398,14 @@ export const Reports: React.FC = () => {
               </ChartContainer>
             </ChartCard>
           </div>
+
+          <MoneyFlowSankeyCard
+            title={`Where the money went (${year})`}
+            description="Income categories flowing into expenses and savings."
+            incomeCategories={incomeCategoryChartData}
+            expenseCategories={categoryChartData}
+            loading={overviewLoading}
+          />
 
           <div className="grid gap-3 lg:grid-cols-3">
             <ChartCard
@@ -3286,6 +3295,14 @@ export const Reports: React.FC = () => {
               </CardContent>
             </Card>
           </div>
+
+          <MoneyFlowSankeyCard
+            title="Lifetime money flow"
+            description="Income categories flowing into expenses and savings."
+            incomeCategories={totalIncomeCategoriesLifetime}
+            expenseCategories={totalExpenseCategoriesLifetime}
+            loading={totalOverviewLoading}
+          />
 
           <div className="grid gap-3 lg:grid-cols-2">
             <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">

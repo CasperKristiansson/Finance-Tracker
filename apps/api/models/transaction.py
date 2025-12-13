@@ -29,6 +29,7 @@ if TYPE_CHECKING:  # pragma: no cover
     from .category import Category
     from .imports import TransactionImportBatch
     from .subscription import Subscription
+    from .tax import TaxEvent
 
 
 class Transaction(
@@ -95,6 +96,7 @@ class Transaction(
         loan_events: List["LoanEvent"]
         import_batch: Optional["TransactionImportBatch"]
         subscription: Optional["Subscription"]
+        tax_event: Optional["TaxEvent"]
 
     __table_args__ = (
         UniqueConstraint("user_id", "external_id", name="uq_transaction_external_id"),
@@ -122,6 +124,10 @@ class Transaction(
     subscription: Optional["Subscription"] = Relationship(
         back_populates="transactions",
         sa_relationship=relationship("Subscription", back_populates="transactions"),
+    )
+    tax_event: Optional["TaxEvent"] = Relationship(
+        back_populates="transaction",
+        sa_relationship=relationship("TaxEvent", back_populates="transaction", uselist=False),
     )
 
 

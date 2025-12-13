@@ -10,6 +10,7 @@ from .investment_snapshot import InvestmentSnapshot
 from .investment_transaction import InvestmentTransaction
 from .settings import UserSettings
 from .subscription import Subscription
+from .tax import TaxEvent
 from .transaction import LoanEvent, Transaction, TransactionLeg
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "Transaction",
     "TransactionLeg",
     "LoanEvent",
+    "TaxEvent",
     "TransactionImportBatch",
     "ImportFile",
     "ImportErrorRecord",

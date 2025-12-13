@@ -37,6 +37,7 @@ from apps.api.models import (
     InvestmentSnapshot,
     Loan,
     LoanEvent,
+    TaxEvent,
     Transaction,
     TransactionLeg,
 )
@@ -46,6 +47,7 @@ from apps.api.shared import (
     CategoryType,
     CreatedSource,
     InterestCompound,
+    TaxEventType,
     TransactionStatus,
     TransactionType,
     ensure_balanced_legs,
@@ -177,7 +179,7 @@ def ensure_categories(session, user_id: str, tx_df: pd.DataFrame) -> Tuple[Dict[
         if pd.isna(cat):
             continue
         cat = str(cat).strip()
-        if cat in {"Investment", "Bospar"}:
+        if cat in {"Investment", "Bospar", "Tax"}:
             continue
         cat_map.setdefault(cat, set()).add(ttype)
 
@@ -227,6 +229,7 @@ def purge_all_transactional_data(session) -> int:
         delete(InvestmentHolding).execution_options(include_all_users=True),
         delete(InvestmentSnapshot).execution_options(include_all_users=True),
         delete(LoanEvent).execution_options(include_all_users=True),
+        delete(TaxEvent).execution_options(include_all_users=True),
         delete(TransactionLeg).execution_options(include_all_users=True),
         delete(Transaction).execution_options(include_all_users=True),
         delete(Loan).execution_options(include_all_users=True),
@@ -500,6 +503,7 @@ def import_transactions(
 
     transactions: list[Transaction] = []
     legs_pending: list[tuple[int, list[TransactionLeg]]] = []
+    tax_pending: list[tuple[int, TaxEventType, Optional[str]]] = []
 
     def infer_transaction_type(
         legs: Iterable[TransactionLeg], category_type: Optional[CategoryType], fallback: TransactionType
@@ -582,7 +586,48 @@ def import_transactions(
         seen_external.add(external_id)
 
         description = note_str or category_name
-        if ttype == "Transfer-Out":
+        if category_name and category_name.lower() == "tax" and ttype in {"Income", "Expense"}:
+            amt = abs(amount).quantize(quantize)
+            if ttype == "Income":
+                legs = [
+                    TransactionLeg(account_id=account_id, amount=amt),
+                    TransactionLeg(account_id=offset_id, amount=-amt),
+                ]
+                inferred_type = TransactionType.TRANSFER
+                category_id = None
+                category_type = None
+                description = note_str or "Skatteverket (tax refund)"
+                tax_type = TaxEventType.REFUND
+            else:
+                legs = [
+                    TransactionLeg(account_id=account_id, amount=-amt),
+                    TransactionLeg(account_id=offset_id, amount=amt),
+                ]
+                inferred_type = TransactionType.TRANSFER
+                category_id = None
+                category_type = None
+                description = note_str or "Skatteverket (tax payment)"
+                tax_type = TaxEventType.PAYMENT
+
+            validate_legs(inferred_type, legs)
+            tx = Transaction(
+                category_id=None,
+                transaction_type=inferred_type,
+                description=description,
+                occurred_at=occurred_at,
+                posted_at=occurred_at,
+                status=TransactionStatus.IMPORTED,
+                created_source=CreatedSource.IMPORT,
+                external_id=external_id,
+            )
+            if user_id:
+                tx.user_id = user_id
+                for leg in legs:
+                    leg.user_id = user_id
+            transactions.append(tx)
+            legs_pending.append((len(transactions) - 1, legs))
+            tax_pending.append((len(transactions) - 1, tax_type, note_str or None))
+        elif ttype == "Transfer-Out":
             dest_name = rename_map.get(category_name, category_name) if category_name else None
             dest_id = account_ids.get(dest_name or "")
             if dest_id is None:
@@ -657,28 +702,28 @@ def import_transactions(
                 TransactionLeg(account_id=offset_id, amount=amt),
             ]
 
-        category_type = (
-            cat_types.get(category_name) if category_name and ttype != "Transfer-Out" else None
-        )
-        inferred_type = infer_transaction_type(legs, category_type, tx_type)
-        validate_legs(inferred_type, legs)
+            category_type = (
+                cat_types.get(category_name) if category_name and ttype != "Transfer-Out" else None
+            )
+            inferred_type = infer_transaction_type(legs, category_type, tx_type)
+            validate_legs(inferred_type, legs)
 
-        tx = Transaction(
-            category_id=category_id,
-            transaction_type=inferred_type,
-            description=description,
-            occurred_at=occurred_at,
-            posted_at=occurred_at,
-            status=TransactionStatus.IMPORTED,
-            created_source=CreatedSource.IMPORT,
-            external_id=external_id,
-        )
-        if user_id:
-            tx.user_id = user_id
-            for leg in legs:
-                leg.user_id = user_id
-        transactions.append(tx)
-        legs_pending.append((len(transactions) - 1, legs))
+            tx = Transaction(
+                category_id=category_id,
+                transaction_type=inferred_type,
+                description=description,
+                occurred_at=occurred_at,
+                posted_at=occurred_at,
+                status=TransactionStatus.IMPORTED,
+                created_source=CreatedSource.IMPORT,
+                external_id=external_id,
+            )
+            if user_id:
+                tx.user_id = user_id
+                for leg in legs:
+                    leg.user_id = user_id
+            transactions.append(tx)
+            legs_pending.append((len(transactions) - 1, legs))
 
         progress("Transactions", idx, total)
 
@@ -700,6 +745,26 @@ def import_transactions(
         chunk = legs_to_insert[start : start + batch_size * 2]
         session.bulk_save_objects(chunk, return_defaults=False)
         session.commit()
+
+    if tax_pending:
+        tax_events: list[TaxEvent] = []
+        for tx_index, tax_type, note in tax_pending:
+            tx_id = transactions[tx_index].id
+            if tx_id is None:
+                continue
+            event = TaxEvent(
+                transaction_id=tx_id,
+                event_type=tax_type,
+                authority="Skatteverket",
+                note=note,
+            )
+            if user_id:
+                event.user_id = user_id
+            tax_events.append(event)
+        for start in range(0, len(tax_events), batch_size * 2):
+            chunk = tax_events[start : start + batch_size * 2]
+            session.bulk_save_objects(chunk, return_defaults=False)
+            session.commit()
 
     print(
         f"Transactions inserted: {inserted}/{total} (zero skipped: {zero_skipped}, dupes skipped: {dup_skipped}, investment skipped: {investment_skipped}, investment transfers redirected: {investment_transfer_redirected}, other skipped: {skipped})"
@@ -735,7 +800,7 @@ def main() -> None:
     # Ensure legacy-specific categories don't linger.
     session.exec(
         delete(Category)
-        .where(Category.user_id == args.user, Category.name.in_(["Investment", "Bospar"]))
+        .where(Category.user_id == args.user, Category.name.in_(["Investment", "Bospar", "Tax"]))
         .execution_options(include_all_users=True)
     )
     session.commit()

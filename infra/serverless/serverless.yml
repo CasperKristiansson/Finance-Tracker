@@ -385,6 +385,42 @@ functions:
           method: POST
           authorizer: cognitoJwt
 
+  listTaxEvents:
+    handler: apps/api/handlers/tax.list_tax_events
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /tax/events
+          method: GET
+          authorizer: cognitoJwt
+
+  createTaxEvent:
+    handler: apps/api/handlers/tax.create_tax_event
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /tax/events
+          method: POST
+          authorizer: cognitoJwt
+
+  taxSummary:
+    handler: apps/api/handlers/tax.tax_summary
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /tax/summary
+          method: GET
+          authorizer: cognitoJwt
+
   listSubscriptions:
     handler: apps/api/handlers/subscriptions.list_subscriptions
     timeout: 29

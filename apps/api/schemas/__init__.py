@@ -124,6 +124,14 @@ from .transaction import (
     TransactionRead,
     TransactionUpdate,
 )
+from .tax import (
+    TaxEventCreateRequest,
+    TaxEventListQuery,
+    TaxEventListResponse,
+    TaxEventRead,
+    TaxSummaryQuery,
+    TaxSummaryResponse,
+)
 
 __all__ = [
     "AccountCreate",
@@ -237,4 +245,10 @@ __all__ = [
     "GoalUpdate",
     "GoalRead",
     "GoalListResponse",
+    "TaxEventCreateRequest",
+    "TaxEventRead",
+    "TaxEventListQuery",
+    "TaxEventListResponse",
+    "TaxSummaryQuery",
+    "TaxSummaryResponse",
 ]

@@ -29,6 +29,7 @@ from ..models import (
     ImportRow,
     ImportRule,
     Subscription,
+    TaxEvent,
     Transaction,
     TransactionImportBatch,
     TransactionLeg,
@@ -40,6 +41,7 @@ from ..shared import (
     AccountType,
     BankImportType,
     CreatedSource,
+    TaxEventType,
     TransactionStatus,
     TransactionType,
 )
@@ -297,14 +299,21 @@ class ImportService:
 
                 amount = Decimal(str(amount_text))
                 description = str(payload_data.get("description", "")) or None
+                tax_event_type: Optional[TaxEventType] = (
+                    override.tax_event_type if override is not None else None
+                )
                 category_id = None
-                if override and override.category_id:
+                if tax_event_type is None and override and override.category_id:
                     category_id = override.category_id
-                elif row.suggested_category:
+                elif tax_event_type is None and row.suggested_category:
                     category = category_map.get(row.suggested_category.lower())
                     if category:
                         category_id = category.id
-                subscription_id = override.subscription_id if override else None
+                subscription_id = (
+                    None
+                    if tax_event_type is not None
+                    else (override.subscription_id if override else None)
+                )
 
                 target_account_id = (
                     override.account_id
@@ -318,7 +327,15 @@ class ImportService:
                     else None
                 )
 
-                if counterparty_account_id is not None:
+                abs_amount = abs(amount)
+                if tax_event_type is not None:
+                    cash_delta = abs_amount if tax_event_type == TaxEventType.REFUND else -abs_amount
+                    legs = [
+                        TransactionLeg(account_id=target_account_id, amount=cash_delta),
+                        TransactionLeg(account_id=offset_account.id, amount=-cash_delta),
+                    ]
+                    counterparty_account_id = None
+                elif counterparty_account_id is not None:
                     legs = [
                         TransactionLeg(account_id=target_account_id, amount=amount),
                         TransactionLeg(account_id=counterparty_account_id, amount=-amount),
@@ -344,14 +361,24 @@ class ImportService:
                 )
 
                 try:
-                    transaction_service.create_transaction(transaction, legs, import_batch=batch)
-                    self._record_rule_from_row(
-                        description,
-                        amount,
-                        occurred_at,
-                        category_id,
-                        subscription_id,
+                    created_tx = transaction_service.create_transaction(
+                        transaction, legs, import_batch=batch
                     )
+                    if tax_event_type is not None:
+                        self.session.add(
+                            TaxEvent(
+                                transaction_id=created_tx.id,
+                                event_type=tax_event_type,
+                            )
+                        )
+                    else:
+                        self._record_rule_from_row(
+                            description,
+                            amount,
+                            occurred_at,
+                            category_id,
+                            subscription_id,
+                        )
                 except Exception as exc:  # pragma: no cover - defensive
                     error_models.append(
                         ImportErrorRecord(

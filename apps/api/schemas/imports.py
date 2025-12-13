@@ -10,7 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_core import PydanticCustomError
 
-from ..shared import BankImportType
+from ..shared import BankImportType, TaxEventType
 
 
 class ImportFile(BaseModel):
@@ -154,6 +154,7 @@ class ImportCommitRow(BaseModel):
     amount: Optional[str] = None
     occurred_at: Optional[datetime] = None
     subscription_id: Optional[UUID] = None
+    tax_event_type: Optional[TaxEventType] = None
     delete: bool = False
 
 
