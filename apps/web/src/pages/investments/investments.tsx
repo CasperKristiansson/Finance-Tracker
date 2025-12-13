@@ -1,28 +1,17 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
-import {
-  Check,
-  Loader2,
-  Plus,
-  RefreshCw,
-  Save,
-  Trash2,
-  UploadCloud,
-  Wand2,
-} from "lucide-react";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Controller, useFieldArray, useForm } from "react-hook-form";
+import { Loader2, RefreshCw } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
   CartesianGrid,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import { toast } from "sonner";
-import { z } from "zod";
+import { useAppSelector } from "@/app/hooks";
 import {
   MotionPage,
   StaggerWrap,
@@ -32,9 +21,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -43,42 +31,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
-import { useInvestmentsApi } from "@/hooks/use-api";
+import { selectToken } from "@/features/auth/authSlice";
+import { useAccountsApi, useInvestmentsApi } from "@/hooks/use-api";
+import { apiFetch } from "@/lib/apiClient";
 import { cn } from "@/lib/utils";
-import type { InvestmentSnapshot } from "@/types/api";
-
-const pasteFormSchema = z.object({
-  pasteValue: z.string().min(1, "Paste some text").trim(),
-});
-
-type PasteFormValues = z.infer<typeof pasteFormSchema>;
-
-type DraftStatus = "idle" | "parsing" | "parsed" | "error";
-
-const draftSchema = z.object({
-  id: z.string(),
-  label: z.string(),
-  raw_text: z.string().min(1, "Paste the export text"),
-  snapshot_date: z.string().optional(),
-  portfolio_value: z.union([z.number(), z.string()]).nullable().optional(),
-  account_name: z.string().nullable().optional(),
-  report_type: z.string().nullable().optional(),
-  use_bedrock: z.boolean().optional(),
-  bedrock_model_id: z.string().nullable().optional(),
-  bedrock_max_tokens: z.union([z.string(), z.number()]).nullable().optional(),
-  parsed_payload: z.record(z.string(), z.unknown()).optional(),
-  status: z.enum(["idle", "parsing", "parsed", "error"]).default("idle"),
-  error: z.string().optional(),
-});
-
-const draftsFormSchema = z.object({
-  drafts: z.array(draftSchema),
-});
-
-type DraftFormValues = z.input<typeof draftsFormSchema>;
-
-type Draft = DraftFormValues["drafts"][number];
+import {
+  AccountType,
+  TransactionType,
+  type AccountRead,
+  type InvestmentSnapshot,
+  type TransactionRead,
+} from "@/types/api";
+import { transactionListSchema } from "@/types/schemas";
 
 type DerivedHolding = Record<string, unknown> & {
   name?: string;
@@ -105,6 +69,9 @@ const formatCompact = (value: number) =>
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(value);
+
+const toChartId = (value: string) =>
+  value.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
 
 const extractHoldings = (
   payload?: Record<string, unknown>,
@@ -182,6 +149,31 @@ const deriveSnapshotValue = (snapshot: InvestmentSnapshot): number => {
   return sumHoldings(payload);
 };
 
+const ChartCard: React.FC<{
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+  action?: React.ReactNode;
+  loading?: boolean;
+}> = ({ title, description, children, action, loading }) => (
+  <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+    <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+      <div>
+        <CardTitle className="text-base font-semibold text-slate-900">
+          {title}
+        </CardTitle>
+        {description ? (
+          <p className="text-xs text-slate-500">{description}</p>
+        ) : null}
+      </div>
+      {action}
+    </CardHeader>
+    <CardContent className="h-80 md:h-96">
+      {loading ? <Skeleton className="h-full w-full" /> : children}
+    </CardContent>
+  </Card>
+);
+
 const getSnapshotHoldings = (
   snapshot: InvestmentSnapshot,
 ): DerivedHolding[] => {
@@ -203,224 +195,114 @@ const getSnapshotHoldings = (
 };
 
 export const Investments: React.FC = () => {
+  const token = useAppSelector(selectToken);
   const {
-    snapshots,
-    transactions,
-    metrics,
-    loading,
-    saving,
-    parseLoading,
-    parsedResults,
-    lastSavedClientId,
-    fetchSnapshots,
-    fetchTransactions,
-    fetchMetrics,
-    parseExport,
-    saveSnapshot,
-    clearDraft,
-  } = useInvestmentsApi();
+    items: accounts,
+    loading: accountsLoading,
+    fetchAccounts,
+  } = useAccountsApi();
+  const { snapshots, metrics, loading, fetchSnapshots, fetchMetrics } =
+    useInvestmentsApi();
 
-  const pasteForm = useForm<PasteFormValues>({
-    resolver: zodResolver(pasteFormSchema),
-    defaultValues: { pasteValue: "" },
-  });
-
-  const draftForm = useForm<DraftFormValues>({
-    resolver: zodResolver(draftsFormSchema),
-    defaultValues: { drafts: [] },
-  });
-
-  const {
-    fields: draftFields,
-    append: appendDraft,
-    remove: removeDraft,
-  } = useFieldArray({
-    control: draftForm.control,
-    name: "drafts",
-  });
-
-  const [isUploading, setIsUploading] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [range, setRange] = useState<"3M" | "6M" | "1Y" | "ALL">("6M");
   const [showAllAccounts, setShowAllAccounts] = useState(false);
+  const [focusedAccount, setFocusedAccount] = useState<string>("ALL");
+  const [cashflowRefreshKey, setCashflowRefreshKey] = useState(0);
+  const [cashflowTransactions, setCashflowTransactions] = useState<
+    TransactionRead[]
+  >([]);
+  const [cashflowLoading, setCashflowLoading] = useState(false);
+  const [cashflowError, setCashflowError] = useState<string | null>(null);
+  const [cashflowTruncated, setCashflowTruncated] = useState(false);
 
   useEffect(() => {
     fetchSnapshots();
-    fetchTransactions();
     fetchMetrics();
-  }, [fetchSnapshots, fetchTransactions, fetchMetrics]);
+    fetchAccounts();
+  }, [fetchAccounts, fetchMetrics, fetchSnapshots]);
+
+  const investmentAccounts = useMemo(() => {
+    return (accounts ?? []).filter(
+      (account: AccountRead) =>
+        account.is_active !== false &&
+        account.account_type === AccountType.INVESTMENT,
+    );
+  }, [accounts]);
+
+  const investmentAccountIds = useMemo(
+    () => investmentAccounts.map((acc) => acc.id),
+    [investmentAccounts],
+  );
+
+  const investmentAccountIdSet = useMemo(
+    () => new Set(investmentAccountIds),
+    [investmentAccountIds],
+  );
+
+  const cashflowWindowStart = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now);
+    start.setDate(now.getDate() - 365);
+    return start.toISOString().slice(0, 10);
+  }, []);
 
   useEffect(() => {
-    draftFields.forEach((field, idx) => {
-      const parsed = parsedResults[field.id];
-      if (!parsed) return;
-      const payload = (parsed as { parsed_payload?: Record<string, unknown> })
-        .parsed_payload;
-      const current = draftForm.getValues(`drafts.${idx}`);
-      draftForm.setValue(`drafts.${idx}.parsed_payload`, payload ?? {});
-      draftForm.setValue(
-        `drafts.${idx}.snapshot_date`,
-        (parsed as { snapshot_date?: string }).snapshot_date ||
-          current.snapshot_date,
-      );
-      draftForm.setValue(
-        `drafts.${idx}.portfolio_value`,
-        coerceNumber(
-          (parsed as { portfolio_value?: number | string }).portfolio_value,
-        ) ?? current.portfolio_value,
-      );
-      draftForm.setValue(
-        `drafts.${idx}.report_type`,
-        (parsed as { report_type?: string }).report_type ??
-          current.report_type ??
-          "portfolio_report",
-      );
-      draftForm.setValue(`drafts.${idx}.status`, "parsed");
-      draftForm.setValue(`drafts.${idx}.error`, undefined);
-    });
-  }, [parsedResults, draftFields, draftForm]);
+    const fetchCashflows = async () => {
+      const accountIds = investmentAccountIds.join(",");
+      if (!token || !accountIds) {
+        setCashflowTransactions([]);
+        setCashflowError(null);
+        setCashflowTruncated(false);
+        return;
+      }
 
-  useEffect(() => {
-    if (!lastSavedClientId) return;
-    const index = draftFields.findIndex((d) => d.id === lastSavedClientId);
-    if (index >= 0) {
-      removeDraft(index);
-    }
-    clearDraft(lastSavedClientId);
-  }, [clearDraft, draftFields, lastSavedClientId, removeDraft]);
+      setCashflowLoading(true);
+      setCashflowError(null);
+      setCashflowTruncated(false);
 
-  const draftValues = draftForm.watch("drafts") ?? [];
+      const all: TransactionRead[] = [];
+      const limit = 200;
+      let offset = 0;
+      const maxPages = 10;
 
-  const addDraft = (raw_text: string, label?: string) => {
-    const text = raw_text.trim();
-    if (!text) return;
-    appendDraft({
-      id: crypto.randomUUID(),
-      label: label || `Paste ${draftFields.length + 1}`,
-      raw_text: text,
-      status: "idle",
-      report_type: "portfolio_report",
-    });
-  };
+      try {
+        for (let page = 0; page < maxPages; page += 1) {
+          const { data } = await apiFetch<{
+            transactions: TransactionRead[];
+          }>({
+            path: "/transactions",
+            query: {
+              start_date: cashflowWindowStart,
+              account_ids: accountIds,
+              limit,
+              offset,
+            },
+            token,
+            schema: transactionListSchema,
+          });
 
-  const handleFiles = async (files: FileList | null) => {
-    if (!files) return;
-    setIsUploading(true);
-    try {
-      const entries = await Promise.all(
-        Array.from(files).map(async (file) => {
-          const text = await file.text();
-          return { text, name: file.name };
-        }),
-      );
-      entries.forEach((entry) => addDraft(entry.text, entry.name));
-    } finally {
-      setIsUploading(false);
-    }
-  };
+          const pageItems = data.transactions ?? [];
+          all.push(...pageItems);
+          if (pageItems.length < limit) break;
+          offset += limit;
 
-  const handleParse = (draftId: string) => {
-    const index = draftFields.findIndex((d) => d.id === draftId);
-    if (index < 0) return;
-    draftForm.setValue(`drafts.${index}.status`, "parsing");
-    draftForm.setValue(`drafts.${index}.error`, undefined);
-    const rawText = draftForm.getValues(`drafts.${index}.raw_text`) || "";
-    parseExport(draftId, rawText);
-  };
+          if (page === maxPages - 1) {
+            setCashflowTruncated(true);
+          }
+        }
 
-  const updateHolding = (
-    draftId: string,
-    index: number,
-    key: string,
-    value: string,
-  ) => {
-    const draftIndex = draftFields.findIndex((d) => d.id === draftId);
-    if (draftIndex < 0) return;
-    const payload =
-      draftForm.getValues(`drafts.${draftIndex}.parsed_payload`) || {};
-    const holdings = extractHoldings(payload);
-    const next = holdings.map((h, idx) =>
-      idx === index ? { ...h, [key]: value } : h,
-    );
-    draftForm.setValue(`drafts.${draftIndex}.parsed_payload`, {
-      ...payload,
-      holdings: next,
-    });
-  };
+        setCashflowTransactions(all);
+      } catch (err) {
+        console.error("Failed to fetch investment cashflows", err);
+        setCashflowError(
+          err instanceof Error ? err.message : "Failed to load cashflows",
+        );
+      } finally {
+        setCashflowLoading(false);
+      }
+    };
 
-  const handleSave = async (draftId: string) => {
-    const index = draftFields.findIndex((d) => d.id === draftId);
-    if (index < 0) return;
-    const valid = await draftForm.trigger([
-      `drafts.${index}.raw_text`,
-      `drafts.${index}.portfolio_value`,
-      `drafts.${index}.snapshot_date`,
-    ]);
-    if (!valid) {
-      const error = draftForm.formState.errors.drafts?.[index];
-      toast.error("Fix draft before saving", {
-        description:
-          error?.raw_text?.message ||
-          error?.portfolio_value?.toString() ||
-          "Check the highlighted fields.",
-      });
-      return;
-    }
-    const draft = draftForm.getValues(`drafts.${index}`);
-    const portfolioValue =
-      draft.portfolio_value === undefined || draft.portfolio_value === null
-        ? undefined
-        : (coerceNumber(draft.portfolio_value) ?? undefined);
-    const bedrockTokens =
-      draft.bedrock_max_tokens === undefined ||
-      draft.bedrock_max_tokens === null
-        ? undefined
-        : (coerceNumber(draft.bedrock_max_tokens) ?? undefined);
-    saveSnapshot({
-      clientId: draft.id,
-      raw_text: draft.raw_text,
-      parsed_payload: draft.parsed_payload,
-      snapshot_date: draft.snapshot_date,
-      portfolio_value: portfolioValue,
-      report_type: draft.report_type || "portfolio_report",
-      account_name: draft.account_name,
-      use_bedrock: draft.use_bedrock,
-      bedrock_model_id: draft.bedrock_model_id,
-      bedrock_max_tokens: bedrockTokens,
-    });
-  };
-
-  const holdingsDelta = useMemo(() => {
-    if (snapshots.length < 2) return [];
-    const sorted = [...snapshots].sort(
-      (a, b) =>
-        new Date(b.snapshot_date).getTime() -
-        new Date(a.snapshot_date).getTime(),
-    );
-    const latest = sorted[0];
-    const previous = sorted[1];
-    const latestMap = new Map(
-      getSnapshotHoldings(latest).map((h) => [
-        (h.name ?? "Unknown") as string,
-        deriveHoldingsValue(h),
-      ]),
-    );
-    const prevMap = new Map(
-      getSnapshotHoldings(previous).map((h) => [
-        (h.name ?? "Unknown") as string,
-        deriveHoldingsValue(h),
-      ]),
-    );
-
-    const names = new Set([...latestMap.keys(), ...prevMap.keys()]);
-    return Array.from(names).map((name) => {
-      const current = latestMap.get(name) ?? 0;
-      const prior = prevMap.get(name) ?? 0;
-      const delta = current - prior;
-      const deltaPct = prior ? (delta / prior) * 100 : null;
-      return { name, current, prior, delta, deltaPct };
-    });
-  }, [snapshots]);
+    void fetchCashflows();
+  }, [cashflowRefreshKey, cashflowWindowStart, investmentAccountIds, token]);
 
   const latestSnapshot = useMemo(() => {
     if (!snapshots.length) return undefined;
@@ -431,303 +313,7 @@ export const Investments: React.FC = () => {
     )[0];
   }, [snapshots]);
 
-  const draftList = draftValues.length ? draftValues : draftFields;
-
-  const renderDraft = (field: Draft, index: number) => {
-    const draft = draftValues[index] ?? field;
-    const holdings = extractHoldings(draft.parsed_payload);
-    const status = (draft.status as DraftStatus) || "idle";
-    const isParsing = parseLoading[draft.id];
-    const badgeTone =
-      status === "parsed"
-        ? "bg-emerald-50 text-emerald-700"
-        : status === "parsing"
-          ? "bg-blue-50 text-blue-700"
-          : "bg-slate-100 text-slate-700";
-
-    return (
-      <motion.div variants={fadeInUp} {...subtleHover}>
-        <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.45)]">
-          <CardHeader className="flex flex-col gap-2 pb-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <CardTitle className="text-base text-slate-800">
-                {draft.label}
-              </CardTitle>
-              <p className="text-sm text-slate-500">
-                Paste raw text, adjust fields, parse, then save.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge className={cn("text-xs", badgeTone)}>
-                {status === "parsed"
-                  ? "Parsed"
-                  : status === "parsing"
-                    ? "Parsing"
-                    : "Draft"}
-              </Badge>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-slate-500 hover:text-slate-800"
-                onClick={() => removeDraft(index)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-xs tracking-wide text-slate-600 uppercase">
-                  Raw export
-                </Label>
-                <Textarea
-                  rows={8}
-                  className="font-mono text-sm"
-                  {...draftForm.register(`drafts.${index}.raw_text` as const)}
-                />
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs text-slate-600">
-                      Snapshot date
-                    </Label>
-                    <Input
-                      type="date"
-                      value={draft.snapshot_date ?? ""}
-                      onChange={(e) =>
-                        draftForm.setValue(
-                          `drafts.${index}.snapshot_date`,
-                          e.target.value,
-                        )
-                      }
-                      className="h-9 w-36"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs text-slate-600">
-                      Value (SEK)
-                    </Label>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      value={draft.portfolio_value ?? ""}
-                      onChange={(e) =>
-                        draftForm.setValue(
-                          `drafts.${index}.portfolio_value`,
-                          e.target.value === ""
-                            ? undefined
-                            : Number(e.target.value),
-                        )
-                      }
-                      className="h-9 w-32"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs text-slate-600">Account</Label>
-                    <Input
-                      value={draft.account_name ?? ""}
-                      onChange={(e) =>
-                        draftForm.setValue(
-                          `drafts.${index}.account_name`,
-                          e.target.value || undefined,
-                        )
-                      }
-                      className="h-9 w-44"
-                      placeholder="e.g. ISK"
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs text-slate-600">
-                      Use Bedrock
-                    </Label>
-                    <Controller
-                      control={draftForm.control}
-                      name={`drafts.${index}.use_bedrock` as const}
-                      render={({ field: controllerField }) => (
-                        <Switch
-                          checked={Boolean(controllerField.value)}
-                          onCheckedChange={(val) =>
-                            controllerField.onChange(val)
-                          }
-                        />
-                      )}
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Label className="text-xs text-slate-600">Model</Label>
-                    <select
-                      className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800 shadow-sm"
-                      value={draft.bedrock_model_id ?? ""}
-                      onChange={(e) =>
-                        draftForm.setValue(
-                          `drafts.${index}.bedrock_model_id`,
-                          e.target.value || undefined,
-                        )
-                      }
-                    >
-                      <option value="">Default (Haiku)</option>
-                      <option value="anthropic.claude-haiku-4-5-20251001-v1:0">
-                        Claude 4.5 Haiku
-                      </option>
-                      <option value="anthropic.claude-3-5-sonnet-20241022-v2:0">
-                        Claude 3.5 Sonnet
-                      </option>
-                    </select>
-                    <Label className="text-xs text-slate-600">Max tokens</Label>
-                    <Input
-                      type="number"
-                      inputMode="numeric"
-                      className="h-9 w-20"
-                      value={draft.bedrock_max_tokens ?? ""}
-                      onChange={(e) =>
-                        draftForm.setValue(
-                          `drafts.${index}.bedrock_max_tokens`,
-                          e.target.value === ""
-                            ? undefined
-                            : Number(e.target.value),
-                        )
-                      }
-                      min={100}
-                      max={2000}
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleParse(draft.id)}
-                    disabled={isParsing}
-                  >
-                    {isParsing ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Wand2 className="mr-2 h-4 w-4" />
-                    )}
-                    Parse
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => void handleSave(draft.id)}
-                    disabled={saving || status === "parsing"}
-                  >
-                    {saving ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Save className="mr-2 h-4 w-4" />
-                    )}
-                    Save snapshot
-                  </Button>
-                </div>
-                {draft.error ? (
-                  <p className="text-sm text-rose-600">{draft.error}</p>
-                ) : null}
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs tracking-wide text-slate-600 uppercase">
-                  Parsed preview (edit before saving)
-                </Label>
-                {holdings.length ? (
-                  <div className="rounded-lg border border-slate-200">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-1/3">Holding</TableHead>
-                          <TableHead className="w-1/5">Qty</TableHead>
-                          <TableHead className="w-1/5">Value (SEK)</TableHead>
-                          <TableHead className="w-1/5">Currency</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {holdings.map((holding, idx) => (
-                          <TableRow key={`${draft.id}-${idx}`}>
-                            <TableCell>
-                              <Input
-                                value={(holding.name as string) ?? ""}
-                                onChange={(e) =>
-                                  updateHolding(
-                                    draft.id,
-                                    idx,
-                                    "name",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="text"
-                                value={
-                                  holding.quantity !== undefined &&
-                                  holding.quantity !== null
-                                    ? String(holding.quantity)
-                                    : ""
-                                }
-                                onChange={(e) =>
-                                  updateHolding(
-                                    draft.id,
-                                    idx,
-                                    "quantity",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                inputMode="decimal"
-                                value={
-                                  coerceNumber(holding.market_value_sek) ??
-                                  coerceNumber(holding.value_sek) ??
-                                  ""
-                                }
-                                onChange={(e) =>
-                                  updateHolding(
-                                    draft.id,
-                                    idx,
-                                    "market_value_sek",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                value={(holding.currency as string) ?? "SEK"}
-                                onChange={(e) =>
-                                  updateHolding(
-                                    draft.id,
-                                    idx,
-                                    "currency",
-                                    e.target.value,
-                                  )
-                                }
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                ) : (
-                  <Card className="border-dashed border-slate-200 bg-slate-50/50">
-                    <CardContent className="py-6 text-sm text-slate-600">
-                      No holdings parsed yet. Click <strong>Parse</strong> to
-                      extract holdings. You can still save with raw text if you
-                      prefer.
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-    );
-  };
-
-  const valueSeries = useMemo(() => {
+  const portfolioSeries = useMemo(() => {
     const byDate = new Map<
       string,
       Map<string, { snapshot: InvestmentSnapshot; updatedAtMs: number }>
@@ -757,23 +343,24 @@ export const Investments: React.FC = () => {
       })
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    const cutoff = (() => {
-      const now = new Date();
-      if (range === "3M") return new Date(now.setMonth(now.getMonth() - 3));
-      if (range === "6M") return new Date(now.setMonth(now.getMonth() - 6));
-      if (range === "1Y")
-        return new Date(now.setFullYear(now.getFullYear() - 1));
-      return null;
-    })();
-    const filtered = cutoff
-      ? sorted.filter((row) => new Date(row.date) >= cutoff)
-      : sorted;
-    return filtered;
-  }, [snapshots, range]);
+    if (!sorted.length) return [];
+
+    const today = new Date().toISOString().slice(0, 10);
+    const last = sorted.at(-1);
+    const extended =
+      last && last.date !== today
+        ? [...sorted, { date: today, value: last.value }]
+        : sorted;
+
+    return extended.map((row) => ({
+      ...row,
+      year: new Date(row.date).getFullYear(),
+    }));
+  }, [snapshots]);
 
   const totalValue =
     coerceNumber(metrics?.total_value) ??
-    coerceNumber(valueSeries.at(-1)?.value) ??
+    coerceNumber(portfolioSeries.at(-1)?.value) ??
     0;
   const invested = coerceNumber(metrics?.invested) ?? 0;
   const realizedPl = coerceNumber(metrics?.realized_pl) ?? 0;
@@ -782,15 +369,23 @@ export const Investments: React.FC = () => {
   const irr = coerceNumber(metrics?.irr);
   const benchmarkChange = coerceNumber(metrics?.benchmarks?.[0]?.change_pct);
 
-  const visibleStartValue = coerceNumber(valueSeries[0]?.value);
-  const visibleEndValue = coerceNumber(valueSeries.at(-1)?.value);
-  const visibleDelta =
-    visibleStartValue !== undefined && visibleEndValue !== undefined
-      ? visibleEndValue - visibleStartValue
+  const portfolioDomain = useMemo<[number, number]>(() => {
+    if (!portfolioSeries.length) return [0, 0];
+    const values = portfolioSeries.map((d) => d.value);
+    const max = Math.max(...values);
+    const upperPad = Math.abs(max) * 0.05 || 1;
+    return [0, max + upperPad];
+  }, [portfolioSeries]);
+
+  const portfolioStartValue = coerceNumber(portfolioSeries[0]?.value);
+  const portfolioEndValue = coerceNumber(portfolioSeries.at(-1)?.value);
+  const portfolioDelta =
+    portfolioStartValue !== undefined && portfolioEndValue !== undefined
+      ? portfolioEndValue - portfolioStartValue
       : undefined;
-  const visibleDeltaPct =
-    visibleDelta !== undefined && visibleStartValue
-      ? (visibleDelta / visibleStartValue) * 100
+  const portfolioDeltaPct =
+    portfolioDelta !== undefined && portfolioStartValue
+      ? (portfolioDelta / portfolioStartValue) * 100
       : null;
 
   const accountSummaries = useMemo(() => {
@@ -814,9 +409,9 @@ export const Investments: React.FC = () => {
       byAccount.set(accountName, bucket);
     });
 
-    const summaries = Array.from(byAccount.entries()).map(
-      ([accountName, dateMap]) => {
-        const series = Array.from(dateMap.entries())
+    const summaries = Array.from(byAccount.entries())
+      .map(([accountName, dateMap]) => {
+        const baseSeries = Array.from(dateMap.entries())
           .map(([date, entry]) => ({
             date,
             snapshot: entry.snapshot,
@@ -826,16 +421,36 @@ export const Investments: React.FC = () => {
             (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
           );
 
-        const latest = series.at(-1);
-        const previous = series.at(-2);
+        if (!baseSeries.length) {
+          return {
+            accountName,
+            latestDate: undefined as string | undefined,
+            latestValue: 0,
+            growth: undefined as number | undefined,
+            growthPct: null as number | null,
+            holdingsCount: 0,
+            snapshotsCount: 0,
+            sparkline: [] as { date: string; value: number }[],
+          };
+        }
+
+        const today = new Date().toISOString().slice(0, 10);
+        const last = baseSeries.at(-1);
+        const extended =
+          last && last.date !== today
+            ? [...baseSeries, { ...last, date: today }]
+            : baseSeries;
+
+        const latest = extended.at(-1);
+        const first = extended[0];
         const latestValue = latest?.value ?? 0;
-        const previousValue = previous?.value ?? 0;
-        const delta =
-          latest && previous ? latestValue - previousValue : undefined;
-        const deltaPct =
-          delta !== undefined && previousValue
-            ? (delta / previousValue) * 100
+        const firstValue = first?.value ?? 0;
+        const growth = latest && first ? latestValue - firstValue : undefined;
+        const growthPct =
+          growth !== undefined && firstValue
+            ? (growth / firstValue) * 100
             : null;
+
         const holdingsCount = latest
           ? getSnapshotHoldings(latest.snapshot).length
           : 0;
@@ -844,20 +459,159 @@ export const Investments: React.FC = () => {
           accountName,
           latestDate: latest?.date,
           latestValue,
-          delta,
-          deltaPct,
+          growth,
+          growthPct,
           holdingsCount,
-          snapshotsCount: series.length,
+          snapshotsCount: baseSeries.length,
+          sparkline: extended
+            .slice(-18)
+            .map((p) => ({ date: p.date, value: p.value })),
         };
-      },
-    );
+      })
+      .sort((a, b) => b.latestValue - a.latestValue);
 
-    return summaries.sort((a, b) => b.latestValue - a.latestValue);
+    return summaries;
   }, [snapshots]);
 
   const visibleAccounts = showAllAccounts
     ? accountSummaries
     : accountSummaries.slice(0, 4);
+
+  const focusedAccountSeries = useMemo(() => {
+    if (focusedAccount === "ALL") return null;
+    const acct = accountSummaries.find((a) => a.accountName === focusedAccount);
+    if (!acct?.sparkline?.length) return null;
+    return acct.sparkline.map((p) => ({
+      ...p,
+      year: new Date(p.date).getFullYear(),
+    }));
+  }, [accountSummaries, focusedAccount]);
+
+  const cashflowSummary = useMemo(() => {
+    const now = new Date();
+    const iso30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const isoYtd = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
+
+    const byAccountId = new Map<
+      string,
+      {
+        deposits30: number;
+        withdrawals30: number;
+        depositsYtd: number;
+        withdrawalsYtd: number;
+        deposits365: number;
+        withdrawals365: number;
+      }
+    >();
+
+    const ensure = (accountId: string) => {
+      const existing = byAccountId.get(accountId);
+      if (existing) return existing;
+      const created = {
+        deposits30: 0,
+        withdrawals30: 0,
+        depositsYtd: 0,
+        withdrawalsYtd: 0,
+        deposits365: 0,
+        withdrawals365: 0,
+      };
+      byAccountId.set(accountId, created);
+      return created;
+    };
+
+    cashflowTransactions.forEach((tx) => {
+      if (tx.transaction_type !== TransactionType.TRANSFER) return;
+      const occurred = String(tx.occurred_at).slice(0, 10);
+      const is30 = occurred >= iso30;
+      const isYtd = occurred >= isoYtd;
+      const is365 = occurred >= cashflowWindowStart;
+
+      tx.legs.forEach((leg) => {
+        if (!investmentAccountIdSet.has(leg.account_id)) return;
+        const amount = Number(leg.amount);
+        if (!Number.isFinite(amount) || amount === 0) return;
+        const deposit = amount > 0 ? amount : 0;
+        const withdrawal = amount < 0 ? Math.abs(amount) : 0;
+
+        const bucket = ensure(leg.account_id);
+        if (is30) {
+          bucket.deposits30 += deposit;
+          bucket.withdrawals30 += withdrawal;
+        }
+        if (isYtd) {
+          bucket.depositsYtd += deposit;
+          bucket.withdrawalsYtd += withdrawal;
+        }
+        if (is365) {
+          bucket.deposits365 += deposit;
+          bucket.withdrawals365 += withdrawal;
+        }
+      });
+    });
+
+    const totals = Array.from(byAccountId.values()).reduce(
+      (acc, row) => ({
+        deposits30: acc.deposits30 + row.deposits30,
+        withdrawals30: acc.withdrawals30 + row.withdrawals30,
+        depositsYtd: acc.depositsYtd + row.depositsYtd,
+        withdrawalsYtd: acc.withdrawalsYtd + row.withdrawalsYtd,
+        deposits365: acc.deposits365 + row.deposits365,
+        withdrawals365: acc.withdrawals365 + row.withdrawals365,
+      }),
+      {
+        deposits30: 0,
+        withdrawals30: 0,
+        depositsYtd: 0,
+        withdrawalsYtd: 0,
+        deposits365: 0,
+        withdrawals365: 0,
+      },
+    );
+
+    return {
+      iso30,
+      isoYtd,
+      byAccountId,
+      totals,
+      net30: totals.deposits30 - totals.withdrawals30,
+      netYtd: totals.depositsYtd - totals.withdrawalsYtd,
+      net365: totals.deposits365 - totals.withdrawals365,
+    };
+  }, [cashflowTransactions, cashflowWindowStart, investmentAccountIdSet]);
+
+  const recentCashTransfers = useMemo(() => {
+    const rows = cashflowTransactions
+      .filter((tx) => tx.transaction_type === TransactionType.TRANSFER)
+      .map((tx) => {
+        const investmentAmount = tx.legs.reduce((sum, leg) => {
+          if (!investmentAccountIdSet.has(leg.account_id)) return sum;
+          const amt = Number(leg.amount);
+          return Number.isFinite(amt) ? sum + amt : sum;
+        }, 0);
+        return {
+          id: tx.id,
+          occurred_at: tx.occurred_at,
+          description: tx.description ?? "",
+          amount: investmentAmount,
+        };
+      })
+      .filter((row) => row.amount !== 0)
+      .sort(
+        (a, b) =>
+          new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime(),
+      );
+
+    return rows.slice(0, 12);
+  }, [cashflowTransactions, investmentAccountIdSet]);
+
+  const investmentAccountIdByName = useMemo(() => {
+    const normalize = (value: string) => value.trim().toLowerCase();
+    return new Map(
+      investmentAccounts.map((acc) => [normalize(acc.name), acc.id]),
+    );
+  }, [investmentAccounts]);
 
   return (
     <MotionPage className="space-y-6">
@@ -867,11 +621,10 @@ export const Investments: React.FC = () => {
             Investments
           </p>
           <h1 className="text-2xl font-semibold text-slate-900">
-            Explore your portfolio
+            Explore your investments
           </h1>
           <p className="text-sm text-slate-500">
-            Combined growth across accounts, followed by account summaries and
-            importer drafts.
+            Balance over time, per-account performance, and cash in/out.
           </p>
         </motion.div>
         <motion.div
@@ -883,130 +636,147 @@ export const Investments: React.FC = () => {
             size="sm"
             onClick={() => {
               fetchSnapshots();
-              fetchTransactions();
               fetchMetrics();
+              fetchAccounts();
+              setCashflowRefreshKey((v) => v + 1);
             }}
-            disabled={loading}
+            disabled={loading || accountsLoading || cashflowLoading}
           >
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
-          {loading || isUploading ? (
+          {loading || accountsLoading || cashflowLoading ? (
             <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600">
               <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
               Loading
             </span>
           ) : null}
-          {saving ? (
-            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600">
-              <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-              Saving
+          {cashflowError ? (
+            <span className="rounded-full bg-rose-50 px-3 py-1 text-sm text-rose-700">
+              Cashflow failed to load
             </span>
           ) : null}
         </motion.div>
       </StaggerWrap>
 
       <StaggerWrap className="grid gap-4 lg:grid-cols-3">
-        <motion.div
-          variants={fadeInUp}
-          className="lg:col-span-2"
-          {...subtleHover}
-        >
-          <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
-            <CardHeader className="pb-2">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-1">
-                  <CardTitle className="text-sm text-slate-800">
-                    Portfolio growth
-                  </CardTitle>
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <p className="text-2xl font-semibold text-slate-900">
-                      {formatSek(totalValue)}
-                    </p>
-                    {visibleDelta !== undefined ? (
-                      <span
-                        className={cn(
-                          "text-sm font-medium",
-                          visibleDelta >= 0
-                            ? "text-emerald-700"
-                            : "text-rose-700",
-                        )}
-                      >
-                        {visibleDelta >= 0 ? "+" : ""}
-                        {formatCompact(visibleDelta)}{" "}
-                        {visibleDeltaPct !== null
-                          ? `(${visibleDeltaPct >= 0 ? "+" : ""}${visibleDeltaPct.toFixed(
-                              1,
-                            )}%)`
-                          : ""}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 text-xs text-slate-600">
-                  {["3M", "6M", "1Y", "ALL"].map((opt) => (
-                    <Button
-                      key={opt}
-                      size="sm"
-                      variant={range === opt ? "secondary" : "ghost"}
-                      onClick={() => setRange(opt as typeof range)}
-                    >
-                      {opt}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="h-[280px]">
-              {valueSeries.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={valueSeries}>
-                    <defs>
-                      <linearGradient id="trend" x1="0" y1="0" x2="0" y2="1">
-                        <stop
-                          offset="5%"
-                          stopColor="#0ea5e9"
-                          stopOpacity={0.35}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#0ea5e9"
-                          stopOpacity={0.05}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis
-                      tick={{ fontSize: 12 }}
-                      tickFormatter={(val) => formatCompact(Number(val))}
-                    />
-                    <Tooltip
-                      formatter={(val) => formatSek(Number(val))}
-                      labelFormatter={(label) => `Date: ${label}`}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#0ea5e9"
-                      fillOpacity={1}
-                      fill="url(#trend)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : loading ? (
-                <div className="space-y-2">
-                  <div className="h-5 w-24 animate-pulse rounded bg-slate-200" />
-                  <div className="h-36 animate-pulse rounded bg-slate-100" />
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500">
-                  No snapshots yet. Import your first report to start tracking
-                  growth.
+        <motion.div variants={fadeInUp} className="lg:col-span-2">
+          <ChartCard
+            title="Investments"
+            description="Balance over time"
+            loading={loading}
+            action={
+              <div className="text-right">
+                <p className="text-xs text-slate-500">Current</p>
+                <p className="text-sm font-semibold text-slate-900">
+                  {formatSek(totalValue)}
                 </p>
-              )}
-            </CardContent>
-          </Card>
+                {portfolioDelta !== undefined ? (
+                  <p
+                    className={cn(
+                      "text-xs font-medium",
+                      portfolioDelta >= 0
+                        ? "text-emerald-700"
+                        : "text-rose-700",
+                    )}
+                  >
+                    {portfolioDelta >= 0 ? "+" : ""}
+                    {formatCompact(portfolioDelta)}
+                    {portfolioDeltaPct !== null
+                      ? ` (${portfolioDeltaPct >= 0 ? "+" : ""}${portfolioDeltaPct.toFixed(
+                          1,
+                        )}%)`
+                      : ""}
+                  </p>
+                ) : null}
+              </div>
+            }
+          >
+            {portfolioSeries.length ? (
+              <ChartContainer
+                className="h-full w-full"
+                config={{
+                  value: {
+                    label: "Investments",
+                    color: "#0ea5e9",
+                  },
+                }}
+              >
+                <AreaChart
+                  data={portfolioSeries}
+                  margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient
+                      id="investmentsFill"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(value) =>
+                      new Date(value).toLocaleDateString("en-US", {
+                        month: "short",
+                      })
+                    }
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    domain={portfolioDomain}
+                    allowDataOverflow
+                    tickMargin={12}
+                    width={90}
+                    tickFormatter={(v) => formatCompact(Number(v))}
+                  />
+                  <Tooltip content={<ChartTooltipContent />} />
+                  {Array.from(new Set(portfolioSeries.map((d) => d.year))).map(
+                    (year) => {
+                      const firstPoint = portfolioSeries.find(
+                        (d) => d.year === year,
+                      );
+                      return firstPoint ? (
+                        <ReferenceLine
+                          key={year}
+                          x={firstPoint.date}
+                          stroke="#cbd5e1"
+                          strokeDasharray="4 4"
+                          label={{
+                            value: `${year}`,
+                            position: "insideTopLeft",
+                            fill: "#475569",
+                            fontSize: 10,
+                          }}
+                        />
+                      ) : null;
+                    },
+                  )}
+                  <Area
+                    type="monotoneX"
+                    connectNulls
+                    dataKey="value"
+                    stroke="#0ea5e9"
+                    fill="url(#investmentsFill)"
+                    strokeWidth={2}
+                    name="Investments"
+                  />
+                </AreaChart>
+              </ChartContainer>
+            ) : (
+              <div className="flex h-full w-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-600">
+                No investment snapshots yet.
+              </div>
+            )}
+          </ChartCard>
         </motion.div>
 
         <motion.div variants={fadeInUp} className="space-y-3" {...subtleHover}>
@@ -1028,6 +798,67 @@ export const Investments: React.FC = () => {
                 <span className="font-medium text-slate-900">
                   {formatSek(invested)}
                 </span>
+              </div>
+              <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50/60 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs tracking-wide text-slate-600 uppercase">
+                    Cashflow
+                  </span>
+                  {cashflowTruncated ? (
+                    <Badge className="bg-amber-50 text-xs text-amber-700">
+                      Truncated
+                    </Badge>
+                  ) : null}
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-slate-500">Added (30d)</span>
+                  <span className="font-medium text-slate-900">
+                    {cashflowLoading
+                      ? "—"
+                      : formatSek(cashflowSummary.totals.deposits30)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-slate-500">Withdrawn (30d)</span>
+                  <span className="font-medium text-slate-900">
+                    {cashflowLoading
+                      ? "—"
+                      : formatSek(cashflowSummary.totals.withdrawals30)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-slate-500">Net flow (30d)</span>
+                  <span
+                    className={cn(
+                      "font-medium",
+                      cashflowSummary.net30 >= 0
+                        ? "text-emerald-700"
+                        : "text-rose-700",
+                    )}
+                  >
+                    {cashflowLoading
+                      ? "—"
+                      : `${cashflowSummary.net30 >= 0 ? "+" : ""}${formatSek(
+                          Math.abs(cashflowSummary.net30),
+                        )}`}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <span className="text-slate-500">Added (12m)</span>
+                  <span className="font-medium text-slate-900">
+                    {cashflowLoading
+                      ? "—"
+                      : formatSek(cashflowSummary.totals.deposits365)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-slate-500">Withdrawn (12m)</span>
+                  <span className="font-medium text-slate-900">
+                    {cashflowLoading
+                      ? "—"
+                      : formatSek(cashflowSummary.totals.withdrawals365)}
+                  </span>
+                </div>
               </div>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-slate-500">Unrealized P/L</span>
@@ -1090,18 +921,121 @@ export const Investments: React.FC = () => {
               Investment accounts
             </h2>
           </div>
-          {accountSummaries.length > 4 ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowAllAccounts((v) => !v)}
-            >
-              {showAllAccounts
-                ? "Show top 4"
-                : `Show all (${accountSummaries.length})`}
-            </Button>
-          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            {accountSummaries.length ? (
+              <select
+                className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800 shadow-sm"
+                value={focusedAccount}
+                onChange={(e) => setFocusedAccount(e.target.value)}
+              >
+                <option value="ALL">All accounts</option>
+                {accountSummaries.map((acct) => (
+                  <option key={acct.accountName} value={acct.accountName}>
+                    {acct.accountName}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            {accountSummaries.length > 4 ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAllAccounts((v) => !v)}
+              >
+                {showAllAccounts
+                  ? "Show top 4"
+                  : `Show all (${accountSummaries.length})`}
+              </Button>
+            ) : null}
+          </div>
         </motion.div>
+
+        {focusedAccountSeries ? (
+          <motion.div variants={fadeInUp} {...subtleHover}>
+            <ChartCard
+              title={focusedAccount}
+              description="Account balance over time"
+              loading={false}
+            >
+              <ChartContainer
+                className="h-full w-full"
+                config={{
+                  value: {
+                    label: focusedAccount,
+                    color: "#4f46e5",
+                  },
+                }}
+              >
+                <AreaChart
+                  data={focusedAccountSeries}
+                  margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient
+                      id="accountFill"
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(value) =>
+                      new Date(value).toLocaleDateString("en-US", {
+                        month: "short",
+                      })
+                    }
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={12}
+                    width={90}
+                    tickFormatter={(v) => formatCompact(Number(v))}
+                  />
+                  <Tooltip content={<ChartTooltipContent />} />
+                  {Array.from(
+                    new Set(focusedAccountSeries.map((d) => d.year)),
+                  ).map((year) => {
+                    const firstPoint = focusedAccountSeries.find(
+                      (d) => d.year === year,
+                    );
+                    return firstPoint ? (
+                      <ReferenceLine
+                        key={year}
+                        x={firstPoint.date}
+                        stroke="#cbd5e1"
+                        strokeDasharray="4 4"
+                        label={{
+                          value: `${year}`,
+                          position: "insideTopLeft",
+                          fill: "#475569",
+                          fontSize: 10,
+                        }}
+                      />
+                    ) : null;
+                  })}
+                  <Area
+                    type="monotoneX"
+                    connectNulls
+                    dataKey="value"
+                    stroke="#4f46e5"
+                    fill="url(#accountFill)"
+                    strokeWidth={2}
+                    name={focusedAccount}
+                  />
+                </AreaChart>
+              </ChartContainer>
+            </ChartCard>
+          </motion.div>
+        ) : null}
 
         {accountSummaries.length ? (
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
@@ -1122,19 +1056,19 @@ export const Investments: React.FC = () => {
                       <p className="text-xl font-semibold text-slate-900">
                         {formatSek(acct.latestValue)}
                       </p>
-                      {acct.delta !== undefined ? (
+                      {acct.growth !== undefined ? (
                         <Badge
                           className={cn(
                             "text-xs",
-                            acct.delta >= 0
+                            acct.growth >= 0
                               ? "bg-emerald-50 text-emerald-700"
                               : "bg-rose-50 text-rose-700",
                           )}
                         >
-                          {acct.delta >= 0 ? "+" : ""}
-                          {formatCompact(acct.delta)}
-                          {acct.deltaPct !== null
-                            ? ` (${acct.deltaPct >= 0 ? "+" : ""}${acct.deltaPct.toFixed(
+                          {acct.growth >= 0 ? "+" : ""}
+                          {formatCompact(acct.growth)}
+                          {acct.growthPct !== null
+                            ? ` (${acct.growthPct >= 0 ? "+" : ""}${acct.growthPct.toFixed(
                                 1,
                               )}%)`
                             : ""}
@@ -1154,6 +1088,65 @@ export const Investments: React.FC = () => {
                         {acct.latestDate ? `As of ${acct.latestDate}` : "-"}
                       </span>
                     </div>
+                    {(() => {
+                      const accountId = investmentAccountIdByName.get(
+                        acct.accountName.trim().toLowerCase(),
+                      );
+                      if (!accountId) return null;
+                      const flow = cashflowSummary.byAccountId.get(accountId);
+                      if (!flow) return null;
+                      const net = flow.deposits365 - flow.withdrawals365;
+                      return (
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-slate-500">Net flow (12m)</span>
+                          <span
+                            className={cn(
+                              "font-medium tabular-nums",
+                              net >= 0 ? "text-emerald-700" : "text-rose-700",
+                            )}
+                          >
+                            {net >= 0 ? "+" : ""}
+                            {formatSek(Math.abs(net))}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                    <div className="h-14">
+                      {acct.sparkline.length ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={acct.sparkline}>
+                            <defs>
+                              <linearGradient
+                                id={`spark-${toChartId(acct.accountName)}`}
+                                x1="0"
+                                y1="0"
+                                x2="0"
+                                y2="1"
+                              >
+                                <stop
+                                  offset="5%"
+                                  stopColor="#4f46e5"
+                                  stopOpacity={0.25}
+                                />
+                                <stop
+                                  offset="95%"
+                                  stopColor="#4f46e5"
+                                  stopOpacity={0}
+                                />
+                              </linearGradient>
+                            </defs>
+                            <Area
+                              type="monotoneX"
+                              dataKey="value"
+                              stroke="#4f46e5"
+                              fill={`url(#spark-${toChartId(acct.accountName)})`}
+                              strokeWidth={2}
+                              dot={false}
+                            />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      ) : null}
+                    </div>
                     <p className="text-xs text-slate-500">
                       {acct.snapshotsCount}{" "}
                       {acct.snapshotsCount === 1 ? "snapshot" : "snapshots"}
@@ -1167,192 +1160,26 @@ export const Investments: React.FC = () => {
           <motion.div variants={fadeInUp}>
             <Card className="border-dashed border-slate-200 bg-slate-50/70">
               <CardContent className="py-8 text-center text-sm text-slate-600">
-                Import a Nordnet report below to create your first investment
-                snapshot.
+                No investment snapshots yet.
               </CardContent>
             </Card>
           </motion.div>
         )}
       </StaggerWrap>
 
-      <motion.div variants={fadeInUp} initial="hidden" animate="show">
-        <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-slate-800">
-              Import Nordnet exports
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label className="text-xs tracking-wide text-slate-600 uppercase">
-                  Paste raw text
-                </Label>
-                <Textarea
-                  rows={6}
-                  placeholder="Paste the full Nordnet export text here..."
-                  className="font-mono text-sm"
-                  {...pasteForm.register("pasteValue")}
-                />
-                {pasteForm.formState.errors.pasteValue ? (
-                  <p className="text-xs text-rose-600">
-                    {pasteForm.formState.errors.pasteValue.message}
-                  </p>
-                ) : null}
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    void pasteForm.handleSubmit((values) => {
-                      addDraft(values.pasteValue);
-                      pasteForm.reset({ pasteValue: "" });
-                    })()
-                  }
-                  disabled={!pasteForm.watch("pasteValue")?.trim()}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add pasted export
-                </Button>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-xs tracking-wide text-slate-600 uppercase">
-                  Upload text file
-                </Label>
-                <div className="flex min-h-[140px] items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50/60 p-4 text-center">
-                  <label className="flex flex-col items-center gap-2 text-sm text-slate-600">
-                    <UploadCloud className="h-6 w-6 text-slate-500" />
-                    <span>Drop .txt/.md or click to choose files</span>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      multiple
-                      accept=".txt,.md,.csv"
-                      className="hidden"
-                      onChange={(e) => {
-                        handleFiles(e.target.files);
-                        if (fileInputRef.current) {
-                          fileInputRef.current.value = "";
-                        }
-                      }}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      Browse files
-                    </Button>
-                  </label>
-                </div>
-              </div>
-            </div>
-            {draftList.length ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-slate-800">
-                    Drafts ({draftList.length})
-                  </p>
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <Check className="h-4 w-4 text-emerald-500" />
-                    Parse each draft, then save to persist.
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  {draftFields.map((field, idx) =>
-                    renderDraft(field as Draft, idx),
-                  )}
-                </div>
-              </div>
-            ) : (
-              <Card className="border-dashed border-slate-200 bg-slate-50/70">
-                <CardContent className="space-y-4 py-8 text-center text-sm text-slate-600">
-                  <div className="flex justify-center">
-                    <div className="h-24 w-24 animate-pulse rounded-full bg-gradient-to-b from-slate-200 to-slate-100" />
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-base font-medium text-slate-800">
-                      Paste your Nordnet report
-                    </p>
-                    <p>
-                      Drop multiple exports here, parse them with AI, edit
-                      holdings inline, and save snapshots to see your portfolio
-                      trend.
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-center gap-3 text-xs text-slate-500">
-                    <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
-                      <UploadCloud className="h-4 w-4" />
-                      Paste or upload text
-                    </span>
-                    <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
-                      <Wand2 className="h-4 w-4" />
-                      Parse & edit holdings
-                    </span>
-                    <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
-                      <Save className="h-4 w-4" />
-                      Approve & save snapshot
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </CardContent>
-        </Card>
-      </motion.div>
-
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)] lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-slate-800">
-              Holdings delta (latest vs previous)
+              Added / withdrawn (cash transfers)
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            {holdingsDelta.length ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Holding</TableHead>
-                    <TableHead className="text-right">Now</TableHead>
-                    <TableHead className="text-right">Prev</TableHead>
-                    <TableHead className="text-right">Delta</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {holdingsDelta.map((row) => (
-                    <TableRow key={row.name}>
-                      <TableCell className="font-medium">{row.name}</TableCell>
-                      <TableCell className="text-right">
-                        {row.current.toLocaleString("sv-SE", {
-                          maximumFractionDigits: 0,
-                        })}
-                      </TableCell>
-                      <TableCell className="text-right text-slate-500">
-                        {row.prior.toLocaleString("sv-SE", {
-                          maximumFractionDigits: 0,
-                        })}
-                      </TableCell>
-                      <TableCell
-                        className={cn(
-                          "text-right",
-                          row.delta >= 0 ? "text-emerald-600" : "text-rose-600",
-                        )}
-                      >
-                        {row.delta.toLocaleString("sv-SE", {
-                          maximumFractionDigits: 0,
-                        })}
-                        {row.deltaPct !== null
-                          ? ` (${row.deltaPct.toFixed(1)}%)`
-                          : ""}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : loading ? (
+            {cashflowLoading ? (
               <div className="space-y-2">
-                <div className="h-5 w-20 animate-pulse rounded bg-slate-200" />
+                <div className="h-5 w-40 animate-pulse rounded bg-slate-200" />
                 <div className="space-y-1">
-                  {[1, 2, 3].map((i) => (
+                  {[1, 2, 3, 4].map((i) => (
                     <div
                       key={i}
                       className="h-8 animate-pulse rounded bg-slate-100"
@@ -1360,9 +1187,75 @@ export const Investments: React.FC = () => {
                   ))}
                 </div>
               </div>
+            ) : investmentAccounts.length ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Account</TableHead>
+                    <TableHead className="text-right">Added (12m)</TableHead>
+                    <TableHead className="text-right">
+                      Withdrawn (12m)
+                    </TableHead>
+                    <TableHead className="text-right">Net (12m)</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {investmentAccounts.map((account) => {
+                    const flow = cashflowSummary.byAccountId.get(
+                      account.id,
+                    ) ?? {
+                      deposits30: 0,
+                      withdrawals30: 0,
+                      depositsYtd: 0,
+                      withdrawalsYtd: 0,
+                      deposits365: 0,
+                      withdrawals365: 0,
+                    };
+                    const net12m = flow.deposits365 - flow.withdrawals365;
+                    const net30 = flow.deposits30 - flow.withdrawals30;
+                    return (
+                      <TableRow key={account.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex flex-col">
+                            <span className="text-slate-900">
+                              {account.name}
+                            </span>
+                            <span
+                              className={cn(
+                                "text-xs",
+                                net30 >= 0
+                                  ? "text-emerald-700"
+                                  : "text-rose-700",
+                              )}
+                            >
+                              30d: {net30 >= 0 ? "+" : "-"}
+                              {formatSek(Math.abs(net30))}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatSek(flow.deposits365)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatSek(flow.withdrawals365)}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            "text-right font-medium",
+                            net12m >= 0 ? "text-emerald-700" : "text-rose-700",
+                          )}
+                        >
+                          {net12m >= 0 ? "+" : "-"}
+                          {formatSek(Math.abs(net12m))}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             ) : (
               <p className="text-sm text-slate-500">
-                Save at least two snapshots to compare holdings.
+                No investment accounts found.
               </p>
             )}
           </CardContent>
@@ -1429,64 +1322,67 @@ export const Investments: React.FC = () => {
           <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
             <CardHeader className="flex items-center justify-between pb-2">
               <CardTitle className="text-sm text-slate-800">
-                Recent investment transactions
+                Recent cash transfers
               </CardTitle>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() =>
                   exportCsv(
-                    transactions.slice(0, 200).map((tx) => ({
+                    recentCashTransfers.map((tx) => ({
                       date: tx.occurred_at,
-                      description: tx.description ?? "",
-                      account: tx.account_name ?? "",
-                      asset: tx.asset ?? "",
-                      amount: tx.amount,
-                      amount_sek: tx.amount_sek ?? "",
-                      type: tx.transaction_type ?? "",
+                      direction: tx.amount >= 0 ? "Added" : "Withdrawn",
+                      description: tx.description || "",
+                      amount_sek: Math.abs(tx.amount),
                     })),
-                    "investment-transactions.csv",
+                    "investment-cash-transfers.csv",
                   )
                 }
-                disabled={!transactions.length}
+                disabled={!recentCashTransfers.length}
               >
                 Export CSV
               </Button>
             </CardHeader>
             <CardContent className="space-y-2">
-              {transactions.length ? (
+              {recentCashTransfers.length ? (
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Date</TableHead>
-                      <TableHead>Type</TableHead>
+                      <TableHead>Direction</TableHead>
                       <TableHead>Description</TableHead>
                       <TableHead className="text-right">Amount (SEK)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {transactions.slice(0, 10).map((tx) => (
+                    {recentCashTransfers.map((tx) => (
                       <TableRow key={tx.id}>
                         <TableCell className="text-slate-600">
                           {tx.occurred_at.slice(0, 10)}
                         </TableCell>
-                        <TableCell className="text-slate-700 capitalize">
-                          {tx.transaction_type}
-                        </TableCell>
-                        <TableCell className="text-slate-800">
-                          {tx.description || tx.holding_name || "-"}
-                        </TableCell>
                         <TableCell
                           className={cn(
-                            "text-right",
-                            (Number(tx.amount_sek) || 0) >= 0
+                            "text-slate-700",
+                            tx.amount >= 0
                               ? "text-emerald-700"
                               : "text-rose-700",
                           )}
                         >
-                          {Number(tx.amount_sek).toLocaleString("sv-SE", {
-                            maximumFractionDigits: 0,
-                          })}
+                          {tx.amount >= 0 ? "Added" : "Withdrawn"}
+                        </TableCell>
+                        <TableCell className="text-slate-800">
+                          {tx.description || "-"}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            "text-right",
+                            tx.amount >= 0
+                              ? "text-emerald-700"
+                              : "text-rose-700",
+                          )}
+                        >
+                          {tx.amount >= 0 ? "+" : "-"}
+                          {formatSek(Math.abs(tx.amount))}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1494,7 +1390,9 @@ export const Investments: React.FC = () => {
                 </Table>
               ) : (
                 <p className="text-sm text-slate-500">
-                  Save a snapshot with transactions to see them here.
+                  {cashflowLoading
+                    ? "Loading cash transfers…"
+                    : "No cash transfers found in the last 12 months."}
                 </p>
               )}
             </CardContent>
