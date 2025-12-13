@@ -132,6 +132,20 @@ const monthName = (year: number, month: number) =>
 const percent = (value: number) =>
   `${value.toLocaleString("sv-SE", { maximumFractionDigits: 0 })}%`;
 
+const heatColor = (rgb: string, value: number, max: number) => {
+  if (
+    !Number.isFinite(value) ||
+    !Number.isFinite(max) ||
+    max <= 0 ||
+    value <= 0
+  ) {
+    return "rgba(148,163,184,0.08)";
+  }
+  const intensity = Math.min(1, value / max);
+  const alpha = 0.08 + intensity * 0.45;
+  return `rgba(${rgb},${alpha.toFixed(3)})`;
+};
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
@@ -771,6 +785,75 @@ export const Reports: React.FC = () => {
         delta: row.delta ? Number(row.delta) : null,
       }))
       .sort((a, b) => b.current - a.current);
+  }, [totalOverview]);
+
+  const totalMonthlyIncomeExpense = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.monthly_income_expense.map((row) => {
+      const parsed = new Date(row.date);
+      return {
+        date: row.date,
+        year: parsed.getUTCFullYear(),
+        month: parsed.getUTCMonth() + 1,
+        income: Number(row.income),
+        expense: Number(row.expense),
+      };
+    });
+  }, [totalOverview]);
+
+  const totalSeasonalityHeatmaps = useMemo(() => {
+    if (!totalMonthlyIncomeExpense.length) return null;
+    const years = Array.from(
+      new Set(totalMonthlyIncomeExpense.map((row) => row.year)),
+    ).sort((a, b) => a - b);
+    const yearIndex = new Map<number, number>();
+    years.forEach((yr, idx) => yearIndex.set(yr, idx));
+    const income = years.map(() => Array.from({ length: 12 }, () => 0));
+    const expense = years.map(() => Array.from({ length: 12 }, () => 0));
+    for (const row of totalMonthlyIncomeExpense) {
+      const idx = yearIndex.get(row.year);
+      if (idx === undefined) continue;
+      const monthIdx = row.month - 1;
+      if (monthIdx < 0 || monthIdx > 11) continue;
+      income[idx][monthIdx] += row.income;
+      expense[idx][monthIdx] += row.expense;
+    }
+    const maxIncome = Math.max(0, ...income.flat());
+    const maxExpense = Math.max(0, ...expense.flat());
+    const months = Array.from({ length: 12 }, (_, idx) =>
+      monthLabel(new Date(Date.UTC(2000, idx, 1)).toISOString()),
+    );
+    return { years, months, income, expense, maxIncome, maxExpense };
+  }, [totalMonthlyIncomeExpense]);
+
+  const totalExpenseCategoryYearHeatmap = useMemo(() => {
+    if (!totalOverview) return null;
+    const heatmap = totalOverview.expense_category_heatmap_by_year;
+    const years = heatmap.years;
+    const rows = heatmap.rows.map((row) => ({
+      categoryId: row.category_id ?? null,
+      name: row.name,
+      icon: row.icon ?? null,
+      color: row.color_hex ?? null,
+      totals: row.totals.map((value) => Number(value)),
+    }));
+    const max = Math.max(0, ...rows.flatMap((row) => row.totals));
+    return { years, rows, max };
+  }, [totalOverview]);
+
+  const totalIncomeCategoryYearHeatmap = useMemo(() => {
+    if (!totalOverview) return null;
+    const heatmap = totalOverview.income_category_heatmap_by_year;
+    const years = heatmap.years;
+    const rows = heatmap.rows.map((row) => ({
+      categoryId: row.category_id ?? null,
+      name: row.name,
+      icon: row.icon ?? null,
+      color: row.color_hex ?? null,
+      totals: row.totals.map((value) => Number(value)),
+    }));
+    const max = Math.max(0, ...rows.flatMap((row) => row.totals));
+    return { years, rows, max };
   }, [totalOverview]);
 
   const openDetailDialog = (state: DetailDialogState) => {
@@ -2901,6 +2984,250 @@ export const Reports: React.FC = () => {
                       ) : null}
                     </div>
                   </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Income seasonality (year × month)
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Total income per month (all categories combined).
+                </p>
+              </CardHeader>
+              <CardContent className="overflow-auto">
+                {!totalOverview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : !totalSeasonalityHeatmaps ? (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No seasonality data yet.
+                  </div>
+                ) : (
+                  <div className="min-w-[560px]">
+                    <div className="grid grid-cols-[72px_repeat(12,minmax(28px,1fr))] gap-1 text-[11px] text-slate-600">
+                      <div />
+                      {totalSeasonalityHeatmaps.months.map((label) => (
+                        <div key={label} className="text-center">
+                          {label}
+                        </div>
+                      ))}
+                      {totalSeasonalityHeatmaps.years.map((yr, yrIdx) => (
+                        <React.Fragment key={yr}>
+                          <div className="pr-2 font-medium text-slate-700">
+                            {yr}
+                          </div>
+                          {totalSeasonalityHeatmaps.income[yrIdx].map(
+                            (value, idx) => (
+                              <div
+                                key={`${yr}-${idx}`}
+                                title={`${yr} ${totalSeasonalityHeatmaps.months[idx]}: ${currency(
+                                  value,
+                                )}`}
+                                className="h-7 rounded-sm border border-slate-100"
+                                style={{
+                                  backgroundColor: heatColor(
+                                    "16,185,129",
+                                    value,
+                                    totalSeasonalityHeatmaps.maxIncome,
+                                  ),
+                                }}
+                              />
+                            ),
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Expense seasonality (year × month)
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Total expense per month (all categories combined).
+                </p>
+              </CardHeader>
+              <CardContent className="overflow-auto">
+                {!totalOverview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : !totalSeasonalityHeatmaps ? (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No seasonality data yet.
+                  </div>
+                ) : (
+                  <div className="min-w-[560px]">
+                    <div className="grid grid-cols-[72px_repeat(12,minmax(28px,1fr))] gap-1 text-[11px] text-slate-600">
+                      <div />
+                      {totalSeasonalityHeatmaps.months.map((label) => (
+                        <div key={label} className="text-center">
+                          {label}
+                        </div>
+                      ))}
+                      {totalSeasonalityHeatmaps.years.map((yr, yrIdx) => (
+                        <React.Fragment key={yr}>
+                          <div className="pr-2 font-medium text-slate-700">
+                            {yr}
+                          </div>
+                          {totalSeasonalityHeatmaps.expense[yrIdx].map(
+                            (value, idx) => (
+                              <div
+                                key={`${yr}-${idx}`}
+                                title={`${yr} ${totalSeasonalityHeatmaps.months[idx]}: ${currency(
+                                  value,
+                                )}`}
+                                className="h-7 rounded-sm border border-slate-100"
+                                style={{
+                                  backgroundColor: heatColor(
+                                    "239,68,68",
+                                    value,
+                                    totalSeasonalityHeatmaps.maxExpense,
+                                  ),
+                                }}
+                              />
+                            ),
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Expense categories by year
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Top categories (lifetime) across all years.
+                </p>
+              </CardHeader>
+              <CardContent className="overflow-auto">
+                {!totalOverview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : !totalExpenseCategoryYearHeatmap ? (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No category history yet.
+                  </div>
+                ) : (
+                  <div className="min-w-[720px]">
+                    <div
+                      className="grid gap-1 text-[11px] text-slate-600"
+                      style={{
+                        gridTemplateColumns: `180px repeat(${totalExpenseCategoryYearHeatmap.years.length}, minmax(44px, 1fr))`,
+                      }}
+                    >
+                      <div />
+                      {totalExpenseCategoryYearHeatmap.years.map((yr) => (
+                        <div key={yr} className="text-center">
+                          {yr}
+                        </div>
+                      ))}
+                      {totalExpenseCategoryYearHeatmap.rows.map((row) => (
+                        <React.Fragment key={row.name}>
+                          <div className="truncate pr-2 font-medium text-slate-700">
+                            {row.name}
+                          </div>
+                          {totalExpenseCategoryYearHeatmap.years.map(
+                            (yr, idx) => {
+                              const value = row.totals[idx] ?? 0;
+                              return (
+                                <div
+                                  key={`${row.name}-${yr}`}
+                                  title={`${row.name} • ${yr}: ${currency(
+                                    value,
+                                  )}`}
+                                  className="h-7 rounded-sm border border-slate-100"
+                                  style={{
+                                    backgroundColor: heatColor(
+                                      "239,68,68",
+                                      value,
+                                      totalExpenseCategoryYearHeatmap.max,
+                                    ),
+                                  }}
+                                />
+                              );
+                            },
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Income categories by year
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Top categories (lifetime) across all years.
+                </p>
+              </CardHeader>
+              <CardContent className="overflow-auto">
+                {!totalOverview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : !totalIncomeCategoryYearHeatmap ? (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No category history yet.
+                  </div>
+                ) : (
+                  <div className="min-w-[720px]">
+                    <div
+                      className="grid gap-1 text-[11px] text-slate-600"
+                      style={{
+                        gridTemplateColumns: `180px repeat(${totalIncomeCategoryYearHeatmap.years.length}, minmax(44px, 1fr))`,
+                      }}
+                    >
+                      <div />
+                      {totalIncomeCategoryYearHeatmap.years.map((yr) => (
+                        <div key={yr} className="text-center">
+                          {yr}
+                        </div>
+                      ))}
+                      {totalIncomeCategoryYearHeatmap.rows.map((row) => (
+                        <React.Fragment key={row.name}>
+                          <div className="truncate pr-2 font-medium text-slate-700">
+                            {row.name}
+                          </div>
+                          {totalIncomeCategoryYearHeatmap.years.map(
+                            (yr, idx) => {
+                              const value = row.totals[idx] ?? 0;
+                              return (
+                                <div
+                                  key={`${row.name}-${yr}`}
+                                  title={`${row.name} • ${yr}: ${currency(
+                                    value,
+                                  )}`}
+                                  className="h-7 rounded-sm border border-slate-100"
+                                  style={{
+                                    backgroundColor: heatColor(
+                                      "16,185,129",
+                                      value,
+                                      totalIncomeCategoryYearHeatmap.max,
+                                    ),
+                                  }}
+                                />
+                              );
+                            },
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>

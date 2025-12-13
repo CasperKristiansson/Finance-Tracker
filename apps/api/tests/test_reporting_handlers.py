@@ -250,9 +250,12 @@ def test_total_overview_returns_expected_shape():
     assert "as_of" in body
     assert "kpis" in body
     assert "net_worth_series" in body
+    assert "monthly_income_expense" in body
     assert "yearly" in body
     assert "expense_categories_lifetime" in body
     assert "income_categories_lifetime" in body
+    assert "expense_category_heatmap_by_year" in body
+    assert "income_category_heatmap_by_year" in body
     assert "accounts" in body
     assert "debt" in body
 

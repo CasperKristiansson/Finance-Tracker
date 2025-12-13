@@ -314,10 +314,30 @@ class TotalDebtOverview(BaseModel):
     accounts: List[TotalDebtAccountEntry]
 
 
+class MonthlyIncomeExpensePoint(BaseModel):
+    date: str
+    income: Decimal
+    expense: Decimal
+
+
+class CategoryYearHeatmapRow(BaseModel):
+    category_id: Optional[str] = None
+    name: str
+    icon: Optional[str] = None
+    color_hex: Optional[str] = None
+    totals: List[Decimal]
+
+
+class CategoryYearHeatmap(BaseModel):
+    years: List[int]
+    rows: List[CategoryYearHeatmapRow]
+
+
 class TotalOverviewResponse(BaseModel):
     as_of: str
     kpis: TotalOverviewKpis
     net_worth_series: List["NetWorthSeriesPoint"]
+    monthly_income_expense: List[MonthlyIncomeExpensePoint]
     yearly: List[TotalYearEntry]
     best_year: Optional[int] = None
     worst_year: Optional[int] = None
@@ -325,6 +345,8 @@ class TotalOverviewResponse(BaseModel):
     income_categories_lifetime: List[CategoryTotalEntry]
     expense_category_mix_by_year: List[YearCategoryMixEntry]
     income_category_mix_by_year: List[YearCategoryMixEntry]
+    expense_category_heatmap_by_year: CategoryYearHeatmap
+    income_category_heatmap_by_year: CategoryYearHeatmap
     expense_category_changes_yoy: List["CategoryChangeEntry"]
     income_category_changes_yoy: List["CategoryChangeEntry"]
     income_sources_lifetime: List[SourceTotalEntry]

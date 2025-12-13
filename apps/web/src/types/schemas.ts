@@ -317,6 +317,13 @@ export const totalOverviewSchema = z.object({
       net_worth: z.string(),
     }),
   ),
+  monthly_income_expense: z.array(
+    z.object({
+      date: z.string(),
+      income: z.string(),
+      expense: z.string(),
+    }),
+  ),
   yearly: z.array(
     z.object({
       year: z.number(),
@@ -378,6 +385,30 @@ export const totalOverviewSchema = z.object({
       ),
     }),
   ),
+  expense_category_heatmap_by_year: z.object({
+    years: z.array(z.number()),
+    rows: z.array(
+      z.object({
+        category_id: z.string().nullable().optional(),
+        name: z.string(),
+        icon: z.string().nullable().optional(),
+        color_hex: z.string().nullable().optional(),
+        totals: z.array(z.string()),
+      }),
+    ),
+  }),
+  income_category_heatmap_by_year: z.object({
+    years: z.array(z.number()),
+    rows: z.array(
+      z.object({
+        category_id: z.string().nullable().optional(),
+        name: z.string(),
+        icon: z.string().nullable().optional(),
+        color_hex: z.string().nullable().optional(),
+        totals: z.array(z.string()),
+      }),
+    ),
+  }),
   expense_category_changes_yoy: z.array(
     z.object({
       category_id: z.string().nullable().optional(),

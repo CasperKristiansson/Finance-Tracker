@@ -25,6 +25,11 @@ class YearTotals(TypedDict):
     expense: Decimal
 
 
+class MonthTotals(TypedDict):
+    income: Decimal
+    expense: Decimal
+
+
 class CategoryAgg(TypedDict):
     category_id: Optional[str]
     name: str
@@ -215,6 +220,7 @@ def build_total_overview(
         return repository.sum_legs_before(before=cutoff, account_ids=ids)
 
     yearly: Dict[int, YearTotals] = {}
+    monthly: Dict[date, MonthTotals] = {}
     expense_categories_by_year: Dict[int, Dict[str, CategoryAgg]] = defaultdict(dict)
     income_categories_by_year: Dict[int, Dict[str, CategoryAgg]] = defaultdict(dict)
     expense_sources_by_year: Dict[int, Dict[str, SourceAgg]] = defaultdict(dict)
@@ -234,10 +240,15 @@ def build_total_overview(
         year = row.occurred_at.year
         if year not in yearly:
             yearly[year] = {"income": Decimal("0"), "expense": Decimal("0")}
+        month_key = date(row.occurred_at.year, row.occurred_at.month, 1)
+        if month_key not in monthly:
+            monthly[month_key] = {"income": Decimal("0"), "expense": Decimal("0")}
 
         inc, exp = classify_income_expense(row)
         yearly[year]["income"] += inc
         yearly[year]["expense"] += exp
+        monthly[month_key]["income"] += inc
+        monthly[month_key]["expense"] += exp
 
         if exp > 0:
             bucket = _ensure_category(expense_categories_by_year[year], row=row)
@@ -282,6 +293,10 @@ def build_total_overview(
                 withdrawals_lifetime += amount
 
     years_sorted = sorted(yearly.keys())
+    monthly_income_expense = [
+        {"date": month.isoformat(), "income": totals["income"], "expense": totals["expense"]}
+        for month, totals in sorted(monthly.items(), key=lambda item: item[0])
+    ]
     lifetime_income = sum((yearly[y]["income"] for y in years_sorted), Decimal("0"))
     lifetime_expense = sum((yearly[y]["expense"] for y in years_sorted), Decimal("0"))
     lifetime_saved = lifetime_income - lifetime_expense
@@ -376,6 +391,34 @@ def build_total_overview(
     income_lifetime_sorted = sorted(
         income_categories_lifetime.values(), key=lambda item: item["total"], reverse=True
     )
+
+    def build_category_heatmap(
+        *,
+        categories: List[CategoryAgg],
+        categories_by_year: Dict[int, Dict[str, CategoryAgg]],
+        years: List[int],
+    ) -> dict[str, object]:
+        rows: List[dict[str, object]] = []
+        for cat in categories[:12]:
+            key = str(cat["category_id"] or "uncategorized")
+            totals: List[Decimal] = []
+            for year in years:
+                year_map = categories_by_year.get(year)
+                if not year_map:
+                    totals.append(Decimal("0"))
+                    continue
+                bucket = year_map.get(key)
+                totals.append(bucket["total"] if bucket else Decimal("0"))
+            rows.append(
+                {
+                    "category_id": cat["category_id"],
+                    "name": cat["name"],
+                    "icon": cat.get("icon"),
+                    "color_hex": cat.get("color_hex"),
+                    "totals": totals,
+                }
+            )
+        return {"years": years, "rows": rows}
 
     def top_category_keys(categories: Dict[str, CategoryAgg], limit: int) -> List[str]:
         ranked = sorted(categories.items(), key=lambda kv: kv[1]["total"], reverse=True)
@@ -695,6 +738,7 @@ def build_total_overview(
             "lifetime_savings_rate_pct": lifetime_rate,
         },
         "net_worth_series": net_worth_series,
+        "monthly_income_expense": monthly_income_expense,
         "yearly": yearly_rows,
         "best_year": best_year,
         "worst_year": worst_year,
@@ -702,6 +746,16 @@ def build_total_overview(
         "income_categories_lifetime": income_lifetime_sorted[:12],
         "expense_category_mix_by_year": expense_mix_by_year,
         "income_category_mix_by_year": income_mix_by_year,
+        "expense_category_heatmap_by_year": build_category_heatmap(
+            categories=expense_lifetime_sorted,
+            categories_by_year=expense_categories_by_year,
+            years=years_sorted,
+        ),
+        "income_category_heatmap_by_year": build_category_heatmap(
+            categories=income_lifetime_sorted,
+            categories_by_year=income_categories_by_year,
+            years=years_sorted,
+        ),
         "expense_category_changes_yoy": expense_changes,
         "income_category_changes_yoy": income_changes,
         "income_sources_lifetime": income_sources_rows,
