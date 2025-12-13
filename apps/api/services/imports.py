@@ -312,10 +312,22 @@ class ImportService:
                     else file.account_id or unassigned_account.id
                 )
 
-                legs = [
-                    TransactionLeg(account_id=target_account_id, amount=amount),
-                    TransactionLeg(account_id=offset_account.id, amount=-amount),
-                ]
+                counterparty_account_id = (
+                    override.transfer_account_id
+                    if override and override.transfer_account_id is not None
+                    else None
+                )
+
+                if counterparty_account_id is not None:
+                    legs = [
+                        TransactionLeg(account_id=target_account_id, amount=amount),
+                        TransactionLeg(account_id=counterparty_account_id, amount=-amount),
+                    ]
+                else:
+                    legs = [
+                        TransactionLeg(account_id=target_account_id, amount=amount),
+                        TransactionLeg(account_id=offset_account.id, amount=-amount),
+                    ]
 
                 transaction = Transaction(
                     category_id=category_id,

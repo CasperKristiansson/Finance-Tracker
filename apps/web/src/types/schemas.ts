@@ -611,6 +611,7 @@ export const importCommitRowSchema = z.object({
   row_id: z.string(),
   category_id: nullableString,
   account_id: nullableString,
+  transfer_account_id: nullableString,
   description: nullableString,
   amount: nullableString,
   occurred_at: nullableString,

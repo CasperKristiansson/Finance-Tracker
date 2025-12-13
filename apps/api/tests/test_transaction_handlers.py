@@ -255,8 +255,8 @@ def test_create_transaction_generates_loan_event():
     payload = {
         "occurred_at": occurred.isoformat(),
         "legs": [
-            {"account_id": str(debt_account_id), "amount": "-100.00"},
-            {"account_id": str(funding_account_id), "amount": "100.00"},
+            {"account_id": str(funding_account_id), "amount": "-100.00"},
+            {"account_id": str(debt_account_id), "amount": "100.00"},
         ],
     }
 

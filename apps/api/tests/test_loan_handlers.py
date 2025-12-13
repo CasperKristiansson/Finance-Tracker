@@ -201,8 +201,8 @@ def test_list_loan_events_returns_recent_activity():
             posted_at=occurred,
         )
         legs = [
-            TransactionLeg(account_id=debt_account.id, amount=Decimal("-250.00")),
-            TransactionLeg(account_id=funding_account.id, amount=Decimal("250.00")),
+            TransactionLeg(account_id=funding_account.id, amount=Decimal("-250.00")),
+            TransactionLeg(account_id=debt_account.id, amount=Decimal("250.00")),
         ]
         service.create_transaction(transaction, legs)
 

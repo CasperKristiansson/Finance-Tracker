@@ -149,6 +149,7 @@ class ImportCommitRow(BaseModel):
     row_id: UUID
     category_id: Optional[UUID] = None
     account_id: Optional[UUID] = None
+    transfer_account_id: Optional[UUID] = None
     description: Optional[str] = None
     amount: Optional[str] = None
     occurred_at: Optional[datetime] = None

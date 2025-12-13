@@ -388,8 +388,8 @@ export const Loans: React.FC = () => {
       `${activityDate}T00:00:00.000Z`,
     ).toISOString();
     const amount = centsToMoneyString(amountCents);
-    const loanLegAmount = activityKind === "payment" ? `-${amount}` : amount;
-    const fundingLegAmount = activityKind === "payment" ? amount : `-${amount}`;
+    const loanLegAmount = activityKind === "payment" ? amount : `-${amount}`;
+    const fundingLegAmount = activityKind === "payment" ? `-${amount}` : amount;
 
     setActivityLoading(true);
     try {

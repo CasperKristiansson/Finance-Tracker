@@ -25,6 +25,7 @@ import {
 } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import { cn } from "@/lib/utils";
+import { AccountType } from "@/types/api";
 import type {
   BankImportType,
   ImportCommitRow,
@@ -83,6 +84,7 @@ const commitRowSchema = z.object({
   occurred_at: trimmedString,
   category_id: nullableTrimmedString,
   account_id: nullableTrimmedString,
+  transfer_account_id: nullableTrimmedString,
   subscription_id: nullableTrimmedString,
   delete: z.boolean().optional(),
 });
@@ -148,6 +150,7 @@ const deriveRowDefaults = (
     occurred_at: dateValue,
     category_id: null,
     account_id: fileAccountId ?? null,
+    transfer_account_id: null,
     subscription_id: row.suggested_subscription_id ?? null,
     delete: false,
   };
@@ -314,6 +317,7 @@ export const Imports: React.FC = () => {
       row_id: row.row_id,
       category_id: row.category_id ?? undefined,
       account_id: row.account_id ?? undefined,
+      transfer_account_id: row.transfer_account_id ?? undefined,
       description: row.description?.trim() || undefined,
       amount: row.amount?.trim() || undefined,
       occurred_at: row.occurred_at?.trim() || undefined,
@@ -371,6 +375,13 @@ export const Imports: React.FC = () => {
       case "subscription_id":
         commitForm.setValue(
           `rows.${index}.subscription_id`,
+          (value as string | null | undefined) ?? null,
+          { shouldDirty: true },
+        );
+        return;
+      case "transfer_account_id":
+        commitForm.setValue(
+          `rows.${index}.transfer_account_id`,
           (value as string | null | undefined) ?? null,
           { shouldDirty: true },
         );
@@ -445,6 +456,10 @@ export const Imports: React.FC = () => {
   };
 
   const watchedRows = commitForm.watch("rows") ?? [];
+  const loanAccounts = useMemo(
+    () => accounts.filter((acc) => acc.account_type === AccountType.DEBT),
+    [accounts],
+  );
 
   return (
     <MotionPage className="space-y-4">
@@ -716,6 +731,7 @@ export const Imports: React.FC = () => {
                   <TableHead>Suggested</TableHead>
                   <TableHead>Subscription</TableHead>
                   <TableHead>Account</TableHead>
+                  <TableHead>Loan</TableHead>
                   <TableHead>Delete</TableHead>
                 </TableRow>
               </TableHeader>
@@ -908,6 +924,29 @@ export const Imports: React.FC = () => {
                             </option>
                           ))}
                         </select>
+                      </TableCell>
+                      <TableCell className="min-w-[160px]">
+                        <select
+                          className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
+                          value={formRow.transfer_account_id ?? ""}
+                          onChange={(e) =>
+                            setRowValue(
+                              row.id,
+                              "transfer_account_id",
+                              e.target.value || null,
+                            )
+                          }
+                        >
+                          <option value="">No loan</option>
+                          {loanAccounts.map((acc) => (
+                            <option key={acc.id} value={acc.id}>
+                              {acc.name || "Loan"} - {acc.id.slice(0, 6)}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Links this row as a transfer to the loan.
+                        </p>
                       </TableCell>
                       <TableCell className="min-w-[80px]">
                         <Controller

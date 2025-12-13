@@ -16,8 +16,15 @@ from apps.api.handlers.imports import (
     create_import_batch,
     reset_handler_state,
 )
-from apps.api.models import Subscription, Transaction
-from apps.api.shared import configure_engine, get_default_user_id, get_engine, scope_session_to_user
+from apps.api.models import Account, Loan, LoanEvent, Subscription, Transaction, TransactionLeg
+from apps.api.shared import (
+    AccountType,
+    InterestCompound,
+    configure_engine,
+    get_default_user_id,
+    get_engine,
+    scope_session_to_user,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -314,3 +321,82 @@ def test_subscription_applied_when_explicit_override():
         transactions = list(session.exec(select(Transaction)).all())
         assert len(transactions) == 1
         assert transactions[0].subscription_id == subscription.id
+
+
+def test_commit_can_link_rows_to_loan_account_transfer():
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        bank = Account(name="Bank", account_type=AccountType.NORMAL)
+        debt = Account(name="Debt", account_type=AccountType.DEBT)
+        session.add_all([bank, debt])
+        session.flush()
+        loan = Loan(
+            account_id=debt.id,
+            origin_principal=Decimal("1000.00"),
+            current_principal=Decimal("1000.00"),
+            interest_rate_annual=Decimal("0.05"),
+            interest_compound=InterestCompound.MONTHLY,
+        )
+        session.add(loan)
+        session.commit()
+        bank_id = str(bank.id)
+        debt_id = str(debt.id)
+
+    payload = _swedbank_workbook()
+    create_event = {
+        "body": json.dumps(
+            {
+                "files": [
+                    {
+                        "filename": "swedbank.xlsx",
+                        "bank_type": "swedbank",
+                        "content_base64": payload,
+                        "account_id": bank_id,
+                    }
+                ]
+            }
+        ),
+        "isBase64Encoded": False,
+    }
+    create_response = create_import_batch(create_event, None)
+    assert create_response["statusCode"] == 201
+    created = _json_body(create_response)["imports"][0]
+    keep_row_id = created["rows"][1]["id"]
+    delete_row_id = created["rows"][0]["id"]
+
+    commit_response = commit_import_session(
+        {
+            "pathParameters": {"batch_id": created["id"]},
+            "body": json.dumps(
+                {
+                    "rows": [
+                        {
+                            "row_id": delete_row_id,
+                            "delete": True,
+                        },
+                        {
+                            "row_id": keep_row_id,
+                            "transfer_account_id": debt_id,
+                        },
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert commit_response["statusCode"] == 200
+
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        tx = session.exec(select(Transaction)).one()
+        legs = session.exec(
+            select(TransactionLeg).where(TransactionLeg.transaction_id == tx.id)
+        ).all()
+        account_ids = {str(leg.account_id) for leg in legs}
+        assert account_ids == {bank_id, debt_id}
+
+        events = session.exec(select(LoanEvent)).all()
+        assert len(events) == 1
+        assert events[0].event_type == "payment_principal"
