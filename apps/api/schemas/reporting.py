@@ -262,6 +262,139 @@ class NetWorthProjectionResponse(BaseModel):
     points: List[NetWorthProjectionPoint]
 
 
+class YearlyOverviewQuery(_CsvUUIDMixin):
+    """Query parameters for yearly overview report."""
+
+    year: int = Field(ge=1900, le=3000)
+    account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _split_lists(cls, values: Any) -> Any:
+        if isinstance(values, dict) and "account_ids" in values:
+            values["account_ids"] = cls._parse_uuid_list(values.get("account_ids"))
+        return values
+
+
+class YearlyCategoryDetailQuery(_CsvUUIDMixin):
+    """Query parameters for category drilldown within a year."""
+
+    year: int = Field(ge=1900, le=3000)
+    category_id: UUID
+    account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _split_lists(cls, values: Any) -> Any:
+        if isinstance(values, dict) and "account_ids" in values:
+            values["account_ids"] = cls._parse_uuid_list(values.get("account_ids"))
+        return values
+
+
+class YearlyOverviewMonthEntry(BaseModel):
+    date: str
+    month: int
+    income: Decimal
+    expense: Decimal
+    net: Decimal
+
+
+class NetWorthSeriesPoint(BaseModel):
+    date: str
+    net_worth: Decimal
+
+
+class DebtSeriesPoint(BaseModel):
+    date: str
+    debt: Decimal
+
+
+class SavingsIndicator(BaseModel):
+    income: Decimal
+    expense: Decimal
+    saved: Decimal
+    savings_rate_pct: Optional[Decimal] = None
+
+
+class BiggestMonthEntry(BaseModel):
+    month: int
+    amount: Decimal
+
+
+class YearlyOverviewStats(BaseModel):
+    total_income: Decimal
+    total_expense: Decimal
+    net_savings: Decimal
+    savings_rate_pct: Optional[Decimal] = None
+    avg_monthly_spend: Decimal
+    biggest_income_month: BiggestMonthEntry
+    biggest_expense_month: BiggestMonthEntry
+
+
+class YearlyCategoryBreakdownEntry(BaseModel):
+    category_id: Optional[str] = None
+    name: str
+    total: Decimal
+    monthly: List[Decimal]
+    icon: Optional[str] = None
+    color_hex: Optional[str] = None
+    transaction_count: int
+
+
+class MerchantSummaryEntry(BaseModel):
+    merchant: str
+    amount: Decimal
+    transaction_count: int
+    yoy_change_pct: Optional[Decimal] = None
+
+
+class LargestTransactionEntry(BaseModel):
+    id: str
+    occurred_at: str
+    merchant: str
+    amount: Decimal
+    category_id: Optional[str] = None
+    category_name: str
+    notes: Optional[str] = None
+
+
+class CategoryChangeEntry(BaseModel):
+    category_id: Optional[str] = None
+    name: str
+    amount: Decimal
+    prev_amount: Decimal
+    delta: Decimal
+    delta_pct: Optional[Decimal] = None
+
+
+class YearlyOverviewResponse(BaseModel):
+    year: int
+    monthly: List[YearlyOverviewMonthEntry]
+    net_worth: List[NetWorthSeriesPoint]
+    debt: List[DebtSeriesPoint]
+    savings: SavingsIndicator
+    stats: YearlyOverviewStats
+    category_breakdown: List[YearlyCategoryBreakdownEntry]
+    top_merchants: List[MerchantSummaryEntry]
+    largest_transactions: List[LargestTransactionEntry]
+    category_changes: List[CategoryChangeEntry]
+    insights: List[str]
+
+
+class YearlyCategoryMonthlyEntry(BaseModel):
+    date: str
+    month: int
+    amount: Decimal
+
+
+class YearlyCategoryDetailResponse(BaseModel):
+    year: int
+    category_id: str
+    category_name: str
+    monthly: List[YearlyCategoryMonthlyEntry]
+    top_merchants: List[MerchantSummaryEntry]
+
+
 class ExportReportRequest(BaseModel):
     """Request payload for exporting reports in CSV/XLSX."""
 
@@ -320,6 +453,14 @@ __all__ = [
     "NetWorthHistoryQuery",
     "NetWorthPoint",
     "NetWorthHistoryResponse",
+    "CashflowForecastQuery",
+    "CashflowForecastResponse",
+    "NetWorthProjectionQuery",
+    "NetWorthProjectionResponse",
+    "YearlyOverviewQuery",
+    "YearlyOverviewResponse",
+    "YearlyCategoryDetailQuery",
+    "YearlyCategoryDetailResponse",
     "ExportReportRequest",
     "ExportReportResponse",
 ]

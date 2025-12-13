@@ -529,6 +529,30 @@ functions:
           method: GET
           authorizer: cognitoJwt
 
+  yearlyOverview:
+    handler: apps/api/handlers/reporting.yearly_overview
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/yearly-overview
+          method: GET
+          authorizer: cognitoJwt
+
+  yearlyCategoryDetail:
+    handler: apps/api/handlers/reporting.yearly_category_detail
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/yearly-category-detail
+          method: GET
+          authorizer: cognitoJwt
+
   quarterlyReport:
     handler: apps/api/handlers/reporting.quarterly_report
     timeout: 29

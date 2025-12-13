@@ -8,13 +8,15 @@ from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 from uuid import UUID
 
-from sqlalchemy import Table, desc, func, text
+from sqlalchemy import Table, desc, func
+from sqlalchemy import select as sa_select
+from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session, select
 
-from ..models import Account, Transaction, TransactionLeg
+from ..models import Account, Category, Transaction, TransactionLeg
 from ..models.investment_snapshot import InvestmentSnapshot
-from ..shared import coerce_decimal, get_default_user_id
+from ..shared import AccountType, TransactionType, coerce_decimal, get_default_user_id
 
 DecimalTotals = Tuple[Decimal, Decimal]
 
@@ -67,6 +69,23 @@ class NetWorthPoint:
     net_worth: Decimal
 
 
+@dataclass(frozen=True)
+class TransactionAmountRow:
+    """Aggregated view of a transaction's impact on selected accounts."""
+
+    id: UUID
+    occurred_at: datetime
+    transaction_type: TransactionType
+    description: Optional[str]
+    notes: Optional[str]
+    category_id: Optional[UUID]
+    category_name: Optional[str]
+    category_icon: Optional[str]
+    category_color_hex: Optional[str]
+    subscription_id: Optional[UUID]
+    amount: Decimal
+
+
 class ReportingRepository:
     """Provides reporting-oriented aggregation helpers."""
 
@@ -82,6 +101,15 @@ class ReportingRepository:
                 )
             ).all()
         )
+
+    def _normalize_datetime(self, value: datetime) -> datetime:
+        """SQLite stores naive datetimes; Postgres uses tz-aware timestamps."""
+
+        bind = self.session.get_bind()
+        dialect = getattr(bind, "dialect", None)
+        if dialect is not None and getattr(dialect, "name", "") == "sqlite":
+            return value.replace(tzinfo=None)
+        return value
 
     def get_monthly_totals(
         self,
@@ -216,6 +244,200 @@ class ReportingRepository:
             history.append(NetWorthPoint(period=period, net_worth=running_total))
 
         return history
+
+    def list_account_ids_by_type(
+        self, account_type: AccountType, *, account_ids: Optional[Iterable[UUID]] = None
+    ) -> List[UUID]:
+        statement = select(Account.id).where(
+            Account.user_id == self.user_id,
+            Account.account_type == account_type,
+        )
+        if account_ids:
+            statement = statement.where(cast(Any, Account.id).in_(list(account_ids)))
+        return list(self.session.exec(statement).all())
+
+    def sum_legs_before(
+        self, *, before: datetime, account_ids: Optional[Iterable[UUID]] = None
+    ) -> Decimal:
+        transaction_table = cast(Table, getattr(Transaction, "__table__"))
+        leg_table = cast(Table, getattr(TransactionLeg, "__table__"))
+        before_value = self._normalize_datetime(before)
+
+        statement = (
+            select(func.coalesce(func.sum(leg_table.c.amount), 0))
+            .join_from(
+                leg_table, transaction_table, leg_table.c.transaction_id == transaction_table.c.id
+            )
+            .where(transaction_table.c.occurred_at < before_value)
+        )
+        statement = statement.where(transaction_table.c.user_id == self.user_id)
+        statement = statement.where(leg_table.c.user_id == self.user_id)
+
+        if account_ids:
+            statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
+        elif self._excluded_account_ids:
+            statement = statement.where(
+                ~leg_table.c.account_id.in_(list(self._excluded_account_ids))
+            )
+
+        scalar_result = cast(Any, self.session.exec(statement))
+        if hasattr(scalar_result, "scalar_one"):
+            result = scalar_result.scalar_one()
+        elif hasattr(scalar_result, "one"):
+            row = scalar_result.one()
+            result = row[0] if isinstance(row, tuple) else row
+        elif hasattr(scalar_result, "first"):
+            row = scalar_result.first()
+            result = row[0] if row and isinstance(row, tuple) else (row or 0)
+        else:
+            result = scalar_result or 0
+        return coerce_decimal(result)
+
+    def daily_deltas_between(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+        account_ids: Optional[Iterable[UUID]] = None,
+    ) -> List[Tuple[date, Decimal]]:
+        transaction_table = cast(Table, getattr(Transaction, "__table__"))
+        leg_table = cast(Table, getattr(TransactionLeg, "__table__"))
+        day_column = func.date(transaction_table.c.occurred_at)
+        start_value = self._normalize_datetime(start)
+        end_value = self._normalize_datetime(end)
+
+        statement = (
+            select(day_column.label("day"), func.sum(leg_table.c.amount).label("delta"))
+            .join_from(
+                leg_table, transaction_table, leg_table.c.transaction_id == transaction_table.c.id
+            )
+            .where(transaction_table.c.occurred_at >= start_value)
+            .where(transaction_table.c.occurred_at < end_value)
+            .group_by(day_column)
+            .order_by(day_column.asc())
+        )
+
+        statement = statement.where(transaction_table.c.user_id == self.user_id)
+        statement = statement.where(leg_table.c.user_id == self.user_id)
+
+        if account_ids:
+            statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
+        elif self._excluded_account_ids:
+            statement = statement.where(
+                ~leg_table.c.account_id.in_(list(self._excluded_account_ids))
+            )
+
+        rows = self.session.exec(statement).all()
+        return [(self._coerce_date(day), coerce_decimal(delta)) for day, delta in rows]
+
+    def list_investment_snapshots_until(self, *, end: date) -> List[Tuple[date, Decimal]]:
+        statement = (
+            select(
+                cast(Any, InvestmentSnapshot.snapshot_date),
+                cast(Any, InvestmentSnapshot.portfolio_value),
+            )
+            .where(InvestmentSnapshot.user_id == self.user_id)
+            .where(cast(Any, InvestmentSnapshot.snapshot_date) <= end)
+            .order_by(cast(Any, InvestmentSnapshot.snapshot_date).asc())
+        )
+        rows = self.session.exec(statement).all()
+        return [(self._coerce_date(day), coerce_decimal(value)) for day, value in rows]
+
+    def fetch_transaction_amounts(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+        account_ids: Optional[Iterable[UUID]] = None,
+    ) -> List[TransactionAmountRow]:
+        transaction_table = cast(Table, getattr(Transaction, "__table__"))
+        leg_table = cast(Table, getattr(TransactionLeg, "__table__"))
+        category_table = cast(Table, getattr(Category, "__table__"))
+        start_value = self._normalize_datetime(start)
+        end_value = self._normalize_datetime(end)
+
+        columns: list[Any] = [
+            cast(Any, transaction_table.c.id).label("id"),
+            cast(Any, transaction_table.c.occurred_at).label("occurred_at"),
+            cast(Any, transaction_table.c.transaction_type).label("transaction_type"),
+            cast(Any, transaction_table.c.description).label("description"),
+            cast(Any, transaction_table.c.notes).label("notes"),
+            cast(Any, transaction_table.c.category_id).label("category_id"),
+            cast(Any, category_table.c.name).label("category_name"),
+            cast(Any, category_table.c.icon).label("category_icon"),
+            cast(Any, category_table.c.color_hex).label("category_color_hex"),
+            cast(Any, transaction_table.c.subscription_id).label("subscription_id"),
+            func.sum(leg_table.c.amount).label("amount"),
+        ]
+
+        statement: Any = sa_select(*columns)
+        statement = (
+            statement.join_from(
+                leg_table, transaction_table, leg_table.c.transaction_id == transaction_table.c.id
+            )
+            .join(
+                category_table,
+                category_table.c.id == transaction_table.c.category_id,
+                isouter=True,
+            )
+            .where(transaction_table.c.occurred_at >= start_value)
+            .where(transaction_table.c.occurred_at < end_value)
+            .group_by(
+                transaction_table.c.id,
+                transaction_table.c.occurred_at,
+                transaction_table.c.transaction_type,
+                transaction_table.c.description,
+                transaction_table.c.notes,
+                transaction_table.c.category_id,
+                category_table.c.name,
+                category_table.c.icon,
+                category_table.c.color_hex,
+                transaction_table.c.subscription_id,
+            )
+            .order_by(transaction_table.c.occurred_at.asc())
+        )
+
+        statement = statement.where(transaction_table.c.user_id == self.user_id)
+        statement = statement.where(leg_table.c.user_id == self.user_id)
+
+        if account_ids:
+            statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
+        elif self._excluded_account_ids:
+            statement = statement.where(
+                ~leg_table.c.account_id.in_(list(self._excluded_account_ids))
+            )
+
+        rows = self.session.exec(statement).all()
+        result: List[TransactionAmountRow] = []
+        for (
+            tx_id,
+            occurred_at,
+            tx_type,
+            description,
+            notes,
+            category_id,
+            category_name,
+            category_icon,
+            category_color_hex,
+            subscription_id,
+            amount,
+        ) in rows:
+            result.append(
+                TransactionAmountRow(
+                    id=cast(UUID, tx_id),
+                    occurred_at=cast(datetime, occurred_at),
+                    transaction_type=TransactionType(str(tx_type)),
+                    description=cast(Optional[str], description),
+                    notes=cast(Optional[str], notes),
+                    category_id=cast(Optional[UUID], category_id),
+                    category_name=cast(Optional[str], category_name),
+                    category_icon=cast(Optional[str], category_icon),
+                    category_color_hex=cast(Optional[str], category_color_hex),
+                    subscription_id=cast(Optional[UUID], subscription_id),
+                    amount=coerce_decimal(amount),
+                )
+            )
+        return result
 
     def average_daily_net(
         self, *, days: int = 90, account_ids: Optional[Iterable[UUID]] = None
@@ -442,4 +664,5 @@ __all__ = [
     "QuarterlyTotals",
     "LifetimeTotals",
     "NetWorthPoint",
+    "TransactionAmountRow",
 ]

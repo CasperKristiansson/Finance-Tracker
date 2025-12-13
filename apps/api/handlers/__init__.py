@@ -53,6 +53,8 @@ from .reporting import (
 from .reporting import reset_handler_state as reset_reporting_handler_state
 from .reporting import (
     total_report,
+    yearly_category_detail,
+    yearly_overview,
     yearly_report,
 )
 from .settings import get_settings
@@ -101,6 +103,8 @@ __all__ = [
     "net_worth_history",
     "cashflow_forecast",
     "net_worth_projection",
+    "yearly_overview",
+    "yearly_category_detail",
     "get_settings",
     "save_settings",
     "create_transaction",

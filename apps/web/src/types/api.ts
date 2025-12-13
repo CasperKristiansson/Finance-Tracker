@@ -70,5 +70,7 @@ export type {
   TransactionCreate,
   TransactionUpdateRequest,
   WarmupResponse,
+  YearlyCategoryDetailResponse,
+  YearlyOverviewResponse,
   YearlyReportEntry,
 } from "./schemas";

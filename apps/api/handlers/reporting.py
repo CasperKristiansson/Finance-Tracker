@@ -30,6 +30,10 @@ from ..schemas import (
     QuarterlyReportResponse,
     TotalReportQuery,
     TotalReportRead,
+    YearlyCategoryDetailQuery,
+    YearlyCategoryDetailResponse,
+    YearlyOverviewQuery,
+    YearlyOverviewResponse,
     YearlyReportEntry,
     YearlyReportQuery,
     YearlyReportResponse,
@@ -231,6 +235,44 @@ def net_worth_projection(event: Dict[str, Any], _context: Any) -> Dict[str, Any]
         service = ReportingService(session)
         result = service.net_worth_projection(months=query.months, account_ids=query.account_ids)
         payload = NetWorthProjectionResponse.model_validate(result)
+    return json_response(200, payload.model_dump(mode="json"))
+
+
+def yearly_overview(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    user_id = get_user_id(event)
+    params = get_query_params(event)
+
+    try:
+        query = YearlyOverviewQuery.model_validate(params)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope(user_id=user_id) as session:
+        service = ReportingService(session)
+        result = service.yearly_overview(year=query.year, account_ids=query.account_ids)
+        payload = YearlyOverviewResponse.model_validate(result)
+    return json_response(200, payload.model_dump(mode="json"))
+
+
+def yearly_category_detail(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    user_id = get_user_id(event)
+    params = get_query_params(event)
+
+    try:
+        query = YearlyCategoryDetailQuery.model_validate(params)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope(user_id=user_id) as session:
+        service = ReportingService(session)
+        result = service.yearly_category_detail(
+            year=query.year,
+            category_id=query.category_id,
+            account_ids=query.account_ids,
+        )
+        payload = YearlyCategoryDetailResponse.model_validate(result)
     return json_response(200, payload.model_dump(mode="json"))
 
 

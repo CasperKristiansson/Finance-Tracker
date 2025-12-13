@@ -308,6 +308,114 @@ export const netWorthHistorySchema = z.object({
   ),
 });
 
+export const yearlyOverviewSchema = z.object({
+  year: z.number(),
+  monthly: z.array(
+    z.object({
+      date: z.string(),
+      month: z.number(),
+      income: z.string(),
+      expense: z.string(),
+      net: z.string(),
+    }),
+  ),
+  net_worth: z.array(
+    z.object({
+      date: z.string(),
+      net_worth: z.string(),
+    }),
+  ),
+  debt: z.array(
+    z.object({
+      date: z.string(),
+      debt: z.string(),
+    }),
+  ),
+  savings: z.object({
+    income: z.string(),
+    expense: z.string(),
+    saved: z.string(),
+    savings_rate_pct: z.string().nullable().optional(),
+  }),
+  stats: z.object({
+    total_income: z.string(),
+    total_expense: z.string(),
+    net_savings: z.string(),
+    savings_rate_pct: z.string().nullable().optional(),
+    avg_monthly_spend: z.string(),
+    biggest_income_month: z.object({
+      month: z.number(),
+      amount: z.string(),
+    }),
+    biggest_expense_month: z.object({
+      month: z.number(),
+      amount: z.string(),
+    }),
+  }),
+  category_breakdown: z.array(
+    z.object({
+      category_id: z.string().nullable().optional(),
+      name: z.string(),
+      total: z.string(),
+      monthly: z.array(z.string()),
+      icon: z.string().nullable().optional(),
+      color_hex: z.string().nullable().optional(),
+      transaction_count: z.number(),
+    }),
+  ),
+  top_merchants: z.array(
+    z.object({
+      merchant: z.string(),
+      amount: z.string(),
+      transaction_count: z.number(),
+      yoy_change_pct: z.string().nullable().optional(),
+    }),
+  ),
+  largest_transactions: z.array(
+    z.object({
+      id: z.string(),
+      occurred_at: z.string(),
+      merchant: z.string(),
+      amount: z.string(),
+      category_id: z.string().nullable().optional(),
+      category_name: z.string(),
+      notes: z.string().nullable().optional(),
+    }),
+  ),
+  category_changes: z.array(
+    z.object({
+      category_id: z.string().nullable().optional(),
+      name: z.string(),
+      amount: z.string(),
+      prev_amount: z.string(),
+      delta: z.string(),
+      delta_pct: z.string().nullable().optional(),
+    }),
+  ),
+  insights: z.array(z.string()),
+});
+
+export const yearlyCategoryDetailSchema = z.object({
+  year: z.number(),
+  category_id: z.string(),
+  category_name: z.string(),
+  monthly: z.array(
+    z.object({
+      date: z.string(),
+      month: z.number(),
+      amount: z.string(),
+    }),
+  ),
+  top_merchants: z.array(
+    z.object({
+      merchant: z.string(),
+      amount: z.string(),
+      transaction_count: z.number(),
+      yoy_change_pct: z.string().nullable().optional(),
+    }),
+  ),
+});
+
 export const subscriptionSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -675,6 +783,10 @@ export type NetWorthPoint = z.infer<
   typeof netWorthHistorySchema
 >["points"][number];
 export type NetWorthHistoryResponse = z.infer<typeof netWorthHistorySchema>;
+export type YearlyOverviewResponse = z.infer<typeof yearlyOverviewSchema>;
+export type YearlyCategoryDetailResponse = z.infer<
+  typeof yearlyCategoryDetailSchema
+>;
 export type SubscriptionRead = z.infer<typeof subscriptionSchema>;
 export type SubscriptionSummaryRead = z.infer<typeof subscriptionSummarySchema>;
 export type SubscriptionSummaryResponse = z.infer<
