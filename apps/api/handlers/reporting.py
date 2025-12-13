@@ -194,6 +194,7 @@ def date_range_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             account_ids=query.account_ids,
             category_ids=query.category_ids,
             subscription_ids=query.subscription_ids,
+            source=query.source,
         )
         payload = DateRangeReportResponse(
             results=[MonthlyReportEntry.model_validate(item) for item in results]

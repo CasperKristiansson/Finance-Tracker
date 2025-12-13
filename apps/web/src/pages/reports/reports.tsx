@@ -47,6 +47,7 @@ import type {
   YearlyOverviewResponse,
 } from "@/types/api";
 import {
+  monthlyReportSchema,
   totalOverviewSchema,
   yearlyCategoryDetailSchema,
   yearlyOverviewSchema,
@@ -106,6 +107,35 @@ type DetailDialogState =
       monthly: Array<{ month: string; total: number }>;
       total: number;
       txCount: number;
+    };
+
+type TotalDrilldownState =
+  | {
+      kind: "category";
+      flow: "income" | "expense";
+      categoryId: string;
+      name: string;
+      color: string;
+    }
+  | {
+      kind: "source";
+      flow: "income" | "expense";
+      source: string;
+    }
+  | {
+      kind: "account";
+      accountId: string;
+      name: string;
+      accountType: string;
+    }
+  | {
+      kind: "investments";
+    }
+  | {
+      kind: "debt";
+    }
+  | {
+      kind: "netWorth";
     };
 
 const currency = (value: number) =>
@@ -203,6 +233,16 @@ export const Reports: React.FC = () => {
     null,
   );
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [totalDrilldown, setTotalDrilldown] =
+    useState<TotalDrilldownState | null>(null);
+  const [totalDrilldownOpen, setTotalDrilldownOpen] = useState(false);
+  const [totalDrilldownLoading, setTotalDrilldownLoading] = useState(false);
+  const [totalDrilldownError, setTotalDrilldownError] = useState<string | null>(
+    null,
+  );
+  const [totalDrilldownSeries, setTotalDrilldownSeries] = useState<
+    Array<{ period: string; income: number; expense: number; net: number }>
+  >([]);
 
   const yearOptions = useMemo(() => {
     const current = new Date().getFullYear();
@@ -271,6 +311,97 @@ export const Reports: React.FC = () => {
     };
     void loadTotalOverview();
   }, [routeMode, selectedAccounts, token]);
+
+  const totalRange = useMemo(() => {
+    if (!totalOverview) return null;
+    const years = totalOverview.yearly.map((row) => row.year);
+    const minYear = years.length
+      ? Math.min(...years)
+      : new Date().getFullYear();
+    return {
+      start: `${minYear}-01-01`,
+      end: totalOverview.as_of.slice(0, 10),
+    };
+  }, [totalOverview]);
+
+  useEffect(() => {
+    const loadDrilldown = async () => {
+      if (!token) return;
+      if (routeMode !== "total") return;
+      if (!totalDrilldownOpen) return;
+      if (!totalRange) return;
+      if (!totalDrilldown) return;
+      if (
+        totalDrilldown.kind !== "category" &&
+        totalDrilldown.kind !== "source" &&
+        totalDrilldown.kind !== "account"
+      ) {
+        setTotalDrilldownSeries([]);
+        setTotalDrilldownError(null);
+        return;
+      }
+
+      setTotalDrilldownLoading(true);
+      setTotalDrilldownError(null);
+      try {
+        const accountIds =
+          totalDrilldown.kind === "account"
+            ? totalDrilldown.accountId
+            : selectedAccounts.length
+              ? selectedAccounts.join(",")
+              : undefined;
+        const categoryIds =
+          totalDrilldown.kind === "category"
+            ? totalDrilldown.categoryId
+            : undefined;
+        const source =
+          totalDrilldown.kind === "source" ? totalDrilldown.source : undefined;
+
+        const { data } = await apiFetch<{
+          results: Array<{
+            period: string;
+            income: string;
+            expense: string;
+            net: string;
+          }>;
+        }>({
+          path: "/reports/custom",
+          schema: monthlyReportSchema,
+          query: {
+            start_date: totalRange.start,
+            end_date: totalRange.end,
+            ...(accountIds ? { account_ids: accountIds } : {}),
+            ...(categoryIds ? { category_ids: categoryIds } : {}),
+            ...(source ? { source } : {}),
+          },
+          token,
+        });
+
+        setTotalDrilldownSeries(
+          data.results.map((row) => ({
+            period: row.period,
+            income: Number(row.income),
+            expense: Number(row.expense),
+            net: Number(row.net),
+          })),
+        );
+      } catch (error) {
+        console.error(error);
+        setTotalDrilldownSeries([]);
+        setTotalDrilldownError("Failed to load drilldown.");
+      } finally {
+        setTotalDrilldownLoading(false);
+      }
+    };
+    void loadDrilldown();
+  }, [
+    routeMode,
+    selectedAccounts,
+    token,
+    totalDrilldown,
+    totalDrilldownOpen,
+    totalRange,
+  ]);
 
   useEffect(() => {
     const loadCategoryDetail = async () => {
@@ -912,6 +1043,11 @@ export const Reports: React.FC = () => {
   const openDetailDialog = (state: DetailDialogState) => {
     setDetailDialog(state);
     setDetailDialogOpen(true);
+  };
+
+  const openTotalDrilldownDialog = (state: TotalDrilldownState) => {
+    setTotalDrilldown(state);
+    setTotalDrilldownOpen(true);
   };
 
   return (
@@ -2938,8 +3074,13 @@ export const Reports: React.FC = () => {
                     </div>
                   ) : null}
 
-                  <div className="min-h-0 flex-1 rounded-md border border-slate-100 bg-white p-2">
-                    <ResponsiveContainer width="100%" height="200%">
+                  <div
+                    className="min-h-0 flex-1 cursor-pointer rounded-md border border-slate-100 bg-white p-2"
+                    onClick={() =>
+                      openTotalDrilldownDialog({ kind: "netWorth" })
+                    }
+                  >
+                    <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={totalNetWorthSeries}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis
@@ -3298,7 +3439,23 @@ export const Reports: React.FC = () => {
                     ))}
                     {totalExpenseCategoryYearHeatmap.rows.map((row) => (
                       <React.Fragment key={row.name}>
-                        <div className="truncate pr-2 font-medium text-slate-700">
+                        <div
+                          className={
+                            row.categoryId
+                              ? "cursor-pointer truncate pr-2 font-medium text-slate-700"
+                              : "truncate pr-2 font-medium text-slate-700"
+                          }
+                          onClick={() => {
+                            if (!row.categoryId) return;
+                            openTotalDrilldownDialog({
+                              kind: "category",
+                              flow: "expense",
+                              categoryId: row.categoryId,
+                              name: row.name,
+                              color: row.color ?? "#ef4444",
+                            });
+                          }}
+                        >
                           {row.name}
                         </div>
                         {totalExpenseCategoryYearHeatmap.years.map(
@@ -3364,7 +3521,23 @@ export const Reports: React.FC = () => {
                     ))}
                     {totalIncomeCategoryYearHeatmap.rows.map((row) => (
                       <React.Fragment key={row.name}>
-                        <div className="truncate pr-2 font-medium text-slate-700">
+                        <div
+                          className={
+                            row.categoryId
+                              ? "cursor-pointer truncate pr-2 font-medium text-slate-700"
+                              : "truncate pr-2 font-medium text-slate-700"
+                          }
+                          onClick={() => {
+                            if (!row.categoryId) return;
+                            openTotalDrilldownDialog({
+                              kind: "category",
+                              flow: "income",
+                              categoryId: row.categoryId,
+                              name: row.name,
+                              color: row.color ?? "#10b981",
+                            });
+                          }}
+                        >
                           {row.name}
                         </div>
                         {totalIncomeCategoryYearHeatmap.years.map((yr, idx) => {
@@ -3416,7 +3589,12 @@ export const Reports: React.FC = () => {
                   </div>
                 ) : (
                   <>
-                    <div className="h-44 rounded-md border border-slate-100 bg-white p-2">
+                    <div
+                      className="h-44 cursor-pointer rounded-md border border-slate-100 bg-white p-2"
+                      onClick={() =>
+                        openTotalDrilldownDialog({ kind: "investments" })
+                      }
+                    >
                       <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={totalInvestments.series}>
                           <CartesianGrid
@@ -3577,7 +3755,10 @@ export const Reports: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                    <div className="h-44 rounded-md border border-slate-100 bg-white p-2">
+                    <div
+                      className="h-44 cursor-pointer rounded-md border border-slate-100 bg-white p-2"
+                      onClick={() => openTotalDrilldownDialog({ kind: "debt" })}
+                    >
                       <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={totalDebtSeries}>
                           <CartesianGrid
@@ -3700,7 +3881,18 @@ export const Reports: React.FC = () => {
                   </TableHeader>
                   <TableBody>
                     {totalAccountsOverview.map((row) => (
-                      <TableRow key={row.id}>
+                      <TableRow
+                        key={row.id}
+                        className="cursor-pointer"
+                        onClick={() =>
+                          openTotalDrilldownDialog({
+                            kind: "account",
+                            accountId: row.id,
+                            name: row.name,
+                            accountType: row.type,
+                          })
+                        }
+                      >
                         <TableCell className="max-w-[220px] truncate font-medium">
                           {row.name}
                         </TableCell>
@@ -3765,7 +3957,17 @@ export const Reports: React.FC = () => {
                           {totalIncomeSourcesLifetime
                             .slice(0, 12)
                             .map((row) => (
-                              <TableRow key={row.source}>
+                              <TableRow
+                                key={row.source}
+                                className="cursor-pointer"
+                                onClick={() =>
+                                  openTotalDrilldownDialog({
+                                    kind: "source",
+                                    flow: "income",
+                                    source: row.source,
+                                  })
+                                }
+                              >
                                 <TableCell className="max-w-[220px] truncate font-medium">
                                   {row.source}
                                 </TableCell>
@@ -3797,7 +3999,17 @@ export const Reports: React.FC = () => {
                               {totalIncomeSourceChanges
                                 .slice(0, 10)
                                 .map((row) => (
-                                  <TableRow key={row.source}>
+                                  <TableRow
+                                    key={row.source}
+                                    className="cursor-pointer"
+                                    onClick={() =>
+                                      openTotalDrilldownDialog({
+                                        kind: "source",
+                                        flow: "income",
+                                        source: row.source,
+                                      })
+                                    }
+                                  >
                                     <TableCell className="max-w-[220px] truncate font-medium">
                                       {row.source}
                                     </TableCell>
@@ -3864,7 +4076,17 @@ export const Reports: React.FC = () => {
                           {totalExpenseSourcesLifetime
                             .slice(0, 12)
                             .map((row) => (
-                              <TableRow key={row.source}>
+                              <TableRow
+                                key={row.source}
+                                className="cursor-pointer"
+                                onClick={() =>
+                                  openTotalDrilldownDialog({
+                                    kind: "source",
+                                    flow: "expense",
+                                    source: row.source,
+                                  })
+                                }
+                              >
                                 <TableCell className="max-w-[220px] truncate font-medium">
                                   {row.source}
                                 </TableCell>
@@ -3896,7 +4118,17 @@ export const Reports: React.FC = () => {
                               {totalExpenseSourceChanges
                                 .slice(0, 10)
                                 .map((row) => (
-                                  <TableRow key={row.source}>
+                                  <TableRow
+                                    key={row.source}
+                                    className="cursor-pointer"
+                                    onClick={() =>
+                                      openTotalDrilldownDialog({
+                                        kind: "source",
+                                        flow: "expense",
+                                        source: row.source,
+                                      })
+                                    }
+                                  >
                                     <TableCell className="max-w-[220px] truncate font-medium">
                                       {row.source}
                                     </TableCell>
@@ -3940,7 +4172,7 @@ export const Reports: React.FC = () => {
                   Expense categories (lifetime)
                 </CardTitle>
                 <p className="text-xs text-slate-500">
-                  Biggest lifetime expense categories.
+                  Biggest lifetime expense categories. Click to drill down.
                 </p>
               </CardHeader>
               <CardContent className="h-80">
@@ -3952,6 +4184,31 @@ export const Reports: React.FC = () => {
                       data={totalExpenseCategoriesLifetime}
                       layout="vertical"
                       margin={{ left: 16, right: 12, top: 8, bottom: 8 }}
+                      onClick={(
+                        state: {
+                          activePayload?: Array<{ payload?: unknown }>;
+                        } | null,
+                      ) => {
+                        const payload = state?.activePayload?.[0]?.payload;
+                        if (!isRecord(payload)) return;
+                        const id = payload.id;
+                        if (typeof id !== "string" || !id.length) return;
+                        const name =
+                          typeof payload.name === "string"
+                            ? payload.name
+                            : "Category";
+                        const color =
+                          typeof payload.color === "string"
+                            ? payload.color
+                            : "#ef4444";
+                        openTotalDrilldownDialog({
+                          kind: "category",
+                          flow: "expense",
+                          categoryId: id,
+                          name,
+                          color,
+                        });
+                      }}
                     >
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                       <XAxis type="number" hide />
@@ -4088,7 +4345,7 @@ export const Reports: React.FC = () => {
                   Income categories (lifetime)
                 </CardTitle>
                 <p className="text-xs text-slate-500">
-                  Biggest lifetime income categories.
+                  Biggest lifetime income categories. Click to drill down.
                 </p>
               </CardHeader>
               <CardContent className="h-80">
@@ -4100,6 +4357,31 @@ export const Reports: React.FC = () => {
                       data={totalIncomeCategoriesLifetime}
                       layout="vertical"
                       margin={{ left: 16, right: 12, top: 8, bottom: 8 }}
+                      onClick={(
+                        state: {
+                          activePayload?: Array<{ payload?: unknown }>;
+                        } | null,
+                      ) => {
+                        const payload = state?.activePayload?.[0]?.payload;
+                        if (!isRecord(payload)) return;
+                        const id = payload.id;
+                        if (typeof id !== "string" || !id.length) return;
+                        const name =
+                          typeof payload.name === "string"
+                            ? payload.name
+                            : "Category";
+                        const color =
+                          typeof payload.color === "string"
+                            ? payload.color
+                            : "#10b981";
+                        openTotalDrilldownDialog({
+                          kind: "category",
+                          flow: "income",
+                          categoryId: id,
+                          name,
+                          color,
+                        });
+                      }}
                     >
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                       <XAxis type="number" hide />
@@ -4256,7 +4538,20 @@ export const Reports: React.FC = () => {
                     </TableHeader>
                     <TableBody>
                       {totalExpenseCategoryChanges.slice(0, 14).map((row) => (
-                        <TableRow key={row.name}>
+                        <TableRow
+                          key={row.name}
+                          className={row.id ? "cursor-pointer" : undefined}
+                          onClick={() => {
+                            if (!row.id) return;
+                            openTotalDrilldownDialog({
+                              kind: "category",
+                              flow: "expense",
+                              categoryId: row.id,
+                              name: row.name,
+                              color: "#ef4444",
+                            });
+                          }}
+                        >
                           <TableCell className="max-w-[220px] truncate font-medium">
                             {row.name}
                           </TableCell>
@@ -4315,7 +4610,20 @@ export const Reports: React.FC = () => {
                     </TableHeader>
                     <TableBody>
                       {totalIncomeCategoryChanges.slice(0, 14).map((row) => (
-                        <TableRow key={row.name}>
+                        <TableRow
+                          key={row.name}
+                          className={row.id ? "cursor-pointer" : undefined}
+                          onClick={() => {
+                            if (!row.id) return;
+                            openTotalDrilldownDialog({
+                              kind: "category",
+                              flow: "income",
+                              categoryId: row.id,
+                              name: row.name,
+                              color: "#10b981",
+                            });
+                          }}
+                        >
                           <TableCell className="max-w-[220px] truncate font-medium">
                             {row.name}
                           </TableCell>
@@ -4377,6 +4685,607 @@ export const Reports: React.FC = () => {
           </Card>
         </>
       )}
+
+      <Dialog
+        open={totalDrilldownOpen}
+        onOpenChange={(open) => {
+          setTotalDrilldownOpen(open);
+          if (!open) {
+            setTotalDrilldown(null);
+            setTotalDrilldownSeries([]);
+            setTotalDrilldownError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>
+              {totalDrilldown?.kind === "category"
+                ? `${totalDrilldown.name} (${totalDrilldown.flow})`
+                : totalDrilldown?.kind === "source"
+                  ? `${totalDrilldown.source} (${totalDrilldown.flow})`
+                  : totalDrilldown?.kind === "account"
+                    ? `${totalDrilldown.name} (${totalDrilldown.accountType})`
+                    : totalDrilldown?.kind === "investments"
+                      ? "Investments"
+                      : totalDrilldown?.kind === "debt"
+                        ? "Debt overview"
+                        : totalDrilldown?.kind === "netWorth"
+                          ? "Net worth"
+                          : "Details"}
+            </DialogTitle>
+          </DialogHeader>
+
+          {!totalDrilldown ? null : totalDrilldown.kind === "category" ||
+            totalDrilldown.kind === "source" ? (
+            <>
+              {totalDrilldownError ? (
+                <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                  {totalDrilldownError}
+                </div>
+              ) : null}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                    <p className="text-xs tracking-wide text-slate-500 uppercase">
+                      Total (filtered)
+                    </p>
+                    <p className="font-semibold text-slate-900">
+                      {totalDrilldownLoading
+                        ? "—"
+                        : currency(
+                            totalDrilldownSeries.reduce((sum, row) => {
+                              const value =
+                                totalDrilldown.flow === "expense"
+                                  ? row.expense
+                                  : row.income;
+                              return sum + value;
+                            }, 0),
+                          )}
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      Monthly buckets from /reports/custom (transfers excluded).
+                    </p>
+                  </div>
+                  <div className="max-h-72 overflow-auto rounded-md border border-slate-100 bg-white">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Year</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(() => {
+                          const bucket: Record<number, number> = {};
+                          totalDrilldownSeries.forEach((row) => {
+                            const yr = new Date(row.period).getUTCFullYear();
+                            const value =
+                              totalDrilldown.flow === "expense"
+                                ? row.expense
+                                : row.income;
+                            bucket[yr] = (bucket[yr] ?? 0) + value;
+                          });
+                          return Object.entries(bucket)
+                            .map(([yr, value]) => ({
+                              year: Number(yr),
+                              total: value,
+                            }))
+                            .sort((a, b) => b.year - a.year)
+                            .slice(0, 20)
+                            .map((row) => (
+                              <TableRow key={row.year}>
+                                <TableCell className="font-medium">
+                                  {row.year}
+                                </TableCell>
+                                <TableCell className="text-right font-semibold">
+                                  {currency(row.total)}
+                                </TableCell>
+                              </TableRow>
+                            ));
+                        })()}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                <div className="h-80 rounded-md border border-slate-100 bg-white p-2">
+                  {totalDrilldownLoading ? (
+                    <Skeleton className="h-full w-full" />
+                  ) : totalDrilldownSeries.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={totalDrilldownSeries.map((row) => ({
+                          date: row.period,
+                          label: new Date(row.period).toLocaleDateString(
+                            "sv-SE",
+                            { month: "short", year: "2-digit" },
+                          ),
+                          value:
+                            totalDrilldown.flow === "expense"
+                              ? row.expense
+                              : row.income,
+                        }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="label"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                          tickFormatter={(v) => compactCurrency(Number(v))}
+                        />
+                        <Tooltip
+                          formatter={(value) => currency(Number(value))}
+                          labelFormatter={(_label, payload) =>
+                            payload?.[0]?.payload?.date
+                              ? new Date(
+                                  String(payload[0].payload.date),
+                                ).toLocaleDateString("sv-SE", {
+                                  year: "numeric",
+                                  month: "long",
+                                })
+                              : String(_label)
+                          }
+                          contentStyle={{ fontSize: 12 }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="value"
+                          stroke={
+                            totalDrilldown.kind === "category"
+                              ? totalDrilldown.color
+                              : totalDrilldown.flow === "income"
+                                ? "#10b981"
+                                : "#ef4444"
+                          }
+                          fill={
+                            totalDrilldown.flow === "income"
+                              ? "rgba(16,185,129,0.14)"
+                              : "rgba(239,68,68,0.12)"
+                          }
+                          strokeWidth={2}
+                          isAnimationActive={false}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                      No history available.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : totalDrilldown.kind === "account" ? (
+            <>
+              {totalDrilldownError ? (
+                <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                  {totalDrilldownError}
+                </div>
+              ) : null}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        Income
+                      </p>
+                      <p className="font-semibold text-emerald-700">
+                        {currency(
+                          totalDrilldownSeries.reduce(
+                            (sum, row) => sum + row.income,
+                            0,
+                          ),
+                        )}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        Expense
+                      </p>
+                      <p className="font-semibold text-rose-700">
+                        {currency(
+                          totalDrilldownSeries.reduce(
+                            (sum, row) => sum + row.expense,
+                            0,
+                          ),
+                        )}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-100 bg-white p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        Net
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {currency(
+                          totalDrilldownSeries.reduce(
+                            (sum, row) => sum + row.net,
+                            0,
+                          ),
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+                    This uses /reports/custom (income/expense only). Transfers
+                    are excluded.
+                  </div>
+                </div>
+                <div className="h-80 rounded-md border border-slate-100 bg-white p-2">
+                  {totalDrilldownLoading ? (
+                    <Skeleton className="h-full w-full" />
+                  ) : totalDrilldownSeries.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={totalDrilldownSeries.map((row) => ({
+                          date: row.period,
+                          label: new Date(row.period).toLocaleDateString(
+                            "sv-SE",
+                            { month: "short", year: "2-digit" },
+                          ),
+                          income: row.income,
+                          expenseNeg: -row.expense,
+                        }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="label"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                          tickFormatter={(v) => compactCurrency(Number(v))}
+                        />
+                        <Tooltip
+                          formatter={(value) =>
+                            currency(Math.abs(Number(value)))
+                          }
+                          labelFormatter={(_label, payload) =>
+                            payload?.[0]?.payload?.date
+                              ? new Date(
+                                  String(payload[0].payload.date),
+                                ).toLocaleDateString("sv-SE", {
+                                  year: "numeric",
+                                  month: "long",
+                                })
+                              : String(_label)
+                          }
+                          contentStyle={{ fontSize: 12 }}
+                        />
+                        <ReferenceLine y={0} stroke="#cbd5e1" />
+                        <Bar
+                          dataKey="income"
+                          name="Income"
+                          fill="#10b981"
+                          radius={[4, 4, 4, 4]}
+                          isAnimationActive={false}
+                        />
+                        <Bar
+                          dataKey="expenseNeg"
+                          name="Expense"
+                          fill="#ef4444"
+                          radius={[4, 4, 4, 4]}
+                          isAnimationActive={false}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                      No history available.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : totalDrilldown.kind === "investments" ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-3">
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Latest value
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {totalKpis?.investmentsValue === null
+                      ? "—"
+                      : currency(totalKpis?.investmentsValue ?? 0)}
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    Snapshot-based (clear account filters to include).
+                  </p>
+                </div>
+                <div className="max-h-72 overflow-auto rounded-md border border-slate-100 bg-white">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Year</TableHead>
+                        <TableHead className="text-right">End</TableHead>
+                        <TableHead className="hidden text-right md:table-cell">
+                          Net contrib
+                        </TableHead>
+                        <TableHead className="hidden text-right md:table-cell">
+                          Implied return
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(totalOverview?.investments?.yearly ?? []).map((row) => (
+                        <TableRow key={row.year}>
+                          <TableCell className="font-medium">
+                            {row.year}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {currency(Number(row.end_value))}
+                          </TableCell>
+                          <TableCell className="hidden text-right md:table-cell">
+                            {currency(Number(row.net_contributions))}
+                          </TableCell>
+                          <TableCell className="hidden text-right md:table-cell">
+                            {row.implied_return === null
+                              ? "—"
+                              : currency(Number(row.implied_return))}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+              <div className="h-80 rounded-md border border-slate-100 bg-white p-2">
+                {!totalOverview?.investments?.series?.length ? (
+                  <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                    No investment snapshots yet.
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={totalOverview.investments.series.map((row) => ({
+                        date: row.date,
+                        label: new Date(row.date).toLocaleDateString("sv-SE", {
+                          month: "short",
+                          year: "2-digit",
+                        }),
+                        value: Number(row.value),
+                      }))}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                        tickFormatter={(v) => compactCurrency(Number(v))}
+                      />
+                      <Tooltip
+                        formatter={(value) => currency(Number(value))}
+                        labelFormatter={(_label, payload) =>
+                          payload?.[0]?.payload?.date
+                            ? new Date(
+                                String(payload[0].payload.date),
+                              ).toLocaleDateString("sv-SE", {
+                                year: "numeric",
+                                month: "long",
+                              })
+                            : String(_label)
+                        }
+                        contentStyle={{ fontSize: 12 }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke="#4f46e5"
+                        fill="rgba(79,70,229,0.15)"
+                        strokeWidth={2}
+                        isAnimationActive={false}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          ) : totalDrilldown.kind === "debt" ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-3">
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Total debt
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {totalOverview
+                      ? currency(Number(totalOverview.debt.total_current))
+                      : "—"}
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    Accounts shown as-of now.
+                  </p>
+                </div>
+                <div className="max-h-72 overflow-auto rounded-md border border-slate-100 bg-white">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Account</TableHead>
+                        <TableHead className="text-right">Debt</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {totalDebtAccounts.map((row) => (
+                        <TableRow key={row.id}>
+                          <TableCell className="max-w-[220px] truncate font-medium">
+                            {row.name}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {currency(row.current)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+              <div className="h-80 rounded-md border border-slate-100 bg-white p-2">
+                {totalDebtSeries.length ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={totalOverview?.debt.series.map((row) => ({
+                        date: row.date,
+                        label: new Date(row.date).toLocaleDateString("sv-SE", {
+                          month: "short",
+                          year: "2-digit",
+                        }),
+                        debt: Number(row.debt),
+                      }))}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                        tickFormatter={(v) => compactCurrency(Number(v))}
+                      />
+                      <Tooltip
+                        formatter={(value) => currency(Number(value))}
+                        labelFormatter={(_label, payload) =>
+                          payload?.[0]?.payload?.date
+                            ? new Date(
+                                String(payload[0].payload.date),
+                              ).toLocaleDateString("sv-SE", {
+                                year: "numeric",
+                                month: "long",
+                              })
+                            : String(_label)
+                        }
+                        contentStyle={{ fontSize: 12 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="debt"
+                        stroke="#ef4444"
+                        strokeWidth={2}
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                    No debt history yet.
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-3">
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    As of
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {totalOverview
+                      ? new Date(totalOverview.as_of).toLocaleDateString(
+                          "sv-SE",
+                        )
+                      : "—"}
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    Ledger + investment snapshots.
+                  </p>
+                </div>
+                {totalNetWorthStats ? (
+                  <div className="rounded-md border border-slate-100 bg-white p-3">
+                    <p className="text-xs tracking-wide text-slate-500 uppercase">
+                      Current
+                    </p>
+                    <p className="font-semibold text-slate-900">
+                      {currency(totalNetWorthStats.current)}
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      Range: {currency(totalNetWorthStats.allTimeLow)} →{" "}
+                      {currency(totalNetWorthStats.allTimeHigh)}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+              <div className="h-80 rounded-md border border-slate-100 bg-white p-2">
+                {totalOverview?.net_worth_series.length ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart
+                      data={totalOverview.net_worth_series.map((row) => ({
+                        date: row.date,
+                        label: new Date(row.date).toLocaleDateString("sv-SE", {
+                          month: "short",
+                          year: "2-digit",
+                        }),
+                        netWorth: Number(row.net_worth),
+                      }))}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                        tickFormatter={(v) => compactCurrency(Number(v))}
+                      />
+                      <Tooltip
+                        formatter={(value) => currency(Number(value))}
+                        labelFormatter={(_label, payload) =>
+                          payload?.[0]?.payload?.date
+                            ? new Date(
+                                String(payload[0].payload.date),
+                              ).toLocaleDateString("sv-SE", {
+                                year: "numeric",
+                                month: "long",
+                              })
+                            : String(_label)
+                        }
+                        contentStyle={{ fontSize: 12 }}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="netWorth"
+                        stroke="#0f172a"
+                        fill="rgba(15,23,42,0.12)"
+                        strokeWidth={2}
+                        isAnimationActive={false}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                    No net worth history yet.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Legacy total detail dialog (no longer used after /reports/total rework).
       {routeMode === "total" ? (

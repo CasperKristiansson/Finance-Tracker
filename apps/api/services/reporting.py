@@ -859,6 +859,7 @@ class ReportingService:
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
         subscription_ids: Optional[Iterable[UUID]] = None,
+        source: Optional[str] = None,
     ) -> List[MonthlyTotals]:
         start = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
         end = datetime.combine(
@@ -872,6 +873,8 @@ class ReportingService:
             category_ids=category_ids,
             subscription_ids=subscription_ids,
         )
+        if source:
+            rows = [row for row in rows if self._merchant_key(row.description) == source]
 
         buckets: Dict[date, Tuple[Decimal, Decimal]] = {}
         for row in rows:

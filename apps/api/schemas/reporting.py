@@ -106,6 +106,7 @@ class DateRangeReportQuery(_CsvUUIDMixin):
     account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
     category_ids: Optional[List[UUID]] = Field(default=None, alias="category_ids")
     subscription_ids: Optional[List[UUID]] = Field(default=None, alias="subscription_ids")
+    source: Optional[str] = None
 
     @model_validator(mode="before")
     @classmethod
