@@ -52,6 +52,60 @@ import {
 
 type ReportMode = "year_overview" | "all_years";
 
+type DetailDialogState =
+  | {
+      kind: "investments";
+      title: string;
+      asOf: string;
+      monthly: Array<{ month: string; value: number }>;
+      accounts: Array<{
+        name: string;
+        start: number;
+        end: number;
+        change: number;
+      }>;
+      summary: {
+        start: number;
+        end: number;
+        change: number;
+        changePct: number | null;
+        contributions: number;
+        withdrawals: number;
+      };
+    }
+  | {
+      kind: "debt";
+      title: string;
+      monthly: Array<{ month: string; value: number }>;
+      startDebt: number;
+      endDebt: number;
+      delta: number;
+    }
+  | {
+      kind: "account";
+      title: string;
+      accountType: string;
+      startBalance: number;
+      endBalance: number;
+      change: number;
+      monthly: Array<{
+        month: string;
+        income: number;
+        expense: number;
+        transfersIn: number;
+        transfersOut: number;
+        change: number;
+      }>;
+    }
+  | {
+      kind: "source";
+      title: string;
+      subtitle: string;
+      monthly: Array<{ month: string; total: number }>;
+      total: number;
+      txCount: number;
+    };
+
 const currency = (value: number) =>
   value.toLocaleString("sv-SE", {
     style: "currency",
@@ -72,6 +126,9 @@ const monthName = (year: number, month: number) =>
   new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("sv-SE", {
     month: "long",
   });
+
+const percent = (value: number) =>
+  `${value.toLocaleString("sv-SE", { maximumFractionDigits: 0 })}%`;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -115,6 +172,10 @@ export const Reports: React.FC = () => {
   const [categoryDetail, setCategoryDetail] =
     useState<YearlyCategoryDetailResponse | null>(null);
   const [categoryDetailLoading, setCategoryDetailLoading] = useState(false);
+  const [detailDialog, setDetailDialog] = useState<DetailDialogState | null>(
+    null,
+  );
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
 
   const yearOptions = useMemo(() => {
     const current = new Date().getFullYear();
@@ -316,6 +377,120 @@ export const Reports: React.FC = () => {
           : null,
       }
     : null;
+
+  const investmentsSummary = useMemo(() => {
+    if (!overview?.investments_summary) return null;
+    const monthly = overview.investments_summary.monthly_values.map(
+      (value, idx) => ({
+        month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
+        value: Number(value),
+      }),
+    );
+    const accounts = overview.investments_summary.accounts
+      .map((row) => ({
+        name: row.account_name,
+        start: Number(row.start_value),
+        end: Number(row.end_value),
+        change: Number(row.change),
+      }))
+      .sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+    return {
+      asOf: overview.investments_summary.as_of,
+      start: Number(overview.investments_summary.start_value),
+      end: Number(overview.investments_summary.end_value),
+      change: Number(overview.investments_summary.change),
+      changePct: overview.investments_summary.change_pct
+        ? Number(overview.investments_summary.change_pct)
+        : null,
+      contributions: Number(overview.investments_summary.contributions),
+      withdrawals: Number(overview.investments_summary.withdrawals),
+      monthly,
+      accounts,
+    };
+  }, [overview?.investments_summary, year]);
+
+  const debtOverviewRows = useMemo(() => {
+    if (!overview?.debt_overview) return [];
+    return overview.debt_overview
+      .map((row) => ({
+        id: row.account_id,
+        name: row.name || "Debt account",
+        startDebt: Number(row.start_debt),
+        endDebt: Number(row.end_debt),
+        delta: Number(row.delta),
+        monthly: row.monthly_debt.map((v, idx) => ({
+          month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
+          value: Number(v),
+        })),
+      }))
+      .sort((a, b) => b.endDebt - a.endDebt);
+  }, [overview?.debt_overview, year]);
+
+  const accountFlowRows = useMemo(() => {
+    if (!overview?.account_flows) return [];
+    return overview.account_flows
+      .map((row) => {
+        const monthly = Array.from({ length: 12 }, (_, idx) => ({
+          month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
+          income: Number(row.monthly_income[idx] ?? 0),
+          expense: Number(row.monthly_expense[idx] ?? 0),
+          transfersIn: Number(row.monthly_transfers_in[idx] ?? 0),
+          transfersOut: Number(row.monthly_transfers_out[idx] ?? 0),
+          change: Number(row.monthly_change[idx] ?? 0),
+        }));
+        return {
+          id: row.account_id,
+          name: row.name || "Account",
+          accountType: row.account_type,
+          startBalance: Number(row.start_balance),
+          endBalance: Number(row.end_balance),
+          change: Number(row.change),
+          netOperating: Number(row.net_operating),
+          netTransfers: Number(row.net_transfers),
+          income: Number(row.income),
+          expense: Number(row.expense),
+          transfersIn: Number(row.transfers_in),
+          transfersOut: Number(row.transfers_out),
+          monthly,
+        };
+      })
+      .sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+  }, [overview?.account_flows, year]);
+
+  const incomeSourceRows = useMemo(() => {
+    if (!overview?.income_sources) return [];
+    return overview.income_sources
+      .map((row) => ({
+        source: row.source,
+        total: Number(row.total),
+        txCount: row.transaction_count,
+        monthly: row.monthly.map((v, idx) => ({
+          month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
+          total: Number(v),
+        })),
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [overview?.income_sources, year]);
+
+  const expenseSourceRows = useMemo(() => {
+    if (!overview?.expense_sources) return [];
+    return overview.expense_sources
+      .map((row) => ({
+        source: row.source,
+        total: Number(row.total),
+        txCount: row.transaction_count,
+        monthly: row.monthly.map((v, idx) => ({
+          month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
+          total: Number(v),
+        })),
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [overview?.expense_sources, year]);
+
+  const openDetailDialog = (state: DetailDialogState) => {
+    setDetailDialog(state);
+    setDetailDialogOpen(true);
+  };
 
   return (
     <MotionPage className="space-y-4">
@@ -799,6 +974,497 @@ export const Reports: React.FC = () => {
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">
+                    Investments summary
+                  </CardTitle>
+                  <p className="text-xs text-slate-500">
+                    Snapshot-based (not a spending category).
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={!overview || !investmentsSummary}
+                  onClick={() => {
+                    if (!investmentsSummary) return;
+                    openDetailDialog({
+                      kind: "investments",
+                      title: `Investments (${year})`,
+                      asOf: investmentsSummary.asOf,
+                      monthly: investmentsSummary.monthly,
+                      accounts: investmentsSummary.accounts.map((row) => ({
+                        name: row.name,
+                        start: row.start,
+                        end: row.end,
+                        change: row.change,
+                      })),
+                      summary: {
+                        start: investmentsSummary.start,
+                        end: investmentsSummary.end,
+                        change: investmentsSummary.change,
+                        changePct: investmentsSummary.changePct,
+                        contributions: investmentsSummary.contributions,
+                        withdrawals: investmentsSummary.withdrawals,
+                      },
+                    });
+                  }}
+                >
+                  Details
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!overview || !investmentsSummary ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : selectedAccounts.length ? (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    Clear the account filter to include investment snapshots.
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          As of
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {new Date(investmentsSummary.asOf).toLocaleDateString(
+                            "sv-SE",
+                          )}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Value
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(investmentsSummary.end)}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {investmentsSummary.change >= 0 ? "+" : "−"}
+                          {currency(Math.abs(investmentsSummary.change))}{" "}
+                          {investmentsSummary.changePct !== null
+                            ? `(${percent(investmentsSummary.changePct)})`
+                            : ""}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-md border border-slate-100 bg-white p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Contributions
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(investmentsSummary.contributions)}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-white p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Withdrawals
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(investmentsSummary.withdrawals)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="h-44 rounded-md border border-slate-100 bg-white p-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={investmentsSummary.monthly}>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="month"
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                          />
+                          <YAxis
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                            tickFormatter={(v) => compactCurrency(Number(v))}
+                          />
+                          <Tooltip
+                            formatter={(value) => currency(Number(value))}
+                            contentStyle={{ fontSize: 12 }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="value"
+                            stroke="#4f46e5"
+                            fill="rgba(79,70,229,0.15)"
+                            strokeWidth={2}
+                            name="Portfolio"
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div className="rounded-md border border-slate-100">
+                      <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                        Accounts
+                      </div>
+                      <div className="max-h-44 overflow-auto">
+                        {investmentsSummary.accounts.length ? (
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Account</TableHead>
+                                <TableHead className="text-right">
+                                  End
+                                </TableHead>
+                                <TableHead className="text-right">
+                                  Change
+                                </TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {investmentsSummary.accounts.map((row) => (
+                                <TableRow
+                                  key={row.name}
+                                  className="cursor-pointer"
+                                  onClick={() => {
+                                    openDetailDialog({
+                                      kind: "investments",
+                                      title: `${row.name} (${year})`,
+                                      asOf: investmentsSummary.asOf,
+                                      monthly: investmentsSummary.monthly,
+                                      accounts: [
+                                        {
+                                          name: row.name,
+                                          start: row.start,
+                                          end: row.end,
+                                          change: row.change,
+                                        },
+                                      ],
+                                      summary: {
+                                        start: row.start,
+                                        end: row.end,
+                                        change: row.change,
+                                        changePct:
+                                          row.start > 0
+                                            ? (row.change / row.start) * 100
+                                            : null,
+                                        contributions: 0,
+                                        withdrawals: 0,
+                                      },
+                                    });
+                                  }}
+                                >
+                                  <TableCell className="font-medium">
+                                    {row.name}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {currency(row.end)}
+                                  </TableCell>
+                                  <TableCell className="text-right text-xs">
+                                    <span
+                                      className={
+                                        row.change >= 0
+                                          ? "text-emerald-700"
+                                          : "text-rose-700"
+                                      }
+                                    >
+                                      {row.change >= 0 ? "+" : "−"}
+                                      {currency(Math.abs(row.change))}
+                                    </span>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        ) : (
+                          <div className="p-3 text-sm text-slate-500">
+                            No investment accounts captured yet.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Debt overview
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  End balance and change this year.
+                </p>
+              </CardHeader>
+              <CardContent className="max-h-[32rem] overflow-auto">
+                {!overview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : debtOverviewRows.length ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Account</TableHead>
+                        <TableHead className="text-right">End</TableHead>
+                        <TableHead className="hidden text-right md:table-cell">
+                          Δ
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {debtOverviewRows.map((row) => (
+                        <TableRow
+                          key={row.id}
+                          className="cursor-pointer"
+                          onClick={() => {
+                            openDetailDialog({
+                              kind: "debt",
+                              title: `${row.name} (${year})`,
+                              monthly: row.monthly,
+                              startDebt: row.startDebt,
+                              endDebt: row.endDebt,
+                              delta: row.delta,
+                            });
+                          }}
+                        >
+                          <TableCell className="max-w-[180px] truncate font-medium">
+                            {row.name}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {currency(row.endDebt)}
+                          </TableCell>
+                          <TableCell className="hidden text-right text-xs md:table-cell">
+                            <span
+                              className={
+                                row.delta <= 0
+                                  ? "text-emerald-700"
+                                  : "text-rose-700"
+                              }
+                            >
+                              {row.delta >= 0 ? "+" : "−"}
+                              {currency(Math.abs(row.delta))}
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No debt accounts found for this selection.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-slate-900">
+                Account flows
+              </CardTitle>
+              <p className="text-xs text-slate-500">
+                Net operating (income − expense) vs net transfers. Click a row
+                for monthly detail.
+              </p>
+            </CardHeader>
+            <CardContent className="max-h-[32rem] overflow-auto">
+              {!overview ? (
+                <Skeleton className="h-56 w-full" />
+              ) : accountFlowRows.length ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Account</TableHead>
+                      <TableHead className="hidden text-right md:table-cell">
+                        Net operating
+                      </TableHead>
+                      <TableHead className="hidden text-right md:table-cell">
+                        Net transfers
+                      </TableHead>
+                      <TableHead className="text-right">Δ</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {accountFlowRows.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        className="cursor-pointer"
+                        onClick={() => {
+                          openDetailDialog({
+                            kind: "account",
+                            title: `${row.name} (${year})`,
+                            accountType: row.accountType,
+                            startBalance: row.startBalance,
+                            endBalance: row.endBalance,
+                            change: row.change,
+                            monthly: row.monthly,
+                          });
+                        }}
+                      >
+                        <TableCell className="max-w-[220px] truncate font-medium">
+                          {row.name}
+                          <span className="ml-2 text-xs text-slate-500">
+                            ({row.accountType})
+                          </span>
+                        </TableCell>
+                        <TableCell className="hidden text-right md:table-cell">
+                          {currency(row.netOperating)}
+                        </TableCell>
+                        <TableCell className="hidden text-right md:table-cell">
+                          {currency(row.netTransfers)}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">
+                          <span
+                            className={
+                              row.change >= 0
+                                ? "text-emerald-700"
+                                : "text-rose-700"
+                            }
+                          >
+                            {row.change >= 0 ? "+" : "−"}
+                            {currency(Math.abs(row.change))}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                  No account flows available.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Income sources
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Grouped by description. Click for seasonality.
+                </p>
+              </CardHeader>
+              <CardContent className="max-h-[26rem] overflow-auto">
+                {!overview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : incomeSourceRows.length ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Source</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="hidden text-right md:table-cell">
+                          Tx
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {incomeSourceRows.slice(0, 14).map((row) => (
+                        <TableRow
+                          key={row.source}
+                          className="cursor-pointer"
+                          onClick={() => {
+                            openDetailDialog({
+                              kind: "source",
+                              title: row.source,
+                              subtitle: `Income • ${year}`,
+                              monthly: row.monthly,
+                              total: row.total,
+                              txCount: row.txCount,
+                            });
+                          }}
+                        >
+                          <TableCell className="max-w-[220px] truncate font-medium">
+                            {row.source}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {currency(row.total)}
+                          </TableCell>
+                          <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
+                            {row.txCount}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No income sources yet.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Expense sources
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Grouped by description. Click for seasonality.
+                </p>
+              </CardHeader>
+              <CardContent className="max-h-[26rem] overflow-auto">
+                {!overview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : expenseSourceRows.length ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Source</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="hidden text-right md:table-cell">
+                          Tx
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {expenseSourceRows.slice(0, 14).map((row) => (
+                        <TableRow
+                          key={row.source}
+                          className="cursor-pointer"
+                          onClick={() => {
+                            openDetailDialog({
+                              kind: "source",
+                              title: row.source,
+                              subtitle: `Expense • ${year}`,
+                              monthly: row.monthly,
+                              total: row.total,
+                              txCount: row.txCount,
+                            });
+                          }}
+                        >
+                          <TableCell className="max-w-[220px] truncate font-medium">
+                            {row.source}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {currency(row.total)}
+                          </TableCell>
+                          <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
+                            {row.txCount}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No expense sources yet.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
             <ChartCard
               title="Category breakdown (expenses)"
               description="Top categories + Other. Click to drill down."
@@ -1179,6 +1845,405 @@ export const Reports: React.FC = () => {
               )}
             </CardContent>
           </Card>
+
+          <Dialog
+            open={detailDialogOpen}
+            onOpenChange={(open) => {
+              setDetailDialogOpen(open);
+              if (!open) setDetailDialog(null);
+            }}
+          >
+            <DialogContent className="max-w-4xl">
+              <DialogHeader>
+                <DialogTitle>{detailDialog?.title ?? "Details"}</DialogTitle>
+              </DialogHeader>
+              {!detailDialog ? null : detailDialog.kind === "investments" ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          As of
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {new Date(detailDialog.asOf).toLocaleDateString(
+                            "sv-SE",
+                          )}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Value
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(detailDialog.summary.end)}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {detailDialog.summary.change >= 0 ? "+" : "−"}
+                          {currency(Math.abs(detailDialog.summary.change))}{" "}
+                          {detailDialog.summary.changePct !== null
+                            ? `(${percent(detailDialog.summary.changePct)})`
+                            : ""}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-white p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Contributions
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(detailDialog.summary.contributions)}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-white p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Withdrawals
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(detailDialog.summary.withdrawals)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="h-60 rounded-md border border-slate-100 bg-white p-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={detailDialog.monthly}>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="month"
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                          />
+                          <YAxis
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                            tickFormatter={(v) => compactCurrency(Number(v))}
+                          />
+                          <Tooltip
+                            formatter={(value) => currency(Number(value))}
+                            contentStyle={{ fontSize: 12 }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="value"
+                            stroke="#4f46e5"
+                            fill="rgba(79,70,229,0.15)"
+                            strokeWidth={2}
+                            name="Portfolio"
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-sm text-slate-700">
+                      <p className="font-semibold">What this means</p>
+                      <p className="text-xs text-slate-600">
+                        Investments are tracked via snapshots, so they should
+                        not appear as an expense category.
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-100">
+                      <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                        Accounts
+                      </div>
+                      <div className="max-h-[22rem] overflow-auto">
+                        {detailDialog.accounts.length ? (
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Account</TableHead>
+                                <TableHead className="text-right">
+                                  Start
+                                </TableHead>
+                                <TableHead className="text-right">
+                                  End
+                                </TableHead>
+                                <TableHead className="text-right">
+                                  Change
+                                </TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {detailDialog.accounts.map((row) => (
+                                <TableRow key={row.name}>
+                                  <TableCell className="max-w-[200px] truncate font-medium">
+                                    {row.name}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {currency(row.start)}
+                                  </TableCell>
+                                  <TableCell className="text-right">
+                                    {currency(row.end)}
+                                  </TableCell>
+                                  <TableCell className="text-right text-xs">
+                                    <span
+                                      className={
+                                        row.change >= 0
+                                          ? "text-emerald-700"
+                                          : "text-rose-700"
+                                      }
+                                    >
+                                      {row.change >= 0 ? "+" : "−"}
+                                      {currency(Math.abs(row.change))}
+                                    </span>
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        ) : (
+                          <div className="p-3 text-sm text-slate-500">
+                            No investment accounts available.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : detailDialog.kind === "debt" ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-3">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Start
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(detailDialog.startDebt)}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          End
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(detailDialog.endDebt)}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-white p-3 sm:col-span-2">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Change
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {detailDialog.delta >= 0 ? "+" : "−"}
+                          {currency(Math.abs(detailDialog.delta))}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+                      A negative change means you paid down debt during the
+                      year.
+                    </div>
+                  </div>
+                  <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={detailDialog.monthly}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="month"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                          tickFormatter={(v) => compactCurrency(Number(v))}
+                        />
+                        <Tooltip
+                          formatter={(value) => currency(Number(value))}
+                          contentStyle={{ fontSize: 12 }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="value"
+                          stroke="#f97316"
+                          strokeWidth={2}
+                          dot={false}
+                          name="Debt"
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              ) : detailDialog.kind === "account" ? (
+                <div className="space-y-4">
+                  <div className="grid gap-3 md:grid-cols-4">
+                    {[
+                      { label: "Start", value: detailDialog.startBalance },
+                      { label: "End", value: detailDialog.endBalance },
+                      { label: "Change", value: detailDialog.change },
+                      {
+                        label: "Type",
+                        value: detailDialog.accountType,
+                        text: true,
+                      },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        className="rounded-md border border-slate-100 bg-slate-50 p-3"
+                      >
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          {item.label}
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {"text" in item && item.text
+                            ? String(item.value)
+                            : currency(Number(item.value))}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={detailDialog.monthly.map((m) => ({
+                            ...m,
+                            expenseNeg: -m.expense,
+                            transfersOutNeg: -m.transfersOut,
+                          }))}
+                        >
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="month"
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                          />
+                          <YAxis
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                            tickFormatter={(v) => compactCurrency(Number(v))}
+                          />
+                          <Tooltip
+                            formatter={(value) => currency(Number(value))}
+                            contentStyle={{ fontSize: 12 }}
+                          />
+                          <Bar
+                            dataKey="income"
+                            name="Income"
+                            fill="#10b981"
+                            radius={[4, 4, 4, 4]}
+                          />
+                          <Bar
+                            dataKey="expenseNeg"
+                            name="Expense"
+                            fill="#ef4444"
+                            radius={[4, 4, 4, 4]}
+                          />
+                          <Bar
+                            dataKey="transfersIn"
+                            name="Transfers in"
+                            fill="#0ea5e9"
+                            radius={[4, 4, 4, 4]}
+                          />
+                          <Bar
+                            dataKey="transfersOutNeg"
+                            name="Transfers out"
+                            fill="#a855f7"
+                            radius={[4, 4, 4, 4]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={detailDialog.monthly}>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="month"
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                          />
+                          <YAxis
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                            tickFormatter={(v) => compactCurrency(Number(v))}
+                          />
+                          <Tooltip
+                            formatter={(value) => currency(Number(value))}
+                            contentStyle={{ fontSize: 12 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="change"
+                            name="Monthly change"
+                            stroke="#334155"
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-3">
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        {detailDialog.subtitle}
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {currency(detailDialog.total)}
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        {detailDialog.txCount} transactions
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+                      This is grouped by transaction description (good for
+                      spotting recurring sources and merchants).
+                    </div>
+                  </div>
+                  <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={detailDialog.monthly}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="month"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                          tickFormatter={(v) => compactCurrency(Number(v))}
+                        />
+                        <Tooltip
+                          formatter={(value) => currency(Number(value))}
+                          contentStyle={{ fontSize: 12 }}
+                        />
+                        <Bar
+                          dataKey="total"
+                          name="Total"
+                          fill="#334155"
+                          radius={[6, 6, 4, 4]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
 
           <Dialog
             open={Boolean(selectedCategoryId)}

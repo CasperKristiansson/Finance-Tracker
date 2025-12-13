@@ -402,6 +402,72 @@ export const yearlyOverviewSchema = z.object({
       delta_pct: z.string().nullable().optional(),
     }),
   ),
+  investments_summary: z.object({
+    as_of: z.string(),
+    start_value: z.string(),
+    end_value: z.string(),
+    change: z.string(),
+    change_pct: z.string().nullable().optional(),
+    contributions: z.string(),
+    withdrawals: z.string(),
+    net_contributions: z.string(),
+    monthly_values: z.array(z.string()),
+    accounts: z.array(
+      z.object({
+        account_name: z.string(),
+        start_value: z.string(),
+        end_value: z.string(),
+        change: z.string(),
+      }),
+    ),
+  }),
+  debt_overview: z.array(
+    z.object({
+      account_id: z.string(),
+      name: z.string(),
+      start_debt: z.string(),
+      end_debt: z.string(),
+      delta: z.string(),
+      monthly_debt: z.array(z.string()),
+    }),
+  ),
+  account_flows: z.array(
+    z.object({
+      account_id: z.string(),
+      name: z.string(),
+      account_type: z.nativeEnum(AccountType),
+      start_balance: z.string(),
+      end_balance: z.string(),
+      change: z.string(),
+      income: z.string(),
+      expense: z.string(),
+      transfers_in: z.string(),
+      transfers_out: z.string(),
+      net_operating: z.string(),
+      net_transfers: z.string(),
+      monthly_income: z.array(z.string()),
+      monthly_expense: z.array(z.string()),
+      monthly_transfers_in: z.array(z.string()),
+      monthly_transfers_out: z.array(z.string()),
+      monthly_change: z.array(z.string()),
+    }),
+  ),
+  income_sources: z.array(
+    z.object({
+      source: z.string(),
+      total: z.string(),
+      monthly: z.array(z.string()),
+      transaction_count: z.number(),
+    }),
+  ),
+  expense_sources: z.array(
+    z.object({
+      source: z.string(),
+      total: z.string(),
+      monthly: z.array(z.string()),
+      transaction_count: z.number(),
+    }),
+  ),
   insights: z.array(z.string()),
 });
 

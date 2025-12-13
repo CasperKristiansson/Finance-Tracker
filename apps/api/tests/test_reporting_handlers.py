@@ -312,6 +312,11 @@ def test_yearly_overview_returns_income_expense_excluding_transfers():
     assert response["statusCode"] == 200
     body = _json_body(response)
     assert body["year"] == 2024
+    assert "investments_summary" in body
+    assert "debt_overview" in body
+    assert "account_flows" in body
+    assert "income_sources" in body
+    assert "expense_sources" in body
     monthly = body["monthly"]
     assert len(monthly) == 12
     jan = next(item for item in monthly if item["month"] == 1)

@@ -20,6 +20,7 @@ from ..repositories.reporting import (
     YearlyTotals,
 )
 from ..shared import AccountType, TransactionType, coerce_decimal
+from .reporting_yearly import build_yearly_overview_enhancements
 
 
 class ReportingService:
@@ -333,16 +334,22 @@ class ReportingService:
         year: int,
         account_ids: Optional[Iterable[UUID]] = None,
     ) -> dict[str, object]:
+        account_id_list = list(account_ids) if account_ids is not None else None
         start = datetime(year, 1, 1, tzinfo=timezone.utc)
-        end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        year_end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        as_of_date = min(date.today(), date(year, 12, 31))
+        end = datetime.combine(
+            as_of_date + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
+        )
+        end = min(end, year_end)
         prev_start = datetime(year - 1, 1, 1, tzinfo=timezone.utc)
         prev_end = datetime(year, 1, 1, tzinfo=timezone.utc)
 
         rows = self.repository.fetch_transaction_amounts(
-            start=start, end=end, account_ids=account_ids
+            start=start, end=end, account_ids=account_id_list
         )
         prev_rows = self.repository.fetch_transaction_amounts(
-            start=prev_start, end=prev_end, account_ids=account_ids
+            start=prev_start, end=prev_end, account_ids=account_id_list
         )
 
         monthly_income = [Decimal("0") for _ in range(12)]
@@ -443,9 +450,9 @@ class ReportingService:
         biggest_expense_month = max(range(12), key=lambda idx: monthly_expense[idx])
 
         # Month-end time series.
-        net_worth_series = self._month_end_balance_series(year=year, account_ids=account_ids)
+        net_worth_series = self._month_end_balance_series(year=year, account_ids=account_id_list)
         debt_ids = self.repository.list_account_ids_by_type(
-            AccountType.DEBT, account_ids=account_ids
+            AccountType.DEBT, account_ids=account_id_list
         )
         debt_series = (
             self._month_end_balance_series(year=year, account_ids=debt_ids) if debt_ids else []
@@ -453,8 +460,8 @@ class ReportingService:
 
         # Investments only apply to full net worth (no account filter).
         investments_by_month: List[Decimal] = [Decimal("0") for _ in range(12)]
-        if account_ids is None:
-            snapshots = self.repository.list_investment_snapshots_until(end=date(year, 12, 31))
+        if account_id_list is None:
+            snapshots = self.repository.list_investment_snapshots_until(end=as_of_date)
             snap_idx = 0
             latest = Decimal("0")
             month_ends = self._month_end_dates(year)
@@ -632,6 +639,29 @@ class ReportingService:
         if increased:
             insights.append(f"Subscriptions: {increased} appear to have increased price.")
 
+        (
+            investments_summary,
+            debt_overview,
+            account_flows,
+            income_sources_rows,
+            expense_sources_rows,
+        ) = build_yearly_overview_enhancements(
+            session=self.session,
+            repository=self.repository,
+            year=year,
+            start=start,
+            end=end,
+            as_of_date=as_of_date,
+            account_id_list=account_id_list,
+            rows=rows,
+            classify_income_expense=self._classify_income_expense,
+            merchant_key=self._merchant_key,
+            month_end_balance_series=lambda yr, ids: self._month_end_balance_series(
+                year=yr, account_ids=ids
+            ),
+            month_end_dates=self._month_end_dates,
+        )
+
         return {
             "year": year,
             "monthly": [
@@ -672,6 +702,11 @@ class ReportingService:
             "top_merchants": merchants_rows[:10],
             "largest_transactions": largest_expenses[:10],
             "category_changes": category_changes[:10],
+            "investments_summary": investments_summary,
+            "debt_overview": debt_overview,
+            "account_flows": account_flows,
+            "income_sources": income_sources_rows[:50],
+            "expense_sources": expense_sources_rows[:50],
             "insights": insights[:6],
         }
 

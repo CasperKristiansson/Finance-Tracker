@@ -9,6 +9,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from ..shared import AccountType
+
 
 class _CsvUUIDMixin(BaseModel):
     """Utility mixin to split comma-separated UUID query params."""
@@ -367,6 +369,62 @@ class CategoryChangeEntry(BaseModel):
     delta_pct: Optional[Decimal] = None
 
 
+class InvestmentAccountSummaryEntry(BaseModel):
+    account_name: str
+    start_value: Decimal
+    end_value: Decimal
+    change: Decimal
+
+
+class InvestmentsSummary(BaseModel):
+    as_of: str
+    start_value: Decimal
+    end_value: Decimal
+    change: Decimal
+    change_pct: Optional[Decimal] = None
+    contributions: Decimal
+    withdrawals: Decimal
+    net_contributions: Decimal
+    monthly_values: List[Decimal]
+    accounts: List[InvestmentAccountSummaryEntry]
+
+
+class DebtOverviewEntry(BaseModel):
+    account_id: str
+    name: str
+    start_debt: Decimal
+    end_debt: Decimal
+    delta: Decimal
+    monthly_debt: List[Decimal]
+
+
+class AccountFlowEntry(BaseModel):
+    account_id: str
+    name: str
+    account_type: AccountType
+    start_balance: Decimal
+    end_balance: Decimal
+    change: Decimal
+    income: Decimal
+    expense: Decimal
+    transfers_in: Decimal
+    transfers_out: Decimal
+    net_operating: Decimal
+    net_transfers: Decimal
+    monthly_income: List[Decimal]
+    monthly_expense: List[Decimal]
+    monthly_transfers_in: List[Decimal]
+    monthly_transfers_out: List[Decimal]
+    monthly_change: List[Decimal]
+
+
+class SourceSummaryEntry(BaseModel):
+    source: str
+    total: Decimal
+    monthly: List[Decimal]
+    transaction_count: int
+
+
 class YearlyOverviewResponse(BaseModel):
     year: int
     monthly: List[YearlyOverviewMonthEntry]
@@ -379,6 +437,11 @@ class YearlyOverviewResponse(BaseModel):
     top_merchants: List[MerchantSummaryEntry]
     largest_transactions: List[LargestTransactionEntry]
     category_changes: List[CategoryChangeEntry]
+    investments_summary: InvestmentsSummary
+    debt_overview: List[DebtOverviewEntry]
+    account_flows: List[AccountFlowEntry]
+    income_sources: List[SourceSummaryEntry]
+    expense_sources: List[SourceSummaryEntry]
     insights: List[str]
 
 
