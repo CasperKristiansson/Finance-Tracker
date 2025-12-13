@@ -150,6 +150,10 @@ export const categorySchema = z.object({
   transaction_count: numeric.optional().default(0),
   last_used_at: nullableString,
   lifetime_total: money.optional().default(0),
+  recent_months: z
+    .array(z.object({ period: dateString, total: money }))
+    .optional()
+    .default([]),
 });
 
 export const categoryCreateRequestSchema = z.object({

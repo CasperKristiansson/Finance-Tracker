@@ -81,7 +81,8 @@ const formatAccountType = (type: AccountType) => {
 
 const startOfYear = (year: number) => `${year}-01-01`;
 const todayIso = () => new Date().toISOString().slice(0, 10);
-const monthKeyFromDate = (date: Date) => date.getFullYear() * 12 + date.getMonth();
+const monthKeyFromDate = (date: Date) =>
+  date.getFullYear() * 12 + date.getMonth();
 const formatMonthLabel = (year: number, monthIndex: number) =>
   new Date(year, monthIndex, 1).toLocaleString("en-US", { month: "short" });
 const formatMonthLabelWithYear = (year: number, monthIndex: number) =>
@@ -260,19 +261,7 @@ export const AccountDetails: React.FC = () => {
       }
     };
     void loadOverviews();
-  }, [
-    accountId,
-    availableYears,
-    range,
-    refreshSeq,
-    token,
-    yearsForFixedRange,
-  ]);
-
-  const accountFlow = useMemo(() => {
-    const flows = yearlyOverviews[currentYear]?.account_flows ?? [];
-    return flows.find((f) => f.account_id === accountId) ?? flows[0] ?? null;
-  }, [accountId, currentYear, yearlyOverviews]);
+  }, [accountId, availableYears, range, refreshSeq, token, yearsForFixedRange]);
 
   const investmentSeries = useMemo(() => {
     if (!account) return null;
@@ -290,7 +279,6 @@ export const AccountDetails: React.FC = () => {
   }, [account, investmentsOverview?.accounts]);
 
   const balanceSeries = useMemo(() => {
-    const currentMonthIndex = new Date().getMonth();
     const isSingleYear = range === "ytd";
 
     if (account?.account_type === AccountType.INVESTMENT && investmentSeries) {
@@ -390,76 +378,176 @@ export const AccountDetails: React.FC = () => {
   ]);
 
   const cashflowSeries = useMemo(() => {
-    if (!accountFlow) return [];
-    const maxMonth = new Date().getMonth();
-    return Array.from({ length: 12 }, (_, monthIndex) => {
-      const month = new Date(year, monthIndex, 1).toLocaleString("en-US", {
-        month: "short",
-      });
-      if (monthIndex > maxMonth) {
-        return {
-          month,
-          income: null as number | null,
-          expense: null as number | null,
-          transfersIn: null as number | null,
-          transfersOut: null as number | null,
-        };
+    if (range === "all") {
+      return Object.entries(yearlyOverviews)
+        .map(([yearStr, overview]) => {
+          const year = Number(yearStr);
+          const flow =
+            overview.account_flows.find((f) => f.account_id === accountId) ??
+            overview.account_flows[0];
+          if (!flow) return null;
+          return {
+            month: String(year),
+            income: Number(flow.income),
+            expense: Number(flow.expense),
+            transfersIn: Number(flow.transfers_in),
+            transfersOut: Number(flow.transfers_out),
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => Boolean(row))
+        .sort((a, b) => Number(a.month) - Number(b.month));
+    }
+
+    const points: Array<{
+      monthKey: number;
+      income: number;
+      expense: number;
+      transfersIn: number;
+      transfersOut: number;
+    }> = [];
+
+    Object.entries(yearlyOverviews).forEach(([yearStr, overview]) => {
+      const year = Number(yearStr);
+      if (!Number.isFinite(year)) return;
+      const flow =
+        overview.account_flows.find((f) => f.account_id === accountId) ??
+        overview.account_flows[0];
+      if (!flow) return;
+      for (let monthIndex = 0; monthIndex < 12; monthIndex += 1) {
+        points.push({
+          monthKey: year * 12 + monthIndex,
+          income: Number(flow.monthly_income[monthIndex] ?? 0),
+          expense: Number(flow.monthly_expense[monthIndex] ?? 0),
+          transfersIn: Number(flow.monthly_transfers_in[monthIndex] ?? 0),
+          transfersOut: Number(flow.monthly_transfers_out[monthIndex] ?? 0),
+        });
       }
-      return {
-        month,
-        income: Number(accountFlow.monthly_income[monthIndex] ?? 0),
-        expense: Number(accountFlow.monthly_expense[monthIndex] ?? 0),
-        transfersIn: Number(accountFlow.monthly_transfers_in[monthIndex] ?? 0),
-        transfersOut: Number(
-          accountFlow.monthly_transfers_out[monthIndex] ?? 0,
-        ),
-      };
     });
-  }, [accountFlow, year]);
+
+    const isSingleYear = range === "ytd";
+    return points
+      .filter(
+        (p) => p.monthKey >= startMonthKey && p.monthKey <= currentMonthKey,
+      )
+      .sort((a, b) => a.monthKey - b.monthKey)
+      .map((p) => {
+        const year = Math.floor(p.monthKey / 12);
+        const monthIndex = p.monthKey % 12;
+        const label = isSingleYear
+          ? formatMonthLabel(year, monthIndex)
+          : formatMonthLabelWithYear(year, monthIndex);
+        return {
+          month: label,
+          income: p.income,
+          expense: p.expense,
+          transfersIn: p.transfersIn,
+          transfersOut: p.transfersOut,
+        };
+      });
+  }, [accountId, currentMonthKey, range, startMonthKey, yearlyOverviews]);
 
   const kpis = useMemo(() => {
     const balanceNow = account ? Number(account.balance) : 0;
-    const changeYtd = accountFlow ? Number(accountFlow.change) : 0;
-    const monthsElapsed = new Date().getMonth() + 1;
-    const avgIncome = accountFlow
-      ? Number(accountFlow.income) / monthsElapsed
+    const first =
+      balanceSeries.find((p) => p.balance !== null)?.balance ?? null;
+    const last =
+      [...balanceSeries].reverse().find((p) => p.balance !== null)?.balance ??
+      null;
+    const change =
+      first !== null && last !== null ? Number(last) - Number(first) : 0;
+
+    const sumIncome = cashflowSeries.reduce(
+      (sum, row) => sum + Number(row.income ?? 0),
+      0,
+    );
+    const sumExpense = cashflowSeries.reduce(
+      (sum, row) => sum + Number(row.expense ?? 0),
+      0,
+    );
+    const avgIncome = cashflowSeries.length
+      ? sumIncome / cashflowSeries.length
       : 0;
-    const avgExpense = accountFlow
-      ? Number(accountFlow.expense) / monthsElapsed
+    const avgExpense = cashflowSeries.length
+      ? sumExpense / cashflowSeries.length
       : 0;
     const net = avgIncome - avgExpense;
-    return { balanceNow, changeYtd, avgIncome, avgExpense, net };
-  }, [account, accountFlow]);
+    return { balanceNow, change, avgIncome, avgExpense, net };
+  }, [account, balanceSeries, cashflowSeries]);
 
   const topExpenseCategories = useMemo(() => {
-    const rows = yearlyOverview?.category_breakdown ?? [];
-    return rows
-      .map((row) => ({ name: row.name, total: Math.abs(Number(row.total)) }))
+    const byName = new Map<string, number>();
+    Object.entries(yearlyOverviews).forEach(([yearStr, overview]) => {
+      const year = Number(yearStr);
+      const rows = overview.category_breakdown ?? [];
+      rows.forEach((row) => {
+        if (range === "all") {
+          byName.set(
+            row.name,
+            (byName.get(row.name) ?? 0) + Math.abs(Number(row.total)),
+          );
+          return;
+        }
+        const monthStart = Math.max(0, startMonthKey - year * 12);
+        const monthEnd = Math.min(11, currentMonthKey - year * 12);
+        if (monthEnd < 0 || monthStart > 11 || monthStart > monthEnd) return;
+        const sum = row.monthly
+          .slice(monthStart, monthEnd + 1)
+          .reduce((acc, v) => acc + Math.abs(Number(v)), 0);
+        byName.set(row.name, (byName.get(row.name) ?? 0) + sum);
+      });
+    });
+    return [...byName.entries()]
+      .map(([name, total]) => ({ name, total }))
       .filter((row) => Number.isFinite(row.total) && row.total > 0)
       .sort((a, b) => b.total - a.total)
       .slice(0, 6);
-  }, [yearlyOverview?.category_breakdown]);
+  }, [currentMonthKey, range, startMonthKey, yearlyOverviews]);
 
   const topIncomeCategories = useMemo(() => {
-    const rows = yearlyOverview?.income_category_breakdown ?? [];
-    return rows
-      .map((row) => ({ name: row.name, total: Math.abs(Number(row.total)) }))
+    const byName = new Map<string, number>();
+    Object.entries(yearlyOverviews).forEach(([yearStr, overview]) => {
+      const year = Number(yearStr);
+      const rows = overview.income_category_breakdown ?? [];
+      rows.forEach((row) => {
+        if (range === "all") {
+          byName.set(
+            row.name,
+            (byName.get(row.name) ?? 0) + Math.abs(Number(row.total)),
+          );
+          return;
+        }
+        const monthStart = Math.max(0, startMonthKey - year * 12);
+        const monthEnd = Math.min(11, currentMonthKey - year * 12);
+        if (monthEnd < 0 || monthStart > 11 || monthStart > monthEnd) return;
+        const sum = row.monthly
+          .slice(monthStart, monthEnd + 1)
+          .reduce((acc, v) => acc + Math.abs(Number(v)), 0);
+        byName.set(row.name, (byName.get(row.name) ?? 0) + sum);
+      });
+    });
+    return [...byName.entries()]
+      .map(([name, total]) => ({ name, total }))
       .filter((row) => Number.isFinite(row.total) && row.total > 0)
       .sort((a, b) => b.total - a.total)
       .slice(0, 6);
-  }, [yearlyOverview?.income_category_breakdown]);
+  }, [currentMonthKey, range, startMonthKey, yearlyOverviews]);
 
   const topMerchants = useMemo(() => {
-    const rows = yearlyOverview?.top_merchants ?? [];
-    return rows
-      .map((row) => ({
-        name: row.merchant,
-        total: Math.abs(Number(row.amount)),
-      }))
+    const byName = new Map<string, number>();
+    Object.values(yearlyOverviews).forEach((overview) => {
+      (overview.top_merchants ?? []).forEach((row) => {
+        byName.set(
+          row.merchant,
+          (byName.get(row.merchant) ?? 0) + Math.abs(Number(row.amount)),
+        );
+      });
+    });
+    return [...byName.entries()]
+      .map(([name, total]) => ({ name, total }))
       .filter((row) => Number.isFinite(row.total) && row.total > 0)
       .sort((a, b) => b.total - a.total)
       .slice(0, 6);
-  }, [yearlyOverview?.top_merchants]);
+  }, [yearlyOverviews]);
 
   const [txItems, setTxItems] = useState<TransactionRead[]>([]);
   const [txLoading, setTxLoading] = useState(false);
@@ -477,8 +565,8 @@ export const AccountDetails: React.FC = () => {
     setTxError(null);
     try {
       const query = {
-        start_date: ytdStart,
-        end_date: ytdEnd,
+        ...(rangeStartIso ? { start_date: rangeStartIso } : {}),
+        end_date: endIso,
         account_ids: accountId,
         limit: txLimit,
         offset: nextOffset,
@@ -506,7 +594,7 @@ export const AccountDetails: React.FC = () => {
   useEffect(() => {
     void loadTransactions({ reset: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountId, refreshSeq, token, ytdEnd, ytdStart]);
+  }, [accountId, endIso, range, rangeStartIso, refreshSeq, token]);
 
   if (!accountId) {
     return (
@@ -556,9 +644,34 @@ export const AccountDetails: React.FC = () => {
               </>
             ) : null}
           </div>
-          <p className="text-sm text-slate-500">
-            YTD overview ({ytdStart} → {ytdEnd})
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-slate-500">{rangeLabel}</p>
+            <Tabs
+              value={range}
+              onValueChange={(v) => {
+                setRange(v as typeof range);
+                setTxItems([]);
+                setTxOffset(0);
+                setTxHasMore(true);
+              }}
+              className="w-auto"
+            >
+              <TabsList className="h-9 bg-slate-100">
+                <TabsTrigger value="ytd" className="cursor-pointer text-xs">
+                  YTD
+                </TabsTrigger>
+                <TabsTrigger value="1y" className="cursor-pointer text-xs">
+                  1Y
+                </TabsTrigger>
+                <TabsTrigger value="3y" className="cursor-pointer text-xs">
+                  3Y
+                </TabsTrigger>
+                <TabsTrigger value="all" className="cursor-pointer text-xs">
+                  All
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
           <p className="text-xs text-slate-500">
             {asOfDate ? `As of ${asOfDate}` : "Live balances"}{" "}
             {includeInactive ? "(including inactive enabled)" : ""}
@@ -653,11 +766,11 @@ export const AccountDetails: React.FC = () => {
             tone: "text-slate-900",
           },
           {
-            label: "Change (YTD)",
-            value: `${kpis.changeYtd >= 0 ? "+" : "−"}${formatCurrency(
-              Math.abs(kpis.changeYtd),
+            label: `Change (${range.toUpperCase()})`,
+            value: `${kpis.change >= 0 ? "+" : "−"}${formatCurrency(
+              Math.abs(kpis.change),
             )}`,
-            tone: kpis.changeYtd >= 0 ? "text-emerald-700" : "text-rose-700",
+            tone: kpis.change >= 0 ? "text-emerald-700" : "text-rose-700",
           },
           {
             label: "Avg income / mo",
@@ -736,7 +849,9 @@ export const AccountDetails: React.FC = () => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="h-72">
-                    {yearlyOverviewLoading || accountsLoading ? (
+                    {yearlyOverviewLoading ||
+                    availableYearsLoading ||
+                    accountsLoading ? (
                       <Skeleton className="h-full w-full" />
                     ) : balanceSeries.length ? (
                       <ChartContainer
@@ -840,11 +955,13 @@ export const AccountDetails: React.FC = () => {
                 <Card className="border-slate-100">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm text-slate-500">
-                      Cashflow (YTD)
+                      Cashflow ({range.toUpperCase()})
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="h-72">
-                    {yearlyOverviewLoading || accountsLoading ? (
+                    {yearlyOverviewLoading ||
+                    availableYearsLoading ||
+                    accountsLoading ? (
                       <Skeleton className="h-full w-full" />
                     ) : cashflowSeries.length ? (
                       <ChartContainer
@@ -1042,11 +1159,11 @@ export const AccountDetails: React.FC = () => {
                 <Card className="border-slate-100">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm text-slate-500">
-                      Top categories (YTD)
+                      Top categories ({range.toUpperCase()})
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    {yearlyOverviewLoading ? (
+                    {yearlyOverviewLoading || availableYearsLoading ? (
                       <Skeleton className="h-28 w-full" />
                     ) : (
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -1110,11 +1227,11 @@ export const AccountDetails: React.FC = () => {
                 <Card className="border-slate-100">
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm text-slate-500">
-                      Top merchants (YTD)
+                      Top merchants ({range.toUpperCase()})
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    {yearlyOverviewLoading ? (
+                    {yearlyOverviewLoading || availableYearsLoading ? (
                       <Skeleton className="h-28 w-full" />
                     ) : topMerchants.length ? (
                       topMerchants.map((row) => (
@@ -1148,7 +1265,8 @@ export const AccountDetails: React.FC = () => {
                       Transactions
                     </p>
                     <p className="text-xs text-slate-500">
-                      Showing YTD transactions for this account.
+                      Showing {rangeLabel.toLowerCase()} transactions for this
+                      account.
                     </p>
                   </div>
                   <Button

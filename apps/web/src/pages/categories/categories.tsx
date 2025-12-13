@@ -92,6 +92,23 @@ const usageText = (cat: CategoryRead) => {
   return `${count} tx • last ${lastUsed} • ${formatCurrency(total)}`;
 };
 
+const sparklinePath = (values: number[], width: number, height: number) => {
+  if (values.length < 2) return "";
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const pad = 2;
+  const xStep = (width - pad * 2) / (values.length - 1);
+
+  return values
+    .map((value, idx) => {
+      const x = pad + idx * xStep;
+      const y = pad + (1 - (value - min) / range) * (height - pad * 2);
+      return `${idx === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
+    })
+    .join(" ");
+};
+
 export const Categories: React.FC = () => {
   const {
     items,
@@ -475,75 +492,118 @@ export const Categories: React.FC = () => {
             </div>
 
             <div className="divide-y divide-slate-100 rounded-md border border-slate-100 bg-white">
-              {sortedCategories.map((cat) => (
-                <div
-                  key={cat.id}
-                  className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div
-                      className="h-3 w-3 shrink-0 rounded-full border border-slate-200"
-                      style={{ backgroundColor: cat.color_hex ?? "#e2e8f0" }}
-                      title={cat.color_hex ?? "No color"}
-                    />
-                    {renderCategoryIcon(
-                      cat.icon ?? "",
-                      cat.name,
-                      "h-6 w-6 text-slate-700 flex items-center justify-center",
-                    )}
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="truncate font-medium text-slate-900">
-                          {cat.name}
+              {sortedCategories.map((cat) => {
+                const series = (cat.recent_months ?? []).map((p) =>
+                  Number(p.total ?? 0),
+                );
+                const hasSeries = series.length >= 2;
+                const delta = hasSeries ? series[series.length - 1] - series[0] : 0;
+                const deltaPct =
+                  hasSeries && series[0] !== 0
+                    ? (delta / Math.abs(series[0])) * 100
+                    : null;
+
+                const accent =
+                  cat.color_hex ??
+                  (cat.category_type === CategoryType.INCOME ? "#10b981" : "#ef4444");
+
+                return (
+                  <div
+                    key={cat.id}
+                    className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div
+                        className="h-3 w-3 shrink-0 rounded-full border border-slate-200"
+                        style={{ backgroundColor: cat.color_hex ?? "#e2e8f0" }}
+                        title={cat.color_hex ?? "No color"}
+                      />
+                      {renderCategoryIcon(
+                        cat.icon ?? "",
+                        cat.name,
+                        "h-6 w-6 text-slate-700 flex items-center justify-center",
+                      )}
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="truncate font-medium text-slate-900">
+                            {cat.name}
+                          </div>
+                          <Badge
+                            variant="secondary"
+                            className={
+                              cat.category_type === CategoryType.INCOME
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-rose-50 text-rose-700"
+                            }
+                          >
+                            {cat.category_type}
+                          </Badge>
+                          {cat.is_archived ? (
+                            <Badge variant="outline">Archived</Badge>
+                          ) : null}
                         </div>
-                        <Badge
-                          variant="secondary"
-                          className={
-                            cat.category_type === CategoryType.INCOME
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-rose-50 text-rose-700"
-                          }
-                        >
-                          {cat.category_type}
-                        </Badge>
-                        {cat.is_archived ? (
-                          <Badge variant="outline">Archived</Badge>
-                        ) : null}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {usageText(cat)}
+                        <div className="text-xs text-slate-500">{usageText(cat)}</div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-2"
-                      onClick={() => openMerge(cat.id)}
-                      disabled={cat.is_archived}
-                      title={
-                        cat.is_archived
-                          ? "Unarchive to merge"
-                          : "Merge into another category"
-                      }
-                    >
-                      <Merge className="h-4 w-4" />
-                      Merge
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1"
-                      onClick={() => setEditingId(cat.id)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                      Edit
-                    </Button>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <div className="hidden w-32 flex-col items-end gap-1 lg:flex">
+                        {hasSeries ? (
+                          <>
+                            <svg
+                              width="112"
+                              height="28"
+                              viewBox="0 0 112 28"
+                              className="overflow-visible"
+                            >
+                              <path
+                                d={sparklinePath(series, 112, 28)}
+                                fill="none"
+                                stroke={accent}
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                            <span className="text-[11px] font-semibold tabular-nums text-slate-600">
+                              {deltaPct !== null
+                                ? `${delta >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%`
+                                : formatCurrency(delta)}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </div>
+
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => openMerge(cat.id)}
+                        disabled={cat.is_archived}
+                        title={
+                          cat.is_archived
+                            ? "Unarchive to merge"
+                            : "Merge into another category"
+                        }
+                      >
+                        <Merge className="h-4 w-4" />
+                        Merge
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1"
+                        onClick={() => setEditingId(cat.id)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {sortedCategories.length === 0 ? (
                 <div className="px-3 py-8 text-center text-sm text-slate-500">
                   No categories match your filters.

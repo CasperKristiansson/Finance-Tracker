@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Dict
 
@@ -12,6 +12,7 @@ from ..models import Category
 from ..schemas import (
     CategoryCreate,
     CategoryListResponse,
+    CategoryMonthlyPoint,
     CategoryRead,
     CategoryUpdate,
     ListCategoriesQuery,
@@ -72,9 +73,34 @@ def list_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             include_special=query.include_special,
         )
         usage_by_id = service.get_category_usage([category.id for category in categories])
+        monthly_by_id = service.get_recent_category_months([category.id for category in categories])
+
+        today = date.today()
+        end_month = date(today.year, today.month, 1)
+        months = 6
+        month_starts: list[date] = []
+        cursor = end_month
+        for _ in range(months):
+            month_starts.append(cursor)
+            year = cursor.year
+            month = cursor.month - 1
+            if month == 0:
+                year -= 1
+                month = 12
+            cursor = date(year, month, 1)
+        month_starts.reverse()
+
         enriched = []
         for category in categories:
             usage = usage_by_id.get(category.id)
+            monthly = monthly_by_id.get(category.id, {})
+            points = []
+            for month_start in month_starts:
+                income_total, expense_total = monthly.get(month_start, (Decimal("0"), Decimal("0")))
+                total = (
+                    income_total if category.category_type == CategoryType.INCOME else expense_total
+                )
+                points.append(CategoryMonthlyPoint(period=month_start, total=total))
             enriched.append(
                 _category_to_schema(
                     category,
@@ -82,7 +108,7 @@ def list_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                     last_used_at=(usage.last_used_at if usage else None),
                     income_total=(usage.income_total if usage else None),
                     expense_total=(usage.expense_total if usage else None),
-                )
+                ).model_copy(update={"recent_months": points})
             )
         response = CategoryListResponse(categories=enriched)
     return json_response(200, response.model_dump(mode="json"))

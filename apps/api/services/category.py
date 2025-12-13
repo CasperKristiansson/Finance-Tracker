@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from typing import Any, Dict, List, cast
 from uuid import UUID
 
@@ -99,6 +101,40 @@ class CategoryService:
 
     def get_category_usage(self, category_ids: List[UUID]) -> Dict[UUID, CategoryUsage]:
         return self.repository.usage_by_category_ids(category_ids)
+
+    def get_recent_category_months(
+        self,
+        category_ids: List[UUID],
+        *,
+        months: int = 6,
+        as_of: date | None = None,
+    ) -> Dict[UUID, Dict[date, tuple[Decimal, Decimal]]]:
+        """Fetch month buckets for a category sparkline."""
+
+        if months <= 0:
+            return {}
+
+        today = as_of or date.today()
+        end_month = date(today.year, today.month, 1)
+        start_month = end_month
+        for _ in range(months - 1):
+            year = start_month.year
+            month = start_month.month - 1
+            if month == 0:
+                year -= 1
+                month = 12
+            start_month = date(year, month, 1)
+
+        start_dt = datetime.combine(start_month, datetime.min.time(), tzinfo=timezone.utc)
+        end_dt = datetime.combine(end_month, datetime.min.time(), tzinfo=timezone.utc) + timedelta(
+            days=32
+        )
+        end_dt = datetime(end_dt.year, end_dt.month, 1, tzinfo=timezone.utc)
+        return self.repository.monthly_totals_by_category_ids(
+            category_ids,
+            start=start_dt,
+            end=end_dt,
+        )
 
 
 __all__ = ["CategoryService"]

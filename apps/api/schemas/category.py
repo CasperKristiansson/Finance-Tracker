@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
@@ -62,6 +62,14 @@ class CategoryRead(BaseModel):
     transaction_count: int = 0
     last_used_at: Optional[datetime] = None
     lifetime_total: Decimal = Decimal("0")
+    recent_months: list["CategoryMonthlyPoint"] = []
+
+
+class CategoryMonthlyPoint(BaseModel):
+    """Monthly aggregate for category sparklines."""
+
+    period: date
+    total: Decimal
 
 
 class ListCategoriesQuery(BaseModel):
@@ -102,6 +110,7 @@ class MergeCategoriesRequest(BaseModel):
 __all__ = [
     "CategoryCreate",
     "CategoryUpdate",
+    "CategoryMonthlyPoint",
     "CategoryRead",
     "ListCategoriesQuery",
     "CategoryPathParams",
