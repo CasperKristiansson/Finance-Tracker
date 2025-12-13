@@ -288,13 +288,15 @@ export const Dashboard: React.FC = () => {
     const ytdNet = ytdIncome - ytdExpense;
     const ytdSavingsRate =
       ytdIncome > 0 ? Math.round((ytdNet / ytdIncome) * 100) : 0;
-    const net = numberFromString(total.data?.net);
+    const netWorthNow = netWorth.data?.length
+      ? Number(netWorth.data[netWorth.data.length - 1]?.net_worth)
+      : numberFromString(total.data?.net);
 
     return [
       {
         title: "Net worth",
-        value: currency(net),
-        trend: net >= 0 ? "up" : "down",
+        value: currency(netWorthNow),
+        trend: netWorthNow >= 0 ? "up" : "down",
         helper: "As of now",
       },
       {
@@ -311,7 +313,7 @@ export const Dashboard: React.FC = () => {
         trend: ytdSavingsRate >= 0 ? "up" : "down",
       },
     ];
-  }, [total.data, monthly.data, filteredMonthly]);
+  }, [filteredMonthly, monthly.data, netWorth.data, total.data]);
 
   const incomeExpenseChart = useMemo(() => {
     const src = filteredMonthly.length ? filteredMonthly : monthly.data || [];

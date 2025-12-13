@@ -109,6 +109,9 @@ export const Reports: React.FC = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   );
+  const [selectedCategoryFlow, setSelectedCategoryFlow] = useState<
+    "expense" | "income"
+  >("expense");
   const [categoryDetail, setCategoryDetail] =
     useState<YearlyCategoryDetailResponse | null>(null);
   const [categoryDetailLoading, setCategoryDetailLoading] = useState(false);
@@ -164,8 +167,17 @@ export const Reports: React.FC = () => {
           ? selectedAccounts.join(",")
           : undefined;
         const query = accountIds
-          ? { year, category_id: selectedCategoryId, account_ids: accountIds }
-          : { year, category_id: selectedCategoryId };
+          ? {
+              year,
+              category_id: selectedCategoryId,
+              account_ids: accountIds,
+              flow: selectedCategoryFlow,
+            }
+          : {
+              year,
+              category_id: selectedCategoryId,
+              flow: selectedCategoryFlow,
+            };
         const { data } = await apiFetch<YearlyCategoryDetailResponse>({
           path: "/reports/yearly-category-detail",
           schema: yearlyCategoryDetailSchema,
@@ -181,7 +193,7 @@ export const Reports: React.FC = () => {
       }
     };
     void loadCategoryDetail();
-  }, [selectedAccounts, selectedCategoryId, token, year]);
+  }, [selectedAccounts, selectedCategoryFlow, selectedCategoryId, token, year]);
 
   const toggleAccount = (id: string) => {
     setSelectedAccounts((prev) =>
@@ -273,6 +285,26 @@ export const Reports: React.FC = () => {
     );
     return { rows: categoryChartData, max };
   }, [categoryChartData]);
+
+  const incomeCategoryChartData = useMemo(() => {
+    if (!overview?.income_category_breakdown) return [];
+    return overview.income_category_breakdown.map((item) => ({
+      id: item.category_id ?? null,
+      name: item.name,
+      total: Number(item.total),
+      color: item.color_hex ?? "#10b981",
+      monthly: item.monthly.map((v) => Number(v)),
+    }));
+  }, [overview?.income_category_breakdown]);
+
+  const incomeHeatmap = useMemo(() => {
+    if (!incomeCategoryChartData.length) return { rows: [], max: 0 };
+    const max = Math.max(
+      ...incomeCategoryChartData.flatMap((item) => item.monthly),
+      0,
+    );
+    return { rows: incomeCategoryChartData, max };
+  }, [incomeCategoryChartData]);
 
   const savings = overview?.savings
     ? {
@@ -787,6 +819,7 @@ export const Reports: React.FC = () => {
                   ) => {
                     const id = state?.activePayload?.[0]?.payload?.id;
                     if (typeof id === "string" && id.length) {
+                      setSelectedCategoryFlow("expense");
                       setSelectedCategoryId(id);
                     }
                   }}
@@ -878,6 +911,121 @@ export const Reports: React.FC = () => {
             </Card>
           </div>
 
+          <div className="grid gap-3 lg:grid-cols-2">
+            <ChartCard
+              title="Category breakdown (income)"
+              description="Top categories + Other. Click to drill down."
+              loading={overviewLoading}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={incomeCategoryChartData.map((row) => ({
+                    ...row,
+                    total: row.total,
+                  }))}
+                  layout="vertical"
+                  margin={{ left: 16, right: 12, top: 8, bottom: 8 }}
+                  onClick={(
+                    state: {
+                      activePayload?: Array<{ payload?: { id?: unknown } }>;
+                    } | null,
+                  ) => {
+                    const id = state?.activePayload?.[0]?.payload?.id;
+                    if (typeof id === "string" && id.length) {
+                      setSelectedCategoryFlow("income");
+                      setSelectedCategoryId(id);
+                    }
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" hide />
+                  <YAxis
+                    type="category"
+                    dataKey="name"
+                    tickLine={false}
+                    axisLine={false}
+                    width={120}
+                    tick={{ fill: "#475569", fontSize: 12 }}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const item = payload[0]?.payload;
+                      if (!isRecord(item)) return null;
+                      const name =
+                        typeof item.name === "string" ? item.name : "Category";
+                      const total = Number(item.total ?? 0);
+                      return (
+                        <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                          <p className="font-semibold text-slate-800">{name}</p>
+                          <p className="text-slate-600">{currency(total)}</p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar dataKey="total" radius={[6, 6, 6, 6]}>
+                    {incomeCategoryChartData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartCard>
+
+            <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Income heatmap
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Seasonality by category and month.
+                </p>
+              </CardHeader>
+              <CardContent className="overflow-auto">
+                {!overview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : (
+                  <div className="min-w-[560px]">
+                    <div className="grid grid-cols-[160px_repeat(12,minmax(28px,1fr))] gap-1 text-[11px] text-slate-600">
+                      <div />
+                      {Array.from({ length: 12 }, (_, idx) => (
+                        <div key={idx} className="text-center">
+                          {monthLabel(
+                            new Date(Date.UTC(year, idx, 1)).toISOString(),
+                          )}
+                        </div>
+                      ))}
+                      {incomeHeatmap.rows.map((row) => (
+                        <React.Fragment key={row.name}>
+                          <div className="truncate pr-2 text-slate-700">
+                            {row.name}
+                          </div>
+                          {row.monthly.map((value, idx) => {
+                            const intensity =
+                              incomeHeatmap.max > 0
+                                ? value / incomeHeatmap.max
+                                : 0;
+                            const bg = `rgba(16, 185, 129, ${Math.min(0.08 + intensity * 0.6, 0.7)})`;
+                            return (
+                              <div
+                                key={idx}
+                                title={`${row.name} — ${monthName(year, idx + 1)}: ${currency(value)}`}
+                                className="h-7 rounded-sm border border-slate-100"
+                                style={{
+                                  backgroundColor: value > 0 ? bg : undefined,
+                                }}
+                              />
+                            );
+                          })}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
           <div className="grid gap-3 lg:grid-cols-3">
             <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
               <CardHeader className="pb-2">
@@ -885,10 +1033,10 @@ export const Reports: React.FC = () => {
                   Top merchants
                 </CardTitle>
                 <p className="text-xs text-slate-500">
-                  Amount, #transactions, change vs last year.
+                  Amount spent per merchant.
                 </p>
               </CardHeader>
-              <CardContent className="max-h-80 overflow-auto">
+              <CardContent className="max-h-[22rem] overflow-auto">
                 {!overview ? (
                   <Skeleton className="h-56 w-full" />
                 ) : (
@@ -897,22 +1045,16 @@ export const Reports: React.FC = () => {
                       <TableRow>
                         <TableHead>Merchant</TableHead>
                         <TableHead className="text-right">Amount</TableHead>
-                        <TableHead className="text-right">YoY</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {overview.top_merchants.map((row) => (
+                      {overview.top_merchants.slice(0, 8).map((row) => (
                         <TableRow key={row.merchant}>
                           <TableCell className="max-w-[160px] truncate font-medium">
                             {row.merchant}
                           </TableCell>
                           <TableCell className="text-right">
                             {currency(Number(row.amount))}
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-slate-600">
-                            {row.yoy_change_pct
-                              ? `${Math.round(Number(row.yoy_change_pct))}%`
-                              : "—"}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -931,7 +1073,7 @@ export const Reports: React.FC = () => {
                   High-impact items with category and note.
                 </p>
               </CardHeader>
-              <CardContent className="max-h-80 overflow-auto">
+              <CardContent className="max-h-[22rem] overflow-auto">
                 {!overview ? (
                   <Skeleton className="h-56 w-full" />
                 ) : (
@@ -944,7 +1086,7 @@ export const Reports: React.FC = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {overview.largest_transactions.map((row) => (
+                      {overview.largest_transactions.slice(0, 8).map((row) => (
                         <TableRow key={row.id}>
                           <TableCell className="max-w-[160px] truncate font-medium">
                             {row.merchant}
@@ -1043,6 +1185,7 @@ export const Reports: React.FC = () => {
             onOpenChange={(open) => {
               if (!open) {
                 setSelectedCategoryId(null);
+                setSelectedCategoryFlow("expense");
                 setCategoryDetail(null);
               }
             }}
@@ -1079,7 +1222,11 @@ export const Reports: React.FC = () => {
                         />
                         <Bar
                           dataKey="amount"
-                          fill="#ef4444"
+                          fill={
+                            selectedCategoryFlow === "income"
+                              ? "#10b981"
+                              : "#ef4444"
+                          }
                           radius={[6, 6, 6, 6]}
                         />
                       </BarChart>

@@ -270,6 +270,7 @@ def yearly_category_detail(event: Dict[str, Any], _context: Any) -> Dict[str, An
         result = service.yearly_category_detail(
             year=query.year,
             category_id=query.category_id,
+            flow=query.flow,
             account_ids=query.account_ids,
         )
         payload = YearlyCategoryDetailResponse.model_validate(result)

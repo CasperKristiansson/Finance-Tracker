@@ -7,7 +7,7 @@ from typing import Iterator
 
 import pytest
 from sqlalchemy.pool import StaticPool
-from sqlmodel import Session, SQLModel
+from sqlmodel import Session, SQLModel, select
 
 from apps.api.handlers import (
     monthly_report,
@@ -293,3 +293,32 @@ def test_yearly_category_detail_returns_monthly_and_merchants():
     assert Decimal(jan["amount"]) == Decimal("200.00")
     merchants = body["top_merchants"]
     assert merchants and merchants[0]["merchant"] == "COOP ODENPLAN"
+
+
+def test_yearly_category_detail_supports_income_flow():
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        tracked = _create_account(session)
+        balancing = _create_account(session)
+    _seed_income_expense_with_category(engine, tracked, balancing)
+
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        income_category = session.exec(select(Category).where(Category.name == "Salary")).one()
+
+    params = {
+        "queryStringParameters": {
+            "account_ids": str(tracked.id),
+            "year": "2024",
+            "category_id": str(income_category.id),
+            "flow": "income",
+        }
+    }
+    response = yearly_category_detail(params, None)
+    assert response["statusCode"] == 200
+    body = _json_body(response)
+    jan = next(item for item in body["monthly"] if item["month"] == 1)
+    assert Decimal(jan["amount"]) == Decimal("500.00")
+    merchants = body["top_merchants"]
+    assert merchants and merchants[0]["merchant"] == "Salary"

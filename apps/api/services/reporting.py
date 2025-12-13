@@ -37,12 +37,37 @@ class ReportingService:
         category_ids: Optional[Iterable[UUID]] = None,
         subscription_ids: Optional[Iterable[UUID]] = None,
     ) -> List[MonthlyTotals]:
-        return self.repository.get_monthly_totals(
-            year=year,
+        if year is not None:
+            start = datetime(year, 1, 1, tzinfo=timezone.utc)
+            end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        else:
+            start = datetime(1900, 1, 1, tzinfo=timezone.utc)
+            end = datetime.now(timezone.utc) + timedelta(days=1)
+
+        rows = self._filtered_transaction_amounts(
+            start=start,
+            end=end,
             account_ids=account_ids,
             category_ids=category_ids,
             subscription_ids=subscription_ids,
         )
+
+        buckets: Dict[date, Tuple[Decimal, Decimal]] = {}
+        for row in rows:
+            income, expense = self._classify_income_expense(row)
+            if income == 0 and expense == 0:
+                continue
+            period = date(row.occurred_at.year, row.occurred_at.month, 1)
+            inc, exp = buckets.get(period, (Decimal("0"), Decimal("0")))
+            buckets[period] = (inc + income, exp + expense)
+
+        results: List[MonthlyTotals] = []
+        for period in sorted(buckets.keys()):
+            income, expense = buckets[period]
+            results.append(
+                MonthlyTotals(period=period, income=income, expense=expense, net=income - expense)
+            )
+        return results
 
     def yearly_report(
         self,
@@ -51,11 +76,31 @@ class ReportingService:
         category_ids: Optional[Iterable[UUID]] = None,
         subscription_ids: Optional[Iterable[UUID]] = None,
     ) -> List[YearlyTotals]:
-        return self.repository.get_yearly_totals(
+        start = datetime(1900, 1, 1, tzinfo=timezone.utc)
+        end = datetime.now(timezone.utc) + timedelta(days=1)
+        rows = self._filtered_transaction_amounts(
+            start=start,
+            end=end,
             account_ids=account_ids,
             category_ids=category_ids,
             subscription_ids=subscription_ids,
         )
+
+        buckets: Dict[int, Tuple[Decimal, Decimal]] = {}
+        for row in rows:
+            income, expense = self._classify_income_expense(row)
+            if income == 0 and expense == 0:
+                continue
+            inc, exp = buckets.get(row.occurred_at.year, (Decimal("0"), Decimal("0")))
+            buckets[row.occurred_at.year] = (inc + income, exp + expense)
+
+        results: List[YearlyTotals] = []
+        for yr in sorted(buckets.keys()):
+            income, expense = buckets[yr]
+            results.append(
+                YearlyTotals(year=yr, income=income, expense=expense, net=income - expense)
+            )
+        return results
 
     def total_report(
         self,
@@ -66,12 +111,30 @@ class ReportingService:
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> LifetimeTotals:
-        return self.repository.get_total_summary(
+        start = datetime.combine(
+            start_date or date(1900, 1, 1), datetime.min.time(), tzinfo=timezone.utc
+        )
+        end_bound = end_date or date.today()
+        end = datetime.combine(
+            end_bound + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
+        )
+
+        rows = self._filtered_transaction_amounts(
+            start=start,
+            end=end,
             account_ids=account_ids,
             category_ids=category_ids,
             subscription_ids=subscription_ids,
-            start_date=start_date,
-            end_date=end_date,
+        )
+
+        income_total = Decimal("0")
+        expense_total = Decimal("0")
+        for row in rows:
+            income, expense = self._classify_income_expense(row)
+            income_total += income
+            expense_total += expense
+        return LifetimeTotals(
+            income=income_total, expense=expense_total, net=income_total - expense_total
         )
 
     def net_worth_history(
@@ -79,7 +142,40 @@ class ReportingService:
         *,
         account_ids: Optional[Iterable[UUID]] = None,
     ) -> List[NetWorthPoint]:
-        return self.repository.get_net_worth_history(account_ids=account_ids)
+        ledger_points = self.repository.get_net_worth_history(account_ids=account_ids)
+        if account_ids is not None:
+            return ledger_points
+
+        snapshots = self.repository.list_investment_snapshots_until(end=date.today())
+        if not snapshots:
+            return ledger_points
+
+        ledger_by_day = {point.period: coerce_decimal(point.net_worth) for point in ledger_points}
+        snapshot_days = {day for day, _value in snapshots}
+        all_days = sorted(set(ledger_by_day.keys()) | snapshot_days)
+        if not all_days:
+            return []
+
+        results: List[NetWorthPoint] = []
+        running_ledger = Decimal("0")
+        snap_idx = 0
+        latest_investments = Decimal("0")
+
+        for day in all_days:
+            if day in ledger_by_day:
+                running_ledger = ledger_by_day[day]
+            while snap_idx < len(snapshots) and snapshots[snap_idx][0] <= day:
+                latest_investments = coerce_decimal(snapshots[snap_idx][1])
+                snap_idx += 1
+            results.append(NetWorthPoint(period=day, net_worth=running_ledger + latest_investments))
+
+        today = date.today()
+        if results and results[-1].period != today:
+            results.append(
+                NetWorthPoint(period=today, net_worth=running_ledger + latest_investments)
+            )
+
+        return results
 
     def cashflow_forecast(
         self,
@@ -253,6 +349,7 @@ class ReportingService:
         monthly_expense = [Decimal("0") for _ in range(12)]
 
         expense_by_category: Dict[str, Dict[str, object]] = {}
+        income_by_category: Dict[str, Dict[str, object]] = {}
         merchants: Dict[str, Dict[str, object]] = {}
         largest_expenses: List[Dict[str, object]] = []
         subscriptions_current: Dict[str, Dict[str, object]] = {}
@@ -262,6 +359,24 @@ class ReportingService:
             income, expense = self._classify_income_expense(row)
             monthly_income[month_idx] += income
             monthly_expense[month_idx] += expense
+
+            if income > 0:
+                category_key = str(row.category_id or "uncategorized")
+                if category_key not in income_by_category:
+                    income_by_category[category_key] = {
+                        "category_id": row.category_id,
+                        "category_name": row.category_name or "Uncategorized",
+                        "icon": row.category_icon,
+                        "color_hex": row.category_color_hex,
+                        "total": Decimal("0"),
+                        "monthly": [Decimal("0") for _ in range(12)],
+                        "transaction_count": 0,
+                    }
+                bucket = income_by_category[category_key]
+                bucket["total"] = cast(Decimal, bucket["total"]) + income
+                monthly_list = cast(List[Decimal], bucket["monthly"])
+                monthly_list[month_idx] += income
+                bucket["transaction_count"] = cast(int, bucket["transaction_count"]) + 1
 
             if expense > 0:
                 category_key = str(row.category_id or "uncategorized")
@@ -357,46 +472,61 @@ class ReportingService:
             {"date": d.isoformat(), "debt": -bal if bal < 0 else bal} for d, bal in debt_series
         ]
 
-        # Top categories (top 8 + other).
+        def build_category_breakdown(
+            categories_sorted: List[Dict[str, object]],
+        ) -> List[Dict[str, object]]:
+            top = categories_sorted[:8]
+            rest = categories_sorted[8:]
+            other_total = sum((cast(Decimal, item["total"]) for item in rest), Decimal("0"))
+            other_monthly = [Decimal("0") for _ in range(12)]
+            for item in rest:
+                for idx, value in enumerate(cast(List[Decimal], item["monthly"])):
+                    other_monthly[idx] += value
+            breakdown = [
+                {
+                    "category_id": str(item["category_id"]) if item["category_id"] else None,
+                    "name": cast(str, item["category_name"]),
+                    "total": cast(Decimal, item["total"]),
+                    "monthly": cast(List[Decimal], item["monthly"]),
+                    "icon": item["icon"],
+                    "color_hex": item["color_hex"],
+                    "transaction_count": item["transaction_count"],
+                }
+                for item in top
+            ]
+            if other_total > 0:
+                breakdown.append(
+                    {
+                        "category_id": None,
+                        "name": "Other",
+                        "total": other_total,
+                        "monthly": other_monthly,
+                        "icon": None,
+                        "color_hex": None,
+                        "transaction_count": sum(
+                            cast(int, item["transaction_count"]) for item in rest
+                        ),
+                    }
+                )
+            return breakdown
+
+        # Expense top categories (top 8 + other).
         categories_sorted = sorted(
             expense_by_category.values(),
             key=lambda item: cast(Decimal, item["total"]),
             reverse=True,
         )
-        top = categories_sorted[:8]
-        rest = categories_sorted[8:]
-        other_total = sum((cast(Decimal, item["total"]) for item in rest), Decimal("0"))
-        other_monthly = [Decimal("0") for _ in range(12)]
-        for item in rest:
-            for idx, value in enumerate(cast(List[Decimal], item["monthly"])):
-                other_monthly[idx] += value
-        category_breakdown = [
-            {
-                "category_id": str(item["category_id"]) if item["category_id"] else None,
-                "name": cast(str, item["category_name"]),
-                "total": cast(Decimal, item["total"]),
-                "monthly": cast(List[Decimal], item["monthly"]),
-                "icon": item["icon"],
-                "color_hex": item["color_hex"],
-                "transaction_count": item["transaction_count"],
-            }
-            for item in top
-        ]
-        if other_total > 0:
-            category_breakdown.append(
-                {
-                    "category_id": None,
-                    "name": "Other",
-                    "total": other_total,
-                    "monthly": other_monthly,
-                    "icon": None,
-                    "color_hex": None,
-                    "transaction_count": sum(cast(int, item["transaction_count"]) for item in rest),
-                }
-            )
+        category_breakdown = build_category_breakdown(categories_sorted)
 
-        # Merchant YoY changes.
-        prev_merchants: Dict[str, Decimal] = {}
+        # Income top categories (top 8 + other).
+        income_categories_sorted = sorted(
+            income_by_category.values(),
+            key=lambda item: cast(Decimal, item["total"]),
+            reverse=True,
+        )
+        income_category_breakdown = build_category_breakdown(income_categories_sorted)
+
+        # Prior-year subscription signal inputs.
         prev_subscriptions: set[str] = set()
         prev_subscription_avg: Dict[str, Decimal] = {}
         prev_counts: Dict[str, int] = {}
@@ -404,8 +534,6 @@ class ReportingService:
             income, expense = self._classify_income_expense(row)
             if expense <= 0:
                 continue
-            mkey = self._merchant_key(row.description)
-            prev_merchants[mkey] = prev_merchants.get(mkey, Decimal("0")) + expense
             if row.subscription_id:
                 sid = str(row.subscription_id)
                 prev_subscriptions.add(sid)
@@ -419,16 +547,11 @@ class ReportingService:
         for entry in merchants.values():
             merchant_name = cast(str, entry["merchant"])
             amount = cast(Decimal, entry["amount"])
-            prev_amount = prev_merchants.get(merchant_name, Decimal("0"))
-            change_pct = None
-            if prev_amount > 0:
-                change_pct = (amount - prev_amount) / prev_amount * Decimal("100")
             merchants_rows.append(
                 {
                     "merchant": merchant_name,
                     "amount": amount,
                     "transaction_count": entry["transaction_count"],
-                    "yoy_change_pct": change_pct,
                 }
             )
         merchants_rows.sort(key=lambda item: cast(Decimal, item["amount"]), reverse=True)
@@ -545,6 +668,7 @@ class ReportingService:
                 },
             },
             "category_breakdown": category_breakdown,
+            "income_category_breakdown": income_category_breakdown,
             "top_merchants": merchants_rows[:10],
             "largest_transactions": largest_expenses[:10],
             "category_changes": category_changes[:10],
@@ -556,6 +680,7 @@ class ReportingService:
         *,
         year: int,
         category_id: UUID,
+        flow: str = "expense",
         account_ids: Optional[Iterable[UUID]] = None,
     ) -> dict[str, object]:
         start = datetime(year, 1, 1, tzinfo=timezone.utc)
@@ -569,11 +694,12 @@ class ReportingService:
         for row in rows:
             if row.category_id != category_id:
                 continue
-            _, expense = self._classify_income_expense(row)
-            if expense <= 0:
+            income, expense = self._classify_income_expense(row)
+            amount = income if flow == "income" else expense
+            if amount <= 0:
                 continue
             idx = row.occurred_at.month - 1
-            monthly[idx] += expense
+            monthly[idx] += amount
             merchant_key = self._merchant_key(row.description)
             if merchant_key not in merchants:
                 merchants[merchant_key] = {
@@ -582,7 +708,7 @@ class ReportingService:
                     "transaction_count": 0,
                 }
             merchants[merchant_key]["amount"] = (
-                cast(Decimal, merchants[merchant_key]["amount"]) + expense
+                cast(Decimal, merchants[merchant_key]["amount"]) + amount
             )
             merchants[merchant_key]["transaction_count"] = (
                 cast(int, merchants[merchant_key]["transaction_count"]) + 1
@@ -635,12 +761,40 @@ class ReportingService:
         category_ids: Optional[Iterable[UUID]] = None,
         subscription_ids: Optional[Iterable[UUID]] = None,
     ) -> List[QuarterlyTotals]:
-        return self.repository.get_quarterly_totals(
-            year=year,
+        if year is not None:
+            start = datetime(year, 1, 1, tzinfo=timezone.utc)
+            end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        else:
+            start = datetime(1900, 1, 1, tzinfo=timezone.utc)
+            end = datetime.now(timezone.utc) + timedelta(days=1)
+
+        rows = self._filtered_transaction_amounts(
+            start=start,
+            end=end,
             account_ids=account_ids,
             category_ids=category_ids,
             subscription_ids=subscription_ids,
         )
+
+        buckets: Dict[tuple[int, int], Tuple[Decimal, Decimal]] = {}
+        for row in rows:
+            income, expense = self._classify_income_expense(row)
+            if income == 0 and expense == 0:
+                continue
+            quarter = (row.occurred_at.month - 1) // 3 + 1
+            key = (row.occurred_at.year, quarter)
+            inc, exp = buckets.get(key, (Decimal("0"), Decimal("0")))
+            buckets[key] = (inc + income, exp + expense)
+
+        results: List[QuarterlyTotals] = []
+        for yr, qtr in sorted(buckets.keys()):
+            income, expense = buckets[(yr, qtr)]
+            results.append(
+                QuarterlyTotals(
+                    year=yr, quarter=qtr, income=income, expense=expense, net=income - expense
+                )
+            )
+        return results
 
     def date_range_report(
         self,
@@ -651,13 +805,55 @@ class ReportingService:
         category_ids: Optional[Iterable[UUID]] = None,
         subscription_ids: Optional[Iterable[UUID]] = None,
     ) -> List[MonthlyTotals]:
-        return self.repository.get_range_monthly_totals(
-            start_date=start_date,
-            end_date=end_date,
+        start = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
+        end = datetime.combine(
+            end_date + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
+        )
+
+        rows = self._filtered_transaction_amounts(
+            start=start,
+            end=end,
             account_ids=account_ids,
             category_ids=category_ids,
             subscription_ids=subscription_ids,
         )
+
+        buckets: Dict[date, Tuple[Decimal, Decimal]] = {}
+        for row in rows:
+            income, expense = self._classify_income_expense(row)
+            if income == 0 and expense == 0:
+                continue
+            period = date(row.occurred_at.year, row.occurred_at.month, 1)
+            inc, exp = buckets.get(period, (Decimal("0"), Decimal("0")))
+            buckets[period] = (inc + income, exp + expense)
+
+        results: List[MonthlyTotals] = []
+        for period in sorted(buckets.keys()):
+            income, expense = buckets[period]
+            results.append(
+                MonthlyTotals(period=period, income=income, expense=expense, net=income - expense)
+            )
+        return results
+
+    def _filtered_transaction_amounts(
+        self,
+        *,
+        start: datetime,
+        end: datetime,
+        account_ids: Optional[Iterable[UUID]] = None,
+        category_ids: Optional[Iterable[UUID]] = None,
+        subscription_ids: Optional[Iterable[UUID]] = None,
+    ) -> List[TransactionAmountRow]:
+        rows = self.repository.fetch_transaction_amounts(
+            start=start, end=end, account_ids=account_ids
+        )
+        if category_ids:
+            allowed = set(category_ids)
+            rows = [row for row in rows if row.category_id in allowed]
+        if subscription_ids:
+            allowed = set(subscription_ids)
+            rows = [row for row in rows if row.subscription_id in allowed]
+        return rows
 
 
 __all__ = [

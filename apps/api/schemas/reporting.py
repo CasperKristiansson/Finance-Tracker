@@ -281,6 +281,7 @@ class YearlyCategoryDetailQuery(_CsvUUIDMixin):
 
     year: int = Field(ge=1900, le=3000)
     category_id: UUID
+    flow: str = Field(default="expense", pattern="^(expense|income)$")
     account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
 
     @model_validator(mode="before")
@@ -345,7 +346,6 @@ class MerchantSummaryEntry(BaseModel):
     merchant: str
     amount: Decimal
     transaction_count: int
-    yoy_change_pct: Optional[Decimal] = None
 
 
 class LargestTransactionEntry(BaseModel):
@@ -375,6 +375,7 @@ class YearlyOverviewResponse(BaseModel):
     savings: SavingsIndicator
     stats: YearlyOverviewStats
     category_breakdown: List[YearlyCategoryBreakdownEntry]
+    income_category_breakdown: List[YearlyCategoryBreakdownEntry]
     top_merchants: List[MerchantSummaryEntry]
     largest_transactions: List[LargestTransactionEntry]
     category_changes: List[CategoryChangeEntry]

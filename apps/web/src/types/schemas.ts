@@ -363,12 +363,22 @@ export const yearlyOverviewSchema = z.object({
       transaction_count: z.number(),
     }),
   ),
+  income_category_breakdown: z.array(
+    z.object({
+      category_id: z.string().nullable().optional(),
+      name: z.string(),
+      total: z.string(),
+      monthly: z.array(z.string()),
+      icon: z.string().nullable().optional(),
+      color_hex: z.string().nullable().optional(),
+      transaction_count: z.number(),
+    }),
+  ),
   top_merchants: z.array(
     z.object({
       merchant: z.string(),
       amount: z.string(),
       transaction_count: z.number(),
-      yoy_change_pct: z.string().nullable().optional(),
     }),
   ),
   largest_transactions: z.array(
@@ -411,7 +421,6 @@ export const yearlyCategoryDetailSchema = z.object({
       merchant: z.string(),
       amount: z.string(),
       transaction_count: z.number(),
-      yoy_change_pct: z.string().nullable().optional(),
     }),
   ),
 });
