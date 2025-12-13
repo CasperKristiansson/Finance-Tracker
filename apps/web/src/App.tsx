@@ -24,6 +24,7 @@ import { Dashboard } from "./pages/dashboard/dashboard.tsx";
 import { Goals } from "./pages/goals/goals.tsx";
 import { Imports } from "./pages/imports/imports.tsx";
 import { Investments } from "./pages/investments/investments.tsx";
+import { Loans } from "./pages/loans/loans.tsx";
 import { Login } from "./pages/login/login.tsx";
 import { Navigation } from "./pages/navigation/navigation.tsx";
 import { NotFound } from "./pages/notFound/notFound.tsx";
@@ -189,6 +190,22 @@ export const App: React.FC = () => {
           element={
             <NavigationWrapper title="Cash Flow">
               <CashFlow />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.loans}
+          element={
+            <NavigationWrapper title="Loans">
+              <Loans />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={`${PageRoutes.loans}/:accountId`}
+          element={
+            <NavigationWrapper title="Loans">
+              <Loans />
             </NavigationWrapper>
           }
         />
