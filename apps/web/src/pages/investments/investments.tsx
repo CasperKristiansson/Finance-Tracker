@@ -4,6 +4,7 @@ import {
   Check,
   Loader2,
   Plus,
+  RefreshCw,
   Save,
   Trash2,
   UploadCloud,
@@ -91,6 +92,19 @@ const coerceNumber = (value: unknown): number | undefined => {
   const num = Number(value);
   return Number.isFinite(num) ? num : undefined;
 };
+
+const formatSek = (value: number) =>
+  value.toLocaleString("sv-SE", {
+    style: "currency",
+    currency: "SEK",
+    maximumFractionDigits: 0,
+  });
+
+const formatCompact = (value: number) =>
+  new Intl.NumberFormat("sv-SE", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
 
 const extractHoldings = (
   payload?: Record<string, unknown>,
@@ -228,6 +242,7 @@ export const Investments: React.FC = () => {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [range, setRange] = useState<"3M" | "6M" | "1Y" | "ALL">("6M");
+  const [showAllAccounts, setShowAllAccounts] = useState(false);
 
   useEffect(() => {
     fetchSnapshots();
@@ -508,6 +523,20 @@ export const Investments: React.FC = () => {
                     />
                   </div>
                   <div className="flex items-center gap-2">
+                    <Label className="text-xs text-slate-600">Account</Label>
+                    <Input
+                      value={draft.account_name ?? ""}
+                      onChange={(e) =>
+                        draftForm.setValue(
+                          `drafts.${index}.account_name`,
+                          e.target.value || undefined,
+                        )
+                      }
+                      className="h-9 w-44"
+                      placeholder="e.g. ISK"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
                     <Label className="text-xs text-slate-600">
                       Use Bedrock
                     </Label>
@@ -699,11 +728,35 @@ export const Investments: React.FC = () => {
   };
 
   const valueSeries = useMemo(() => {
-    const sorted = [...snapshots].sort(
-      (a, b) =>
-        new Date(a.snapshot_date).getTime() -
-        new Date(b.snapshot_date).getTime(),
-    );
+    const byDate = new Map<
+      string,
+      Map<string, { snapshot: InvestmentSnapshot; updatedAtMs: number }>
+    >();
+
+    snapshots.forEach((snap) => {
+      const date = String(snap.snapshot_date).slice(0, 10);
+      if (!date) return;
+      const accountKey =
+        (snap.account_name ?? "Unlabeled").trim() || "Unlabeled";
+      const updatedAtMs = new Date(snap.updated_at).getTime();
+
+      const bucket = byDate.get(date) ?? new Map();
+      const existing = bucket.get(accountKey);
+      if (!existing || updatedAtMs > existing.updatedAtMs) {
+        bucket.set(accountKey, { snapshot: snap, updatedAtMs });
+      }
+      byDate.set(date, bucket);
+    });
+
+    const sorted = Array.from(byDate.entries())
+      .map(([date, accounts]) => {
+        const total = Array.from(accounts.values()).reduce((sum, entry) => {
+          return sum + deriveSnapshotValue(entry.snapshot);
+        }, 0);
+        return { date, value: total };
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
     const cutoff = (() => {
       const now = new Date();
       if (range === "3M") return new Date(now.setMonth(now.getMonth() - 3));
@@ -713,12 +766,9 @@ export const Investments: React.FC = () => {
       return null;
     })();
     const filtered = cutoff
-      ? sorted.filter((snap) => new Date(snap.snapshot_date) >= cutoff)
+      ? sorted.filter((row) => new Date(row.date) >= cutoff)
       : sorted;
-    return filtered.map((snap) => ({
-      date: snap.snapshot_date,
-      value: deriveSnapshotValue(snap),
-    }));
+    return filtered;
   }, [snapshots, range]);
 
   const totalValue =
@@ -732,122 +782,404 @@ export const Investments: React.FC = () => {
   const irr = coerceNumber(metrics?.irr);
   const benchmarkChange = coerceNumber(metrics?.benchmarks?.[0]?.change_pct);
 
+  const visibleStartValue = coerceNumber(valueSeries[0]?.value);
+  const visibleEndValue = coerceNumber(valueSeries.at(-1)?.value);
+  const visibleDelta =
+    visibleStartValue !== undefined && visibleEndValue !== undefined
+      ? visibleEndValue - visibleStartValue
+      : undefined;
+  const visibleDeltaPct =
+    visibleDelta !== undefined && visibleStartValue
+      ? (visibleDelta / visibleStartValue) * 100
+      : null;
+
+  const accountSummaries = useMemo(() => {
+    const byAccount = new Map<
+      string,
+      Map<string, { snapshot: InvestmentSnapshot; updatedAtMs: number }>
+    >();
+
+    snapshots.forEach((snap) => {
+      const date = String(snap.snapshot_date).slice(0, 10);
+      if (!date) return;
+      const accountName =
+        (snap.account_name ?? "Unlabeled").trim() || "Unlabeled";
+      const updatedAtMs = new Date(snap.updated_at).getTime();
+
+      const bucket = byAccount.get(accountName) ?? new Map();
+      const existing = bucket.get(date);
+      if (!existing || updatedAtMs > existing.updatedAtMs) {
+        bucket.set(date, { snapshot: snap, updatedAtMs });
+      }
+      byAccount.set(accountName, bucket);
+    });
+
+    const summaries = Array.from(byAccount.entries()).map(
+      ([accountName, dateMap]) => {
+        const series = Array.from(dateMap.entries())
+          .map(([date, entry]) => ({
+            date,
+            snapshot: entry.snapshot,
+            value: deriveSnapshotValue(entry.snapshot),
+          }))
+          .sort(
+            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+          );
+
+        const latest = series.at(-1);
+        const previous = series.at(-2);
+        const latestValue = latest?.value ?? 0;
+        const previousValue = previous?.value ?? 0;
+        const delta =
+          latest && previous ? latestValue - previousValue : undefined;
+        const deltaPct =
+          delta !== undefined && previousValue
+            ? (delta / previousValue) * 100
+            : null;
+        const holdingsCount = latest
+          ? getSnapshotHoldings(latest.snapshot).length
+          : 0;
+
+        return {
+          accountName,
+          latestDate: latest?.date,
+          latestValue,
+          delta,
+          deltaPct,
+          holdingsCount,
+          snapshotsCount: series.length,
+        };
+      },
+    );
+
+    return summaries.sort((a, b) => b.latestValue - a.latestValue);
+  }, [snapshots]);
+
+  const visibleAccounts = showAllAccounts
+    ? accountSummaries
+    : accountSummaries.slice(0, 4);
+
   return (
-    <MotionPage className="space-y-4">
-      <StaggerWrap className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <MotionPage className="space-y-6">
+      <StaggerWrap className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <motion.div variants={fadeInUp}>
           <p className="text-xs tracking-wide text-slate-500 uppercase">
             Investments
           </p>
           <h1 className="text-2xl font-semibold text-slate-900">
-            Paste Nordnet reports, review, approve
+            Explore your portfolio
           </h1>
           <p className="text-sm text-slate-500">
-            Handle multiple exports in one session, edit holdings inline, and
-            save dated snapshots to see value trends.
+            Combined growth across accounts, followed by account summaries and
+            importer drafts.
           </p>
         </motion.div>
         <motion.div
           variants={fadeInUp}
-          className="flex items-center gap-2 text-sm text-slate-600"
+          className="flex flex-wrap items-center justify-end gap-2"
         >
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              fetchSnapshots();
+              fetchTransactions();
+              fetchMetrics();
+            }}
+            disabled={loading}
+          >
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Refresh
+          </Button>
           {loading || isUploading ? (
-            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
+            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600">
               <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
               Loading
             </span>
           ) : null}
           {saving ? (
-            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
+            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600">
               <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
               Saving
             </span>
           ) : null}
         </motion.div>
       </StaggerWrap>
-      <StaggerWrap className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-        <motion.div variants={fadeInUp} {...subtleHover}>
-          <Card className="border-slate-200">
-            <CardContent className="space-y-1 py-4">
-              <p className="text-xs text-slate-500 uppercase">Total value</p>
-              <p className="text-2xl font-semibold text-slate-900">
-                {totalValue.toLocaleString("sv-SE", {
-                  maximumFractionDigits: 0,
-                })}{" "}
-                SEK
-              </p>
+
+      <StaggerWrap className="grid gap-4 lg:grid-cols-3">
+        <motion.div
+          variants={fadeInUp}
+          className="lg:col-span-2"
+          {...subtleHover}
+        >
+          <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
+            <CardHeader className="pb-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div className="space-y-1">
+                  <CardTitle className="text-sm text-slate-800">
+                    Portfolio growth
+                  </CardTitle>
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <p className="text-2xl font-semibold text-slate-900">
+                      {formatSek(totalValue)}
+                    </p>
+                    {visibleDelta !== undefined ? (
+                      <span
+                        className={cn(
+                          "text-sm font-medium",
+                          visibleDelta >= 0
+                            ? "text-emerald-700"
+                            : "text-rose-700",
+                        )}
+                      >
+                        {visibleDelta >= 0 ? "+" : ""}
+                        {formatCompact(visibleDelta)}{" "}
+                        {visibleDeltaPct !== null
+                          ? `(${visibleDeltaPct >= 0 ? "+" : ""}${visibleDeltaPct.toFixed(
+                              1,
+                            )}%)`
+                          : ""}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 text-xs text-slate-600">
+                  {["3M", "6M", "1Y", "ALL"].map((opt) => (
+                    <Button
+                      key={opt}
+                      size="sm"
+                      variant={range === opt ? "secondary" : "ghost"}
+                      onClick={() => setRange(opt as typeof range)}
+                    >
+                      {opt}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="h-[280px]">
+              {valueSeries.length ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={valueSeries}>
+                    <defs>
+                      <linearGradient id="trend" x1="0" y1="0" x2="0" y2="1">
+                        <stop
+                          offset="5%"
+                          stopColor="#0ea5e9"
+                          stopOpacity={0.35}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="#0ea5e9"
+                          stopOpacity={0.05}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                    <YAxis
+                      tick={{ fontSize: 12 }}
+                      tickFormatter={(val) => formatCompact(Number(val))}
+                    />
+                    <Tooltip
+                      formatter={(val) => formatSek(Number(val))}
+                      labelFormatter={(label) => `Date: ${label}`}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke="#0ea5e9"
+                      fillOpacity={1}
+                      fill="url(#trend)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : loading ? (
+                <div className="space-y-2">
+                  <div className="h-5 w-24 animate-pulse rounded bg-slate-200" />
+                  <div className="h-36 animate-pulse rounded bg-slate-100" />
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">
+                  No snapshots yet. Import your first report to start tracking
+                  growth.
+                </p>
+              )}
             </CardContent>
           </Card>
         </motion.div>
-        <motion.div variants={fadeInUp} {...subtleHover}>
+
+        <motion.div variants={fadeInUp} className="space-y-3" {...subtleHover}>
           <Card className="border-slate-200">
-            <CardContent className="space-y-1 py-4">
-              <p className="text-xs text-slate-500 uppercase">Invested</p>
-              <p className="text-lg font-semibold text-slate-900">
-                {invested.toLocaleString("sv-SE", {
-                  maximumFractionDigits: 0,
-                })}{" "}
-                SEK
-              </p>
-              <p className="text-xs text-slate-500">
-                Realized P/L:{" "}
-                {realizedPl.toLocaleString("sv-SE", {
-                  maximumFractionDigits: 0,
-                })}{" "}
-                SEK
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
-        <motion.div variants={fadeInUp} {...subtleHover}>
-          <Card className="border-slate-200">
-            <CardContent className="space-y-1 py-4">
-              <p className="text-xs text-slate-500 uppercase">Unrealized P/L</p>
-              <p
-                className={cn(
-                  "text-lg font-semibold",
-                  unrealizedPl >= 0 ? "text-emerald-700" : "text-rose-700",
-                )}
-              >
-                {unrealizedPl.toLocaleString("sv-SE", {
-                  maximumFractionDigits: 0,
-                })}{" "}
-                SEK
-              </p>
-              <p className="text-xs text-slate-500">
-                TWR:{" "}
-                {twr !== undefined && twr !== null
-                  ? `${(twr * 100).toFixed(1)}%`
-                  : "-"}
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
-        <motion.div variants={fadeInUp} {...subtleHover}>
-          <Card className="border-slate-200">
-            <CardContent className="space-y-1 py-4">
-              <p className="text-xs text-slate-500 uppercase">IRR</p>
-              <p className="text-lg font-semibold text-slate-900">
-                {irr !== undefined && irr !== null
-                  ? `${(irr * 100).toFixed(1)}%`
-                  : "-"}
-              </p>
-              <p className="text-xs text-slate-500">
-                Benchmark:{" "}
-                {benchmarkChange !== undefined && benchmarkChange !== null
-                  ? `${(benchmarkChange * 100).toFixed(1)}%`
-                  : "-"}
-              </p>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm text-slate-800">
+                Portfolio details
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-slate-500">Total value</span>
+                <span className="font-medium text-slate-900">
+                  {formatSek(totalValue)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-slate-500">Invested</span>
+                <span className="font-medium text-slate-900">
+                  {formatSek(invested)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-slate-500">Unrealized P/L</span>
+                <span
+                  className={cn(
+                    "font-medium",
+                    unrealizedPl >= 0 ? "text-emerald-700" : "text-rose-700",
+                  )}
+                >
+                  {unrealizedPl >= 0 ? "+" : ""}
+                  {formatSek(unrealizedPl)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-slate-500">Realized P/L</span>
+                <span className="font-medium text-slate-900">
+                  {realizedPl >= 0 ? "+" : ""}
+                  {formatSek(realizedPl)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-slate-500">TWR</span>
+                <span className="font-medium text-slate-900">
+                  {twr !== undefined && twr !== null
+                    ? `${(twr * 100).toFixed(1)}%`
+                    : "-"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-slate-500">IRR</span>
+                <span className="font-medium text-slate-900">
+                  {irr !== undefined && irr !== null
+                    ? `${(irr * 100).toFixed(1)}%`
+                    : "-"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-slate-500">Benchmark</span>
+                <span className="font-medium text-slate-900">
+                  {benchmarkChange !== undefined && benchmarkChange !== null
+                    ? `${(benchmarkChange * 100).toFixed(1)}%`
+                    : "-"}
+                </span>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
       </StaggerWrap>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)] lg:col-span-2">
+      <StaggerWrap className="space-y-3">
+        <motion.div
+          variants={fadeInUp}
+          className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <p className="text-xs tracking-wide text-slate-500 uppercase">
+              Accounts
+            </p>
+            <h2 className="text-lg font-semibold text-slate-900">
+              Investment accounts
+            </h2>
+          </div>
+          {accountSummaries.length > 4 ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowAllAccounts((v) => !v)}
+            >
+              {showAllAccounts
+                ? "Show top 4"
+                : `Show all (${accountSummaries.length})`}
+            </Button>
+          ) : null}
+        </motion.div>
+
+        {accountSummaries.length ? (
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+            {visibleAccounts.map((acct) => (
+              <motion.div
+                key={acct.accountName}
+                variants={fadeInUp}
+                {...subtleHover}
+              >
+                <Card className="border-slate-200">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm text-slate-800">
+                      {acct.accountName}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="text-xl font-semibold text-slate-900">
+                        {formatSek(acct.latestValue)}
+                      </p>
+                      {acct.delta !== undefined ? (
+                        <Badge
+                          className={cn(
+                            "text-xs",
+                            acct.delta >= 0
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-rose-50 text-rose-700",
+                          )}
+                        >
+                          {acct.delta >= 0 ? "+" : ""}
+                          {formatCompact(acct.delta)}
+                          {acct.deltaPct !== null
+                            ? ` (${acct.deltaPct >= 0 ? "+" : ""}${acct.deltaPct.toFixed(
+                                1,
+                              )}%)`
+                            : ""}
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-slate-100 text-xs text-slate-700">
+                          First snapshot
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>
+                        {acct.holdingsCount}{" "}
+                        {acct.holdingsCount === 1 ? "holding" : "holdings"}
+                      </span>
+                      <span>
+                        {acct.latestDate ? `As of ${acct.latestDate}` : "-"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500">
+                      {acct.snapshotsCount}{" "}
+                      {acct.snapshotsCount === 1 ? "snapshot" : "snapshots"}
+                    </p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </div>
+        ) : (
+          <motion.div variants={fadeInUp}>
+            <Card className="border-dashed border-slate-200 bg-slate-50/70">
+              <CardContent className="py-8 text-center text-sm text-slate-600">
+                Import a Nordnet report below to create your first investment
+                snapshot.
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
+      </StaggerWrap>
+
+      <motion.div variants={fadeInUp} initial="hidden" animate="show">
+        <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-slate-800">
-              Add Nordnet exports (paste or drop files)
+              Import Nordnet exports
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -965,144 +1297,78 @@ export const Investments: React.FC = () => {
             )}
           </CardContent>
         </Card>
+      </motion.div>
 
-        <div className="space-y-4">
-          <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between gap-2">
-                <CardTitle className="text-sm text-slate-800">
-                  Portfolio value trend
-                </CardTitle>
-                <div className="flex items-center gap-2 text-xs text-slate-600">
-                  {["3M", "6M", "1Y", "ALL"].map((opt) => (
-                    <Button
-                      key={opt}
-                      size="sm"
-                      variant={range === opt ? "secondary" : "ghost"}
-                      onClick={() => setRange(opt as typeof range)}
-                    >
-                      {opt}
-                    </Button>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)] lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-slate-800">
+              Holdings delta (latest vs previous)
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {holdingsDelta.length ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Holding</TableHead>
+                    <TableHead className="text-right">Now</TableHead>
+                    <TableHead className="text-right">Prev</TableHead>
+                    <TableHead className="text-right">Delta</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {holdingsDelta.map((row) => (
+                    <TableRow key={row.name}>
+                      <TableCell className="font-medium">{row.name}</TableCell>
+                      <TableCell className="text-right">
+                        {row.current.toLocaleString("sv-SE", {
+                          maximumFractionDigits: 0,
+                        })}
+                      </TableCell>
+                      <TableCell className="text-right text-slate-500">
+                        {row.prior.toLocaleString("sv-SE", {
+                          maximumFractionDigits: 0,
+                        })}
+                      </TableCell>
+                      <TableCell
+                        className={cn(
+                          "text-right",
+                          row.delta >= 0 ? "text-emerald-600" : "text-rose-600",
+                        )}
+                      >
+                        {row.delta.toLocaleString("sv-SE", {
+                          maximumFractionDigits: 0,
+                        })}
+                        {row.deltaPct !== null
+                          ? ` (${row.deltaPct.toFixed(1)}%)`
+                          : ""}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : loading ? (
+              <div className="space-y-2">
+                <div className="h-5 w-20 animate-pulse rounded bg-slate-200" />
+                <div className="space-y-1">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="h-8 animate-pulse rounded bg-slate-100"
+                    />
                   ))}
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="h-[220px]">
-              {valueSeries.length ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={valueSeries}>
-                    <defs>
-                      <linearGradient id="trend" x1="0" y1="0" x2="0" y2="1">
-                        <stop
-                          offset="5%"
-                          stopColor="#0ea5e9"
-                          stopOpacity={0.35}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="#0ea5e9"
-                          stopOpacity={0.05}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                    <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-                    <YAxis tick={{ fontSize: 12 }} />
-                    <Tooltip />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#0ea5e9"
-                      fillOpacity={1}
-                      fill="url(#trend)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : loading ? (
-                <div className="space-y-2">
-                  <div className="h-5 w-24 animate-pulse rounded bg-slate-200" />
-                  <div className="h-36 animate-pulse rounded bg-slate-100" />
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500">
-                  Save at least one snapshot to see value over time.
-                </p>
-              )}
-            </CardContent>
-          </Card>
+            ) : (
+              <p className="text-sm text-slate-500">
+                Save at least two snapshots to compare holdings.
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
-          <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-800">
-                Holdings delta (latest vs previous)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {holdingsDelta.length ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Holding</TableHead>
-                      <TableHead className="text-right">Now</TableHead>
-                      <TableHead className="text-right">Prev</TableHead>
-                      <TableHead className="text-right">Delta</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {holdingsDelta.map((row) => (
-                      <TableRow key={row.name}>
-                        <TableCell className="font-medium">
-                          {row.name}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {row.current.toLocaleString("sv-SE", {
-                            maximumFractionDigits: 0,
-                          })}
-                        </TableCell>
-                        <TableCell className="text-right text-slate-500">
-                          {row.prior.toLocaleString("sv-SE", {
-                            maximumFractionDigits: 0,
-                          })}
-                        </TableCell>
-                        <TableCell
-                          className={cn(
-                            "text-right",
-                            row.delta >= 0
-                              ? "text-emerald-600"
-                              : "text-rose-600",
-                          )}
-                        >
-                          {row.delta.toLocaleString("sv-SE", {
-                            maximumFractionDigits: 0,
-                          })}
-                          {row.deltaPct !== null
-                            ? ` (${row.deltaPct.toFixed(1)}%)`
-                            : ""}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : loading ? (
-                <div className="space-y-2">
-                  <div className="h-5 w-20 animate-pulse rounded bg-slate-200" />
-                  <div className="space-y-1">
-                    {[1, 2, 3].map((i) => (
-                      <div
-                        key={i}
-                        className="h-8 animate-pulse rounded bg-slate-100"
-                      />
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500">
-                  Save at least two snapshots to compare holdings.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
+        <div className="space-y-4">
           <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-slate-800">
