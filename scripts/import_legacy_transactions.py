@@ -109,7 +109,7 @@ def ensure_accounts(session, user_id: str) -> Tuple[Dict[str, str], Dict[str, st
         "Nordnet Company": (AccountType.INVESTMENT, True, "banks/nordnet.jpg"),
         "SEB Company": (AccountType.NORMAL, True, "banks/seb.png"),
         "Bospar": (AccountType.INVESTMENT, True, "banks/danskebank.png"),
-        "Circle K Mastercard": (AccountType.NORMAL, True, "banks/circlek.png"),
+        "Circle K Mastercard": (AccountType.DEBT, True, "banks/circlek.png"),
         "Cash": (AccountType.NORMAL, True, None),
         "Swedbank Savings": (AccountType.NORMAL, False, "banks/swedbank.png"),
         "Paypal": (AccountType.NORMAL, False, None),
