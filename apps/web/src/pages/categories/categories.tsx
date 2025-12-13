@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Pencil, Plus, RefreshCw } from "lucide-react";
+import { Loader2, Merge, Pencil, Plus, RefreshCw } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -33,10 +33,16 @@ const selectableCategoryTypes = [
 ] as const;
 
 const categoryFormSchema = categorySchema
-  .pick({ name: true, category_type: true, icon: true })
+  .pick({ name: true, category_type: true, icon: true, color_hex: true })
   .extend({
     name: z.string().min(1, "Name is required").trim(),
     icon: z.string().optional(),
+    color_hex: z
+      .string()
+      .trim()
+      .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Invalid hex color")
+      .optional()
+      .or(z.literal("")),
   });
 
 type CategoryFormValues = z.infer<typeof categoryFormSchema>;
@@ -45,43 +51,67 @@ const categoryEditFormSchema = z.object({
   name: z.string().min(1, "Name is required").trim(),
   category_type: z.enum(CategoryType),
   icon: z.string().optional(),
+  color_hex: z
+    .string()
+    .trim()
+    .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Invalid hex color")
+    .optional()
+    .or(z.literal("")),
   is_archived: z.boolean(),
 });
 
 type CategoryEditFormValues = z.infer<typeof categoryEditFormSchema>;
 
-const mergeSchema = z
-  .object({
-    sourceCategoryId: z.string().min(1, "Pick a source"),
-    targetCategoryId: z.string().min(1, "Pick a target"),
-    renameTargetTo: z.string().optional(),
-  })
-  .refine(
-    (val) =>
-      val.sourceCategoryId.trim() !== "" &&
-      val.targetCategoryId.trim() !== "" &&
-      val.sourceCategoryId !== val.targetCategoryId,
-    {
-      path: ["targetCategoryId"],
-      message: "Pick distinct source and target",
-    },
-  );
+type TypeFilter = "all" | CategoryType;
+type ArchivedFilter = "active" | "archived" | "all";
+type SortKey = "az" | "most_used" | "newest";
 
-type MergeFormValues = z.infer<typeof mergeSchema>;
+const formatCurrency = (value: number) =>
+  value.toLocaleString("sv-SE", {
+    style: "currency",
+    currency: "SEK",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+
+const formatShortDate = (value?: string | null) => {
+  if (!value) return "Never";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Never";
+  return date.toLocaleDateString("sv-SE", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  });
+};
+
+const usageText = (cat: CategoryRead) => {
+  const count = Number(cat.transaction_count ?? 0);
+  const total = Number(cat.lifetime_total ?? 0);
+  const lastUsed = formatShortDate(cat.last_used_at ?? null);
+  return `${count} tx • last ${lastUsed} • ${formatCurrency(total)}`;
+};
 
 export const Categories: React.FC = () => {
   const {
     items,
     loading,
     error,
-    includeArchived,
     fetchCategories,
     updateCategory,
     createCategory,
     mergeCategory,
   } = useCategoriesApi();
 
-  const [showArchived, setShowArchived] = useState(includeArchived);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [archivedFilter, setArchivedFilter] =
+    useState<ArchivedFilter>("active");
+  const [sortKey, setSortKey] = useState<SortKey>("az");
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState<string>("");
+  const [mergeRename, setMergeRename] = useState<string>("");
   const [showNewSheet, setShowNewSheet] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -91,6 +121,7 @@ export const Categories: React.FC = () => {
       name: "",
       category_type: CategoryType.EXPENSE,
       icon: "",
+      color_hex: "",
     },
   });
 
@@ -110,23 +141,10 @@ export const Categories: React.FC = () => {
       name: "",
       category_type: CategoryType.EXPENSE,
       icon: "",
+      color_hex: "",
       is_archived: false,
     },
   });
-
-  const mergeForm = useForm<MergeFormValues>({
-    resolver: zodResolver(mergeSchema),
-    defaultValues: {
-      sourceCategoryId: "",
-      targetCategoryId: "",
-      renameTargetTo: "",
-    },
-  });
-
-  useEffect(() => {
-    fetchCategories({ includeArchived: showArchived });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   useEffect(() => {
     if (!editingCategory) return;
@@ -134,12 +152,18 @@ export const Categories: React.FC = () => {
       name: editingCategory.name,
       category_type: editingCategory.category_type,
       icon: editingCategory.icon ?? "",
+      color_hex: editingCategory.color_hex ?? "",
       is_archived: editingCategory.is_archived,
     });
   }, [editForm, editingCategory]);
 
+  useEffect(() => {
+    fetchCategories({ includeArchived: archivedFilter !== "active" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [archivedFilter]);
+
   const handleRefresh = () => {
-    fetchCategories({ includeArchived: showArchived });
+    fetchCategories({ includeArchived: archivedFilter !== "active" });
   };
 
   const handleCreate = createForm.handleSubmit((values) => {
@@ -147,12 +171,14 @@ export const Categories: React.FC = () => {
       name: values.name.trim(),
       category_type: values.category_type,
       icon: values.icon?.trim() || undefined,
+      color_hex: values.color_hex?.trim() ? values.color_hex.trim() : undefined,
     });
     toast.success("Category created");
     createForm.reset({
       name: "",
       category_type: values.category_type,
       icon: "",
+      color_hex: "",
     });
     setShowNewSheet(false);
   });
@@ -180,10 +206,17 @@ export const Categories: React.FC = () => {
   };
 
   const exportCategories = () => {
-    const header = ["name", "category_type", "icon", "is_archived"];
+    const header = [
+      "name",
+      "category_type",
+      "color_hex",
+      "icon",
+      "is_archived",
+    ];
     const rows = items.map((cat) => [
       escapeCsv(cat.name),
       escapeCsv(cat.category_type),
+      escapeCsv(cat.color_hex ?? ""),
       escapeCsv(cat.icon ?? ""),
       escapeCsv(cat.is_archived ? "true" : "false"),
     ]);
@@ -207,49 +240,14 @@ export const Categories: React.FC = () => {
         const category_type = row["category_type"]?.trim() as CategoryType;
         if (!name || !category_type) return;
         const icon = row["icon"] || undefined;
-        createCategory({ name, category_type, icon });
+        const color_hex = row["color_hex"] || undefined;
+        createCategory({ name, category_type, icon, color_hex });
       });
-      fetchCategories();
+      fetchCategories({ includeArchived: archivedFilter !== "active" });
       toast.success("Import started");
     };
     reader.readAsText(file);
   };
-
-  const handleMerge = mergeForm.handleSubmit((values) => {
-    mergeCategory({
-      sourceCategoryId: values.sourceCategoryId,
-      targetCategoryId: values.targetCategoryId,
-      renameTargetTo: values.renameTargetTo?.trim() || undefined,
-    });
-    toast.success("Merge requested");
-    mergeForm.reset({
-      sourceCategoryId: "",
-      targetCategoryId: "",
-      renameTargetTo: "",
-    });
-  });
-
-  const visibleCategories = useMemo(
-    () =>
-      items.filter((category) => (showArchived ? true : !category.is_archived)),
-    [items, showArchived],
-  );
-
-  const incomeCategories = useMemo(
-    () =>
-      visibleCategories.filter(
-        (category) => category.category_type === CategoryType.INCOME,
-      ),
-    [visibleCategories],
-  );
-
-  const expenseCategories = useMemo(
-    () =>
-      visibleCategories.filter(
-        (category) => category.category_type === CategoryType.EXPENSE,
-      ),
-    [visibleCategories],
-  );
 
   const handleEditSave = editForm.handleSubmit((values) => {
     if (!editingCategory) return;
@@ -257,11 +255,84 @@ export const Categories: React.FC = () => {
       name: values.name.trim(),
       category_type: values.category_type,
       icon: values.icon?.trim() ? values.icon.trim() : null,
+      color_hex: values.color_hex?.trim() ? values.color_hex.trim() : null,
       is_archived: values.is_archived,
     });
     toast.success("Category updated");
     setEditingId(null);
   });
+
+  const filteredCategories = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter((category) => {
+      if (archivedFilter === "active" && category.is_archived) return false;
+      if (archivedFilter === "archived" && !category.is_archived) return false;
+      if (typeFilter !== "all" && category.category_type !== typeFilter)
+        return false;
+
+      if (!q) return true;
+      const haystack = `${category.name} ${category.icon ?? ""}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [archivedFilter, items, search, typeFilter]);
+
+  const sortedCategories = useMemo(() => {
+    const copy = [...filteredCategories];
+    copy.sort((a, b) => {
+      if (sortKey === "most_used") {
+        const diff =
+          Number(b.transaction_count ?? 0) - Number(a.transaction_count ?? 0);
+        if (diff !== 0) return diff;
+        const aLast = a.last_used_at ? new Date(a.last_used_at).getTime() : 0;
+        const bLast = b.last_used_at ? new Date(b.last_used_at).getTime() : 0;
+        if (bLast !== aLast) return bLast - aLast;
+        return a.name.localeCompare(b.name);
+      }
+      if (sortKey === "newest") {
+        const aCreated = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bCreated = b.created_at ? new Date(b.created_at).getTime() : 0;
+        if (bCreated !== aCreated) return bCreated - aCreated;
+        return a.name.localeCompare(b.name);
+      }
+      return a.name.localeCompare(b.name);
+    });
+    return copy;
+  }, [filteredCategories, sortKey]);
+
+  const mergeSource = useMemo(
+    () => (mergeSourceId ? items.find((c) => c.id === mergeSourceId) : null),
+    [items, mergeSourceId],
+  );
+
+  const mergeTargets = useMemo(() => {
+    if (!mergeSource) return [];
+    return items
+      .filter((cat) => !cat.is_archived)
+      .filter((cat) => cat.id !== mergeSource.id)
+      .filter((cat) => cat.category_type === mergeSource.category_type)
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [items, mergeSource]);
+
+  const openMerge = (sourceId: string) => {
+    setMergeSourceId(sourceId);
+    setMergeTargetId("");
+    setMergeRename("");
+    setMergeOpen(true);
+  };
+
+  const submitMerge = () => {
+    if (!mergeSourceId || !mergeTargetId) return;
+    mergeCategory({
+      sourceCategoryId: mergeSourceId,
+      targetCategoryId: mergeTargetId,
+      renameTargetTo: mergeRename.trim() || undefined,
+    });
+    toast.success("Merge requested");
+    setMergeOpen(false);
+    setMergeSourceId(null);
+    setMergeTargetId("");
+    setMergeRename("");
+  };
 
   return (
     <MotionPage className="space-y-4">
@@ -324,19 +395,7 @@ export const Categories: React.FC = () => {
             <div>
               <CardTitle>Categories</CardTitle>
             </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-slate-300"
-                  checked={showArchived}
-                  onChange={(e) => {
-                    setShowArchived(e.target.checked);
-                    fetchCategories({ includeArchived: e.target.checked });
-                  }}
-                />
-                <span>Show archived</span>
-              </label>
+            <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="default"
                 size="sm"
@@ -348,102 +407,148 @@ export const Categories: React.FC = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-emerald-700">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search categories…"
+                  className="sm:max-w-xs"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={typeFilter === "all" ? "default" : "outline"}
+                    onClick={() => setTypeFilter("all")}
+                  >
+                    All
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={
+                      typeFilter === CategoryType.INCOME ? "default" : "outline"
+                    }
+                    onClick={() => setTypeFilter(CategoryType.INCOME)}
+                  >
                     Income
-                  </p>
-                  <Badge variant="secondary" className="text-xs">
-                    {incomeCategories.length}
-                  </Badge>
-                </div>
-                <div className="divide-y divide-slate-100 rounded-md border border-slate-100 bg-white">
-                  {incomeCategories.map((cat) => (
-                    <div
-                      key={cat.id}
-                      className="flex items-center justify-between gap-3 px-3 py-2"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        {renderCategoryIcon(
-                          cat.icon ?? "",
-                          cat.name,
-                          "h-6 w-6 text-slate-700 flex items-center justify-center",
-                        )}
-                        <div className="min-w-0">
-                          <div className="truncate font-medium text-slate-900">
-                            {cat.name}
-                          </div>
-                          {cat.is_archived ? (
-                            <p className="text-xs text-slate-500">Archived</p>
-                          ) : null}
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="gap-1"
-                        onClick={() => setEditingId(cat.id)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                        Edit
-                      </Button>
-                    </div>
-                  ))}
-                  {incomeCategories.length === 0 ? (
-                    <p className="px-3 py-6 text-sm text-slate-500">
-                      No income categories to show.
-                    </p>
-                  ) : null}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={
+                      typeFilter === CategoryType.EXPENSE
+                        ? "default"
+                        : "outline"
+                    }
+                    onClick={() => setTypeFilter(CategoryType.EXPENSE)}
+                  >
+                    Expense
+                  </Button>
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-rose-700">Expense</p>
-                  <Badge variant="secondary" className="text-xs">
-                    {expenseCategories.length}
-                  </Badge>
-                </div>
-                <div className="divide-y divide-slate-100 rounded-md border border-slate-100 bg-white">
-                  {expenseCategories.map((cat) => (
-                    <div
-                      key={cat.id}
-                      className="flex items-center justify-between gap-3 px-3 py-2"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        {renderCategoryIcon(
-                          cat.icon ?? "",
-                          cat.name,
-                          "h-6 w-6 text-slate-700 flex items-center justify-center",
-                        )}
-                        <div className="min-w-0">
-                          <div className="truncate font-medium text-slate-900">
-                            {cat.name}
-                          </div>
-                          {cat.is_archived ? (
-                            <p className="text-xs text-slate-500">Archived</p>
-                          ) : null}
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="gap-1"
-                        onClick={() => setEditingId(cat.id)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                        Edit
-                      </Button>
-                    </div>
-                  ))}
-                  {expenseCategories.length === 0 ? (
-                    <p className="px-3 py-6 text-sm text-slate-500">
-                      No expense categories to show.
-                    </p>
-                  ) : null}
-                </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800"
+                  value={archivedFilter}
+                  onChange={(e) =>
+                    setArchivedFilter(e.target.value as ArchivedFilter)
+                  }
+                >
+                  <option value="active">Active</option>
+                  <option value="archived">Archived</option>
+                  <option value="all">All</option>
+                </select>
+
+                <select
+                  className="h-9 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800"
+                  value={sortKey}
+                  onChange={(e) => setSortKey(e.target.value as SortKey)}
+                >
+                  <option value="az">A → Z</option>
+                  <option value="most_used">Most used</option>
+                  <option value="newest">Newest</option>
+                </select>
               </div>
+            </div>
+
+            <div className="divide-y divide-slate-100 rounded-md border border-slate-100 bg-white">
+              {sortedCategories.map((cat) => (
+                <div
+                  key={cat.id}
+                  className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div
+                      className="h-3 w-3 shrink-0 rounded-full border border-slate-200"
+                      style={{ backgroundColor: cat.color_hex ?? "#e2e8f0" }}
+                      title={cat.color_hex ?? "No color"}
+                    />
+                    {renderCategoryIcon(
+                      cat.icon ?? "",
+                      cat.name,
+                      "h-6 w-6 text-slate-700 flex items-center justify-center",
+                    )}
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="truncate font-medium text-slate-900">
+                          {cat.name}
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className={
+                            cat.category_type === CategoryType.INCOME
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-rose-50 text-rose-700"
+                          }
+                        >
+                          {cat.category_type}
+                        </Badge>
+                        {cat.is_archived ? (
+                          <Badge variant="outline">Archived</Badge>
+                        ) : null}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {usageText(cat)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => openMerge(cat.id)}
+                      disabled={cat.is_archived}
+                      title={
+                        cat.is_archived
+                          ? "Unarchive to merge"
+                          : "Merge into another category"
+                      }
+                    >
+                      <Merge className="h-4 w-4" />
+                      Merge
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1"
+                      onClick={() => setEditingId(cat.id)}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Edit
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {sortedCategories.length === 0 ? (
+                <div className="px-3 py-8 text-center text-sm text-slate-500">
+                  No categories match your filters.
+                </div>
+              ) : null}
             </div>
           </CardContent>
         </Card>
@@ -515,6 +620,43 @@ export const Categories: React.FC = () => {
                   </div>
                 </div>
 
+                <div className="space-y-1.5">
+                  <label className="text-sm text-slate-700">Color</label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={editForm.watch("color_hex") || "#94a3b8"}
+                      onChange={(e) =>
+                        editForm.setValue("color_hex", e.target.value, {
+                          shouldDirty: true,
+                        })
+                      }
+                      className="h-10 w-12 cursor-pointer rounded border border-slate-300 bg-white p-1"
+                      aria-label="Pick color"
+                    />
+                    <Input
+                      {...editForm.register("color_hex")}
+                      placeholder="#64748b"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() =>
+                        editForm.setValue("color_hex", "", {
+                          shouldDirty: true,
+                        })
+                      }
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                  {editForm.formState.errors.color_hex ? (
+                    <p className="text-xs text-rose-600">
+                      {editForm.formState.errors.color_hex.message}
+                    </p>
+                  ) : null}
+                </div>
+
                 <div className="space-y-2">
                   <label className="text-sm text-slate-700">Icon</label>
                   <div className="space-y-1.5">
@@ -550,69 +692,102 @@ export const Categories: React.FC = () => {
           </DialogContent>
         </Dialog>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Merge / Rename</CardTitle>
-            <p className="text-sm text-slate-500">
-              Move transactions and budgets from one category into another.
-              Optionally rename the target after merging.
-            </p>
-          </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-4">
-            <div className="space-y-2">
-              <label className="text-sm text-slate-600">Source</label>
-              <select
-                className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                {...mergeForm.register("sourceCategoryId")}
-              >
-                <option value="">Pick source</option>
-                {items.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {formatCategory(cat)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm text-slate-600">Target</label>
-              <select
-                className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
-                {...mergeForm.register("targetCategoryId")}
-              >
-                <option value="">Pick target</option>
-                {items.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {formatCategory(cat)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm text-slate-600">Rename target to</label>
-              <Input
-                {...mergeForm.register("renameTargetTo")}
-                placeholder="(optional)"
-              />
-              {mergeForm.formState.errors.targetCategoryId ? (
-                <p className="text-xs text-rose-600">
-                  {mergeForm.formState.errors.targetCategoryId?.message}
-                </p>
-              ) : null}
-            </div>
-            <div className="flex items-end">
-              <Button
-                className="w-full"
-                onClick={handleMerge}
-                disabled={loading}
-              >
-                {loading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
+        <Dialog
+          open={mergeOpen}
+          onOpenChange={(open) => {
+            setMergeOpen(open);
+            if (!open) {
+              setMergeSourceId(null);
+              setMergeTargetId("");
+              setMergeRename("");
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Merge className="h-5 w-5" />
                 Merge categories
+              </DialogTitle>
+              <DialogDescription>
+                Transactions and budgets from the source category will move to
+                the target. The source category will be archived.
+              </DialogDescription>
+            </DialogHeader>
+
+            {mergeSource ? (
+              <div className="space-y-4">
+                <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-medium text-slate-900">
+                      Source: {formatCategory(mergeSource)}
+                    </div>
+                    <Badge variant="secondary">
+                      {mergeSource.category_type}
+                    </Badge>
+                  </div>
+                  <div className="mt-1 text-xs text-slate-600">
+                    Impact: {usageText(mergeSource)}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm text-slate-700">Target</label>
+                  <select
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800"
+                    value={mergeTargetId}
+                    onChange={(e) => setMergeTargetId(e.target.value)}
+                  >
+                    <option value="">Pick target…</option>
+                    {mergeTargets.map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {formatCategory(cat)}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500">
+                    Only {mergeSource.category_type} categories are available as
+                    targets.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm text-slate-700">
+                    Rename target to (optional)
+                  </label>
+                  <Input
+                    value={mergeRename}
+                    onChange={(e) => setMergeRename(e.target.value)}
+                    placeholder="(optional)"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-slate-500">
+                Pick a source category from the list.
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setMergeOpen(false)}
+              >
+                Cancel
               </Button>
-            </div>
-          </CardContent>
-        </Card>
+              <Button
+                type="button"
+                className="gap-2"
+                onClick={submitMerge}
+                disabled={!mergeSource || !mergeTargetId || loading}
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Merge now
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {showNewSheet ? (
@@ -660,6 +835,36 @@ export const Categories: React.FC = () => {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm text-slate-600">Color</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={createForm.watch("color_hex") || "#94a3b8"}
+                    onChange={(e) =>
+                      createForm.setValue("color_hex", e.target.value)
+                    }
+                    className="h-10 w-12 cursor-pointer rounded border border-slate-300 bg-white p-1"
+                    aria-label="Pick color"
+                  />
+                  <Input
+                    {...createForm.register("color_hex")}
+                    placeholder="#64748b"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => createForm.setValue("color_hex", "")}
+                  >
+                    Clear
+                  </Button>
+                </div>
+                {createForm.formState.errors.color_hex ? (
+                  <p className="text-xs text-rose-600">
+                    {createForm.formState.errors.color_hex.message}
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-2">
                 <label className="text-sm text-slate-600">Icon</label>

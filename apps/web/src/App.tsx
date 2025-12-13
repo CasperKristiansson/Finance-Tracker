@@ -15,6 +15,7 @@ import {
 import { LoadSettings } from "./features/settings/settingsSaga.ts";
 import { BeginWarmup } from "./features/warmup/warmupSaga.ts";
 import { selectWarmupState } from "./features/warmup/warmupSlice.ts";
+import { AccountDetails } from "./pages/accounts/account.tsx";
 import { Accounts } from "./pages/accounts/accounts.tsx";
 import { Budgets } from "./pages/budgets/budgets.tsx";
 import { CashFlow } from "./pages/cash-flow/cash-flow.tsx";
@@ -127,6 +128,14 @@ export const App: React.FC = () => {
           element={
             <NavigationWrapper title="Accounts">
               <Accounts />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.accountDetails}
+          element={
+            <NavigationWrapper title="Accounts">
+              <AccountDetails />
             </NavigationWrapper>
           }
         />

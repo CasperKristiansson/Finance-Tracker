@@ -680,10 +680,13 @@ export const Accounts: React.FC = () => {
                       return (
                         <TableRow key={account.id} className="align-top">
                           <TableCell className="px-4 font-medium text-slate-900">
-                            <div className="flex items-center gap-3">
+                            <Link
+                              to={`${PageRoutes.accounts}/${account.id}`}
+                              className="flex items-center gap-3 hover:underline"
+                            >
                               {renderAccountIcon(account.icon, account.name)}
                               <span>{account.name}</span>
-                            </div>
+                            </Link>
                           </TableCell>
                           <TableCell className="px-4 text-slate-600">
                             {formatAccountType(account.account_type)}

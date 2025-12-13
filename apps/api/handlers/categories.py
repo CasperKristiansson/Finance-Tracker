@@ -84,9 +84,7 @@ def list_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                     expense_total=(usage.expense_total if usage else None),
                 )
             )
-        response = CategoryListResponse(
-            categories=enriched
-        )
+        response = CategoryListResponse(categories=enriched)
     return json_response(200, response.model_dump(mode="json"))
 
 

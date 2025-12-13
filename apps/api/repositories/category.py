@@ -6,10 +6,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 from uuid import UUID
 
-from sqlalchemy import case, func
+from sqlalchemy import Table, case, func
 from sqlmodel import Session, select
 
 from ..models import Account, Category, Transaction, TransactionLeg
@@ -84,6 +84,9 @@ class CategoryRepository:
         if not category_ids:
             return {}
 
+        transaction_table = cast(Table, getattr(Transaction, "__table__"))
+        leg_table = cast(Table, getattr(TransactionLeg, "__table__"))
+
         excluded_ids = list(
             self.session.exec(
                 select(Account.id).where(Account.name.in_(["Offset", "Unassigned"]))
@@ -92,28 +95,26 @@ class CategoryRepository:
 
         statement = (
             select(
-                Transaction.category_id.label("category_id"),
-                func.count(func.distinct(Transaction.id)).label("transaction_count"),
-                func.max(Transaction.occurred_at).label("last_used_at"),
+                cast(Any, transaction_table.c.category_id).label("category_id"),
+                func.count(func.distinct(transaction_table.c.id)).label("transaction_count"),
+                func.max(cast(Any, transaction_table.c.occurred_at)).label("last_used_at"),
                 func.coalesce(
-                    func.sum(
-                        case((TransactionLeg.amount > 0, TransactionLeg.amount), else_=0)
-                    ),
+                    func.sum(case((leg_table.c.amount > 0, leg_table.c.amount), else_=0)),
                     0,
                 ).label("income_total"),
                 func.coalesce(
-                    func.sum(
-                        case((TransactionLeg.amount < 0, -TransactionLeg.amount), else_=0)
-                    ),
+                    func.sum(case((leg_table.c.amount < 0, -leg_table.c.amount), else_=0)),
                     0,
                 ).label("expense_total"),
             )
-            .join(TransactionLeg, TransactionLeg.transaction_id == Transaction.id)
-            .where(Transaction.category_id.in_(category_ids))
-            .group_by(Transaction.category_id)
+            .join_from(
+                leg_table, transaction_table, leg_table.c.transaction_id == transaction_table.c.id
+            )
+            .where(transaction_table.c.category_id.in_(category_ids))
+            .group_by(transaction_table.c.category_id)
         )
         if excluded_ids:
-            statement = statement.where(~TransactionLeg.account_id.in_(excluded_ids))
+            statement = statement.where(~leg_table.c.account_id.in_(excluded_ids))
 
         rows = self.session.exec(statement).all()
         results: Dict[UUID, CategoryUsage] = {}

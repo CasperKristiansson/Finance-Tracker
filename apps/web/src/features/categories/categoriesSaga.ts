@@ -1,7 +1,8 @@
 import { createAction } from "@reduxjs/toolkit";
-import { call, put, takeLatest } from "redux-saga/effects";
+import { call, put, select, takeLatest } from "redux-saga/effects";
 import { callApiWithAuth } from "@/features/api/apiSaga";
 import {
+  selectCategoriesState,
   setCategories,
   setCategoriesError,
   setCategoriesFilters,
@@ -76,7 +77,11 @@ function* handleCreateCategory(action: ReturnType<typeof CreateCategory>) {
       },
       { loadingKey: "categories" },
     );
-    yield call(handleFetchCategories, FetchCategories({}));
+    const state: CategoriesState = yield select(selectCategoriesState);
+    yield call(
+      handleFetchCategories,
+      FetchCategories({ includeArchived: state.includeArchived }),
+    );
   } catch (error) {
     yield put(
       setCategoriesError(
@@ -98,7 +103,11 @@ function* handleUpdateCategory(action: ReturnType<typeof UpdateCategory>) {
       },
       { loadingKey: "categories" },
     );
-    yield call(handleFetchCategories, FetchCategories({}));
+    const state: CategoriesState = yield select(selectCategoriesState);
+    yield call(
+      handleFetchCategories,
+      FetchCategories({ includeArchived: state.includeArchived }),
+    );
   } catch (error) {
     yield put(
       setCategoriesError(
@@ -123,7 +132,11 @@ function* handleMergeCategory(action: ReturnType<typeof MergeCategory>) {
       },
       { loadingKey: "categories" },
     );
-    yield call(handleFetchCategories, FetchCategories({}));
+    const state: CategoriesState = yield select(selectCategoriesState);
+    yield call(
+      handleFetchCategories,
+      FetchCategories({ includeArchived: state.includeArchived }),
+    );
   } catch (error) {
     yield put(
       setCategoriesError(
