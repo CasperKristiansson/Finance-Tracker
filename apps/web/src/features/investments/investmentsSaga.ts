@@ -12,11 +12,13 @@ import {
   setParseResult,
   setTransactions,
   setMetrics,
+  setOverview,
   setSnapshots,
   upsertSnapshot,
 } from "@/features/investments/investmentsSlice";
 import type {
   InvestmentMetricsResponse,
+  InvestmentOverviewResponse,
   InvestmentTransactionListResponse,
   InvestmentSnapshotListResponse,
   InvestmentSnapshotResponse,
@@ -26,6 +28,7 @@ import type {
 } from "@/types/api";
 import {
   investmentMetricsResponseSchema,
+  investmentOverviewResponseSchema,
   investmentSnapshotListResponseSchema,
   investmentSnapshotResponseSchema,
   investmentTransactionListSchema,
@@ -39,6 +42,9 @@ export const FetchInvestmentTransactions = createAction(
   "investments/fetchTransactions",
 );
 export const FetchInvestmentMetrics = createAction("investments/fetchMetrics");
+export const FetchInvestmentOverview = createAction(
+  "investments/fetchOverview",
+);
 export const ParseNordnetExport = createAction<
   NordnetParseRequest & { clientId: string }
 >("investments/parse");
@@ -120,6 +126,31 @@ function* handleFetchMetrics(): Generator {
         error instanceof Error ? error.message : "Unable to load metrics.",
       ),
     );
+  }
+}
+
+function* handleFetchOverview(): Generator {
+  yield put(setInvestmentsLoading(true));
+  try {
+    const response: InvestmentOverviewResponse = yield call(
+      callApiWithAuth,
+      {
+        path: "/investments/overview",
+        schema: investmentOverviewResponseSchema,
+      },
+      { loadingKey: "investments", silent: true },
+    );
+    yield put(setOverview(response));
+  } catch (error) {
+    yield put(
+      setInvestmentsError(
+        error instanceof Error
+          ? error.message
+          : "Unable to load investment overview.",
+      ),
+    );
+  } finally {
+    yield put(setInvestmentsLoading(false));
   }
 }
 
@@ -207,6 +238,7 @@ export function* InvestmentsSaga() {
   yield takeLatest(FetchInvestmentSnapshots.type, handleFetchSnapshots);
   yield takeLatest(FetchInvestmentTransactions.type, handleFetchTransactions);
   yield takeLatest(FetchInvestmentMetrics.type, handleFetchMetrics);
+  yield takeLatest(FetchInvestmentOverview.type, handleFetchOverview);
   yield takeLatest(ParseNordnetExport.type, handleParseNordnetExport);
   yield takeLatest(SaveNordnetSnapshot.type, handleSaveSnapshot);
   yield takeLatest(ClearDraft.type, handleClearDraft);

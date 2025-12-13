@@ -941,6 +941,66 @@ export const investmentMetricsResponseSchema = z.object({
   transactions: z.array(investmentTransactionSchema).default([]),
 });
 
+export const investmentValuePointSchema = z.object({
+  date: dateString,
+  value: money,
+});
+
+export const investmentCashflowSummarySchema = z.object({
+  added_30d: money,
+  withdrawn_30d: money,
+  net_30d: money,
+  added_ytd: money,
+  withdrawn_ytd: money,
+  net_ytd: money,
+  added_12m: money,
+  withdrawn_12m: money,
+  net_12m: money,
+});
+
+export const investmentGrowthSchema = z.object({
+  amount: money,
+  pct: nullableNumeric,
+});
+
+export const investmentPortfolioOverviewSchema = z.object({
+  start_date: nullableString,
+  as_of: nullableString,
+  current_value: money,
+  series: z.array(investmentValuePointSchema).default([]),
+  cashflow: investmentCashflowSummarySchema,
+  growth_12m_ex_transfers: investmentGrowthSchema,
+  growth_since_start_ex_transfers: investmentGrowthSchema,
+});
+
+export const investmentAccountOverviewSchema = z.object({
+  account_id: z.string(),
+  name: z.string(),
+  icon: nullableString,
+  as_of: nullableString,
+  current_value: money,
+  series: z.array(investmentValuePointSchema).default([]),
+  cashflow_12m_added: money,
+  cashflow_12m_withdrawn: money,
+  growth_12m_ex_transfers: investmentGrowthSchema,
+});
+
+export const investmentCashflowEventSchema = z.object({
+  occurred_at: dateString,
+  account_id: z.string(),
+  account_name: z.string(),
+  direction: z.enum(["deposit", "withdrawal"]),
+  amount_sek: money,
+  description: nullableString,
+  transaction_id: z.string(),
+});
+
+export const investmentOverviewResponseSchema = z.object({
+  portfolio: investmentPortfolioOverviewSchema,
+  accounts: z.array(investmentAccountOverviewSchema).default([]),
+  recent_cashflows: z.array(investmentCashflowEventSchema).default([]),
+});
+
 export const nordnetParseRequestSchema = z.object({
   raw_text: z.string(),
   manual_payload: z.record(z.string(), z.unknown()).optional(),
@@ -1132,6 +1192,23 @@ export type InvestmentTransactionListResponse = z.infer<
 export type InvestmentPerformance = z.infer<typeof investmentPerformanceSchema>;
 export type InvestmentMetricsResponse = z.infer<
   typeof investmentMetricsResponseSchema
+>;
+export type InvestmentValuePoint = z.infer<typeof investmentValuePointSchema>;
+export type InvestmentCashflowSummary = z.infer<
+  typeof investmentCashflowSummarySchema
+>;
+export type InvestmentGrowth = z.infer<typeof investmentGrowthSchema>;
+export type InvestmentPortfolioOverview = z.infer<
+  typeof investmentPortfolioOverviewSchema
+>;
+export type InvestmentAccountOverview = z.infer<
+  typeof investmentAccountOverviewSchema
+>;
+export type InvestmentCashflowEvent = z.infer<
+  typeof investmentCashflowEventSchema
+>;
+export type InvestmentOverviewResponse = z.infer<
+  typeof investmentOverviewResponseSchema
 >;
 export type NordnetParseRequest = z.infer<typeof nordnetParseRequestSchema>;
 export type NordnetParseResponse = z.infer<typeof nordnetParseResponseSchema>;

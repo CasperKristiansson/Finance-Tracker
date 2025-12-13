@@ -3,6 +3,7 @@ import type {
   InvestmentSnapshot,
   InvestmentTransactionRead,
   InvestmentMetricsResponse,
+  InvestmentOverviewResponse,
   NordnetParseResponse,
 } from "@/types/api";
 
@@ -10,6 +11,7 @@ export interface InvestmentsState {
   snapshots: InvestmentSnapshot[];
   transactions: InvestmentTransactionRead[];
   metrics?: InvestmentMetricsResponse["performance"];
+  overview?: InvestmentOverviewResponse;
   loading: boolean;
   saving: boolean;
   parseLoading: Record<string, boolean>;
@@ -21,6 +23,7 @@ export interface InvestmentsState {
 const initialState: InvestmentsState = {
   snapshots: [],
   transactions: [],
+  overview: undefined,
   loading: false,
   saving: false,
   parseLoading: {},
@@ -46,6 +49,10 @@ const investmentsSlice = createSlice({
       >,
     ) {
       state.metrics = action.payload;
+    },
+    setOverview(state, action: PayloadAction<InvestmentOverviewResponse>) {
+      state.overview = action.payload;
+      state.error = undefined;
     },
     upsertSnapshot(state, action: PayloadAction<InvestmentSnapshot>) {
       const existingIndex = state.snapshots.findIndex(
@@ -94,6 +101,7 @@ const investmentsSlice = createSlice({
     selectInvestmentSnapshots: (state) => state.snapshots,
     selectInvestmentTransactions: (state) => state.transactions,
     selectInvestmentMetrics: (state) => state.metrics,
+    selectInvestmentOverview: (state) => state.overview,
     selectInvestmentsLoading: (state) => state.loading,
     selectInvestmentsSaving: (state) => state.saving,
     selectInvestmentsError: (state) => state.error,
@@ -107,6 +115,7 @@ export const {
   setSnapshots,
   setTransactions,
   setMetrics,
+  setOverview,
   upsertSnapshot,
   setInvestmentsLoading,
   setInvestmentsSaving,
@@ -122,6 +131,7 @@ export const {
   selectInvestmentSnapshots,
   selectInvestmentTransactions,
   selectInvestmentMetrics,
+  selectInvestmentOverview,
   selectInvestmentsLoading,
   selectInvestmentsSaving,
   selectInvestmentsError,

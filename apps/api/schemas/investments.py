@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -158,6 +158,80 @@ class InvestmentMetricsResponse(BaseModel):
     holdings: list[InvestmentHoldingRead]
     snapshots: list[NordnetSnapshotRead]
     transactions: list[InvestmentTransactionRead]
+
+
+class InvestmentValuePointRead(BaseModel):
+    """Value point for an investment account or portfolio."""
+
+    date: date
+    value: Decimal
+
+
+class InvestmentCashflowSummaryRead(BaseModel):
+    """Aggregated deposits and withdrawals."""
+
+    added_30d: Decimal
+    withdrawn_30d: Decimal
+    net_30d: Decimal
+    added_ytd: Decimal
+    withdrawn_ytd: Decimal
+    net_ytd: Decimal
+    added_12m: Decimal
+    withdrawn_12m: Decimal
+    net_12m: Decimal
+
+
+class InvestmentGrowthRead(BaseModel):
+    """Growth excluding transfers."""
+
+    amount: Decimal
+    pct: Optional[float] = None
+
+
+class InvestmentPortfolioOverviewRead(BaseModel):
+    """Portfolio-level investment overview."""
+
+    start_date: Optional[date] = None
+    as_of: Optional[date] = None
+    current_value: Decimal
+    series: list[InvestmentValuePointRead] = Field(default_factory=list)
+    cashflow: InvestmentCashflowSummaryRead
+    growth_12m_ex_transfers: InvestmentGrowthRead
+    growth_since_start_ex_transfers: InvestmentGrowthRead
+
+
+class InvestmentAccountOverviewRead(BaseModel):
+    """Per investment account overview."""
+
+    account_id: UUID
+    name: str
+    icon: Optional[str] = None
+    as_of: Optional[date] = None
+    current_value: Decimal
+    series: list[InvestmentValuePointRead] = Field(default_factory=list)
+    cashflow_12m_added: Decimal
+    cashflow_12m_withdrawn: Decimal
+    growth_12m_ex_transfers: InvestmentGrowthRead
+
+
+class InvestmentCashflowEventRead(BaseModel):
+    """Recent cashflow affecting an investment account."""
+
+    occurred_at: datetime
+    account_id: UUID
+    account_name: str
+    direction: Literal["deposit", "withdrawal"]
+    amount_sek: Decimal
+    description: Optional[str] = None
+    transaction_id: UUID
+
+
+class InvestmentOverviewResponse(BaseModel):
+    """Combined investments overview for the investments page."""
+
+    portfolio: InvestmentPortfolioOverviewRead
+    accounts: list[InvestmentAccountOverviewRead]
+    recent_cashflows: list[InvestmentCashflowEventRead] = Field(default_factory=list)
 
 
 __all__ = [

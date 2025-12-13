@@ -709,6 +709,18 @@ functions:
           method: GET
           authorizer: cognitoJwt
 
+  investmentOverview:
+    handler: apps/api/handlers/investments.investment_overview
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /investments/overview
+          method: GET
+          authorizer: cognitoJwt
+
   syncInvestmentLedger:
     handler: apps/api/handlers/investments.sync_investment_ledger
     timeout: 29

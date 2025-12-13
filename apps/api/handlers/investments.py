@@ -13,6 +13,7 @@ from ..schemas import (
     BenchmarkRead,
     InvestmentHoldingRead,
     InvestmentMetricsResponse,
+    InvestmentOverviewResponse,
     InvestmentPerformanceRead,
     InvestmentTransactionListResponse,
     InvestmentTransactionRead,
@@ -197,6 +198,18 @@ def sync_investment_ledger(event: Dict[str, Any], _context: Any) -> Dict[str, An
         service = InvestmentSnapshotService(session)
         count = service.sync_transactions_to_ledger(default_category_id=category_id)
     return json_response(200, {"synced": count})
+
+
+def investment_overview(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    user_id = get_user_id(event)
+
+    with session_scope(user_id=user_id) as session:
+        service = InvestmentSnapshotService(session)
+        payload = service.investment_overview()
+        response = InvestmentOverviewResponse.model_validate(payload).model_dump(mode="json")
+
+    return json_response(200, response)
 
 
 def _safe_decimal(value) -> Decimal:
