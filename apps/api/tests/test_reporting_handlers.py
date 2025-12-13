@@ -13,6 +13,7 @@ from apps.api.handlers import (
     monthly_report,
     net_worth_history,
     reset_reporting_handler_state,
+    total_overview,
     total_report,
     yearly_category_detail,
     yearly_overview,
@@ -228,6 +229,32 @@ def test_total_report_respects_filters():
     assert response["statusCode"] == 200
     body = _json_body(response)
     assert Decimal(body["net"]) == Decimal("300.00")
+
+
+def test_total_overview_returns_expected_shape():
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        tracked = _create_account(session)
+        balancing = _create_account(session)
+    _seed_income_expense_with_category(engine, tracked, balancing)
+
+    params = {
+        "queryStringParameters": {
+            "account_ids": str(tracked.id),
+        }
+    }
+    response = total_overview(params, None)
+    assert response["statusCode"] == 200
+    body = _json_body(response)
+    assert "as_of" in body
+    assert "net_worth" in body
+    assert "lifetime" in body
+    assert "last_12m" in body
+    assert "run_rate_12m" in body
+    assert "account_flows" in body
+    assert "income_sources" in body
+    assert "expense_sources" in body
 
 
 def test_monthly_report_excludes_transfers():

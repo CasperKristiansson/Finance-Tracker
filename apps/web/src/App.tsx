@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Route, Routes } from "react-router";
+import { Navigate, Route, Routes } from "react-router";
 import { useAppDispatch, useAppSelector } from "./app/hooks.ts";
 import { AppLoadingShell } from "./components/app-loading-shell.tsx";
 import { DatabaseWarmup } from "./components/database-warmup.tsx";
@@ -179,6 +179,23 @@ export const App: React.FC = () => {
         />
         <Route
           path={PageRoutes.reports}
+          element={
+            <Navigate
+              to={`${PageRoutes.reportsYearly}/${new Date().getFullYear()}`}
+              replace
+            />
+          }
+        />
+        <Route
+          path={`${PageRoutes.reportsYearly}/:year`}
+          element={
+            <NavigationWrapper title="Reports">
+              <Reports />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.reportsTotal}
           element={
             <NavigationWrapper title="Reports">
               <Reports />

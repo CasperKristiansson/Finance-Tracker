@@ -1,6 +1,6 @@
-import { Loader2, Sparkles } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Area,
   AreaChart,
@@ -39,18 +39,22 @@ import {
 } from "@/components/ui/table";
 import { PageRoutes } from "@/data/routes";
 import { selectToken } from "@/features/auth/authSlice";
-import { useAccountsApi, useReportsApi } from "@/hooks/use-api";
+import { useAccountsApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import type {
+  SubscriptionSummaryResponse,
   YearlyCategoryDetailResponse,
   YearlyOverviewResponse,
+  TotalOverviewResponse,
 } from "@/types/api";
 import {
+  subscriptionSummaryResponseSchema,
+  totalOverviewSchema,
   yearlyCategoryDetailSchema,
   yearlyOverviewSchema,
 } from "@/types/schemas";
 
-type ReportMode = "year_overview" | "all_years";
+type ReportMode = "yearly" | "total";
 
 type DetailDialogState =
   | {
@@ -104,6 +108,25 @@ type DetailDialogState =
       monthly: Array<{ month: string; total: number }>;
       total: number;
       txCount: number;
+    }
+  | {
+      kind: "category";
+      title: string;
+      subtitle: string;
+      monthly?: Array<{ month: string; total: number }>;
+      total: number;
+      prevTotal?: number;
+      delta?: number;
+      deltaPct?: number | null;
+      txCount?: number;
+    }
+  | {
+      kind: "subscription";
+      title: string;
+      subtitle: string;
+      monthly: Array<{ month: string; total: number }>;
+      trailing12m: number;
+      currentMonth: number;
     };
 
 const currency = (value: number) =>
@@ -126,6 +149,16 @@ const monthName = (year: number, month: number) =>
   new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("sv-SE", {
     month: "long",
   });
+
+const trailingMonthStarts = (asOfIso: string, count: number) => {
+  const asOf = new Date(asOfIso);
+  const year = asOf.getUTCFullYear();
+  const month = asOf.getUTCMonth();
+  return Array.from({ length: count }, (_, idx) => {
+    const back = count - 1 - idx;
+    return new Date(Date.UTC(year, month - back, 1));
+  });
+};
 
 const percent = (value: number) =>
   `${value.toLocaleString("sv-SE", { maximumFractionDigits: 0 })}%`;
@@ -156,13 +189,28 @@ const ChartCard: React.FC<{
 
 export const Reports: React.FC = () => {
   const { items: accounts, fetchAccounts } = useAccountsApi();
-  const { yearly, fetchYearlyReport } = useReportsApi();
   const token = useAppSelector(selectToken);
-  const [mode, setMode] = useState<ReportMode>("year_overview");
-  const [year, setYear] = useState(() => new Date().getFullYear());
+  const location = useLocation();
+  const navigate = useNavigate();
+  const params = useParams<{ year?: string }>();
+  const routeMode: ReportMode = location.pathname.startsWith(
+    PageRoutes.reportsTotal,
+  )
+    ? "total"
+    : "yearly";
+  const currentYear = new Date().getFullYear();
+  const year =
+    routeMode === "yearly" ? Number(params.year) || currentYear : currentYear;
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [overview, setOverview] = useState<YearlyOverviewResponse | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
+  const [totalOverview, setTotalOverview] =
+    useState<TotalOverviewResponse | null>(null);
+  const [totalOverviewLoading, setTotalOverviewLoading] = useState(false);
+  const [subscriptionSummary, setSubscriptionSummary] =
+    useState<SubscriptionSummaryResponse | null>(null);
+  const [subscriptionSummaryLoading, setSubscriptionSummaryLoading] =
+    useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   );
@@ -183,13 +231,20 @@ export const Reports: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (routeMode !== "yearly") return;
+    const parsed = Number(params.year);
+    if (Number.isFinite(parsed) && parsed > 1900 && parsed < 3000) return;
+    navigate(`${PageRoutes.reportsYearly}/${currentYear}`, { replace: true });
+  }, [currentYear, navigate, params.year, routeMode]);
+
+  useEffect(() => {
     fetchAccounts();
   }, [fetchAccounts]);
 
   useEffect(() => {
     const loadOverview = async () => {
       if (!token) return;
-      if (mode !== "year_overview") return;
+      if (routeMode !== "yearly") return;
       setOverviewLoading(true);
       try {
         const accountIds = selectedAccounts.length
@@ -210,12 +265,55 @@ export const Reports: React.FC = () => {
       }
     };
     void loadOverview();
-  }, [mode, selectedAccounts, token, year]);
+  }, [routeMode, selectedAccounts, token, year]);
 
   useEffect(() => {
-    if (mode !== "all_years") return;
-    fetchYearlyReport({ accountIds: selectedAccounts });
-  }, [fetchYearlyReport, mode, selectedAccounts]);
+    const loadTotalOverview = async () => {
+      if (!token) return;
+      if (routeMode !== "total") return;
+      setTotalOverviewLoading(true);
+      try {
+        const accountIds = selectedAccounts.length
+          ? selectedAccounts.join(",")
+          : undefined;
+        const { data } = await apiFetch<TotalOverviewResponse>({
+          path: "/reports/total-overview",
+          schema: totalOverviewSchema,
+          query: accountIds ? { account_ids: accountIds } : undefined,
+          token,
+        });
+        setTotalOverview(data);
+      } catch (error) {
+        console.error(error);
+        setTotalOverview(null);
+      } finally {
+        setTotalOverviewLoading(false);
+      }
+    };
+    void loadTotalOverview();
+  }, [routeMode, selectedAccounts, token]);
+
+  useEffect(() => {
+    const loadSubscriptionSummary = async () => {
+      if (!token) return;
+      if (routeMode !== "total") return;
+      setSubscriptionSummaryLoading(true);
+      try {
+        const { data } = await apiFetch<SubscriptionSummaryResponse>({
+          path: "/subscriptions/summary",
+          schema: subscriptionSummaryResponseSchema,
+          token,
+        });
+        setSubscriptionSummary(data);
+      } catch (error) {
+        console.error(error);
+        setSubscriptionSummary(null);
+      } finally {
+        setSubscriptionSummaryLoading(false);
+      }
+    };
+    void loadSubscriptionSummary();
+  }, [routeMode, token]);
 
   useEffect(() => {
     const loadCategoryDetail = async () => {
@@ -261,17 +359,6 @@ export const Reports: React.FC = () => {
       prev.includes(id) ? prev.filter((acc) => acc !== id) : [...prev, id],
     );
   };
-
-  const allYearsChart = useMemo(
-    () =>
-      yearly.data.map((row) => ({
-        year: row.year,
-        income: Number(row.income),
-        expense: Math.abs(Number(row.expense)),
-        net: Number(row.net),
-      })),
-    [yearly.data],
-  );
 
   const yearOverviewMonthChart = useMemo(
     () =>
@@ -487,6 +574,262 @@ export const Reports: React.FC = () => {
       .sort((a, b) => b.total - a.total);
   }, [overview?.expense_sources, year]);
 
+  const totalMonthStarts = useMemo(() => {
+    if (!totalOverview?.as_of) return [];
+    return trailingMonthStarts(totalOverview.as_of, 12);
+  }, [totalOverview?.as_of]);
+
+  const totalIncomeExpenseChart = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalMonthStarts.map((d, idx) => ({
+      month: d.toLocaleDateString("sv-SE", { month: "short" }),
+      income: Number(totalOverview.monthly_income_12m[idx] ?? 0),
+      expense: Number(totalOverview.monthly_expense_12m[idx] ?? 0),
+      net:
+        Number(totalOverview.monthly_income_12m[idx] ?? 0) -
+        Number(totalOverview.monthly_expense_12m[idx] ?? 0),
+    }));
+  }, [totalMonthStarts, totalOverview]);
+
+  const totalKpis = useMemo(() => {
+    if (!totalOverview) return null;
+    const nw = Number(totalOverview.net_worth);
+    const nw365 = Number(totalOverview.net_worth_change.days_365 ?? 0);
+    const saved12 = Number(totalOverview.last_12m.saved ?? 0);
+    const sr12 = totalOverview.last_12m.savings_rate_pct
+      ? Number(totalOverview.last_12m.savings_rate_pct)
+      : null;
+    const runway = totalOverview.cash_runway.runway_months
+      ? Number(totalOverview.cash_runway.runway_months)
+      : null;
+    const debt = Number(totalOverview.debt.total ?? 0);
+    const inv = Number(totalOverview.investments.current_value ?? 0);
+    return {
+      netWorth: nw,
+      netWorthChange365: nw365,
+      saved12m: saved12,
+      savingsRate12m: sr12,
+      runwayMonths: runway,
+      debtTotal: debt,
+      investmentsValue: inv,
+    };
+  }, [totalOverview]);
+
+  const totalBestWorst = useMemo(() => {
+    if (!totalOverview || !totalIncomeExpenseChart.length) return null;
+    const nets = totalIncomeExpenseChart.map((m) => m.net);
+    const bestIdx = nets.reduce(
+      (best, value, idx) => (value > nets[best] ? idx : best),
+      0,
+    );
+    const worstIdx = nets.reduce(
+      (worst, value, idx) => (value < nets[worst] ? idx : worst),
+      0,
+    );
+    return {
+      best: totalIncomeExpenseChart[bestIdx],
+      worst: totalIncomeExpenseChart[worstIdx],
+    };
+  }, [totalIncomeExpenseChart, totalOverview]);
+
+  const totalIncomeSources = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.income_sources
+      .map((row) => ({
+        source: row.source,
+        total: Number(row.total),
+        txCount: row.transaction_count,
+        monthly: row.monthly.map((v, idx) => ({
+          month:
+            totalMonthStarts[idx]?.toLocaleDateString("sv-SE", {
+              month: "short",
+            }) ?? "",
+          total: Number(v),
+        })),
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [totalMonthStarts, totalOverview]);
+
+  const totalExpenseSources = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.expense_sources
+      .map((row) => ({
+        source: row.source,
+        total: Number(row.total),
+        txCount: row.transaction_count,
+        monthly: row.monthly.map((v, idx) => ({
+          month:
+            totalMonthStarts[idx]?.toLocaleDateString("sv-SE", {
+              month: "short",
+            }) ?? "",
+          total: Number(v),
+        })),
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [totalMonthStarts, totalOverview]);
+
+  const totalTopCategories12m = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.top_categories_12m
+      .map((row) => ({
+        id: row.category_id ?? null,
+        name: row.name,
+        total: Number(row.total),
+        monthly: row.monthly.map((v, idx) => ({
+          month:
+            totalMonthStarts[idx]?.toLocaleDateString("sv-SE", {
+              month: "short",
+            }) ?? "",
+          total: Number(v),
+        })),
+        txCount: row.transaction_count,
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [totalMonthStarts, totalOverview]);
+
+  const totalTopCategoriesLifetime = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.top_categories_lifetime
+      .map((row) => ({
+        id: row.category_id ?? null,
+        name: row.name,
+        total: Number(row.total),
+        txCount: row.transaction_count,
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [totalOverview]);
+
+  const totalCategoryChanges = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.category_changes_12m
+      .map((row) => ({
+        id: row.category_id ?? null,
+        name: row.name,
+        amount: Number(row.amount),
+        prev: Number(row.prev_amount),
+        delta: Number(row.delta),
+        deltaPct: row.delta_pct ? Number(row.delta_pct) : null,
+      }))
+      .sort((a, b) => b.delta - a.delta);
+  }, [totalOverview]);
+
+  const totalDebtAccounts = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.debt.accounts
+      .map((row) => ({
+        id: row.account_id,
+        name: row.name,
+        start: Number(row.start_debt),
+        end: Number(row.end_debt),
+        delta: Number(row.delta),
+        monthly: row.monthly_debt.map((v, idx) => ({
+          month:
+            totalMonthStarts[idx]?.toLocaleDateString("sv-SE", {
+              month: "short",
+            }) ?? "",
+          value: Number(v),
+        })),
+      }))
+      .sort((a, b) => b.end - a.end);
+  }, [totalMonthStarts, totalOverview]);
+
+  const totalAccountFlows = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.account_flows
+      .map((row) => ({
+        id: row.account_id,
+        name: row.name,
+        accountType: row.account_type,
+        startBalance: Number(row.start_balance),
+        endBalance: Number(row.end_balance),
+        change: Number(row.change),
+        netOperating: Number(row.net_operating),
+        netTransfers: Number(row.net_transfers),
+        monthly: Array.from({ length: 12 }, (_, idx) => ({
+          month:
+            totalMonthStarts[idx]?.toLocaleDateString("sv-SE", {
+              month: "short",
+            }) ?? "",
+          income: Number(row.monthly_income[idx] ?? 0),
+          expense: Number(row.monthly_expense[idx] ?? 0),
+          transfersIn: Number(row.monthly_transfers_in[idx] ?? 0),
+          transfersOut: Number(row.monthly_transfers_out[idx] ?? 0),
+          change: Number(row.monthly_change[idx] ?? 0),
+        })),
+      }))
+      .sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+  }, [totalMonthStarts, totalOverview]);
+
+  const totalInvestments = useMemo(() => {
+    if (!totalOverview) return null;
+    const monthly = totalOverview.investments.monthly_values_12m.map(
+      (v, idx) => ({
+        month:
+          totalMonthStarts[idx]?.toLocaleDateString("sv-SE", {
+            month: "short",
+          }) ?? "",
+        value: Number(v),
+      }),
+    );
+    return {
+      asOf: totalOverview.investments.as_of,
+      value: Number(totalOverview.investments.current_value),
+      change12m: Number(totalOverview.investments.change_12m),
+      changePct12m: totalOverview.investments.change_pct_12m
+        ? Number(totalOverview.investments.change_pct_12m)
+        : null,
+      contributions12m: Number(totalOverview.investments.contributions_12m),
+      withdrawals12m: Number(totalOverview.investments.withdrawals_12m),
+      contributionsLife: Number(
+        totalOverview.investments.contributions_lifetime,
+      ),
+      withdrawalsLife: Number(totalOverview.investments.withdrawals_lifetime),
+      monthly,
+      accounts: totalOverview.investments.accounts.map((row) => ({
+        name: row.account_name,
+        start: Number(row.start_value),
+        end: Number(row.end_value),
+        change: Number(row.change),
+      })),
+    };
+  }, [totalMonthStarts, totalOverview]);
+
+  const totalSubscriptions = useMemo(() => {
+    if (!subscriptionSummary?.subscriptions?.length || !totalMonthStarts.length)
+      return null;
+    const sorted = [...subscriptionSummary.subscriptions].sort(
+      (a, b) =>
+        Number(b.trailing_twelve_month_spend) -
+        Number(a.trailing_twelve_month_spend),
+    );
+    const total12m = sorted.reduce(
+      (sum, sub) => sum + Number(sub.trailing_twelve_month_spend ?? 0),
+      0,
+    );
+    const totalCurrent = sorted.reduce(
+      (sum, sub) => sum + Number(sub.current_month_spend ?? 0),
+      0,
+    );
+    return {
+      total12m,
+      totalCurrent,
+      top: sorted.slice(0, 12).map((sub) => ({
+        id: sub.id,
+        name: sub.name,
+        category: sub.category_name ?? null,
+        currentMonth: Number(sub.current_month_spend ?? 0),
+        trailing12m: Number(sub.trailing_twelve_month_spend ?? 0),
+        monthly: (sub.trend ?? []).slice(-12).map((v, idx) => ({
+          month:
+            totalMonthStarts[idx]?.toLocaleDateString("sv-SE", {
+              month: "short",
+            }) ?? "",
+          total: Number(v ?? 0),
+        })),
+      })),
+    };
+  }, [subscriptionSummary?.subscriptions, totalMonthStarts]);
+
   const openDetailDialog = (state: DetailDialogState) => {
     setDetailDialog(state);
     setDetailDialogOpen(true);
@@ -508,11 +851,13 @@ export const Reports: React.FC = () => {
         </div>
         <div className="flex flex-wrap gap-2">
           <div className="w-[110px]">
-            {mode === "year_overview" ? (
+            {routeMode === "yearly" ? (
               <select
                 className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900"
                 value={year}
-                onChange={(e) => setYear(Number(e.target.value))}
+                onChange={(e) =>
+                  navigate(`${PageRoutes.reportsYearly}/${e.target.value}`)
+                }
               >
                 {yearOptions.map((optionYear) => (
                   <option key={optionYear} value={optionYear}>
@@ -525,18 +870,20 @@ export const Reports: React.FC = () => {
             )}
           </div>
           <Button
-            variant={mode === "year_overview" ? "default" : "outline"}
+            variant={routeMode === "yearly" ? "default" : "outline"}
             size="sm"
-            onClick={() => setMode("year_overview")}
+            onClick={() =>
+              navigate(`${PageRoutes.reportsYearly}/${year}`, { replace: true })
+            }
           >
-            Year overview
+            Yearly
           </Button>
           <Button
-            variant={mode === "all_years" ? "default" : "outline"}
+            variant={routeMode === "total" ? "default" : "outline"}
             size="sm"
-            onClick={() => setMode("all_years")}
+            onClick={() => navigate(PageRoutes.reportsTotal, { replace: true })}
           >
-            All years
+            Total
           </Button>
         </div>
       </div>
@@ -569,7 +916,7 @@ export const Reports: React.FC = () => {
             ) : null}
           </div>
         </CardHeader>
-        {mode === "year_overview" && overview ? (
+        {routeMode === "yearly" && overview ? (
           <CardContent className="grid gap-3 md:grid-cols-4">
             {[
               {
@@ -612,10 +959,63 @@ export const Reports: React.FC = () => {
               </div>
             ))}
           </CardContent>
+        ) : routeMode === "total" && totalKpis ? (
+          <CardContent className="grid gap-3 md:grid-cols-5">
+            {[
+              {
+                label: "Net worth",
+                value: totalKpis.netWorth,
+                color: "text-slate-900",
+              },
+              {
+                label: "Saved (12m)",
+                value: totalKpis.saved12m,
+                color:
+                  totalKpis.saved12m >= 0
+                    ? "text-emerald-700"
+                    : "text-rose-700",
+              },
+              {
+                label: "Savings rate (12m)",
+                value: totalKpis.savingsRate12m,
+                color: "text-slate-900",
+              },
+              {
+                label: "Cash runway",
+                value: totalKpis.runwayMonths,
+                color: "text-slate-900",
+              },
+              {
+                label: "Debt",
+                value: totalKpis.debtTotal,
+                color: "text-orange-700",
+              },
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="space-y-1 rounded-lg border border-slate-100 bg-slate-50 p-4"
+              >
+                <p className="text-xs tracking-wide text-slate-500 uppercase">
+                  {item.label}
+                </p>
+                <div className={`text-2xl font-semibold ${item.color}`}>
+                  {item.value === null
+                    ? "—"
+                    : item.label.includes("Savings rate")
+                      ? percent(item.value)
+                      : item.label === "Cash runway"
+                        ? `${Number(item.value).toLocaleString("sv-SE", {
+                            maximumFractionDigits: 1,
+                          })} mo`
+                        : currency(item.value)}
+                </div>
+              </div>
+            ))}
+          </CardContent>
         ) : null}
       </Card>
 
-      {mode === "year_overview" ? (
+      {routeMode === "yearly" ? (
         <>
           <div className="grid gap-3 lg:grid-cols-2">
             <ChartCard
@@ -2192,7 +2592,7 @@ export const Reports: React.FC = () => {
                     </div>
                   </div>
                 </div>
-              ) : (
+              ) : detailDialog.kind === "source" ? (
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-3">
                     <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
@@ -2241,7 +2641,7 @@ export const Reports: React.FC = () => {
                     </ResponsiveContainer>
                   </div>
                 </div>
-              )}
+              ) : null}
             </DialogContent>
           </Dialog>
 
@@ -2334,98 +2734,1454 @@ export const Reports: React.FC = () => {
           </Dialog>
         </>
       ) : (
-        <Card className="border-slate-200 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
-          <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <CardTitle className="text-base text-slate-800">
-                All years
+        <>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <ChartCard
+              title="Income vs expense (last 12 months)"
+              description="Run-rate view (not calendar-year)."
+              loading={totalOverviewLoading}
+            >
+              {!totalOverview && !totalOverviewLoading ? (
+                <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-slate-600">
+                  <Sparkles className="h-6 w-6 text-slate-500" />
+                  <p className="text-center">
+                    No data yet. Import files or add transactions.
+                  </p>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button asChild size="sm">
+                      <Link to={PageRoutes.imports}>Go to Imports</Link>
+                    </Button>
+                    <Button asChild size="sm" variant="outline">
+                      <Link to={PageRoutes.transactions}>Add transactions</Link>
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={totalIncomeExpenseChart}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: "#475569", fontSize: 12 }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: "#475569", fontSize: 12 }}
+                    />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const label = payload[0]?.payload?.month;
+                        return (
+                          <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                            <p className="font-semibold text-slate-800">
+                              {label}
+                            </p>
+                            {payload.map((item) => (
+                              <p
+                                key={String(item.dataKey)}
+                                className="text-slate-600"
+                              >
+                                {item.name}: {currency(Number(item.value))}
+                              </p>
+                            ))}
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar
+                      dataKey="income"
+                      name="Income"
+                      fill="#10b981"
+                      radius={[6, 6, 4, 4]}
+                      barSize={12}
+                    />
+                    <Bar
+                      dataKey="expense"
+                      name="Expense"
+                      fill="#ef4444"
+                      radius={[6, 6, 4, 4]}
+                      barSize={12}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+
+            <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Run-rate & savings quality
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Averages over the last 6 and 12 months.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!totalOverview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Avg monthly net (6m)
+                        </p>
+                        <p className="text-xl font-semibold text-slate-900">
+                          {currency(
+                            Number(totalOverview.run_rate_6m.avg_monthly_net),
+                          )}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Savings rate:{" "}
+                          {totalOverview.run_rate_6m.savings_rate_pct
+                            ? percent(
+                                Number(
+                                  totalOverview.run_rate_6m.savings_rate_pct,
+                                ),
+                              )
+                            : "—"}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Avg monthly net (12m)
+                        </p>
+                        <p className="text-xl font-semibold text-slate-900">
+                          {currency(
+                            Number(totalOverview.run_rate_12m.avg_monthly_net),
+                          )}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Savings rate:{" "}
+                          {totalOverview.run_rate_12m.savings_rate_pct
+                            ? percent(
+                                Number(
+                                  totalOverview.run_rate_12m.savings_rate_pct,
+                                ),
+                              )
+                            : "—"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {totalBestWorst ? (
+                      <div className="rounded-md border border-slate-100 bg-white p-3 text-sm text-slate-700">
+                        <p className="mb-2 text-xs font-semibold text-slate-700 uppercase">
+                          Best / worst months (net)
+                        </p>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-600">
+                            Best: {totalBestWorst.best.month}
+                          </span>
+                          <span className="font-semibold text-emerald-700">
+                            {currency(totalBestWorst.best.net)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-600">
+                            Worst: {totalBestWorst.worst.month}
+                          </span>
+                          <span className="font-semibold text-rose-700">
+                            {currency(totalBestWorst.worst.net)}
+                          </span>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+                      Tip: use this view to judge “typical months”, not one-off
+                      spikes.
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">
+                    Investments (snapshot-based)
+                  </CardTitle>
+                  <p className="text-xs text-slate-500">
+                    Not a spending category. Clear account filters to include.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={!totalInvestments || selectedAccounts.length > 0}
+                  onClick={() => {
+                    if (!totalInvestments) return;
+                    openDetailDialog({
+                      kind: "investments",
+                      title: "Investments (last 12m)",
+                      asOf: totalInvestments.asOf,
+                      monthly: totalInvestments.monthly.map((row) => ({
+                        month: row.month ?? "",
+                        value: row.value,
+                      })),
+                      accounts: totalInvestments.accounts.map((row) => ({
+                        name: row.name,
+                        start: row.start,
+                        end: row.end,
+                        change: row.change,
+                      })),
+                      summary: {
+                        start: Number(
+                          totalOverview?.investments.value_12m_ago ?? 0,
+                        ),
+                        end: totalInvestments.value,
+                        change: totalInvestments.change12m,
+                        changePct: totalInvestments.changePct12m,
+                        contributions: totalInvestments.contributions12m,
+                        withdrawals: totalInvestments.withdrawals12m,
+                      },
+                    });
+                  }}
+                >
+                  Details
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!totalOverview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : selectedAccounts.length ? (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    Clear the account filter to include investment snapshots.
+                  </div>
+                ) : !totalInvestments ? (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No investment snapshots yet.
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Value
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(totalInvestments.value)}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {totalInvestments.change12m >= 0 ? "+" : "−"}
+                          {currency(Math.abs(totalInvestments.change12m))}{" "}
+                          {totalInvestments.changePct12m !== null
+                            ? `(${percent(totalInvestments.changePct12m)})`
+                            : ""}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Net contributions (12m)
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(
+                            totalInvestments.contributions12m -
+                              totalInvestments.withdrawals12m,
+                          )}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          In: {currency(totalInvestments.contributions12m)} •
+                          Out: {currency(totalInvestments.withdrawals12m)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="h-44 rounded-md border border-slate-100 bg-white p-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={totalInvestments.monthly}>
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="month"
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                          />
+                          <YAxis
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                            tickFormatter={(v) => compactCurrency(Number(v))}
+                          />
+                          <Tooltip
+                            formatter={(value) => currency(Number(value))}
+                            contentStyle={{ fontSize: 12 }}
+                          />
+                          <Area
+                            type="monotone"
+                            dataKey="value"
+                            stroke="#4f46e5"
+                            fill="rgba(79,70,229,0.15)"
+                            strokeWidth={2}
+                            name="Portfolio"
+                          />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Debt overview (12m)
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  End balance and change vs 12 months ago.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {!totalOverview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Total debt
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(Number(totalOverview.debt.total))}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Δ 12m:{" "}
+                          {currency(
+                            Math.abs(Number(totalOverview.debt.change_12m)),
+                          )}{" "}
+                          <span
+                            className={
+                              Number(totalOverview.debt.change_12m) <= 0
+                                ? "text-emerald-700"
+                                : "text-rose-700"
+                            }
+                          >
+                            (
+                            {Number(totalOverview.debt.change_12m) <= 0
+                              ? "down"
+                              : "up"}
+                            )
+                          </span>
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Debt / income (12m)
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {totalOverview.debt.debt_to_income_12m
+                            ? `${(
+                                Number(totalOverview.debt.debt_to_income_12m) *
+                                100
+                              ).toLocaleString("sv-SE", {
+                                maximumFractionDigits: 0,
+                              })}%`
+                            : "—"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="max-h-56 overflow-auto rounded-md border border-slate-100 bg-white">
+                      {totalDebtAccounts.length ? (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Account</TableHead>
+                              <TableHead className="text-right">End</TableHead>
+                              <TableHead className="hidden text-right md:table-cell">
+                                Δ
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {totalDebtAccounts.map((row) => (
+                              <TableRow
+                                key={row.id}
+                                className="cursor-pointer"
+                                onClick={() =>
+                                  openDetailDialog({
+                                    kind: "debt",
+                                    title: `${row.name} (12m)`,
+                                    monthly: row.monthly.map((m) => ({
+                                      month: m.month ?? "",
+                                      value: m.value,
+                                    })),
+                                    startDebt: row.start,
+                                    endDebt: row.end,
+                                    delta: row.delta,
+                                  })
+                                }
+                              >
+                                <TableCell className="max-w-[180px] truncate font-medium">
+                                  {row.name}
+                                </TableCell>
+                                <TableCell className="text-right font-semibold">
+                                  {currency(row.end)}
+                                </TableCell>
+                                <TableCell className="hidden text-right text-xs md:table-cell">
+                                  <span
+                                    className={
+                                      row.delta <= 0
+                                        ? "text-emerald-700"
+                                        : "text-rose-700"
+                                    }
+                                  >
+                                    {row.delta >= 0 ? "+" : "−"}
+                                    {currency(Math.abs(row.delta))}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      ) : (
+                        <div className="p-4 text-sm text-slate-600">
+                          No debt accounts found.
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-slate-900">
+                Account flows (12m)
               </CardTitle>
-              <p className="text-sm text-slate-500">
-                Trend across years (stacked income vs expense).
+              <p className="text-xs text-slate-500">
+                Net operating (income − expense) vs net transfers. Click a row
+                for monthly detail.
               </p>
-            </div>
-            {yearly.loading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-            ) : null}
-          </CardHeader>
-          <CardContent className="h-[360px]">
-            {yearly.loading && !allYearsChart.length ? (
-              <Skeleton className="h-full w-full" />
-            ) : !allYearsChart.length ? (
-              <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-slate-600">
-                <Sparkles className="h-6 w-6 text-slate-500" />
-                <p className="text-center">No report data yet.</p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  <Button asChild size="sm">
-                    <Link to={PageRoutes.imports}>Go to Imports</Link>
-                  </Button>
-                  <Button asChild size="sm" variant="outline">
-                    <Link to={PageRoutes.transactions}>Add transactions</Link>
-                  </Button>
+            </CardHeader>
+            <CardContent className="max-h-[32rem] overflow-auto">
+              {!totalOverview ? (
+                <Skeleton className="h-56 w-full" />
+              ) : totalAccountFlows.length ? (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Account</TableHead>
+                      <TableHead className="hidden text-right md:table-cell">
+                        Net operating
+                      </TableHead>
+                      <TableHead className="hidden text-right md:table-cell">
+                        Net transfers
+                      </TableHead>
+                      <TableHead className="text-right">Δ</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {totalAccountFlows.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        className="cursor-pointer"
+                        onClick={() =>
+                          openDetailDialog({
+                            kind: "account",
+                            title: `${row.name} (12m)`,
+                            accountType: row.accountType,
+                            startBalance: row.startBalance,
+                            endBalance: row.endBalance,
+                            change: row.change,
+                            monthly: row.monthly.map((m) => ({
+                              month: m.month ?? "",
+                              income: m.income,
+                              expense: m.expense,
+                              transfersIn: m.transfersIn,
+                              transfersOut: m.transfersOut,
+                              change: m.change,
+                            })),
+                          })
+                        }
+                      >
+                        <TableCell className="max-w-[220px] truncate font-medium">
+                          {row.name}
+                          <span className="ml-2 text-xs text-slate-500">
+                            ({row.accountType})
+                          </span>
+                        </TableCell>
+                        <TableCell className="hidden text-right md:table-cell">
+                          {currency(row.netOperating)}
+                        </TableCell>
+                        <TableCell className="hidden text-right md:table-cell">
+                          {currency(row.netTransfers)}
+                        </TableCell>
+                        <TableCell className="text-right font-semibold">
+                          <span
+                            className={
+                              row.change >= 0
+                                ? "text-emerald-700"
+                                : "text-rose-700"
+                            }
+                          >
+                            {row.change >= 0 ? "+" : "−"}
+                            {currency(Math.abs(row.change))}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                  No account flows available.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Income sources (12m)
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Grouped by description. Click for seasonality.
+                </p>
+              </CardHeader>
+              <CardContent className="max-h-[26rem] overflow-auto">
+                {!totalOverview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : totalIncomeSources.length ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Source</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="hidden text-right md:table-cell">
+                          Tx
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {totalIncomeSources.slice(0, 14).map((row) => (
+                        <TableRow
+                          key={row.source}
+                          className="cursor-pointer"
+                          onClick={() =>
+                            openDetailDialog({
+                              kind: "source",
+                              title: row.source,
+                              subtitle: "Income • last 12m",
+                              monthly: row.monthly.map((m) => ({
+                                month: m.month ?? "",
+                                total: m.total,
+                              })),
+                              total: row.total,
+                              txCount: row.txCount,
+                            })
+                          }
+                        >
+                          <TableCell className="max-w-[220px] truncate font-medium">
+                            {row.source}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {currency(row.total)}
+                          </TableCell>
+                          <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
+                            {row.txCount}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No income sources yet.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Expense sources (12m)
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Grouped by description. Click for seasonality.
+                </p>
+              </CardHeader>
+              <CardContent className="max-h-[26rem] overflow-auto">
+                {!totalOverview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : totalExpenseSources.length ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Source</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="hidden text-right md:table-cell">
+                          Tx
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {totalExpenseSources.slice(0, 14).map((row) => (
+                        <TableRow
+                          key={row.source}
+                          className="cursor-pointer"
+                          onClick={() =>
+                            openDetailDialog({
+                              kind: "source",
+                              title: row.source,
+                              subtitle: "Expense • last 12m",
+                              monthly: row.monthly.map((m) => ({
+                                month: m.month ?? "",
+                                total: m.total,
+                              })),
+                              total: row.total,
+                              txCount: row.txCount,
+                            })
+                          }
+                        >
+                          <TableCell className="max-w-[220px] truncate font-medium">
+                            {row.source}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {currency(row.total)}
+                          </TableCell>
+                          <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
+                            {row.txCount}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No expense sources yet.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Top categories (12m)
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Click a category to see seasonality.
+                </p>
+              </CardHeader>
+              <CardContent className="max-h-[28rem] overflow-auto">
+                {!totalOverview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : totalTopCategories12m.length ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Category</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="hidden text-right md:table-cell">
+                          Tx
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {totalTopCategories12m.slice(0, 14).map((row) => {
+                        const change = totalCategoryChanges.find(
+                          (c) => c.id === row.id,
+                        );
+                        return (
+                          <TableRow
+                            key={row.name}
+                            className="cursor-pointer"
+                            onClick={() =>
+                              openDetailDialog({
+                                kind: "category",
+                                title: row.name,
+                                subtitle: "Expense category • last 12m",
+                                monthly: row.monthly.map((m) => ({
+                                  month: m.month ?? "",
+                                  total: m.total,
+                                })),
+                                total: row.total,
+                                prevTotal: change?.prev,
+                                delta: change?.delta,
+                                deltaPct: change?.deltaPct ?? null,
+                                txCount: row.txCount,
+                              })
+                            }
+                          >
+                            <TableCell className="max-w-[220px] truncate font-medium">
+                              {row.name}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {currency(row.total)}
+                            </TableCell>
+                            <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
+                              {row.txCount}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No category data yet.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Category changes (12m vs prior 12m)
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Ranked by increased spend.
+                </p>
+              </CardHeader>
+              <CardContent className="max-h-[28rem] overflow-auto">
+                {!totalOverview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : totalCategoryChanges.length ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Category</TableHead>
+                        <TableHead className="text-right">Δ</TableHead>
+                        <TableHead className="hidden text-right md:table-cell">
+                          YoY
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {totalCategoryChanges.slice(0, 14).map((row) => (
+                        <TableRow
+                          key={row.name}
+                          className="cursor-pointer"
+                          onClick={() =>
+                            openDetailDialog({
+                              kind: "category",
+                              title: row.name,
+                              subtitle:
+                                "Expense category • change vs prior 12m",
+                              total: row.amount,
+                              prevTotal: row.prev,
+                              delta: row.delta,
+                              deltaPct: row.deltaPct,
+                            })
+                          }
+                        >
+                          <TableCell className="max-w-[220px] truncate font-medium">
+                            {row.name}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {currency(row.delta)}
+                          </TableCell>
+                          <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
+                            {row.deltaPct !== null
+                              ? percent(row.deltaPct)
+                              : "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No change data yet.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Top categories (lifetime)
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  The long-run picture across all imported data.
+                </p>
+              </CardHeader>
+              <CardContent className="max-h-[26rem] overflow-auto">
+                {!totalOverview ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : totalTopCategoriesLifetime.length ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Category</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="hidden text-right md:table-cell">
+                          Tx
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {totalTopCategoriesLifetime.slice(0, 14).map((row) => (
+                        <TableRow
+                          key={row.name}
+                          className="cursor-pointer"
+                          onClick={() =>
+                            openDetailDialog({
+                              kind: "category",
+                              title: row.name,
+                              subtitle: "Expense category • lifetime",
+                              total: row.total,
+                              txCount: row.txCount,
+                            })
+                          }
+                        >
+                          <TableCell className="max-w-[220px] truncate font-medium">
+                            {row.name}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {currency(row.total)}
+                          </TableCell>
+                          <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
+                            {row.txCount}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No lifetime category data yet.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Subscriptions snapshot
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Uses subscription matching (not filtered by accounts yet).
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {subscriptionSummaryLoading ? (
+                  <Skeleton className="h-56 w-full" />
+                ) : !totalSubscriptions ? (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                    No subscription summary yet.
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Current month
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(totalSubscriptions.totalCurrent)}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Trailing 12m
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(totalSubscriptions.total12m)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="max-h-56 overflow-auto rounded-md border border-slate-100 bg-white">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Subscription</TableHead>
+                            <TableHead className="text-right">12m</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {totalSubscriptions.top.map((row) => (
+                            <TableRow
+                              key={row.id}
+                              className="cursor-pointer"
+                              onClick={() =>
+                                openDetailDialog({
+                                  kind: "subscription",
+                                  title: row.name,
+                                  subtitle: "Subscriptions • trailing 12m",
+                                  monthly: row.monthly.map((m) => ({
+                                    month: m.month ?? "",
+                                    total: m.total,
+                                  })),
+                                  trailing12m: row.trailing12m,
+                                  currentMonth: row.currentMonth,
+                                })
+                              }
+                            >
+                              <TableCell className="max-w-[220px] truncate font-medium">
+                                {row.name}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {currency(row.trailing12m)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-slate-900">
+                Insights
+              </CardTitle>
+              <p className="text-xs text-slate-500">
+                Small, high-signal notes derived from totals.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-slate-700">
+              {totalOverviewLoading ? (
+                <Skeleton className="h-32 w-full" />
+              ) : totalOverview?.insights?.length ? (
+                totalOverview.insights.map((text, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs"
+                  >
+                    {text}
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-slate-500">No insights yet.</p>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {routeMode === "total" ? (
+        <Dialog
+          open={detailDialogOpen}
+          onOpenChange={(open) => {
+            setDetailDialogOpen(open);
+            if (!open) setDetailDialog(null);
+          }}
+        >
+          <DialogContent className="max-w-4xl">
+            <DialogHeader>
+              <DialogTitle>{detailDialog?.title ?? "Details"}</DialogTitle>
+            </DialogHeader>
+            {!detailDialog ? null : detailDialog.kind === "investments" ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        As of
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {new Date(detailDialog.asOf).toLocaleDateString(
+                          "sv-SE",
+                        )}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        Value
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {currency(detailDialog.summary.end)}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {detailDialog.summary.change >= 0 ? "+" : "−"}
+                        {currency(Math.abs(detailDialog.summary.change))}{" "}
+                        {detailDialog.summary.changePct !== null
+                          ? `(${percent(detailDialog.summary.changePct)})`
+                          : ""}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-100 bg-white p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        Contributions
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {currency(detailDialog.summary.contributions)}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-100 bg-white p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        Withdrawals
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {currency(detailDialog.summary.withdrawals)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="h-60 rounded-md border border-slate-100 bg-white p-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={detailDialog.monthly}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="month"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                          tickFormatter={(v) => compactCurrency(Number(v))}
+                        />
+                        <Tooltip
+                          formatter={(value) => currency(Number(value))}
+                          contentStyle={{ fontSize: 12 }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="value"
+                          stroke="#4f46e5"
+                          fill="rgba(79,70,229,0.15)"
+                          strokeWidth={2}
+                          name="Portfolio"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-sm text-slate-700">
+                    <p className="font-semibold">What this means</p>
+                    <p className="text-xs text-slate-600">
+                      Investments are tracked via snapshots, so they should not
+                      appear as an expense category.
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-slate-100">
+                    <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                      Accounts
+                    </div>
+                    <div className="max-h-[22rem] overflow-auto">
+                      {detailDialog.accounts.length ? (
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Account</TableHead>
+                              <TableHead className="text-right">
+                                Start
+                              </TableHead>
+                              <TableHead className="text-right">End</TableHead>
+                              <TableHead className="text-right">
+                                Change
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {detailDialog.accounts.map((row) => (
+                              <TableRow key={row.name}>
+                                <TableCell className="max-w-[200px] truncate font-medium">
+                                  {row.name}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {currency(row.start)}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {currency(row.end)}
+                                </TableCell>
+                                <TableCell className="text-right text-xs">
+                                  <span
+                                    className={
+                                      row.change >= 0
+                                        ? "text-emerald-700"
+                                        : "text-rose-700"
+                                    }
+                                  >
+                                    {row.change >= 0 ? "+" : "−"}
+                                    {currency(Math.abs(row.change))}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      ) : (
+                        <div className="p-3 text-sm text-slate-500">
+                          No investment accounts available.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : detailDialog.kind === "debt" ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        Start
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {currency(detailDialog.startDebt)}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        End
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {currency(detailDialog.endDebt)}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-100 bg-white p-3 sm:col-span-2">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        Change
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {detailDialog.delta >= 0 ? "+" : "−"}
+                        {currency(Math.abs(detailDialog.delta))}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+                    A negative change means you paid down debt during the
+                    period.
+                  </div>
+                </div>
+                <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={detailDialog.monthly}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="month"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                        tickFormatter={(v) => compactCurrency(Number(v))}
+                      />
+                      <Tooltip
+                        formatter={(value) => currency(Number(value))}
+                        contentStyle={{ fontSize: 12 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        stroke="#f97316"
+                        strokeWidth={2}
+                        dot={false}
+                        name="Debt"
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            ) : detailDialog.kind === "account" ? (
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-4">
+                  {[
+                    { label: "Start", value: detailDialog.startBalance },
+                    { label: "End", value: detailDialog.endBalance },
+                    { label: "Change", value: detailDialog.change },
+                    {
+                      label: "Type",
+                      value: detailDialog.accountType,
+                      text: true,
+                    },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className="rounded-md border border-slate-100 bg-slate-50 p-3"
+                    >
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        {item.label}
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {"text" in item && item.text
+                          ? String(item.value)
+                          : currency(Number(item.value))}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={detailDialog.monthly.map((m) => ({
+                          ...m,
+                          expenseNeg: -m.expense,
+                          transfersOutNeg: -m.transfersOut,
+                        }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="month"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                          tickFormatter={(v) => compactCurrency(Number(v))}
+                        />
+                        <Tooltip
+                          formatter={(value) => currency(Number(value))}
+                          contentStyle={{ fontSize: 12 }}
+                        />
+                        <Bar
+                          dataKey="income"
+                          name="Income"
+                          fill="#10b981"
+                          radius={[4, 4, 4, 4]}
+                        />
+                        <Bar
+                          dataKey="expenseNeg"
+                          name="Expense"
+                          fill="#ef4444"
+                          radius={[4, 4, 4, 4]}
+                        />
+                        <Bar
+                          dataKey="transfersIn"
+                          name="Transfers in"
+                          fill="#0ea5e9"
+                          radius={[4, 4, 4, 4]}
+                        />
+                        <Bar
+                          dataKey="transfersOutNeg"
+                          name="Transfers out"
+                          fill="#a855f7"
+                          radius={[4, 4, 4, 4]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={detailDialog.monthly}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="month"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                          tickFormatter={(v) => compactCurrency(Number(v))}
+                        />
+                        <Tooltip
+                          formatter={(value) => currency(Number(value))}
+                          contentStyle={{ fontSize: 12 }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="change"
+                          name="Monthly change"
+                          stroke="#334155"
+                          strokeWidth={2}
+                          dot={false}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+            ) : detailDialog.kind === "subscription" ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                    <p className="text-xs tracking-wide text-slate-500 uppercase">
+                      {detailDialog.subtitle}
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      Current month: {currency(detailDialog.currentMonth)} •
+                      12m: {currency(detailDialog.trailing12m)}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+                    Based on subscription matching and historical charges.
+                  </div>
+                </div>
+                <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={detailDialog.monthly}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="month"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                        tickFormatter={(v) => compactCurrency(Number(v))}
+                      />
+                      <Tooltip
+                        formatter={(value) => currency(Number(value))}
+                        contentStyle={{ fontSize: 12 }}
+                      />
+                      <Bar
+                        dataKey="total"
+                        name="Total"
+                        fill="#334155"
+                        radius={[6, 6, 4, 4]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            ) : detailDialog.kind === "category" ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                    <p className="text-xs tracking-wide text-slate-500 uppercase">
+                      {detailDialog.subtitle}
+                    </p>
+                    <p className="font-semibold text-slate-900">
+                      {currency(detailDialog.total)}
+                    </p>
+                    {typeof detailDialog.prevTotal === "number" &&
+                    typeof detailDialog.delta === "number" ? (
+                      <p className="text-xs text-slate-600">
+                        Prev: {currency(detailDialog.prevTotal)} • Δ:{" "}
+                        {currency(detailDialog.delta)}{" "}
+                        {detailDialog.deltaPct !== null &&
+                        typeof detailDialog.deltaPct === "number"
+                          ? `(${percent(detailDialog.deltaPct)})`
+                          : ""}
+                      </p>
+                    ) : null}
+                    {typeof detailDialog.txCount === "number" ? (
+                      <p className="text-xs text-slate-600">
+                        {detailDialog.txCount} transactions
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+                    Categories come from transaction categorization (transfers
+                    excluded).
+                  </div>
+                </div>
+                <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
+                  {detailDialog.monthly?.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={detailDialog.monthly}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="month"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                          tickFormatter={(v) => compactCurrency(Number(v))}
+                        />
+                        <Tooltip
+                          formatter={(value) => currency(Number(value))}
+                          contentStyle={{ fontSize: 12 }}
+                        />
+                        <Bar
+                          dataKey="total"
+                          name="Total"
+                          fill="#ef4444"
+                          radius={[6, 6, 4, 4]}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                      No monthly breakdown available.
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={allYearsChart}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="year"
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fill: "#475569", fontSize: 12 }}
-                  />
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fill: "#475569", fontSize: 12 }}
-                  />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const label = payload[0]?.payload?.year;
-                      return (
-                        <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                          <p className="font-semibold text-slate-800">
-                            {label}
-                          </p>
-                          {payload.map((item) => (
-                            <p
-                              key={String(item.dataKey)}
-                              className="text-slate-600"
-                            >
-                              {item.name}: {currency(Number(item.value))}
-                            </p>
-                          ))}
-                        </div>
-                      );
-                    }}
-                  />
-                  <Bar
-                    dataKey="income"
-                    name="Income"
-                    fill="#10b981"
-                    radius={[6, 6, 4, 4]}
-                  />
-                  <Bar
-                    dataKey="expense"
-                    name="Expense"
-                    fill="#ef4444"
-                    radius={[6, 6, 4, 4]}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="net"
-                    name="Net"
-                    stroke="#0ea5e9"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                    <p className="text-xs tracking-wide text-slate-500 uppercase">
+                      {detailDialog.subtitle}
+                    </p>
+                    <p className="font-semibold text-slate-900">
+                      {currency(detailDialog.total)}
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      {detailDialog.txCount} transactions
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+                    This is grouped by transaction description (good for
+                    spotting recurring sources and merchants).
+                  </div>
+                </div>
+                <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={detailDialog.monthly}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="month"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                        tickFormatter={(v) => compactCurrency(Number(v))}
+                      />
+                      <Tooltip
+                        formatter={(value) => currency(Number(value))}
+                        contentStyle={{ fontSize: 12 }}
+                      />
+                      <Bar
+                        dataKey="total"
+                        name="Total"
+                        fill="#334155"
+                        radius={[6, 6, 4, 4]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             )}
-          </CardContent>
-        </Card>
-      )}
+          </DialogContent>
+        </Dialog>
+      ) : null}
     </MotionPage>
   );
 };

@@ -81,6 +81,19 @@ class TotalReportQuery(YearlyReportQuery):
     """Query parameters for total summary endpoint."""
 
 
+class TotalOverviewQuery(_CsvUUIDMixin):
+    """Query parameters for total overview report."""
+
+    account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _split_lists(cls, values: Any) -> Any:
+        if isinstance(values, dict) and "account_ids" in values:
+            values["account_ids"] = cls._parse_uuid_list(values.get("account_ids"))
+        return values
+
+
 class QuarterlyReportQuery(MonthlyReportQuery):
     """Query parameters for quarterly report endpoint."""
 
@@ -173,6 +186,83 @@ class TotalReportRead(BaseModel):
     income: Decimal
     expense: Decimal
     net: Decimal
+
+
+class NetWorthChangeWindow(BaseModel):
+    days_30: Decimal
+    days_90: Decimal
+    days_365: Decimal
+    since_start: Decimal
+
+
+class RunRateSummary(BaseModel):
+    avg_monthly_income: Decimal
+    avg_monthly_expense: Decimal
+    avg_monthly_net: Decimal
+    savings_rate_pct: Optional[Decimal] = None
+
+
+class CashRunwaySummary(BaseModel):
+    cash_balance: Decimal
+    avg_monthly_expense_6m: Decimal
+    runway_months: Optional[Decimal] = None
+
+
+class CategoryTotalEntry(BaseModel):
+    category_id: Optional[str] = None
+    name: str
+    total: Decimal
+    icon: Optional[str] = None
+    color_hex: Optional[str] = None
+    transaction_count: int
+
+
+class TotalInvestmentsSummary(BaseModel):
+    as_of: str
+    current_value: Decimal
+    value_12m_ago: Decimal
+    change_12m: Decimal
+    change_pct_12m: Optional[Decimal] = None
+    contributions_lifetime: Decimal
+    withdrawals_lifetime: Decimal
+    net_contributions_lifetime: Decimal
+    contributions_12m: Decimal
+    withdrawals_12m: Decimal
+    net_contributions_12m: Decimal
+    monthly_values_12m: List[Decimal]
+    accounts: List["InvestmentAccountSummaryEntry"]
+
+
+class TotalDebtSummary(BaseModel):
+    total: Decimal
+    value_12m_ago: Decimal
+    change_12m: Decimal
+    debt_to_income_12m: Optional[Decimal] = None
+    accounts: List["DebtOverviewEntry"]
+
+
+class TotalOverviewResponse(BaseModel):
+    as_of: str
+    net_worth: Decimal
+    net_worth_change: NetWorthChangeWindow
+    lifetime: "SavingsIndicator"
+    last_12m: "SavingsIndicator"
+    run_rate_6m: RunRateSummary
+    run_rate_12m: RunRateSummary
+    cash_runway: CashRunwaySummary
+    investments: TotalInvestmentsSummary
+    debt: TotalDebtSummary
+    account_flows: List["AccountFlowEntry"]
+    income_sources: List["SourceSummaryEntry"]
+    expense_sources: List["SourceSummaryEntry"]
+    top_categories_12m: List["YearlyCategoryBreakdownEntry"]
+    top_categories_lifetime: List[CategoryTotalEntry]
+    category_changes_12m: List["CategoryChangeEntry"]
+    monthly_income_12m: List[Decimal]
+    monthly_expense_12m: List[Decimal]
+    monthly_income_prev_12m: List[Decimal]
+    monthly_expense_prev_12m: List[Decimal]
+    insights: List[str]
 
 
 class NetWorthHistoryQuery(_CsvUUIDMixin):

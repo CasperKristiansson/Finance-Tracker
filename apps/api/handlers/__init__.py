@@ -52,6 +52,7 @@ from .reporting import (
 )
 from .reporting import reset_handler_state as reset_reporting_handler_state
 from .reporting import (
+    total_overview,
     total_report,
     yearly_category_detail,
     yearly_overview,
@@ -100,6 +101,7 @@ __all__ = [
     "export_report",
     "yearly_report",
     "total_report",
+    "total_overview",
     "net_worth_history",
     "cashflow_forecast",
     "net_worth_projection",

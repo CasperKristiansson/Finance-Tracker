@@ -10,6 +10,8 @@ export const PageRoutes = {
   transactions: "/transactions",
   subscriptions: "/subscriptions",
   reports: "/reports",
+  reportsTotal: "/reports/total",
+  reportsYearly: "/reports/yearly",
   cashFlow: "/cash-flow",
   loans: "/loans",
   investments: "/investments",

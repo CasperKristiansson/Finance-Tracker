@@ -63,6 +63,7 @@ export type {
   SubscriptionSummaryRead,
   SubscriptionSummaryResponse,
   TotalReportRead,
+  TotalOverviewResponse,
   TransactionLegRead,
   TransactionListResponse,
   TransactionRead,

@@ -589,6 +589,18 @@ functions:
           method: GET
           authorizer: cognitoJwt
 
+  totalOverview:
+    handler: apps/api/handlers/reporting.total_overview
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/total-overview
+          method: GET
+          authorizer: cognitoJwt
+
   netWorthHistory:
     handler: apps/api/handlers/reporting.net_worth_history
     timeout: 29

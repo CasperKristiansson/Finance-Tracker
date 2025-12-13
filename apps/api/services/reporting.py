@@ -20,6 +20,7 @@ from ..repositories.reporting import (
     YearlyTotals,
 )
 from ..shared import AccountType, TransactionType, coerce_decimal
+from .reporting_total import build_total_overview
 from .reporting_yearly import build_yearly_overview_enhancements
 
 
@@ -136,6 +137,25 @@ class ReportingService:
             expense_total += expense
         return LifetimeTotals(
             income=income_total, expense=expense_total, net=income_total - expense_total
+        )
+
+    def total_overview(
+        self,
+        *,
+        account_ids: Optional[Iterable[UUID]] = None,
+    ) -> dict[str, object]:
+        account_id_list = list(account_ids) if account_ids is not None else None
+        as_of = date.today()
+        history = self.net_worth_history(account_ids=account_id_list)
+        net_worth_points = [(point.period, coerce_decimal(point.net_worth)) for point in history]
+        return build_total_overview(
+            session=self.session,
+            repository=self.repository,
+            as_of=as_of,
+            account_id_list=account_id_list,
+            net_worth_points=net_worth_points,
+            classify_income_expense=self._classify_income_expense,
+            merchant_key=self._merchant_key,
         )
 
     def net_worth_history(

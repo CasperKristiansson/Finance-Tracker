@@ -28,6 +28,8 @@ from ..schemas import (
     QuarterlyReportEntry,
     QuarterlyReportQuery,
     QuarterlyReportResponse,
+    TotalOverviewQuery,
+    TotalOverviewResponse,
     TotalReportQuery,
     TotalReportRead,
     YearlyCategoryDetailQuery,
@@ -131,6 +133,23 @@ def total_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     response = payload.model_dump(mode="json")
     response["generated_at"] = datetime.now(timezone.utc).isoformat()
     return json_response(200, response)
+
+
+def total_overview(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    user_id = get_user_id(event)
+    params = get_query_params(event)
+
+    try:
+        query = TotalOverviewQuery.model_validate(params)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope(user_id=user_id) as session:
+        service = ReportingService(session)
+        result = service.total_overview(account_ids=query.account_ids)
+        payload = TotalOverviewResponse.model_validate(result)
+    return json_response(200, payload.model_dump(mode="json"))
 
 
 def quarterly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:

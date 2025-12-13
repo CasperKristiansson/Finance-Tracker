@@ -299,6 +299,157 @@ export const totalReportSchema = z.object({
   generated_at: z.string().optional(),
 });
 
+export const totalOverviewSchema = z.object({
+  as_of: z.string(),
+  net_worth: z.string(),
+  net_worth_change: z.object({
+    days_30: z.string(),
+    days_90: z.string(),
+    days_365: z.string(),
+    since_start: z.string(),
+  }),
+  lifetime: z.object({
+    income: z.string(),
+    expense: z.string(),
+    saved: z.string(),
+    savings_rate_pct: z.string().nullable().optional(),
+  }),
+  last_12m: z.object({
+    income: z.string(),
+    expense: z.string(),
+    saved: z.string(),
+    savings_rate_pct: z.string().nullable().optional(),
+  }),
+  run_rate_6m: z.object({
+    avg_monthly_income: z.string(),
+    avg_monthly_expense: z.string(),
+    avg_monthly_net: z.string(),
+    savings_rate_pct: z.string().nullable().optional(),
+  }),
+  run_rate_12m: z.object({
+    avg_monthly_income: z.string(),
+    avg_monthly_expense: z.string(),
+    avg_monthly_net: z.string(),
+    savings_rate_pct: z.string().nullable().optional(),
+  }),
+  cash_runway: z.object({
+    cash_balance: z.string(),
+    avg_monthly_expense_6m: z.string(),
+    runway_months: z.string().nullable().optional(),
+  }),
+  investments: z.object({
+    as_of: z.string(),
+    current_value: z.string(),
+    value_12m_ago: z.string(),
+    change_12m: z.string(),
+    change_pct_12m: z.string().nullable().optional(),
+    contributions_lifetime: z.string(),
+    withdrawals_lifetime: z.string(),
+    net_contributions_lifetime: z.string(),
+    contributions_12m: z.string(),
+    withdrawals_12m: z.string(),
+    net_contributions_12m: z.string(),
+    monthly_values_12m: z.array(z.string()),
+    accounts: z.array(
+      z.object({
+        account_name: z.string(),
+        start_value: z.string(),
+        end_value: z.string(),
+        change: z.string(),
+      }),
+    ),
+  }),
+  debt: z.object({
+    total: z.string(),
+    value_12m_ago: z.string(),
+    change_12m: z.string(),
+    debt_to_income_12m: z.string().nullable().optional(),
+    accounts: z.array(
+      z.object({
+        account_id: z.string(),
+        name: z.string(),
+        start_debt: z.string(),
+        end_debt: z.string(),
+        delta: z.string(),
+        monthly_debt: z.array(z.string()),
+      }),
+    ),
+  }),
+  account_flows: z.array(
+    z.object({
+      account_id: z.string(),
+      name: z.string(),
+      account_type: z.nativeEnum(AccountType),
+      start_balance: z.string(),
+      end_balance: z.string(),
+      change: z.string(),
+      income: z.string(),
+      expense: z.string(),
+      transfers_in: z.string(),
+      transfers_out: z.string(),
+      net_operating: z.string(),
+      net_transfers: z.string(),
+      monthly_income: z.array(z.string()),
+      monthly_expense: z.array(z.string()),
+      monthly_transfers_in: z.array(z.string()),
+      monthly_transfers_out: z.array(z.string()),
+      monthly_change: z.array(z.string()),
+    }),
+  ),
+  income_sources: z.array(
+    z.object({
+      source: z.string(),
+      total: z.string(),
+      monthly: z.array(z.string()),
+      transaction_count: z.number(),
+    }),
+  ),
+  expense_sources: z.array(
+    z.object({
+      source: z.string(),
+      total: z.string(),
+      monthly: z.array(z.string()),
+      transaction_count: z.number(),
+    }),
+  ),
+  top_categories_12m: z.array(
+    z.object({
+      category_id: z.string().nullable().optional(),
+      name: z.string(),
+      total: z.string(),
+      monthly: z.array(z.string()),
+      icon: z.string().nullable().optional(),
+      color_hex: z.string().nullable().optional(),
+      transaction_count: z.number(),
+    }),
+  ),
+  top_categories_lifetime: z.array(
+    z.object({
+      category_id: z.string().nullable().optional(),
+      name: z.string(),
+      total: z.string(),
+      icon: z.string().nullable().optional(),
+      color_hex: z.string().nullable().optional(),
+      transaction_count: z.number(),
+    }),
+  ),
+  category_changes_12m: z.array(
+    z.object({
+      category_id: z.string().nullable().optional(),
+      name: z.string(),
+      amount: z.string(),
+      prev_amount: z.string(),
+      delta: z.string(),
+      delta_pct: z.string().nullable().optional(),
+    }),
+  ),
+  monthly_income_12m: z.array(z.string()),
+  monthly_expense_12m: z.array(z.string()),
+  monthly_income_prev_12m: z.array(z.string()),
+  monthly_expense_prev_12m: z.array(z.string()),
+  insights: z.array(z.string()),
+});
+
 export const netWorthHistorySchema = z.object({
   points: z.array(
     z.object({
@@ -855,6 +1006,7 @@ export type QuarterlyReportEntry = z.infer<
   typeof quarterlyReportSchema
 >["results"][number];
 export type TotalReportRead = z.infer<typeof totalReportSchema>;
+export type TotalOverviewResponse = z.infer<typeof totalOverviewSchema>;
 export type NetWorthPoint = z.infer<
   typeof netWorthHistorySchema
 >["points"][number];
