@@ -553,10 +553,63 @@ export const Reports: React.FC = () => {
   const totalNetWorthSeries = useMemo(() => {
     if (!totalOverview) return [];
     return totalOverview.net_worth_series.map((row) => ({
-      date: monthLabel(row.date),
+      date: row.date,
+      label: new Date(row.date).toLocaleDateString("sv-SE", {
+        month: "short",
+        year: "2-digit",
+      }),
       netWorth: Number(row.net_worth),
     }));
   }, [totalOverview]);
+
+  const totalNetWorthStats = useMemo(() => {
+    if (!totalNetWorthSeries.length) return null;
+    const first = totalNetWorthSeries[0];
+    const latest = totalNetWorthSeries[totalNetWorthSeries.length - 1];
+    const maxPoint = totalNetWorthSeries.reduce((best, candidate) =>
+      candidate.netWorth > best.netWorth ? candidate : best,
+    );
+    const minPoint = totalNetWorthSeries.reduce((best, candidate) =>
+      candidate.netWorth < best.netWorth ? candidate : best,
+    );
+
+    const latestDate = new Date(latest.date);
+    const yearAgoTarget = new Date(latestDate);
+    yearAgoTarget.setUTCFullYear(yearAgoTarget.getUTCFullYear() - 1);
+    const targetIso = yearAgoTarget.toISOString().slice(0, 10);
+
+    let yearAgo: (typeof totalNetWorthSeries)[number] | null = null;
+    for (let idx = totalNetWorthSeries.length - 1; idx >= 0; idx -= 1) {
+      const point = totalNetWorthSeries[idx];
+      if (point.date <= targetIso) {
+        yearAgo = point;
+        break;
+      }
+    }
+
+    const delta12m = yearAgo ? latest.netWorth - yearAgo.netWorth : null;
+    const delta12mPct =
+      yearAgo && yearAgo.netWorth !== 0
+        ? ((latest.netWorth - yearAgo.netWorth) / yearAgo.netWorth) * 100
+        : null;
+
+    const deltaSinceStart = latest.netWorth - first.netWorth;
+    const deltaSinceStartPct =
+      first.netWorth !== 0 ? (deltaSinceStart / first.netWorth) * 100 : null;
+
+    return {
+      asOf: latest.date,
+      current: latest.netWorth,
+      delta12m,
+      delta12mPct,
+      deltaSinceStart,
+      deltaSinceStartPct,
+      allTimeHigh: maxPoint.netWorth,
+      allTimeHighDate: maxPoint.date,
+      allTimeLow: minPoint.netWorth,
+      allTimeLowDate: minPoint.date,
+    };
+  }, [totalNetWorthSeries]);
 
   const totalYearly = useMemo(() => {
     if (!totalOverview) return [];
@@ -2794,35 +2847,139 @@ export const Reports: React.FC = () => {
                   <p>No net worth history yet.</p>
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={totalNetWorthSeries}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis
-                      dataKey="date"
-                      tickLine={false}
-                      axisLine={false}
-                      tick={{ fill: "#475569", fontSize: 12 }}
-                    />
-                    <YAxis
-                      tickLine={false}
-                      axisLine={false}
-                      tick={{ fill: "#475569", fontSize: 12 }}
-                      tickFormatter={(v) => compactCurrency(Number(v))}
-                    />
-                    <Tooltip
-                      formatter={(value) => currency(Number(value))}
-                      contentStyle={{ fontSize: 12 }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="netWorth"
-                      stroke="#0f172a"
-                      fill="rgba(15,23,42,0.12)"
-                      strokeWidth={2}
-                      name="Net worth"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                <div className="flex h-full flex-col gap-3">
+                  {totalNetWorthStats ? (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Current (as of{" "}
+                          {new Date(totalNetWorthStats.asOf).toLocaleDateString(
+                            "sv-SE",
+                          )}
+                          )
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(totalNetWorthStats.current)}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Change (12m)
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {totalNetWorthStats.delta12m === null ? (
+                            "—"
+                          ) : (
+                            <>
+                              <span
+                                className={
+                                  totalNetWorthStats.delta12m >= 0
+                                    ? "text-emerald-700"
+                                    : "text-rose-700"
+                                }
+                              >
+                                {totalNetWorthStats.delta12m >= 0 ? "+" : "−"}
+                                {currency(
+                                  Math.abs(totalNetWorthStats.delta12m),
+                                )}
+                              </span>
+                              {totalNetWorthStats.delta12mPct ===
+                              null ? null : (
+                                <span className="ml-2 text-xs text-slate-600">
+                                  ({percent(totalNetWorthStats.delta12mPct)})
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Change (since start)
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          <span
+                            className={
+                              totalNetWorthStats.deltaSinceStart >= 0
+                                ? "text-emerald-700"
+                                : "text-rose-700"
+                            }
+                          >
+                            {totalNetWorthStats.deltaSinceStart >= 0
+                              ? "+"
+                              : "−"}
+                            {currency(
+                              Math.abs(totalNetWorthStats.deltaSinceStart),
+                            )}
+                          </span>
+                          {totalNetWorthStats.deltaSinceStartPct ===
+                          null ? null : (
+                            <span className="ml-2 text-xs text-slate-600">
+                              ({percent(totalNetWorthStats.deltaSinceStartPct)})
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Range
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(totalNetWorthStats.allTimeLow)} →{" "}
+                          {currency(totalNetWorthStats.allTimeHigh)}
+                        </p>
+                        <p className="text-xs text-slate-600">
+                          High:{" "}
+                          {new Date(
+                            totalNetWorthStats.allTimeHighDate,
+                          ).toLocaleDateString("sv-SE")}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="min-h-0 flex-1 rounded-md border border-slate-100 bg-white p-2">
+                    <ResponsiveContainer width="100%" height="200%">
+                      <AreaChart data={totalNetWorthSeries}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="label"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                          tickFormatter={(v) => compactCurrency(Number(v))}
+                        />
+                        <Tooltip
+                          formatter={(value) => currency(Number(value))}
+                          labelFormatter={(_label, payload) =>
+                            payload?.[0]?.payload?.date
+                              ? new Date(
+                                  String(payload[0].payload.date),
+                                ).toLocaleDateString("sv-SE", {
+                                  year: "numeric",
+                                  month: "long",
+                                })
+                              : String(_label)
+                          }
+                          contentStyle={{ fontSize: 12 }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="netWorth"
+                          stroke="#0f172a"
+                          fill="rgba(15,23,42,0.12)"
+                          strokeWidth={2}
+                          name="Net worth"
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
               )}
             </ChartCard>
 
@@ -3113,7 +3270,7 @@ export const Reports: React.FC = () => {
                   Top categories (lifetime) across all years.
                 </p>
               </CardHeader>
-              <CardContent className="overflow-auto">
+              <CardContent className="overflow-hidden">
                 {!totalOverview ? (
                   <Skeleton className="h-56 w-full" />
                 ) : !totalExpenseCategoryYearHeatmap ? (
@@ -3121,48 +3278,50 @@ export const Reports: React.FC = () => {
                     No category history yet.
                   </div>
                 ) : (
-                  <div className="min-w-[720px]">
-                    <div
-                      className="grid gap-1 text-[11px] text-slate-600"
-                      style={{
-                        gridTemplateColumns: `180px repeat(${totalExpenseCategoryYearHeatmap.years.length}, minmax(44px, 1fr))`,
-                      }}
-                    >
-                      <div />
-                      {totalExpenseCategoryYearHeatmap.years.map((yr) => (
-                        <div key={yr} className="text-center">
-                          {yr}
+                  <div
+                    className="grid gap-px text-[10px] text-slate-600"
+                    style={{
+                      gridTemplateColumns: `160px repeat(${totalExpenseCategoryYearHeatmap.years.length}, minmax(0, 1fr))`,
+                    }}
+                  >
+                    <div />
+                    {totalExpenseCategoryYearHeatmap.years.map((yr) => (
+                      <div
+                        key={yr}
+                        className="flex h-6 items-center justify-center overflow-hidden"
+                        title={String(yr)}
+                      >
+                        <span className="text-[10px] leading-none text-slate-600">
+                          {String(yr).slice(-2)}
+                        </span>
+                      </div>
+                    ))}
+                    {totalExpenseCategoryYearHeatmap.rows.map((row) => (
+                      <React.Fragment key={row.name}>
+                        <div className="truncate pr-2 font-medium text-slate-700">
+                          {row.name}
                         </div>
-                      ))}
-                      {totalExpenseCategoryYearHeatmap.rows.map((row) => (
-                        <React.Fragment key={row.name}>
-                          <div className="truncate pr-2 font-medium text-slate-700">
-                            {row.name}
-                          </div>
-                          {totalExpenseCategoryYearHeatmap.years.map(
-                            (yr, idx) => {
-                              const value = row.totals[idx] ?? 0;
-                              return (
-                                <div
-                                  key={`${row.name}-${yr}`}
-                                  title={`${row.name} • ${yr}: ${currency(
+                        {totalExpenseCategoryYearHeatmap.years.map(
+                          (yr, idx) => {
+                            const value = row.totals[idx] ?? 0;
+                            return (
+                              <div
+                                key={`${row.name}-${yr}`}
+                                title={`${row.name} • ${yr}: ${currency(value)}`}
+                                className="h-5 rounded-sm border border-slate-100"
+                                style={{
+                                  backgroundColor: heatColor(
+                                    "239,68,68",
                                     value,
-                                  )}`}
-                                  className="h-7 rounded-sm border border-slate-100"
-                                  style={{
-                                    backgroundColor: heatColor(
-                                      "239,68,68",
-                                      value,
-                                      totalExpenseCategoryYearHeatmap.max,
-                                    ),
-                                  }}
-                                />
-                              );
-                            },
-                          )}
-                        </React.Fragment>
-                      ))}
-                    </div>
+                                    totalExpenseCategoryYearHeatmap.max,
+                                  ),
+                                }}
+                              />
+                            );
+                          },
+                        )}
+                      </React.Fragment>
+                    ))}
                   </div>
                 )}
               </CardContent>
@@ -3177,7 +3336,7 @@ export const Reports: React.FC = () => {
                   Top categories (lifetime) across all years.
                 </p>
               </CardHeader>
-              <CardContent className="overflow-auto">
+              <CardContent className="overflow-hidden">
                 {!totalOverview ? (
                   <Skeleton className="h-56 w-full" />
                 ) : !totalIncomeCategoryYearHeatmap ? (
@@ -3185,48 +3344,48 @@ export const Reports: React.FC = () => {
                     No category history yet.
                   </div>
                 ) : (
-                  <div className="min-w-[720px]">
-                    <div
-                      className="grid gap-1 text-[11px] text-slate-600"
-                      style={{
-                        gridTemplateColumns: `180px repeat(${totalIncomeCategoryYearHeatmap.years.length}, minmax(44px, 1fr))`,
-                      }}
-                    >
-                      <div />
-                      {totalIncomeCategoryYearHeatmap.years.map((yr) => (
-                        <div key={yr} className="text-center">
-                          {yr}
+                  <div
+                    className="grid gap-px text-[10px] text-slate-600"
+                    style={{
+                      gridTemplateColumns: `160px repeat(${totalIncomeCategoryYearHeatmap.years.length}, minmax(0, 1fr))`,
+                    }}
+                  >
+                    <div />
+                    {totalIncomeCategoryYearHeatmap.years.map((yr) => (
+                      <div
+                        key={yr}
+                        className="flex h-6 items-center justify-center overflow-hidden"
+                        title={String(yr)}
+                      >
+                        <span className="text-[10px] leading-none text-slate-600">
+                          {String(yr).slice(-2)}
+                        </span>
+                      </div>
+                    ))}
+                    {totalIncomeCategoryYearHeatmap.rows.map((row) => (
+                      <React.Fragment key={row.name}>
+                        <div className="truncate pr-2 font-medium text-slate-700">
+                          {row.name}
                         </div>
-                      ))}
-                      {totalIncomeCategoryYearHeatmap.rows.map((row) => (
-                        <React.Fragment key={row.name}>
-                          <div className="truncate pr-2 font-medium text-slate-700">
-                            {row.name}
-                          </div>
-                          {totalIncomeCategoryYearHeatmap.years.map(
-                            (yr, idx) => {
-                              const value = row.totals[idx] ?? 0;
-                              return (
-                                <div
-                                  key={`${row.name}-${yr}`}
-                                  title={`${row.name} • ${yr}: ${currency(
-                                    value,
-                                  )}`}
-                                  className="h-7 rounded-sm border border-slate-100"
-                                  style={{
-                                    backgroundColor: heatColor(
-                                      "16,185,129",
-                                      value,
-                                      totalIncomeCategoryYearHeatmap.max,
-                                    ),
-                                  }}
-                                />
-                              );
-                            },
-                          )}
-                        </React.Fragment>
-                      ))}
-                    </div>
+                        {totalIncomeCategoryYearHeatmap.years.map((yr, idx) => {
+                          const value = row.totals[idx] ?? 0;
+                          return (
+                            <div
+                              key={`${row.name}-${yr}`}
+                              title={`${row.name} • ${yr}: ${currency(value)}`}
+                              className="h-5 rounded-sm border border-slate-100"
+                              style={{
+                                backgroundColor: heatColor(
+                                  "16,185,129",
+                                  value,
+                                  totalIncomeCategoryYearHeatmap.max,
+                                ),
+                              }}
+                            />
+                          );
+                        })}
+                      </React.Fragment>
+                    ))}
                   </div>
                 )}
               </CardContent>
