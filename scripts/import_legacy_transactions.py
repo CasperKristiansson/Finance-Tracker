@@ -100,7 +100,7 @@ def ensure_accounts(session, user_id: str) -> Tuple[Dict[str, str], Dict[str, st
         "Swedbank Savings": "Swedbank Savings",
         "Paypal": "Paypal",
         "Gift Card": "Gift Card",
-        "Danske Bank": "Danske Bank",
+        "Danske Bank": "Bospar",
         "Cash": "Cash",
     }
     account_configs = {
@@ -108,7 +108,7 @@ def ensure_accounts(session, user_id: str) -> Tuple[Dict[str, str], Dict[str, st
         "Nordnet Private": (AccountType.INVESTMENT, True, "banks/nordnet.jpg"),
         "Nordnet Company": (AccountType.INVESTMENT, True, "banks/nordnet.jpg"),
         "SEB Company": (AccountType.NORMAL, True, "banks/seb.png"),
-        "Danske Bank": (AccountType.NORMAL, True, "banks/danskebank.png"),
+        "Bospar": (AccountType.INVESTMENT, True, "banks/danskebank.png"),
         "Circle K Mastercard": (AccountType.NORMAL, True, "banks/circlek.png"),
         "Cash": (AccountType.NORMAL, True, None),
         "Swedbank Savings": (AccountType.NORMAL, False, "banks/swedbank.png"),
@@ -118,9 +118,16 @@ def ensure_accounts(session, user_id: str) -> Tuple[Dict[str, str], Dict[str, st
 
     account_ids: Dict[str, str] = {}
     for name, (atype, active, icon) in account_configs.items():
+        legacy_aliases = {"Bospar": ["Danske Bank"]}.get(name, [])
         existing = session.exec(
             select(Account).where(Account.user_id == user_id, Account.name == name)
         ).one_or_none()
+        if existing is None and legacy_aliases:
+            existing = session.exec(
+                select(Account).where(
+                    Account.user_id == user_id, Account.name.in_(legacy_aliases)
+                )
+            ).one_or_none()
         if existing:
             existing.account_type = atype
             existing.is_active = active
@@ -170,7 +177,7 @@ def ensure_categories(session, user_id: str, tx_df: pd.DataFrame) -> Tuple[Dict[
         if pd.isna(cat):
             continue
         cat = str(cat).strip()
-        if cat == "Investment":
+        if cat in {"Investment", "Bospar"}:
             continue
         cat_map.setdefault(cat, set()).add(ttype)
 
@@ -553,7 +560,7 @@ def import_transactions(
             continue
 
         category_name = normalize(getattr(row, "Category", None))
-        if category_name == "Investment" and str(row.Type) != "Transfer-Out":
+        if category_name in {"Investment", "Bospar"} and str(row.Type) != "Transfer-Out":
             investment_skipped += 1
             progress("Transactions", idx, total)
             continue
@@ -724,7 +731,7 @@ def main() -> None:
     # Ensure legacy-specific categories don't linger.
     session.exec(
         delete(Category)
-        .where(Category.user_id == args.user, Category.name == "Investment")
+        .where(Category.user_id == args.user, Category.name.in_(["Investment", "Bospar"]))
         .execution_options(include_all_users=True)
     )
     session.commit()
