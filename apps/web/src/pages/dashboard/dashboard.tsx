@@ -53,10 +53,15 @@ import { apiFetch } from "@/lib/apiClient";
 import {
   AccountType,
   type MonthlyReportEntry,
+  type YearlyOverviewResponse,
   type TransactionListResponse,
   TransactionType,
 } from "@/types/api";
-import { monthlyReportSchema, transactionListSchema } from "@/types/schemas";
+import {
+  monthlyReportSchema,
+  transactionListSchema,
+  yearlyOverviewSchema,
+} from "@/types/schemas";
 
 type KPI = {
   title: string;
@@ -166,6 +171,9 @@ export const Dashboard: React.FC = () => {
   const [filteredMonthly, setFilteredMonthly] = useState<MonthlyReportEntry[]>(
     [],
   );
+  const [yearlyOverview, setYearlyOverview] =
+    useState<YearlyOverviewResponse | null>(null);
+  const [yearlyOverviewLoading, setYearlyOverviewLoading] = useState(false);
   const [accountDeltas, setAccountDeltas] = useState<Record<string, number>>(
     {},
   );
@@ -175,11 +183,7 @@ export const Dashboard: React.FC = () => {
   const activeAccounts = useMemo(
     () =>
       accounts.filter(
-        (account) =>
-          account.is_active !== false &&
-          account.name !== "Offset" &&
-          account.account_type !== AccountType.DEBT &&
-          account.account_type !== AccountType.INVESTMENT,
+        (account) => account.is_active !== false && account.name !== "Offset",
       ),
     [accounts],
   );
@@ -236,6 +240,29 @@ export const Dashboard: React.FC = () => {
     };
     loadFilteredMonthly();
   }, [accounts, token]);
+
+  useEffect(() => {
+    const loadYearlyOverview = async () => {
+      if (!token) return;
+      const year = new Date().getFullYear();
+      setYearlyOverviewLoading(true);
+      try {
+        const { data } = await apiFetch<YearlyOverviewResponse>({
+          path: "/reports/yearly-overview",
+          query: { year },
+          token,
+          schema: yearlyOverviewSchema,
+        });
+        setYearlyOverview(data);
+      } catch (err) {
+        console.error("Failed to fetch yearly overview", err);
+        setYearlyOverview(null);
+      } finally {
+        setYearlyOverviewLoading(false);
+      }
+    };
+    void loadYearlyOverview();
+  }, [token]);
 
   useEffect(() => {
     const fetchDeltas = async () => {
@@ -790,6 +817,36 @@ export const Dashboard: React.FC = () => {
           >
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
+                <defs>
+                  <linearGradient
+                    id="categoryMixIncomeFill"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="0%" stopColor="#34d399" stopOpacity={0.95} />
+                    <stop
+                      offset="100%"
+                      stopColor="#059669"
+                      stopOpacity={0.95}
+                    />
+                  </linearGradient>
+                  <linearGradient
+                    id="categoryMixExpenseFill"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="0%" stopColor="#fb7185" stopOpacity={0.95} />
+                    <stop
+                      offset="100%"
+                      stopColor="#e11d48"
+                      stopOpacity={0.95}
+                    />
+                  </linearGradient>
+                </defs>
                 <Pie
                   data={categoryBreakdown}
                   dataKey="value"
@@ -801,8 +858,13 @@ export const Dashboard: React.FC = () => {
                   {categoryBreakdown.map((_, index) => (
                     <Cell
                       key={index}
-                      fill={index === 0 ? "#10b981" : "#ef4444"}
-                      stroke="transparent"
+                      fill={
+                        index === 0
+                          ? "url(#categoryMixIncomeFill)"
+                          : "url(#categoryMixExpenseFill)"
+                      }
+                      stroke={index === 0 ? "#10b981" : "#ef4444"}
+                      strokeOpacity={0.35}
                     />
                   ))}
                 </Pie>
@@ -810,6 +872,29 @@ export const Dashboard: React.FC = () => {
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const item = payload[0];
+                    const flow =
+                      item.name === "Income"
+                        ? ("income" as const)
+                        : ("expense" as const);
+                    const breakdown =
+                      flow === "income"
+                        ? yearlyOverview?.income_category_breakdown
+                        : yearlyOverview?.category_breakdown;
+                    const sorted =
+                      breakdown
+                        ?.map((row) => ({
+                          name: row.name,
+                          total: Number(row.total),
+                          color: row.color_hex ?? undefined,
+                        }))
+                        .filter(
+                          (row) => Number.isFinite(row.total) && row.total,
+                        )
+                        .sort((a, b) => b.total - a.total) ?? [];
+                    const top = sorted.slice(0, 5);
+                    const otherTotal = sorted
+                      .slice(5)
+                      .reduce((sum, row) => sum + row.total, 0);
                     return (
                       <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
                         <p className="font-semibold text-slate-800">
@@ -818,6 +903,45 @@ export const Dashboard: React.FC = () => {
                         <p className="text-slate-600">
                           {currency(Number(item.value))}
                         </p>
+                        {yearlyOverviewLoading ? (
+                          <p className="mt-2 text-slate-500">
+                            Loading breakdown…
+                          </p>
+                        ) : top.length ? (
+                          <div className="mt-2 space-y-1">
+                            {top.map((row) => (
+                              <div
+                                key={`${row.name}-${row.total}`}
+                                className="flex items-center justify-between gap-4"
+                              >
+                                <span className="flex min-w-0 items-center gap-2 text-slate-700">
+                                  <span
+                                    className="h-2 w-2 shrink-0 rounded-full"
+                                    style={{
+                                      backgroundColor:
+                                        row.color ??
+                                        (flow === "income"
+                                          ? "#10b981"
+                                          : "#ef4444"),
+                                    }}
+                                  />
+                                  <span className="truncate">{row.name}</span>
+                                </span>
+                                <span className="font-medium text-slate-800 tabular-nums">
+                                  {currency(row.total)}
+                                </span>
+                              </div>
+                            ))}
+                            {otherTotal ? (
+                              <div className="flex items-center justify-between gap-4 pt-1 text-slate-600">
+                                <span>Other</span>
+                                <span className="font-medium tabular-nums">
+                                  {currency(otherTotal)}
+                                </span>
+                              </div>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
                     );
                   }}
@@ -835,6 +959,22 @@ export const Dashboard: React.FC = () => {
           >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={savingsRateData}>
+                <defs>
+                  <linearGradient
+                    id="savingsRateFill"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.95} />
+                    <stop
+                      offset="100%"
+                      stopColor="#0284c7"
+                      stopOpacity={0.95}
+                    />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="month" tickLine={false} axisLine={false} />
                 <YAxis
@@ -856,7 +996,13 @@ export const Dashboard: React.FC = () => {
                     );
                   }}
                 />
-                <Bar dataKey="rate" fill="#0ea5e9" radius={[6, 6, 4, 4]} />
+                <Bar
+                  dataKey="rate"
+                  fill="url(#savingsRateFill)"
+                  stroke="#0ea5e9"
+                  strokeOpacity={0.4}
+                  radius={[6, 6, 4, 4]}
+                />
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
@@ -967,15 +1113,15 @@ export const Dashboard: React.FC = () => {
       </StaggerWrap>
 
       <StaggerWrap className="grid gap-4 md:grid-cols-2">
-        <motion.div variants={fadeInUp}>
-          <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)]">
+        <motion.div variants={fadeInUp} className="h-full">
+          <Card className="flex h-full flex-col border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)]">
             <CardHeader className="pb-2">
               <CardTitle className="text-base font-semibold text-slate-900">
                 Cash on hand
               </CardTitle>
               <p className="text-sm text-slate-500">Active accounts combined</p>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="flex flex-1 flex-col gap-3">
               {accountsLoading ? (
                 <Skeleton className="h-10 w-40" />
               ) : (
@@ -1017,8 +1163,8 @@ export const Dashboard: React.FC = () => {
           </Card>
         </motion.div>
 
-        <motion.div variants={fadeInUp}>
-          <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)]">
+        <motion.div variants={fadeInUp} className="h-full">
+          <Card className="flex h-full flex-col border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)]">
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
               <div>
                 <CardTitle className="text-base font-semibold text-slate-900">
@@ -1034,7 +1180,7 @@ export const Dashboard: React.FC = () => {
                 <ArrowDownRight className="h-5 w-5 text-rose-500" />
               ) : null}
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="flex flex-1 flex-col gap-3">
               {monthly.loading || accountsLoading ? (
                 <Skeleton className="h-10 w-48" />
               ) : runwayMetrics.months === null ? (
@@ -1090,9 +1236,9 @@ export const Dashboard: React.FC = () => {
                 </div>
               </div>
               {runwayMetrics.sparkline.length ? (
-                <div className="rounded-lg border border-slate-100 p-3">
+                <div className="min-h-36 flex-1 rounded-lg border border-slate-100 p-3">
                   <ChartContainer
-                    className="!aspect-auto h-36 w-full"
+                    className="!aspect-auto h-full w-full"
                     config={{
                       balance: { label: "Cash trend", color: "#0ea5e9" },
                     }}
@@ -1137,7 +1283,7 @@ export const Dashboard: React.FC = () => {
                   </ChartContainer>
                 </div>
               ) : (
-                <Skeleton className="h-36 w-full" />
+                <Skeleton className="min-h-36 w-full flex-1" />
               )}
             </CardContent>
           </Card>
