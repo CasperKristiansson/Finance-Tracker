@@ -329,7 +329,9 @@ class ImportService:
 
                 abs_amount = abs(amount)
                 if tax_event_type is not None:
-                    cash_delta = abs_amount if tax_event_type == TaxEventType.REFUND else -abs_amount
+                    cash_delta = (
+                        abs_amount if tax_event_type == TaxEventType.REFUND else -abs_amount
+                    )
                     legs = [
                         TransactionLeg(account_id=target_account_id, amount=cash_delta),
                         TransactionLeg(account_id=offset_account.id, amount=-cash_delta),

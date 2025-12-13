@@ -10,6 +10,7 @@ import {
   Banknote,
   Upload,
   Layers,
+  Receipt,
 } from "lucide-react";
 import * as React from "react";
 import { useAppSelector } from "@/app/hooks";
@@ -76,6 +77,11 @@ const data = {
       title: "Cash Flow",
       url: PageRoutes.cashFlow,
       icon: TrendingUp,
+    },
+    {
+      title: "Taxes",
+      url: PageRoutes.taxes,
+      icon: Receipt,
     },
     {
       title: "Loans",

@@ -17,7 +17,14 @@ from ..schemas import (
 )
 from ..services.tax import TaxService
 from ..shared import session_scope
-from .utils import ensure_engine, get_query_params, get_user_id, json_response, parse_body, reset_engine_state
+from .utils import (
+    ensure_engine,
+    get_query_params,
+    get_user_id,
+    json_response,
+    parse_body,
+    reset_engine_state,
+)
 
 
 def reset_handler_state() -> None:
@@ -108,4 +115,3 @@ __all__ = [
     "tax_summary",
     "reset_handler_state",
 ]
-

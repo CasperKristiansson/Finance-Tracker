@@ -53,4 +53,3 @@ __all__ = ["TaxEvent"]
 
 
 TaxEvent.model_rebuild()
-

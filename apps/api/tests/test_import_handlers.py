@@ -16,10 +16,19 @@ from apps.api.handlers.imports import (
     create_import_batch,
     reset_handler_state,
 )
-from apps.api.models import Account, Loan, LoanEvent, Subscription, Transaction, TransactionLeg
+from apps.api.models import (
+    Account,
+    Loan,
+    LoanEvent,
+    Subscription,
+    TaxEvent,
+    Transaction,
+    TransactionLeg,
+)
 from apps.api.shared import (
     AccountType,
     InterestCompound,
+    TransactionType,
     configure_engine,
     get_default_user_id,
     get_engine,
@@ -400,3 +409,65 @@ def test_commit_can_link_rows_to_loan_account_transfer():
         events = session.exec(select(LoanEvent)).all()
         assert len(events) == 1
         assert events[0].event_type == "payment_principal"
+
+
+def test_commit_supports_tax_event_type_and_creates_tax_event():
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        bank = Account(name="Bank", account_type=AccountType.NORMAL, is_active=True)
+        session.add(bank)
+        session.commit()
+        session.refresh(bank)
+        bank_id = str(bank.id)
+
+    payload = _swedbank_workbook()
+    create_response = create_import_batch(
+        {
+            "body": json.dumps(
+                {
+                    "files": [
+                        {
+                            "filename": "swedbank.xlsx",
+                            "bank_type": "swedbank",
+                            "content_base64": payload,
+                            "account_id": bank_id,
+                        }
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert create_response["statusCode"] == 201
+    created = _json_body(create_response)["imports"][0]
+    deposit_row_id = created["rows"][0]["id"]
+    outgoing_row_id = created["rows"][1]["id"]
+
+    commit_response = commit_import_session(
+        {
+            "pathParameters": {"batch_id": created["id"]},
+            "body": json.dumps(
+                {
+                    "rows": [
+                        {"row_id": deposit_row_id, "delete": True},
+                        {"row_id": outgoing_row_id, "tax_event_type": "payment"},
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert commit_response["statusCode"] == 200
+
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        tx = session.exec(select(Transaction)).one()
+        assert tx.transaction_type == TransactionType.TRANSFER
+        assert tx.category_id is None
+
+        tax_events = list(session.exec(select(TaxEvent)).all())
+        assert len(tax_events) == 1
+        assert str(tax_events[0].event_type) == "payment"

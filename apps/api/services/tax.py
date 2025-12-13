@@ -106,7 +106,9 @@ class TaxService:
         limit: int = 50,
         offset: int = 0,
     ) -> List[TaxEventListItem]:
-        rows = self._fetch_tax_rows(start_date=start_date, end_date=end_date, limit=limit, offset=offset)
+        rows = self._fetch_tax_rows(
+            start_date=start_date, end_date=end_date, limit=limit, offset=offset
+        )
         return [
             TaxEventListItem(
                 id=row.event.id,
@@ -123,7 +125,9 @@ class TaxService:
             for row in rows
         ]
 
-    def summary_for_year(self, *, year: int) -> tuple[List[TaxSummaryMonthlyEntry], TaxSummaryTotals]:
+    def summary_for_year(
+        self, *, year: int
+    ) -> tuple[List[TaxSummaryMonthlyEntry], TaxSummaryTotals]:
         start = datetime(year, 1, 1, tzinfo=timezone.utc)
         end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
         rows = self._fetch_tax_rows(start_date=start, end_date=end, limit=10_000, offset=0)
@@ -140,15 +144,22 @@ class TaxService:
 
         today = datetime.now(timezone.utc).date()
         if year == today.year:
-            ytd_end = datetime.combine(today + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
-            ytd_rows = self._fetch_tax_rows(start_date=start, end_date=ytd_end, limit=10_000, offset=0)
+            ytd_end = datetime.combine(
+                today + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
+            )
+            ytd_rows = self._fetch_tax_rows(
+                start_date=start, end_date=ytd_end, limit=10_000, offset=0
+            )
             net_tax_paid_ytd = sum(
-                (r.amount if r.event.event_type == TaxEventType.PAYMENT else -r.amount) for r in ytd_rows
+                (r.amount if r.event.event_type == TaxEventType.PAYMENT else -r.amount)
+                for r in ytd_rows
             )
         else:
             net_tax_paid_ytd = sum(entry.net_tax_paid for entry in monthly_entries)
 
-        last_12m_end = datetime.combine(today + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+        last_12m_end = datetime.combine(
+            today + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
+        )
         last_12m_start = last_12m_end - timedelta(days=365)
         last_12m_rows = self._fetch_tax_rows(
             start_date=last_12m_start,
@@ -245,4 +256,3 @@ class TaxService:
 
 
 __all__ = ["TaxService"]
-

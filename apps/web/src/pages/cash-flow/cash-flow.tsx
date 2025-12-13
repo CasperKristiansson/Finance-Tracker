@@ -109,7 +109,11 @@ export const CashFlow: React.FC = () => {
           </h1>
           <p className="text-sm text-slate-500">
             Focused view of money in/out. Toggle month or quarter and filter by
-            accounts.
+            accounts. Tax transactions are excluded — see{" "}
+            <Link to={PageRoutes.taxes} className="underline underline-offset-2">
+              Taxes
+            </Link>
+            .
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

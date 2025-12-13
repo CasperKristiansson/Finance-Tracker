@@ -42,4 +42,3 @@ def downgrade() -> None:
     op.drop_index("ix_tax_events_user_id", table_name="tax_events")
     op.drop_table("tax_events")
     sa.Enum(name="taxeventtype").drop(op.get_bind(), checkfirst=True)
-

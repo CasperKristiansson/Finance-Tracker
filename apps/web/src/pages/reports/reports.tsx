@@ -1062,7 +1062,15 @@ export const Reports: React.FC = () => {
             Income, expense, and net
           </h1>
           <p className="text-sm text-slate-500">
-            Yearly overview, trends, and high-signal breakdowns.
+            Yearly overview, trends, and high-signal breakdowns. Tax
+            transactions are excluded — see{" "}
+            <Link
+              to={PageRoutes.taxes}
+              className="underline underline-offset-2"
+            >
+              Taxes
+            </Link>
+            .
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

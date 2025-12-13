@@ -47,6 +47,11 @@ export enum LoanEventType {
   FEE = "fee",
 }
 
+export enum TaxEventType {
+  PAYMENT = "payment",
+  REFUND = "refund",
+}
+
 export type BankImportType = "circle_k_mastercard" | "seb" | "swedbank";
 
 export type ThemePreference = "light" | "dark" | "system";

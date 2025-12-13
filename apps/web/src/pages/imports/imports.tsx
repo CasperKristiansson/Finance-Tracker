@@ -25,7 +25,7 @@ import {
 } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import { cn } from "@/lib/utils";
-import { AccountType } from "@/types/api";
+import { AccountType, TaxEventType } from "@/types/api";
 import type {
   BankImportType,
   ImportCommitRow,
@@ -86,6 +86,7 @@ const commitRowSchema = z.object({
   account_id: nullableTrimmedString,
   transfer_account_id: nullableTrimmedString,
   subscription_id: nullableTrimmedString,
+  tax_event_type: z.nativeEnum(TaxEventType).nullable().optional(),
   delete: z.boolean().optional(),
 });
 
@@ -152,6 +153,7 @@ const deriveRowDefaults = (
     account_id: fileAccountId ?? null,
     transfer_account_id: null,
     subscription_id: row.suggested_subscription_id ?? null,
+    tax_event_type: null,
     delete: false,
   };
 };
@@ -322,6 +324,7 @@ export const Imports: React.FC = () => {
       amount: row.amount?.trim() || undefined,
       occurred_at: row.occurred_at?.trim() || undefined,
       subscription_id: row.subscription_id ?? undefined,
+      tax_event_type: row.tax_event_type ?? undefined,
       delete: Boolean(row.delete),
     }));
 
@@ -390,6 +393,13 @@ export const Imports: React.FC = () => {
         commitForm.setValue(`rows.${index}.delete`, Boolean(value), {
           shouldDirty: true,
         });
+        return;
+      case "tax_event_type":
+        commitForm.setValue(
+          `rows.${index}.tax_event_type`,
+          (value as TaxEventType | null | undefined) ?? null,
+          { shouldDirty: true },
+        );
         return;
       default:
         return;
@@ -809,6 +819,7 @@ export const Imports: React.FC = () => {
                           <select
                             className="rounded border border-slate-200 px-2 py-1 text-sm"
                             value={formRow.category_id ?? ""}
+                            disabled={Boolean(formRow.tax_event_type)}
                             onChange={(e) =>
                               setRowValue(
                                 row.id,
@@ -828,6 +839,28 @@ export const Imports: React.FC = () => {
                               </option>
                             ))}
                           </select>
+                          <select
+                            className="rounded border border-slate-200 px-2 py-1 text-sm"
+                            value={formRow.tax_event_type ?? ""}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              const next =
+                                value === TaxEventType.PAYMENT
+                                  ? TaxEventType.PAYMENT
+                                  : value === TaxEventType.REFUND
+                                    ? TaxEventType.REFUND
+                                    : null;
+                              setRowValue(row.id, "tax_event_type", next);
+                              if (next) {
+                                setRowValue(row.id, "category_id", null);
+                                setRowValue(row.id, "subscription_id", null);
+                              }
+                            }}
+                          >
+                            <option value="">Tax: none</option>
+                            <option value="payment">Tax: payment</option>
+                            <option value="refund">Tax: refund</option>
+                          </select>
                           {row.suggested_confidence ? (
                             <span className="text-xs text-slate-500">
                               Confidence{" "}
@@ -846,6 +879,7 @@ export const Imports: React.FC = () => {
                           <select
                             className="rounded border border-slate-200 px-2 py-1 text-sm"
                             value={formRow.subscription_id ?? ""}
+                            disabled={Boolean(formRow.tax_event_type)}
                             onChange={async (e) => {
                               const value = e.target.value;
                               if (value === "__create__") {

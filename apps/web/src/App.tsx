@@ -32,6 +32,7 @@ import { Redirect } from "./pages/redirect/redirect.tsx";
 import { Reports } from "./pages/reports/reports.tsx";
 import { Settings } from "./pages/settings/settings.tsx";
 import { Subscriptions } from "./pages/subscriptions/subscriptions.tsx";
+import { Taxes } from "./pages/taxes/taxes.tsx";
 import { Transactions } from "./pages/transactions/transactions.tsx";
 
 const NavigationWrapper: React.FC<{
@@ -207,6 +208,14 @@ export const App: React.FC = () => {
           element={
             <NavigationWrapper title="Cash Flow">
               <CashFlow />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.taxes}
+          element={
+            <NavigationWrapper title="Taxes">
+              <Taxes />
             </NavigationWrapper>
           }
         />

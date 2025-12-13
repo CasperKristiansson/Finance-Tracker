@@ -13,6 +13,7 @@ export const PageRoutes = {
   reportsTotal: "/reports/total",
   reportsYearly: "/reports/yearly",
   cashFlow: "/cash-flow",
+  taxes: "/taxes",
   loans: "/loans",
   investments: "/investments",
   goals: "/goals",

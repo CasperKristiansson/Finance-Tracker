@@ -72,6 +72,9 @@ from .subscriptions import reset_handler_state as reset_subscription_handler_sta
 from .subscriptions import (
     update_subscription,
 )
+from .tax import create_tax_event, list_tax_events
+from .tax import reset_handler_state as reset_tax_handler_state
+from .tax import tax_summary
 from .transactions import (
     create_transaction,
     delete_transaction,
@@ -81,8 +84,6 @@ from .transactions import reset_handler_state as reset_transaction_handler_state
 from .transactions import (
     update_transaction,
 )
-from .tax import create_tax_event, list_tax_events, tax_summary
-from .tax import reset_handler_state as reset_tax_handler_state
 
 __all__ = [
     "list_accounts",

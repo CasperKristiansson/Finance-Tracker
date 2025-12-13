@@ -5,6 +5,7 @@ import {
   CategoryType,
   InterestCompound,
   LoanEventType,
+  TaxEventType,
   TransactionStatus,
   TransactionType,
 } from "./enums";
@@ -757,6 +758,8 @@ export const bankImportTypeSchema = z.enum([
   "swedbank",
 ] as const);
 
+export const taxEventTypeSchema = z.nativeEnum(TaxEventType);
+
 export const importErrorSchema = z.object({
   row_number: numeric,
   message: z.string(),
@@ -847,11 +850,71 @@ export const importCommitRowSchema = z.object({
   amount: nullableString,
   occurred_at: nullableString,
   subscription_id: nullableString,
+  tax_event_type: taxEventTypeSchema.nullable().optional(),
   delete: z.boolean().optional(),
 });
 
 export const importCommitRequestSchema = z.object({
   rows: z.array(importCommitRowSchema),
+});
+
+export const taxEventSchema = z.object({
+  id: z.string(),
+  transaction_id: z.string(),
+  event_type: taxEventTypeSchema,
+  authority: nullableString,
+  note: nullableString,
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+export const taxEventCreateRequestSchema = z.object({
+  account_id: z.string(),
+  occurred_at: z.string(),
+  posted_at: z.string().nullable().optional(),
+  amount: z.string(),
+  event_type: taxEventTypeSchema,
+  description: z.string(),
+  authority: z.string().nullable().optional(),
+  note: z.string().nullable().optional(),
+});
+
+export const taxEventCreateResponseSchema = z.object({
+  tax_event: taxEventSchema,
+  transaction: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const taxEventListItemSchema = z.object({
+  id: z.string(),
+  transaction_id: z.string(),
+  occurred_at: z.string(),
+  description: nullableString,
+  event_type: taxEventTypeSchema,
+  authority: nullableString,
+  note: nullableString,
+  account_id: z.string(),
+  account_name: nullableString,
+  amount: z.string(),
+});
+
+export const taxEventListResponseSchema = z.object({
+  events: z.array(taxEventListItemSchema),
+});
+
+export const taxSummarySchema = z.object({
+  year: numeric,
+  monthly: z.array(
+    z.object({
+      month: numeric,
+      net_tax_paid: z.string(),
+    }),
+  ),
+  totals: z.object({
+    net_tax_paid_ytd: z.string(),
+    net_tax_paid_last_12m: z.string(),
+    largest_month: numeric.nullable().optional(),
+    largest_month_value: z.string().nullable().optional(),
+  }),
 });
 
 export const investmentHoldingSchema = z
@@ -1175,6 +1238,12 @@ export type ImportExampleTransaction = z.infer<
 export type ImportCreateRequest = z.infer<typeof importCreateRequestSchema>;
 export type ImportCommitRow = z.infer<typeof importCommitRowSchema>;
 export type ImportCommitRequest = z.infer<typeof importCommitRequestSchema>;
+export type TaxEventRead = z.infer<typeof taxEventSchema>;
+export type TaxEventCreateRequest = z.infer<typeof taxEventCreateRequestSchema>;
+export type TaxEventCreateResponse = z.infer<typeof taxEventCreateResponseSchema>;
+export type TaxEventListItem = z.infer<typeof taxEventListItemSchema>;
+export type TaxEventListResponse = z.infer<typeof taxEventListResponseSchema>;
+export type TaxSummaryResponse = z.infer<typeof taxSummarySchema>;
 export type InvestmentHoldingRead = z.infer<typeof investmentHoldingSchema>;
 export type InvestmentSnapshot = z.infer<typeof investmentSnapshotSchema>;
 export type InvestmentSnapshotResponse = z.infer<

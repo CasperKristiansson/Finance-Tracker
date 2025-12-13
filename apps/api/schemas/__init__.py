@@ -115,6 +115,14 @@ from .subscription import (
     SubscriptionSummaryResponse,
     SubscriptionUpdate,
 )
+from .tax import (
+    TaxEventCreateRequest,
+    TaxEventListQuery,
+    TaxEventListResponse,
+    TaxEventRead,
+    TaxSummaryQuery,
+    TaxSummaryResponse,
+)
 from .transaction import (
     TransactionCreate,
     TransactionLegCreate,
@@ -123,14 +131,6 @@ from .transaction import (
     TransactionListResponse,
     TransactionRead,
     TransactionUpdate,
-)
-from .tax import (
-    TaxEventCreateRequest,
-    TaxEventListQuery,
-    TaxEventListResponse,
-    TaxEventRead,
-    TaxSummaryQuery,
-    TaxSummaryResponse,
 )
 
 __all__ = [
