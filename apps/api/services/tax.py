@@ -3,11 +3,10 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, cast
+from typing import Any, Dict, List, Optional, cast
 from uuid import UUID
 
 from sqlmodel import Session, select
@@ -151,11 +150,14 @@ class TaxService:
                 start_date=start, end_date=ytd_end, limit=10_000, offset=0
             )
             net_tax_paid_ytd = sum(
-                (r.amount if r.event.event_type == TaxEventType.PAYMENT else -r.amount)
-                for r in ytd_rows
+                (
+                    r.amount if r.event.event_type == TaxEventType.PAYMENT else -r.amount
+                    for r in ytd_rows
+                ),
+                Decimal("0"),
             )
         else:
-            net_tax_paid_ytd = sum(entry.net_tax_paid for entry in monthly_entries)
+            net_tax_paid_ytd = sum((entry.net_tax_paid for entry in monthly_entries), Decimal("0"))
 
         last_12m_end = datetime.combine(
             today + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
@@ -168,13 +170,16 @@ class TaxService:
             offset=0,
         )
         net_tax_paid_last_12m = sum(
-            (r.amount if r.event.event_type == TaxEventType.PAYMENT else -r.amount)
-            for r in last_12m_rows
+            (
+                r.amount if r.event.event_type == TaxEventType.PAYMENT else -r.amount
+                for r in last_12m_rows
+            ),
+            Decimal("0"),
         )
 
         largest_month = None
         largest_value = None
-        if any(monthly[m] != 0 for m in monthly):
+        if any(monthly[m] != Decimal("0") for m in monthly):
             largest_month = max(monthly, key=lambda m: monthly[m])
             largest_value = monthly[largest_month]
 

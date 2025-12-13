@@ -24,7 +24,7 @@ export const loanCreateRequestSchema = z.object({
   origin_principal: z.string(),
   current_principal: z.string(),
   interest_rate_annual: z.string(),
-  interest_compound: z.nativeEnum(InterestCompound),
+  interest_compound: z.enum(InterestCompound),
   minimum_payment: z.string().nullable().optional(),
   expected_maturity_date: z.string().nullable().optional(),
 });
@@ -33,7 +33,7 @@ export const loanUpdateRequestSchema = z.object({
   origin_principal: z.string().optional(),
   current_principal: z.string().optional(),
   interest_rate_annual: z.string().optional(),
-  interest_compound: z.nativeEnum(InterestCompound).optional(),
+  interest_compound: z.enum(InterestCompound).optional(),
   minimum_payment: z.string().nullable().optional(),
   expected_maturity_date: z.string().nullable().optional(),
 });
@@ -44,7 +44,7 @@ export const loanSchema = z.object({
   origin_principal: z.string(),
   current_principal: z.string(),
   interest_rate_annual: z.string(),
-  interest_compound: z.nativeEnum(InterestCompound),
+  interest_compound: z.enum(InterestCompound),
   minimum_payment: z.string().nullable().optional(),
   expected_maturity_date: z.string().nullable().optional(),
   created_at: z.string(),
@@ -53,7 +53,7 @@ export const loanSchema = z.object({
 
 export const accountCreateRequestSchema = z.object({
   name: z.string(),
-  account_type: z.nativeEnum(AccountType),
+  account_type: z.enum(AccountType),
   is_active: z.boolean().optional(),
   icon: z.string().nullable().optional(),
   loan: loanCreateRequestSchema
@@ -71,7 +71,7 @@ export const accountUpdateRequestSchema = z.object({
 export const accountSchema = z.object({
   id: z.string(),
   name: z.string(),
-  account_type: z.nativeEnum(AccountType),
+  account_type: z.enum(AccountType),
   is_active: z.boolean(),
   icon: z.string().nullable().optional(),
   created_at: z.string(),
@@ -129,7 +129,7 @@ export const loanEventSchema = z.object({
   loan_id: z.string(),
   transaction_id: z.string(),
   transaction_leg_id: z.string().nullable().optional(),
-  event_type: z.nativeEnum(LoanEventType),
+  event_type: z.enum(LoanEventType),
   amount: z.string(),
   occurred_at: dateString,
 });
@@ -141,7 +141,7 @@ export const loanEventsResponseSchema = z.object({
 export const categorySchema = z.object({
   id: z.string(),
   name: z.string(),
-  category_type: z.nativeEnum(CategoryType),
+  category_type: z.enum(CategoryType),
   color_hex: nullableString,
   icon: nullableString,
   is_archived: z.boolean(),
@@ -149,14 +149,14 @@ export const categorySchema = z.object({
 
 export const categoryCreateRequestSchema = z.object({
   name: z.string(),
-  category_type: z.nativeEnum(CategoryType),
+  category_type: z.enum(CategoryType),
   color_hex: nullableString,
   icon: nullableString,
 });
 
 export const categoryUpdateRequestSchema = z.object({
   name: z.string().optional(),
-  category_type: z.nativeEnum(CategoryType).optional(),
+  category_type: z.enum(CategoryType).optional(),
   color_hex: nullableString,
   icon: nullableString,
   is_archived: z.boolean().optional(),
@@ -169,7 +169,7 @@ export const categoryListSchema = z.object({
 export const budgetSchema = z.object({
   id: z.string(),
   category_id: z.string(),
-  period: z.nativeEnum(BudgetPeriod),
+  period: z.enum(BudgetPeriod),
   amount: z.string(),
   note: nullableString,
 });
@@ -190,13 +190,13 @@ export const budgetListSchema = z.object({
 
 export const budgetCreateRequestSchema = z.object({
   category_id: z.string(),
-  period: z.nativeEnum(BudgetPeriod),
+  period: z.enum(BudgetPeriod),
   amount: z.string(),
   note: nullableString,
 });
 
 export const budgetUpdateRequestSchema = z.object({
-  period: z.nativeEnum(BudgetPeriod).optional(),
+  period: z.enum(BudgetPeriod).optional(),
   amount: z.string().optional(),
   note: nullableString,
 });
@@ -219,8 +219,8 @@ export const transactionCreateSchema = z.object({
   external_id: nullableString,
   occurred_at: dateString,
   posted_at: z.string().nullable().optional(),
-  transaction_type: z.nativeEnum(TransactionType).optional(),
-  status: z.nativeEnum(TransactionStatus).optional(),
+  transaction_type: z.enum(TransactionType).optional(),
+  status: z.enum(TransactionStatus).optional(),
   legs: z.array(transactionLegCreateSchema),
 });
 
@@ -231,18 +231,18 @@ export const transactionUpdateRequestSchema = z.object({
   posted_at: z.string().nullable().optional(),
   category_id: nullableString,
   subscription_id: nullableString,
-  status: z.nativeEnum(TransactionStatus).optional(),
+  status: z.enum(TransactionStatus).optional(),
 });
 
 export const transactionStatusUpdateSchema = z.object({
-  status: z.nativeEnum(TransactionStatus),
+  status: z.enum(TransactionStatus),
 });
 
 export const transactionSchema = z.object({
   id: z.string(),
   category_id: nullableString,
   subscription_id: nullableString,
-  transaction_type: z.nativeEnum(TransactionType),
+  transaction_type: z.enum(TransactionType),
   description: nullableString,
   notes: nullableString,
   external_id: nullableString,
@@ -250,7 +250,7 @@ export const transactionSchema = z.object({
   posted_at: dateString,
   created_at: dateString,
   updated_at: dateString,
-  status: z.nativeEnum(TransactionStatus),
+  status: z.enum(TransactionStatus),
   legs: z.array(transactionLegSchema),
 });
 
@@ -466,7 +466,7 @@ export const totalOverviewSchema = z.object({
     z.object({
       account_id: z.string(),
       name: z.string(),
-      account_type: z.nativeEnum(AccountType),
+      account_type: z.enum(AccountType),
       current_balance: z.string(),
       operating_income: z.string(),
       operating_expense: z.string(),
@@ -667,7 +667,7 @@ export const yearlyOverviewSchema = z.object({
     z.object({
       account_id: z.string(),
       name: z.string(),
-      account_type: z.nativeEnum(AccountType),
+      account_type: z.enum(AccountType),
       start_balance: z.string(),
       end_balance: z.string(),
       change: z.string(),
@@ -758,7 +758,7 @@ export const bankImportTypeSchema = z.enum([
   "swedbank",
 ] as const);
 
-export const taxEventTypeSchema = z.nativeEnum(TaxEventType);
+export const taxEventTypeSchema = z.enum(TaxEventType);
 
 export const importErrorSchema = z.object({
   row_number: numeric,
@@ -814,7 +814,7 @@ export const importRowSchema = z
     rule_type: nullableString,
     rule_summary: nullableString,
   })
-  .passthrough();
+  .loose();
 
 export const importBatchSchema = z.object({
   id: z.string(),
@@ -932,7 +932,7 @@ export const investmentHoldingSchema = z
     value_sek: nullableMoney,
     notes: nullableString,
   })
-  .passthrough();
+  .loose();
 
 export const investmentSnapshotSchema = z.object({
   id: z.string(),
@@ -974,7 +974,7 @@ export const investmentTransactionSchema = z
     fee_sek: nullableMoney,
     notes: nullableString,
   })
-  .passthrough();
+  .loose();
 
 export const investmentTransactionListSchema = z.object({
   transactions: z.array(investmentTransactionSchema),
@@ -1240,7 +1240,9 @@ export type ImportCommitRow = z.infer<typeof importCommitRowSchema>;
 export type ImportCommitRequest = z.infer<typeof importCommitRequestSchema>;
 export type TaxEventRead = z.infer<typeof taxEventSchema>;
 export type TaxEventCreateRequest = z.infer<typeof taxEventCreateRequestSchema>;
-export type TaxEventCreateResponse = z.infer<typeof taxEventCreateResponseSchema>;
+export type TaxEventCreateResponse = z.infer<
+  typeof taxEventCreateResponseSchema
+>;
 export type TaxEventListItem = z.infer<typeof taxEventListItemSchema>;
 export type TaxEventListResponse = z.infer<typeof taxEventListResponseSchema>;
 export type TaxSummaryResponse = z.infer<typeof taxSummarySchema>;

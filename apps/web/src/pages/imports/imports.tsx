@@ -86,7 +86,7 @@ const commitRowSchema = z.object({
   account_id: nullableTrimmedString,
   transfer_account_id: nullableTrimmedString,
   subscription_id: nullableTrimmedString,
-  tax_event_type: z.nativeEnum(TaxEventType).nullable().optional(),
+  tax_event_type: z.enum(TaxEventType).nullable().optional(),
   delete: z.boolean().optional(),
 });
 

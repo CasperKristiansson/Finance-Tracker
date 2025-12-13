@@ -43,7 +43,7 @@ type CategoryFormValues = z.infer<typeof categoryFormSchema>;
 
 const categoryEditFormSchema = z.object({
   name: z.string().min(1, "Name is required").trim(),
-  category_type: z.nativeEnum(CategoryType),
+  category_type: z.enum(CategoryType),
   icon: z.string().optional(),
   is_archived: z.boolean(),
 });

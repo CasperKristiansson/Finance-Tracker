@@ -22,7 +22,7 @@ const transactionFormSchema = z
     description: z.string().min(1, "Description required").trim(),
     notes: z.string().optional(),
     category_id: z.string().optional(),
-    status: z.nativeEnum(TransactionStatus),
+    status: z.enum(TransactionStatus),
     occurred_at: z.string().min(1, "Occurred date required"),
     posted_at: z.string().optional(),
     legs: z.array(legSchema).min(2, "Add at least two legs"),

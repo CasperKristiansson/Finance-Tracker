@@ -60,7 +60,7 @@ format:
 	black apps/api
 
 test:
-	pytest apps/api/tests
+	PYTHONPATH=. pytest apps/api/tests
 
 deploy-layer:
 	$(MAKE) -C infra/layers build

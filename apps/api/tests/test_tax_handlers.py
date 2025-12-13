@@ -137,6 +137,7 @@ def test_reports_exclude_tax_transactions_from_income_and_expense():
         session.commit()
         session.refresh(bank)
         session.refresh(balancing)
+        bank_id = str(bank.id)
 
         income_category = Category(name="Salary", category_type=CategoryType.INCOME)
         expense_category = Category(name="Food", category_type=CategoryType.EXPENSE)
@@ -180,7 +181,7 @@ def test_reports_exclude_tax_transactions_from_income_and_expense():
         monthly_report(
             {
                 "queryStringParameters": {
-                    "account_ids": str(bank.id),
+                    "account_ids": bank_id,
                     "year": "2024",
                 }
             },
@@ -193,7 +194,7 @@ def test_reports_exclude_tax_transactions_from_income_and_expense():
         {
             "body": json.dumps(
                 {
-                    "account_id": str(bank.id),
+                    "account_id": bank_id,
                     "occurred_at": "2024-01-05T00:00:00Z",
                     "amount": "999.00",
                     "event_type": "payment",
@@ -209,7 +210,7 @@ def test_reports_exclude_tax_transactions_from_income_and_expense():
         monthly_report(
             {
                 "queryStringParameters": {
-                    "account_ids": str(bank.id),
+                    "account_ids": bank_id,
                     "year": "2024",
                 }
             },

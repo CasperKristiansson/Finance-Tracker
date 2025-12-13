@@ -251,7 +251,9 @@ export const Taxes: React.FC = () => {
     <MotionPage className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-xs tracking-wide text-slate-500 uppercase">Taxes</p>
+          <p className="text-xs tracking-wide text-slate-500 uppercase">
+            Taxes
+          </p>
           <h1 className="text-2xl font-semibold text-slate-900">
             Income tax (Skatteverket)
           </h1>

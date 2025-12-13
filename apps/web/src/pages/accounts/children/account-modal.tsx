@@ -34,14 +34,14 @@ const iconPresets = [
 const accountFormSchema = z
   .object({
     name: z.string().min(1, "Name is required").trim(),
-    account_type: z.nativeEnum(AccountType),
+    account_type: z.enum(AccountType),
     is_active: z.boolean(),
     icon: z.string().optional(),
     loan: z.object({
       origin_principal: z.string().optional(),
       current_principal: z.string().optional(),
       interest_rate_annual: z.string().optional(),
-      interest_compound: z.nativeEnum(InterestCompound),
+      interest_compound: z.enum(InterestCompound),
       minimum_payment: z.string().optional(),
       expected_maturity_date: z.string().optional(),
     }),
