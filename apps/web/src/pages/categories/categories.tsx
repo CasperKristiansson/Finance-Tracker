@@ -497,7 +497,9 @@ export const Categories: React.FC = () => {
                   Number(p.total ?? 0),
                 );
                 const hasSeries = series.length >= 2;
-                const delta = hasSeries ? series[series.length - 1] - series[0] : 0;
+                const delta = hasSeries
+                  ? series[series.length - 1] - series[0]
+                  : 0;
                 const deltaPct =
                   hasSeries && series[0] !== 0
                     ? (delta / Math.abs(series[0])) * 100
@@ -505,7 +507,9 @@ export const Categories: React.FC = () => {
 
                 const accent =
                   cat.color_hex ??
-                  (cat.category_type === CategoryType.INCOME ? "#10b981" : "#ef4444");
+                  (cat.category_type === CategoryType.INCOME
+                    ? "#10b981"
+                    : "#ef4444");
 
                 return (
                   <div
@@ -542,7 +546,9 @@ export const Categories: React.FC = () => {
                             <Badge variant="outline">Archived</Badge>
                           ) : null}
                         </div>
-                        <div className="text-xs text-slate-500">{usageText(cat)}</div>
+                        <div className="text-xs text-slate-500">
+                          {usageText(cat)}
+                        </div>
                       </div>
                     </div>
 
@@ -565,7 +571,7 @@ export const Categories: React.FC = () => {
                                 strokeLinejoin="round"
                               />
                             </svg>
-                            <span className="text-[11px] font-semibold tabular-nums text-slate-600">
+                            <span className="text-[11px] font-semibold text-slate-600 tabular-nums">
                               {deltaPct !== null
                                 ? `${delta >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%`
                                 : formatCurrency(delta)}

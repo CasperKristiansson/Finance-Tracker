@@ -24,6 +24,7 @@ from .budget import (
 from .category import (
     CategoryCreate,
     CategoryListResponse,
+    CategoryMonthlyPoint,
     CategoryPathParams,
     CategoryRead,
     CategoryUpdate,
@@ -148,6 +149,7 @@ __all__ = [
     "CategoryCreate",
     "CategoryUpdate",
     "CategoryRead",
+    "CategoryMonthlyPoint",
     "ListCategoriesQuery",
     "CategoryPathParams",
     "CategoryListResponse",
