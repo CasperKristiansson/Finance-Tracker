@@ -23,6 +23,7 @@ from uuid import UUID
 
 import boto3
 import pandas as pd
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
@@ -55,6 +56,7 @@ from apps.api.shared import (
     scope_session_to_user,
 )
 from apps.api.shared.session import get_session
+
 TX_PATH = REPO_ROOT / "docs" / "data" / "Transactions Export.xlsx"
 LOAN_PATH = REPO_ROOT / "docs" / "data" / "Loans Export.xlsx"
 
@@ -87,7 +89,12 @@ def progress(label: str, current: int, total: int) -> None:
 
 
 def make_external_id(
-    occurred_at, account_name: str, amount: Decimal, category: Optional[str], note: str, type_label: str
+    occurred_at,
+    account_name: str,
+    amount: Decimal,
+    category: Optional[str],
+    note: str,
+    type_label: str,
 ) -> str:
     raw = f"{occurred_at.isoformat()}|{account_name}|{amount}|{category}|{note}|{type_label}"
     return "legacy-" + hashlib.sha1(raw.encode()).hexdigest()
@@ -126,9 +133,7 @@ def ensure_accounts(session, user_id: str) -> Tuple[Dict[str, str], Dict[str, st
         ).one_or_none()
         if existing is None and legacy_aliases:
             existing = session.exec(
-                select(Account).where(
-                    Account.user_id == user_id, Account.name.in_(legacy_aliases)
-                )
+                select(Account).where(Account.user_id == user_id, Account.name.in_(legacy_aliases))
             ).one_or_none()
         if existing:
             existing.account_type = atype
@@ -162,7 +167,9 @@ def ensure_accounts(session, user_id: str) -> Tuple[Dict[str, str], Dict[str, st
     return rename_map, account_ids
 
 
-def ensure_categories(session, user_id: str, tx_df: pd.DataFrame) -> Tuple[Dict[str, str], Dict[str, CategoryType]]:
+def ensure_categories(
+    session, user_id: str, tx_df: pd.DataFrame
+) -> Tuple[Dict[str, str], Dict[str, CategoryType]]:
     def resolve(typeset):
         if "Income" in typeset and "Expense" in typeset:
             return CategoryType.ADJUSTMENT
@@ -506,7 +513,9 @@ def import_transactions(
     tax_pending: list[tuple[int, TaxEventType, Optional[str]]] = []
 
     def infer_transaction_type(
-        legs: Iterable[TransactionLeg], category_type: Optional[CategoryType], fallback: TransactionType
+        legs: Iterable[TransactionLeg],
+        category_type: Optional[CategoryType],
+        fallback: TransactionType,
     ) -> TransactionType:
         if fallback == TransactionType.ADJUSTMENT:
             return TransactionType.ADJUSTMENT
@@ -627,7 +636,10 @@ def import_transactions(
             transactions.append(tx)
             legs_pending.append((len(transactions) - 1, legs))
             tax_pending.append((len(transactions) - 1, tax_type, note_str or None))
-        elif ttype == "Transfer-Out":
+            progress("Transactions", idx, total)
+            continue
+
+        if ttype == "Transfer-Out":
             dest_name = rename_map.get(category_name, category_name) if category_name else None
             dest_id = account_ids.get(dest_name or "")
             if dest_id is None:
@@ -702,28 +714,28 @@ def import_transactions(
                 TransactionLeg(account_id=offset_id, amount=amt),
             ]
 
-            category_type = (
-                cat_types.get(category_name) if category_name and ttype != "Transfer-Out" else None
-            )
-            inferred_type = infer_transaction_type(legs, category_type, tx_type)
-            validate_legs(inferred_type, legs)
+        category_type = (
+            cat_types.get(category_name) if category_name and ttype != "Transfer-Out" else None
+        )
+        inferred_type = infer_transaction_type(legs, category_type, tx_type)
+        validate_legs(inferred_type, legs)
 
-            tx = Transaction(
-                category_id=category_id,
-                transaction_type=inferred_type,
-                description=description,
-                occurred_at=occurred_at,
-                posted_at=occurred_at,
-                status=TransactionStatus.IMPORTED,
-                created_source=CreatedSource.IMPORT,
-                external_id=external_id,
-            )
-            if user_id:
-                tx.user_id = user_id
-                for leg in legs:
-                    leg.user_id = user_id
-            transactions.append(tx)
-            legs_pending.append((len(transactions) - 1, legs))
+        tx = Transaction(
+            category_id=category_id,
+            transaction_type=inferred_type,
+            description=description,
+            occurred_at=occurred_at,
+            posted_at=occurred_at,
+            status=TransactionStatus.IMPORTED,
+            created_source=CreatedSource.IMPORT,
+            external_id=external_id,
+        )
+        if user_id:
+            tx.user_id = user_id
+            for leg in legs:
+                leg.user_id = user_id
+        transactions.append(tx)
+        legs_pending.append((len(transactions) - 1, legs))
 
         progress("Transactions", idx, total)
 
