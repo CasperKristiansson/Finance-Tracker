@@ -11,7 +11,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useAppSelector } from "@/app/hooks";
 import {
   MotionPage,
   StaggerWrap,
@@ -31,18 +30,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useInvestmentsApi } from "@/hooks/use-api";
-import { apiFetch } from "@/lib/apiClient";
 import { cn } from "@/lib/utils";
 import {
   AccountType,
-  TransactionType,
   type AccountRead,
   type InvestmentSnapshot,
-  type TransactionRead,
+  type InvestmentTransactionRead,
 } from "@/types/api";
-import { transactionListSchema } from "@/types/schemas";
 
 const coerceNumber = (value: unknown): number | undefined => {
   const num = Number(value);
@@ -64,6 +59,49 @@ const formatCompact = (value: number) =>
 
 const formatSignedSek = (value: number) =>
   `${value >= 0 ? "+" : "-"}${formatSek(Math.abs(value))}`;
+
+const classifyCashflowType = (
+  tx: InvestmentTransactionRead,
+): "deposit" | "withdrawal" | null => {
+  const type = String(tx.transaction_type ?? "").toLowerCase();
+  const description = String(tx.description ?? "").toLowerCase();
+  const combined = `${type} ${description}`.trim();
+
+  const amount = Number(tx.amount_sek ?? 0);
+  const quantity = tx.quantity;
+  const hasQuantity = quantity !== null && Number(quantity) !== 0;
+  const hasHolding =
+    Boolean(tx.holding_name) || Boolean(tx.isin) || hasQuantity;
+
+  if (
+    combined.includes("insätt") ||
+    combined.includes("insatt") ||
+    combined.includes("deposit") ||
+    combined.includes("inbetal")
+  ) {
+    return "deposit";
+  }
+  if (
+    combined.includes("utt") ||
+    combined.includes("withdraw") ||
+    combined.includes("utbetal")
+  ) {
+    return "withdrawal";
+  }
+
+  // Sometimes Nordnet exports tag cash movements as transfers/överföring.
+  if (
+    !hasHolding &&
+    (combined.includes("överför") ||
+      combined.includes("overfor") ||
+      combined.includes("transfer"))
+  ) {
+    if (amount > 0) return "deposit";
+    if (amount < 0) return "withdrawal";
+  }
+
+  return null;
+};
 
 const toChartId = (value: string) =>
   value.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
@@ -154,28 +192,28 @@ const ChartCard: React.FC<{
 );
 
 export const Investments: React.FC = () => {
-  const token = useAppSelector(selectToken);
   const {
     items: accounts,
     loading: accountsLoading,
     fetchAccounts,
   } = useAccountsApi();
-  const { snapshots, loading, fetchSnapshots } = useInvestmentsApi();
+  const {
+    snapshots,
+    transactions,
+    loading,
+    error,
+    fetchSnapshots,
+    fetchTransactions,
+  } = useInvestmentsApi();
 
   const [showAllAccounts, setShowAllAccounts] = useState(false);
   const [focusedAccount, setFocusedAccount] = useState<string>("ALL");
-  const [cashflowRefreshKey, setCashflowRefreshKey] = useState(0);
-  const [cashflowTransactions, setCashflowTransactions] = useState<
-    TransactionRead[]
-  >([]);
-  const [cashflowLoading, setCashflowLoading] = useState(false);
-  const [cashflowError, setCashflowError] = useState<string | null>(null);
-  const [cashflowTruncated, setCashflowTruncated] = useState(false);
 
   useEffect(() => {
     fetchSnapshots();
     fetchAccounts();
-  }, [fetchAccounts, fetchSnapshots]);
+    fetchTransactions();
+  }, [fetchAccounts, fetchSnapshots, fetchTransactions]);
 
   const investmentAccounts = useMemo(() => {
     return (accounts ?? []).filter(
@@ -184,16 +222,6 @@ export const Investments: React.FC = () => {
         account.account_type === AccountType.INVESTMENT,
     );
   }, [accounts]);
-
-  const investmentAccountIds = useMemo(
-    () => investmentAccounts.map((acc) => acc.id),
-    [investmentAccounts],
-  );
-
-  const investmentAccountIdSet = useMemo(
-    () => new Set(investmentAccountIds),
-    [investmentAccountIds],
-  );
 
   const investmentAccountsByKey = useMemo(() => {
     const map = new Map<string, { id: string; name: string }>();
@@ -206,80 +234,8 @@ export const Investments: React.FC = () => {
     return map;
   }, [investmentAccounts]);
 
-  const cashflowFetchStart = useMemo(() => {
-    const fallback = (() => {
-      const now = new Date();
-      const start = new Date(now);
-      start.setDate(now.getDate() - 365);
-      return start.toISOString().slice(0, 10);
-    })();
-
-    const earliest = snapshots
-      .map((snap) => String(snap.snapshot_date).slice(0, 10))
-      .filter(Boolean)
-      .sort()[0];
-
-    return earliest ?? fallback;
-  }, [snapshots]);
-
-  useEffect(() => {
-    const fetchCashflows = async () => {
-      const accountIds = investmentAccountIds.join(",");
-      if (!token || !accountIds) {
-        setCashflowTransactions([]);
-        setCashflowError(null);
-        setCashflowTruncated(false);
-        return;
-      }
-
-      setCashflowLoading(true);
-      setCashflowError(null);
-      setCashflowTruncated(false);
-
-      const all: TransactionRead[] = [];
-      const limit = 200;
-      let offset = 0;
-      const maxPages = 10;
-
-      try {
-        for (let page = 0; page < maxPages; page += 1) {
-          const { data } = await apiFetch<{
-            transactions: TransactionRead[];
-          }>({
-            path: "/transactions",
-            query: {
-              start_date: cashflowFetchStart,
-              account_ids: accountIds,
-              limit,
-              offset,
-            },
-            token,
-            schema: transactionListSchema,
-          });
-
-          const pageItems = data.transactions ?? [];
-          all.push(...pageItems);
-          if (pageItems.length < limit) break;
-          offset += limit;
-
-          if (page === maxPages - 1) {
-            setCashflowTruncated(true);
-          }
-        }
-
-        setCashflowTransactions(all);
-      } catch (err) {
-        console.error("Failed to fetch investment cashflows", err);
-        setCashflowError(
-          err instanceof Error ? err.message : "Failed to load cashflows",
-        );
-      } finally {
-        setCashflowLoading(false);
-      }
-    };
-
-    void fetchCashflows();
-  }, [cashflowFetchStart, cashflowRefreshKey, investmentAccountIds, token]);
+  const cashflowLoading = loading && transactions.length === 0;
+  const cashflowError = error;
 
   const investmentValueByDate = useMemo(() => {
     const byDate = new Map<
@@ -348,6 +304,71 @@ export const Investments: React.FC = () => {
   const portfolioStartValue = portfolioSeries.at(0)?.value ?? 0;
   const portfolioEndValue = portfolioSeries.at(-1)?.value ?? 0;
 
+  const cashflowEvents = useMemo(() => {
+    const events: {
+      id: string;
+      occurred_at: string;
+      accountId: string;
+      accountName: string;
+      direction: "deposit" | "withdrawal";
+      amount: number;
+      description: string;
+      transactionType: string;
+    }[] = [];
+
+    transactions.forEach((tx) => {
+      const classification = classifyCashflowType(tx);
+      if (!classification) return;
+
+      const rawAccountName = String(tx.account_name ?? "").trim();
+      if (!rawAccountName) return;
+      const normalizedAccountName = normalizeKey(rawAccountName);
+      const exact = investmentAccountsByKey.get(normalizedAccountName);
+      const canonical =
+        exact ??
+        investmentAccounts.reduce<{ id: string; name: string } | null>(
+          (best, account) => {
+            const accountKey = normalizeKey(account.name);
+            if (
+              normalizedAccountName.includes(accountKey) ||
+              accountKey.includes(normalizedAccountName)
+            ) {
+              if (!best) return { id: account.id, name: account.name };
+              return accountKey.length > normalizeKey(best.name).length
+                ? { id: account.id, name: account.name }
+                : best;
+            }
+            return best;
+          },
+          null,
+        );
+      if (!canonical) return;
+
+      const rawAmount = Number(tx.amount_sek ?? 0);
+      if (!Number.isFinite(rawAmount) || rawAmount === 0) return;
+
+      let direction = classification;
+      if (direction === "deposit" && rawAmount < 0) direction = "withdrawal";
+      if (direction === "withdrawal" && rawAmount > 0) direction = "deposit";
+
+      events.push({
+        id: tx.id,
+        occurred_at: tx.occurred_at,
+        accountId: canonical.id,
+        accountName: canonical.name,
+        direction,
+        amount: Math.abs(rawAmount),
+        description: tx.description ?? "",
+        transactionType: String(tx.transaction_type ?? ""),
+      });
+    });
+
+    return events.sort(
+      (a, b) =>
+        new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime(),
+    );
+  }, [investmentAccounts, investmentAccountsByKey, transactions]);
+
   const accountSummaries = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
     return investmentAccounts
@@ -376,6 +397,8 @@ export const Investments: React.FC = () => {
         }
 
         const last = baseSeries.at(-1);
+        const asOfDate = last?.date;
+        const asOfValue = last?.value ?? 0;
         const extended =
           last && last.date !== today
             ? [...baseSeries, { ...last, date: today }]
@@ -384,8 +407,8 @@ export const Investments: React.FC = () => {
         return {
           accountId: account.id,
           accountName: account.name,
-          latestDate: extended.at(-1)?.date,
-          latestValue: extended.at(-1)?.value ?? 0,
+          latestDate: asOfDate,
+          latestValue: asOfValue,
           startDate: extended[0]?.date,
           startValue: extended[0]?.value ?? 0,
           series: extended,
@@ -446,34 +469,28 @@ export const Investments: React.FC = () => {
       return created;
     };
 
-    cashflowTransactions.forEach((tx) => {
-      if (tx.transaction_type !== TransactionType.TRANSFER) return;
-      const occurred = String(tx.occurred_at).slice(0, 10);
+    cashflowEvents.forEach((event) => {
+      const occurred = String(event.occurred_at).slice(0, 10);
       const is30 = occurred >= iso30;
       const isYtd = occurred >= isoYtd;
       const is12m = occurred >= iso12m;
 
-      tx.legs.forEach((leg) => {
-        if (!investmentAccountIdSet.has(leg.account_id)) return;
-        const amount = Number(leg.amount);
-        if (!Number.isFinite(amount) || amount === 0) return;
-        const deposit = amount > 0 ? amount : 0;
-        const withdrawal = amount < 0 ? Math.abs(amount) : 0;
+      const bucket = ensure(event.accountId);
+      const deposit = event.direction === "deposit" ? event.amount : 0;
+      const withdrawal = event.direction === "withdrawal" ? event.amount : 0;
 
-        const bucket = ensure(leg.account_id);
-        if (is30) {
-          bucket.deposits30 += deposit;
-          bucket.withdrawals30 += withdrawal;
-        }
-        if (isYtd) {
-          bucket.depositsYtd += deposit;
-          bucket.withdrawalsYtd += withdrawal;
-        }
-        if (is12m) {
-          bucket.deposits12m += deposit;
-          bucket.withdrawals12m += withdrawal;
-        }
-      });
+      if (is30) {
+        bucket.deposits30 += deposit;
+        bucket.withdrawals30 += withdrawal;
+      }
+      if (isYtd) {
+        bucket.depositsYtd += deposit;
+        bucket.withdrawalsYtd += withdrawal;
+      }
+      if (is12m) {
+        bucket.deposits12m += deposit;
+        bucket.withdrawals12m += withdrawal;
+      }
     });
 
     const totals = Array.from(byAccountId.values()).reduce(
@@ -505,32 +522,17 @@ export const Investments: React.FC = () => {
       netYtd: totals.depositsYtd - totals.withdrawalsYtd,
       net12m: totals.deposits12m - totals.withdrawals12m,
     };
-  }, [cashflowTransactions, investmentAccountIdSet]);
+  }, [cashflowEvents]);
 
   const recentCashTransfers = useMemo(() => {
-    const rows = cashflowTransactions
-      .filter((tx) => tx.transaction_type === TransactionType.TRANSFER)
-      .map((tx) => {
-        const investmentAmount = tx.legs.reduce((sum, leg) => {
-          if (!investmentAccountIdSet.has(leg.account_id)) return sum;
-          const amt = Number(leg.amount);
-          return Number.isFinite(amt) ? sum + amt : sum;
-        }, 0);
-        return {
-          id: tx.id,
-          occurred_at: tx.occurred_at,
-          description: tx.description ?? "",
-          amount: investmentAmount,
-        };
-      })
-      .filter((row) => row.amount !== 0)
+    const rows = cashflowEvents
+      .slice()
       .sort(
         (a, b) =>
           new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime(),
       );
-
     return rows.slice(0, 12);
-  }, [cashflowTransactions, investmentAccountIdSet]);
+  }, [cashflowEvents]);
 
   const portfolioPerformance = useMemo(() => {
     if (!portfolioSeries.length) {
@@ -549,23 +551,17 @@ export const Investments: React.FC = () => {
     let depositsSinceStart = 0;
     let withdrawalsSinceStart = 0;
 
-    cashflowTransactions.forEach((tx) => {
-      if (tx.transaction_type !== TransactionType.TRANSFER) return;
-      const occurred = String(tx.occurred_at).slice(0, 10);
+    cashflowEvents.forEach((event) => {
+      const occurred = String(event.occurred_at).slice(0, 10);
       if (occurred < startDate || occurred > today) return;
-      tx.legs.forEach((leg) => {
-        if (!investmentAccountIdSet.has(leg.account_id)) return;
-        const amount = Number(leg.amount);
-        if (!Number.isFinite(amount) || amount === 0) return;
-        if (amount > 0) depositsSinceStart += amount;
-        else withdrawalsSinceStart += Math.abs(amount);
-      });
+      if (event.direction === "deposit") depositsSinceStart += event.amount;
+      else withdrawalsSinceStart += event.amount;
     });
 
     const netSinceStart = depositsSinceStart - withdrawalsSinceStart;
     const marketSinceStart =
       portfolioEndValue - portfolioStartValue - netSinceStart;
-    const investedBaseSinceStart = portfolioStartValue + depositsSinceStart;
+    const investedBaseSinceStart = portfolioStartValue + netSinceStart;
     const marketSinceStartPct =
       investedBaseSinceStart > 0
         ? (marketSinceStart / investedBaseSinceStart) * 100
@@ -577,7 +573,7 @@ export const Investments: React.FC = () => {
     const startValue12m = startPoint12m?.value ?? portfolioStartValue;
     const market12m =
       portfolioEndValue - startValue12m - cashflowSummary.net12m;
-    const investedBase12m = startValue12m + cashflowSummary.totals.deposits12m;
+    const investedBase12m = startValue12m + cashflowSummary.net12m;
     const market12mPct =
       investedBase12m > 0 ? (market12m / investedBase12m) * 100 : null;
 
@@ -591,9 +587,7 @@ export const Investments: React.FC = () => {
   }, [
     cashflowSummary.iso12m,
     cashflowSummary.net12m,
-    cashflowSummary.totals.deposits12m,
-    cashflowTransactions,
-    investmentAccountIdSet,
+    cashflowEvents,
     portfolioEndValue,
     portfolioSeries,
     portfolioStartValue,
@@ -623,7 +617,7 @@ export const Investments: React.FC = () => {
             onClick={() => {
               fetchSnapshots();
               fetchAccounts();
-              setCashflowRefreshKey((v) => v + 1);
+              fetchTransactions();
             }}
             disabled={loading || accountsLoading || cashflowLoading}
           >
@@ -782,11 +776,6 @@ export const Investments: React.FC = () => {
                   <span className="text-xs tracking-wide text-slate-600 uppercase">
                     Cashflow
                   </span>
-                  {cashflowTruncated ? (
-                    <Badge className="bg-amber-50 text-xs text-amber-700">
-                      Truncated
-                    </Badge>
-                  ) : null}
                 </div>
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-slate-500">Added (30d)</span>
@@ -852,7 +841,9 @@ export const Investments: React.FC = () => {
                 </div>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-500">Growth (excl. transfers)</span>
+                <span className="text-slate-500">
+                  Growth (12m, excl. transfers)
+                </span>
                 <span
                   className={cn(
                     "font-medium",
@@ -1061,7 +1052,7 @@ export const Investments: React.FC = () => {
                       const market12m = hasHistory
                         ? acct.latestValue - startValue12m - net12m
                         : null;
-                      const investedBase12m = startValue12m + flow.deposits12m;
+                      const investedBase12m = startValue12m + net12m;
                       const market12mPct =
                         market12m !== null && investedBase12m > 0
                           ? (market12m / investedBase12m) * 100
@@ -1177,7 +1168,7 @@ export const Investments: React.FC = () => {
         <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)] lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-slate-800">
-              Added / withdrawn (cash transfers)
+              Added / withdrawn
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -1271,7 +1262,7 @@ export const Investments: React.FC = () => {
           <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
             <CardHeader className="flex items-center justify-between pb-2">
               <CardTitle className="text-sm text-slate-800">
-                Recent cash transfers
+                Recent deposits / withdrawals
               </CardTitle>
               <Button
                 size="sm"
@@ -1280,11 +1271,13 @@ export const Investments: React.FC = () => {
                   exportCsv(
                     recentCashTransfers.map((tx) => ({
                       date: tx.occurred_at,
-                      direction: tx.amount >= 0 ? "Added" : "Withdrawn",
-                      description: tx.description || "",
-                      amount_sek: Math.abs(tx.amount),
+                      account: tx.accountName,
+                      direction:
+                        tx.direction === "deposit" ? "Added" : "Withdrawn",
+                      description: tx.description || tx.transactionType || "",
+                      amount_sek: tx.amount,
                     })),
-                    "investment-cash-transfers.csv",
+                    "investment-cashflow.csv",
                   )
                 }
                 disabled={!recentCashTransfers.length}
@@ -1298,6 +1291,7 @@ export const Investments: React.FC = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Date</TableHead>
+                      <TableHead>Account</TableHead>
                       <TableHead>Direction</TableHead>
                       <TableHead>Description</TableHead>
                       <TableHead className="text-right">Amount (SEK)</TableHead>
@@ -1309,29 +1303,32 @@ export const Investments: React.FC = () => {
                         <TableCell className="text-slate-600">
                           {tx.occurred_at.slice(0, 10)}
                         </TableCell>
+                        <TableCell className="text-slate-800">
+                          {tx.accountName}
+                        </TableCell>
                         <TableCell
                           className={cn(
                             "text-slate-700",
-                            tx.amount >= 0
+                            tx.direction === "deposit"
                               ? "text-emerald-700"
                               : "text-rose-700",
                           )}
                         >
-                          {tx.amount >= 0 ? "Added" : "Withdrawn"}
+                          {tx.direction === "deposit" ? "Added" : "Withdrawn"}
                         </TableCell>
                         <TableCell className="text-slate-800">
-                          {tx.description || "-"}
+                          {tx.description || tx.transactionType || "-"}
                         </TableCell>
                         <TableCell
                           className={cn(
                             "text-right",
-                            tx.amount >= 0
+                            tx.direction === "deposit"
                               ? "text-emerald-700"
                               : "text-rose-700",
                           )}
                         >
-                          {tx.amount >= 0 ? "+" : "-"}
-                          {formatSek(Math.abs(tx.amount))}
+                          {tx.direction === "deposit" ? "+" : "-"}
+                          {formatSek(tx.amount)}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -1340,8 +1337,8 @@ export const Investments: React.FC = () => {
               ) : (
                 <p className="text-sm text-slate-500">
                   {cashflowLoading
-                    ? "Loading cash transfers…"
-                    : "No cash transfers found in the last 12 months."}
+                    ? "Loading cashflow…"
+                    : "No deposits or withdrawals found."}
                 </p>
               )}
             </CardContent>
