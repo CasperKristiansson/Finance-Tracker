@@ -234,11 +234,13 @@ export const TransactionModal: React.FC<{
                   className="rounded border border-slate-200 px-3 py-2"
                   {...register("status")}
                 >
-                  {Object.values(TransactionStatus).map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
+                  {Object.values(TransactionStatus)
+                    .filter((status) => status !== TransactionStatus.REVIEWED)
+                    .map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
                 </select>
               </label>
             </div>
@@ -263,7 +265,7 @@ export const TransactionModal: React.FC<{
                     <option value="">Select account</option>
                     {accounts.map((acc) => (
                       <option key={acc.id} value={acc.id}>
-                        {acc.account_type} • {acc.id.slice(0, 6)}
+                        {acc.name}
                       </option>
                     ))}
                   </select>

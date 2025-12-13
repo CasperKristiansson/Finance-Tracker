@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import calendar
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Iterable, List, Optional
 from uuid import UUID
 
@@ -86,7 +87,7 @@ class ReportingService:
         account_ids: Optional[Iterable[UUID]] = None,
     ) -> dict[str, object]:
         current_balance = self.repository.current_balance_total(account_ids=account_ids)
-        avg_daily = self.repository.average_daily_net()
+        avg_daily = self.repository.average_daily_net(account_ids=account_ids)
         points: list[tuple[str, Decimal]] = []
         alert_at: Optional[str] = None
         running = current_balance
@@ -104,6 +105,14 @@ class ReportingService:
             "threshold": threshold,
         }
 
+    @staticmethod
+    def _add_months(start: date, months: int) -> date:
+        month_index = (start.month - 1) + months
+        year = start.year + (month_index // 12)
+        month = (month_index % 12) + 1
+        day = min(start.day, calendar.monthrange(year, month)[1])
+        return date(year, month, day)
+
     def net_worth_projection(
         self,
         *,
@@ -111,32 +120,67 @@ class ReportingService:
         account_ids: Optional[Iterable[UUID]] = None,
     ) -> dict[str, object]:
         history = self.repository.get_net_worth_history(account_ids=account_ids)
+
+        investment_value = (
+            self.repository.latest_investment_value() if account_ids is None else Decimal("0")
+        )
+        current = self.repository.current_balance_total(account_ids=account_ids) + investment_value
+
         if not history:
-            return {"points": [], "cagr": None}
-        start = history[0].net_worth
-        end = history[-1].net_worth
-        start_date = history[0].period
-        end_date = history[-1].period
-        years = max(1, (end_date.year - start_date.year) + (end_date.month - start_date.month) / 12)
-        cagr = None
-        if start > 0 and end > 0:
-            cagr = (end / start) ** Decimal(1 / years) - Decimal("1")
-        current = end + self.repository.latest_investment_value()
+            return {"current": current, "cagr": None, "points": []}
+
+        monthly: dict[tuple[int, int], tuple[date, Decimal]] = {}
+        for point in history:
+            key = (point.period.year, point.period.month)
+            monthly[key] = (point.period, point.net_worth)
+        monthly_points = [monthly[key] for key in sorted(monthly.keys())]
+
+        end_period, end_value = monthly_points[-1]
+        if investment_value:
+            end_value += investment_value
+
+        # Prefer a 12-month CAGR window when available; fallback to earliest positive value.
+        cagr: Decimal | None = None
+        start_idx = max(0, len(monthly_points) - 13)
+        start_period, start_value = monthly_points[start_idx]
+        if start_value <= 0:
+            for i in range(start_idx, -1, -1):
+                candidate_period, candidate_value = monthly_points[i]
+                if candidate_value > 0:
+                    start_period, start_value = candidate_period, candidate_value
+                    break
+
+        months_span = (end_period.year - start_period.year) * 12 + (
+            end_period.month - start_period.month
+        )
+        years = Decimal(str(months_span / 12)) if months_span else Decimal("0")
+        if years > 0 and start_value > 0 and end_value > 0:
+            try:
+                cagr = (end_value / start_value) ** (Decimal("1") / years) - Decimal("1")
+            except (InvalidOperation, ZeroDivisionError, OverflowError):  # pragma: no cover
+                cagr = None
+
+        # If CAGR isn't computable, fall back to linear projection from recent monthly deltas.
+        monthly_delta = Decimal("0")
+        recent = monthly_points[-7:] if len(monthly_points) > 1 else []
+        if len(recent) >= 2:
+            deltas: list[Decimal] = []
+            for (_prev_period, prev_value), (_next_period, next_value) in zip(recent, recent[1:]):
+                deltas.append(next_value - prev_value)
+            if deltas:
+                monthly_delta = sum(deltas, Decimal("0")) / Decimal(len(deltas))
 
         points: list[dict[str, object]] = []
-        monthly_rate = cagr / Decimal(12) if cagr is not None else Decimal("0")
+        monthly_rate = (cagr / Decimal(12)) if cagr is not None else None
         for idx in range(1, months + 1):
-            projected = current * (Decimal("1") + monthly_rate) ** Decimal(idx)
-            target_date = (
-                datetime.combine(end_date, datetime.min.time()) + timedelta(days=30 * idx)
-            ).date()
+            target_date = self._add_months(end_period, idx)
+            if monthly_rate is not None:
+                projected = current * (Decimal("1") + monthly_rate) ** Decimal(idx)
+            else:
+                projected = current + (monthly_delta * Decimal(idx))
             points.append({"date": target_date.isoformat(), "net_worth": projected})
 
-        return {
-            "current": current,
-            "cagr": cagr,
-            "points": points,
-        }
+        return {"current": current, "cagr": cagr, "points": points}
 
     def refresh_materialized_views(
         self,

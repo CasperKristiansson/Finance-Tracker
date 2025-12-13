@@ -5,13 +5,13 @@ from __future__ import annotations
 import base64
 import csv
 from datetime import datetime, timezone
-from decimal import Decimal
 from io import BytesIO, StringIO
 from typing import Any, Dict, Iterable
 
 from pydantic import ValidationError
 
 from ..schemas import (
+    CashflowForecastQuery,
     CashflowForecastResponse,
     DateRangeReportQuery,
     DateRangeReportResponse,
@@ -23,6 +23,7 @@ from ..schemas import (
     NetWorthHistoryQuery,
     NetWorthHistoryResponse,
     NetWorthPoint,
+    NetWorthProjectionQuery,
     NetWorthProjectionResponse,
     QuarterlyReportEntry,
     QuarterlyReportQuery,
@@ -200,13 +201,19 @@ def cashflow_forecast(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
     user_id = get_user_id(event)
     params = get_query_params(event)
-    days = int(params.get("days", 60) or 60)
-    threshold_raw = params.get("threshold")
-    threshold = Decimal(str(threshold_raw)) if threshold_raw is not None else Decimal("0")
+
+    try:
+        query = CashflowForecastQuery.model_validate(params)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
 
     with session_scope(user_id=user_id) as session:
         service = ReportingService(session)
-        result = service.cashflow_forecast(days=days, threshold=threshold)
+        result = service.cashflow_forecast(
+            days=query.days,
+            threshold=query.threshold,
+            account_ids=query.account_ids,
+        )
         payload = CashflowForecastResponse.model_validate(result)
     return json_response(200, payload.model_dump(mode="json"))
 
@@ -215,10 +222,14 @@ def net_worth_projection(event: Dict[str, Any], _context: Any) -> Dict[str, Any]
     ensure_engine()
     user_id = get_user_id(event)
     params = get_query_params(event)
-    months = int(params.get("months", 36) or 36)
+
+    try:
+        query = NetWorthProjectionQuery.model_validate(params)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
     with session_scope(user_id=user_id) as session:
         service = ReportingService(session)
-        result = service.net_worth_projection(months=months)
+        result = service.net_worth_projection(months=query.months, account_ids=query.account_ids)
         payload = NetWorthProjectionResponse.model_validate(result)
     return json_response(200, payload.model_dump(mode="json"))
 

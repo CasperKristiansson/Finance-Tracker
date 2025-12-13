@@ -217,7 +217,9 @@ class ReportingRepository:
 
         return history
 
-    def average_daily_net(self, *, days: int = 90) -> Decimal:
+    def average_daily_net(
+        self, *, days: int = 90, account_ids: Optional[Iterable[UUID]] = None
+    ) -> Decimal:
         """Compute average daily net change over a rolling window."""
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
@@ -236,6 +238,13 @@ class ReportingRepository:
 
         statement = statement.where(transaction_table.c.user_id == self.user_id)
         statement = statement.where(leg_table.c.user_id == self.user_id)
+
+        if account_ids:
+            statement = statement.where(leg_table.c.account_id.in_(list(account_ids)))
+        elif self._excluded_account_ids:
+            statement = statement.where(
+                ~leg_table.c.account_id.in_(list(self._excluded_account_ids))
+            )
 
         rows = self.session.exec(statement).all()
         if not rows:

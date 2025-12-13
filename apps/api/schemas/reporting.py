@@ -218,6 +218,35 @@ class CashflowForecastResponse(BaseModel):
     points: List[CashflowForecastPoint]
 
 
+class CashflowForecastQuery(_CsvUUIDMixin):
+    """Query parameters for cash flow forecast endpoint."""
+
+    days: int = Field(default=60, ge=1, le=365)
+    threshold: Decimal = Field(default=Decimal("0"))
+    account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _split_lists(cls, values: Any) -> Any:
+        if isinstance(values, dict) and "account_ids" in values:
+            values["account_ids"] = cls._parse_uuid_list(values.get("account_ids"))
+        return values
+
+
+class NetWorthProjectionQuery(_CsvUUIDMixin):
+    """Query parameters for net worth projection endpoint."""
+
+    months: int = Field(default=36, ge=1, le=120)
+    account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _split_lists(cls, values: Any) -> Any:
+        if isinstance(values, dict) and "account_ids" in values:
+            values["account_ids"] = cls._parse_uuid_list(values.get("account_ids"))
+        return values
+
+
 class NetWorthProjectionPoint(BaseModel):
     """Projected net worth over time."""
 

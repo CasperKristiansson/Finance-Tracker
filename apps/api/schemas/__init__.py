@@ -68,6 +68,7 @@ from .loan import (
     LoanUpdate,
 )
 from .reporting import (
+    CashflowForecastQuery,
     CashflowForecastResponse,
     DateRangeReportQuery,
     DateRangeReportResponse,
@@ -79,6 +80,7 @@ from .reporting import (
     NetWorthHistoryQuery,
     NetWorthHistoryResponse,
     NetWorthPoint,
+    NetWorthProjectionQuery,
     NetWorthProjectionResponse,
     QuarterlyReportEntry,
     QuarterlyReportQuery,
@@ -182,7 +184,9 @@ __all__ = [
     "NetWorthHistoryQuery",
     "NetWorthHistoryResponse",
     "NetWorthPoint",
+    "CashflowForecastQuery",
     "CashflowForecastResponse",
+    "NetWorthProjectionQuery",
     "NetWorthProjectionResponse",
     "YearlyReportQuery",
     "YearlyReportEntry",

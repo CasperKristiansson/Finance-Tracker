@@ -9,6 +9,7 @@
 **.terraform*
 infra/terraform/*.tfvars
 *.pyc
+.pylint.d
 infra/layers/layer-backend.zip
 infra/terraform/resources/lambda/*.zip
 *.serverless

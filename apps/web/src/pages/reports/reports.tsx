@@ -34,7 +34,7 @@ import {
   subscriptionSummaryResponseSchema,
 } from "@/types/schemas";
 
-type Granularity = "monthly" | "quarterly" | "yearly";
+type Granularity = "monthly" | "yearly";
 
 type ChartPoint = {
   label: string | number;
@@ -44,22 +44,16 @@ type ChartPoint = {
 };
 
 const currency = (value: number) =>
-  value.toLocaleString("en-US", {
+  value.toLocaleString("sv-SE", {
     style: "currency",
-    currency: "USD",
+    currency: "SEK",
     maximumFractionDigits: 0,
   });
 
 export const Reports: React.FC = () => {
   const { items: accounts, fetchAccounts } = useAccountsApi();
-  const {
-    monthly,
-    quarterly,
-    yearly,
-    fetchMonthlyReport,
-    fetchQuarterlyReport,
-    fetchYearlyReport,
-  } = useReportsApi();
+  const { monthly, yearly, fetchMonthlyReport, fetchYearlyReport } =
+    useReportsApi();
   const token = useAppSelector(selectToken);
   const [subscriptionIds, setSubscriptionIds] = useState<string[]>([]);
   const [subscriptionSummaries, setSubscriptionSummaries] = useState<
@@ -72,7 +66,15 @@ export const Reports: React.FC = () => {
     useState<NetWorthProjectionResponse | null>(null);
 
   const [granularity, setGranularity] = useState<Granularity>("monthly");
+  const [monthlyYear, setMonthlyYear] = useState(() =>
+    new Date().getFullYear(),
+  );
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
+
+  const monthlyYearOptions = useMemo(() => {
+    const current = new Date().getFullYear();
+    return Array.from({ length: 11 }, (_, idx) => current - idx);
+  }, []);
 
   useEffect(() => {
     fetchAccounts();
@@ -102,15 +104,20 @@ export const Reports: React.FC = () => {
     const loadForecasts = async () => {
       if (!token) return;
       try {
+        const accountIds = selectedAccounts.length
+          ? selectedAccounts.join(",")
+          : undefined;
         const [{ data: cashflow }, { data: netWorth }] = await Promise.all([
           apiFetch<CashflowForecastResponse>({
             path: "/reports/forecast/cashflow",
             schema: cashflowForecastResponseSchema,
+            query: accountIds ? { account_ids: accountIds } : undefined,
             token,
           }),
           apiFetch<NetWorthProjectionResponse>({
             path: "/reports/forecast/net-worth",
             schema: netWorthProjectionResponseSchema,
+            query: accountIds ? { account_ids: accountIds } : undefined,
             token,
           }),
         ]);
@@ -121,26 +128,26 @@ export const Reports: React.FC = () => {
       }
     };
     void loadForecasts();
-  }, [token]);
+  }, [selectedAccounts, token]);
 
   useEffect(() => {
-    const filters = {
-      year: new Date().getFullYear(),
-      accountIds: selectedAccounts,
-      subscriptionIds,
-    };
     if (granularity === "monthly") {
-      fetchMonthlyReport(filters);
-    } else if (granularity === "quarterly") {
-      fetchQuarterlyReport(filters);
+      fetchMonthlyReport({
+        year: monthlyYear,
+        accountIds: selectedAccounts,
+        subscriptionIds,
+      });
     } else {
-      fetchYearlyReport(filters);
+      fetchYearlyReport({
+        accountIds: selectedAccounts,
+        subscriptionIds,
+      });
     }
   }, [
     fetchMonthlyReport,
-    fetchQuarterlyReport,
     fetchYearlyReport,
     granularity,
+    monthlyYear,
     selectedAccounts,
     subscriptionIds,
   ]);
@@ -166,25 +173,12 @@ export const Reports: React.FC = () => {
     return sorted.slice(0, 3);
   }, [subscriptionSummaries]);
 
-  const activeReport =
-    granularity === "monthly"
-      ? monthly
-      : granularity === "quarterly"
-        ? quarterly
-        : yearly;
+  const activeReport = granularity === "monthly" ? monthly : yearly;
 
   const chartData: ChartPoint[] = useMemo(() => {
     if (granularity === "monthly") {
       return monthly.data.map((row) => ({
         label: new Date(row.period).toLocaleString("en-US", { month: "short" }),
-        income: Number(row.income),
-        expense: Math.abs(Number(row.expense)),
-        net: Number(row.net),
-      }));
-    }
-    if (granularity === "quarterly") {
-      return quarterly.data.map((row) => ({
-        label: `Q${row.quarter} ${row.year}`,
         income: Number(row.income),
         expense: Math.abs(Number(row.expense)),
         net: Number(row.net),
@@ -196,7 +190,7 @@ export const Reports: React.FC = () => {
       expense: Math.abs(Number(row.expense)),
       net: Number(row.net),
     }));
-  }, [granularity, monthly.data, quarterly.data, yearly.data]);
+  }, [granularity, monthly.data, yearly.data]);
 
   const totals = useMemo(() => {
     if (!chartData.length) return { income: 0, expense: 0, net: 0 };
@@ -247,18 +241,31 @@ export const Reports: React.FC = () => {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {["monthly", "quarterly", "yearly"].map((option) => (
+          <div className="w-[110px]">
+            {granularity === "monthly" ? (
+              <select
+                className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900"
+                value={monthlyYear}
+                onChange={(e) => setMonthlyYear(Number(e.target.value))}
+              >
+                {monthlyYearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="h-9" />
+            )}
+          </div>
+          {["monthly", "yearly"].map((option) => (
             <Button
               key={option}
               variant={granularity === option ? "default" : "outline"}
               size="sm"
               onClick={() => setGranularity(option as Granularity)}
             >
-              {option === "monthly"
-                ? "Monthly"
-                : option === "quarterly"
-                  ? "Quarterly"
-                  : "Yearly"}
+              {option === "monthly" ? "Monthly" : "Yearly"}
             </Button>
           ))}
         </div>
@@ -284,7 +291,7 @@ export const Reports: React.FC = () => {
                     : "rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700"
                 }
               >
-                {account.account_type} · {account.id.slice(0, 4)}
+                {account.name}
               </button>
             ))}
             {accounts.length === 0 ? (
@@ -348,7 +355,7 @@ export const Reports: React.FC = () => {
               Cash flow forecast (60d)
             </CardTitle>
             <p className="text-sm text-slate-500">
-              Based on recent average daily net plus subscriptions.
+              Based on recent average daily net (excluding transfers).
             </p>
           </CardHeader>
           <CardContent className="h-[240px]">
@@ -360,7 +367,15 @@ export const Reports: React.FC = () => {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" hide />
                   <YAxis hide />
-                  <Tooltip />
+                  <Tooltip
+                    formatter={(value) => currency(Number(value))}
+                    labelFormatter={(label) =>
+                      new Date(String(label)).toLocaleDateString("sv-SE", {
+                        month: "short",
+                        day: "numeric",
+                      })
+                    }
+                  />
                   <Line
                     type="monotone"
                     dataKey="balance"
@@ -386,7 +401,7 @@ export const Reports: React.FC = () => {
               Net worth projection (36 months)
             </CardTitle>
             <p className="text-sm text-slate-500">
-              Uses compounded growth from history plus latest investments.
+              Projects from net worth history plus latest investments.
             </p>
           </CardHeader>
           <CardContent className="h-[240px]">
@@ -398,7 +413,15 @@ export const Reports: React.FC = () => {
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" hide />
                   <YAxis hide />
-                  <Tooltip />
+                  <Tooltip
+                    formatter={(value) => currency(Number(value))}
+                    labelFormatter={(label) =>
+                      new Date(String(label)).toLocaleDateString("sv-SE", {
+                        month: "short",
+                        year: "numeric",
+                      })
+                    }
+                  />
                   <Line
                     type="monotone"
                     dataKey="net"
