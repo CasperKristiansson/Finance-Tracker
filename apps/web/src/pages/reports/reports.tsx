@@ -108,6 +108,9 @@ type DetailDialogState =
       monthly: Array<{ month: string; total: number }>;
       total: number;
       txCount: number;
+      compareLabel?: string;
+      compareTotal?: number;
+      compareMonthly?: Array<{ month: string; total: number }>;
     };
 
 type TotalDrilldownState =
@@ -139,6 +142,21 @@ type TotalDrilldownState =
       kind: "netWorth";
     };
 
+type YearlyExtraDialogState =
+  | {
+      kind: "categoryDrivers";
+    }
+  | {
+      kind: "merchantDrivers";
+      flow: "income" | "expense";
+    }
+  | {
+      kind: "oneOffs";
+    }
+  | {
+      kind: "savingsDecomposition";
+    };
+
 const currency = (value: number) =>
   value.toLocaleString("sv-SE", {
     style: "currency",
@@ -162,6 +180,51 @@ const monthName = (year: number, month: number) =>
 
 const percent = (value: number) =>
   `${value.toLocaleString("sv-SE", { maximumFractionDigits: 0 })}%`;
+
+const median = (values: number[]) => {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+};
+
+const medianAbsoluteDeviation = (values: number[], center?: number) => {
+  if (!values.length) return 0;
+  const mid = typeof center === "number" ? center : median(values);
+  const deviations = values.map((v) => Math.abs(v - mid));
+  return median(deviations);
+};
+
+const csvEscape = (value: unknown) => {
+  if (value === null || value === undefined) return "";
+  const raw = String(value);
+  if (/["\n,]/.test(raw)) return `"${raw.replace(/"/g, '""')}"`;
+  return raw;
+};
+
+const downloadCsv = (
+  filename: string,
+  rows: Array<Record<string, unknown>>,
+) => {
+  if (!rows.length) return;
+  const headers = Array.from(
+    rows.reduce((acc, row) => {
+      Object.keys(row).forEach((key) => acc.add(key));
+      return acc;
+    }, new Set<string>()),
+  );
+  const lines = [
+    headers.map(csvEscape).join(","),
+    ...rows.map((row) => headers.map((key) => csvEscape(row[key])).join(",")),
+  ];
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+};
 
 const heatColor = (rgb: string, value: number, max: number) => {
   if (
@@ -218,6 +281,9 @@ export const Reports: React.FC = () => {
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [overview, setOverview] = useState<YearlyOverviewResponse | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
+  const [prevOverview, setPrevOverview] =
+    useState<YearlyOverviewResponse | null>(null);
+  const [prevOverviewLoading, setPrevOverviewLoading] = useState(false);
   const [totalOverview, setTotalOverview] =
     useState<TotalOverviewResponse | null>(null);
   const [totalOverviewLoading, setTotalOverviewLoading] = useState(false);
@@ -234,6 +300,11 @@ export const Reports: React.FC = () => {
     null,
   );
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [yearlyExtraDialog, setYearlyExtraDialog] =
+    useState<YearlyExtraDialogState | null>(null);
+  const [totalWindowPreset, setTotalWindowPreset] = useState<
+    "all" | "10" | "5" | "3"
+  >("all");
   const [totalDrilldown, setTotalDrilldown] =
     useState<TotalDrilldownState | null>(null);
   const [totalDrilldownOpen, setTotalDrilldownOpen] = useState(false);
@@ -288,6 +359,38 @@ export const Reports: React.FC = () => {
   }, [routeMode, selectedAccounts, token, year]);
 
   useEffect(() => {
+    const loadPrevOverview = async () => {
+      if (!token) return;
+      if (routeMode !== "yearly") return;
+      if (year <= 1900) {
+        setPrevOverview(null);
+        return;
+      }
+      setPrevOverviewLoading(true);
+      try {
+        const accountIds = selectedAccounts.length
+          ? selectedAccounts.join(",")
+          : undefined;
+        const { data } = await apiFetch<YearlyOverviewResponse>({
+          path: "/reports/yearly-overview",
+          schema: yearlyOverviewSchema,
+          query: accountIds
+            ? { year: year - 1, account_ids: accountIds }
+            : { year: year - 1 },
+          token,
+        });
+        setPrevOverview(data);
+      } catch (error) {
+        console.error(error);
+        setPrevOverview(null);
+      } finally {
+        setPrevOverviewLoading(false);
+      }
+    };
+    void loadPrevOverview();
+  }, [routeMode, selectedAccounts, token, year]);
+
+  useEffect(() => {
     const loadTotalOverview = async () => {
       if (!token) return;
       if (routeMode !== "total") return;
@@ -313,7 +416,7 @@ export const Reports: React.FC = () => {
     void loadTotalOverview();
   }, [routeMode, selectedAccounts, token]);
 
-  const totalRange = useMemo(() => {
+  const totalAllRange = useMemo(() => {
     if (!totalOverview) return null;
     const years = totalOverview.yearly.map((row) => row.year);
     const minYear = years.length
@@ -325,12 +428,22 @@ export const Reports: React.FC = () => {
     };
   }, [totalOverview]);
 
+  const totalWindowRange = useMemo(() => {
+    if (!totalAllRange) return null;
+    if (totalWindowPreset === "all") return totalAllRange;
+    const asOfYear = Number(totalAllRange.end.slice(0, 4));
+    const minYear = Number(totalAllRange.start.slice(0, 4));
+    const yearsBack = Number(totalWindowPreset);
+    const startYear = Math.max(minYear, asOfYear - yearsBack + 1);
+    return { start: `${startYear}-01-01`, end: totalAllRange.end };
+  }, [totalAllRange, totalWindowPreset]);
+
   useEffect(() => {
     const loadDrilldown = async () => {
       if (!token) return;
       if (routeMode !== "total") return;
       if (!totalDrilldownOpen) return;
-      if (!totalRange) return;
+      if (!totalWindowRange) return;
       if (!totalDrilldown) return;
       if (
         totalDrilldown.kind !== "category" &&
@@ -369,8 +482,8 @@ export const Reports: React.FC = () => {
           path: "/reports/custom",
           schema: monthlyReportSchema,
           query: {
-            start_date: totalRange.start,
-            end_date: totalRange.end,
+            start_date: totalWindowRange.start,
+            end_date: totalWindowRange.end,
             ...(accountIds ? { account_ids: accountIds } : {}),
             ...(categoryIds ? { category_ids: categoryIds } : {}),
             ...(source ? { source } : {}),
@@ -401,7 +514,7 @@ export const Reports: React.FC = () => {
     token,
     totalDrilldown,
     totalDrilldownOpen,
-    totalRange,
+    totalWindowRange,
   ]);
 
   useEffect(() => {
@@ -443,6 +556,18 @@ export const Reports: React.FC = () => {
     void loadCategoryDetail();
   }, [selectedAccounts, selectedCategoryFlow, selectedCategoryId, token, year]);
 
+  const categoryDetailPrevMonthly = useMemo(() => {
+    if (!prevOverview) return null;
+    if (!selectedCategoryId) return null;
+    const rows =
+      selectedCategoryFlow === "income"
+        ? prevOverview.income_category_breakdown
+        : prevOverview.category_breakdown;
+    const match = rows.find((row) => row.category_id === selectedCategoryId);
+    if (!match) return null;
+    return match.monthly.map((value) => Number(value));
+  }, [prevOverview, selectedCategoryFlow, selectedCategoryId]);
+
   const toggleAccount = (id: string) => {
     setSelectedAccounts((prev) =>
       prev.includes(id) ? prev.filter((acc) => acc !== id) : [...prev, id],
@@ -458,6 +583,15 @@ export const Reports: React.FC = () => {
         net: Number(row.net),
       })),
     [overview?.monthly],
+  );
+
+  const yearSeasonalityChart = useMemo(
+    () =>
+      yearOverviewMonthChart.map((row) => ({
+        ...row,
+        expenseNeg: -row.expense,
+      })),
+    [yearOverviewMonthChart],
   );
 
   const netWorthChart = useMemo(
@@ -663,6 +797,364 @@ export const Reports: React.FC = () => {
       .sort((a, b) => b.total - a.total);
   }, [overview?.expense_sources, year]);
 
+  const prevIncomeSourceRows = useMemo(() => {
+    if (!prevOverview?.income_sources) return [];
+    const prevYear = year - 1;
+    return prevOverview.income_sources
+      .map((row) => ({
+        source: row.source,
+        total: Number(row.total),
+        txCount: row.transaction_count,
+        monthly: row.monthly.map((v, idx) => ({
+          month: monthLabel(new Date(Date.UTC(prevYear, idx, 1)).toISOString()),
+          total: Number(v),
+        })),
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [prevOverview?.income_sources, year]);
+
+  const prevExpenseSourceRows = useMemo(() => {
+    if (!prevOverview?.expense_sources) return [];
+    const prevYear = year - 1;
+    return prevOverview.expense_sources
+      .map((row) => ({
+        source: row.source,
+        total: Number(row.total),
+        txCount: row.transaction_count,
+        monthly: row.monthly.map((v, idx) => ({
+          month: monthLabel(new Date(Date.UTC(prevYear, idx, 1)).toISOString()),
+          total: Number(v),
+        })),
+      }))
+      .sort((a, b) => b.total - a.total);
+  }, [prevOverview?.expense_sources, year]);
+
+  const yearlyExpenseCategoryDeltas = useMemo(() => {
+    if (!overview || !prevOverview) return [];
+    const currentMap = new Map<
+      string,
+      { id: string | null; name: string; total: number }
+    >();
+    overview.category_breakdown.forEach((row) => {
+      const key =
+        row.category_id ??
+        (typeof row.name === "string" ? `name:${row.name}` : "unknown");
+      currentMap.set(key, {
+        id: row.category_id ?? null,
+        name: row.name,
+        total: Number(row.total),
+      });
+    });
+    const prevMap = new Map<
+      string,
+      { id: string | null; name: string; total: number }
+    >();
+    prevOverview.category_breakdown.forEach((row) => {
+      const key =
+        row.category_id ??
+        (typeof row.name === "string" ? `name:${row.name}` : "unknown");
+      prevMap.set(key, {
+        id: row.category_id ?? null,
+        name: row.name,
+        total: Number(row.total),
+      });
+    });
+
+    const keys = new Set([...currentMap.keys(), ...prevMap.keys()]);
+    return Array.from(keys)
+      .map((key) => {
+        const currentRow = currentMap.get(key);
+        const prevRow = prevMap.get(key);
+        const current = currentRow?.total ?? 0;
+        const prev = prevRow?.total ?? 0;
+        const delta = current - prev;
+        const deltaPct = prev > 0 ? (delta / prev) * 100 : null;
+        return {
+          key,
+          id: currentRow?.id ?? prevRow?.id ?? null,
+          name: currentRow?.name ?? prevRow?.name ?? "Category",
+          current,
+          prev,
+          delta,
+          deltaPct,
+        };
+      })
+      .filter((row) => row.name !== "Other")
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  }, [overview, prevOverview]);
+
+  const yearlyIncomeCategoryDeltas = useMemo(() => {
+    if (!overview || !prevOverview) return [];
+    const currentMap = new Map<
+      string,
+      { id: string | null; name: string; total: number }
+    >();
+    overview.income_category_breakdown.forEach((row) => {
+      const key =
+        row.category_id ??
+        (typeof row.name === "string" ? `name:${row.name}` : "unknown");
+      currentMap.set(key, {
+        id: row.category_id ?? null,
+        name: row.name,
+        total: Number(row.total),
+      });
+    });
+    const prevMap = new Map<
+      string,
+      { id: string | null; name: string; total: number }
+    >();
+    prevOverview.income_category_breakdown.forEach((row) => {
+      const key =
+        row.category_id ??
+        (typeof row.name === "string" ? `name:${row.name}` : "unknown");
+      prevMap.set(key, {
+        id: row.category_id ?? null,
+        name: row.name,
+        total: Number(row.total),
+      });
+    });
+
+    const keys = new Set([...currentMap.keys(), ...prevMap.keys()]);
+    return Array.from(keys)
+      .map((key) => {
+        const currentRow = currentMap.get(key);
+        const prevRow = prevMap.get(key);
+        const current = currentRow?.total ?? 0;
+        const prev = prevRow?.total ?? 0;
+        const delta = current - prev;
+        const deltaPct = prev > 0 ? (delta / prev) * 100 : null;
+        return {
+          key,
+          id: currentRow?.id ?? prevRow?.id ?? null,
+          name: currentRow?.name ?? prevRow?.name ?? "Category",
+          current,
+          prev,
+          delta,
+          deltaPct,
+        };
+      })
+      .filter((row) => row.name !== "Other")
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  }, [overview, prevOverview]);
+
+  const yearlyExpenseSourceDeltas = useMemo(() => {
+    if (!overview || !prevOverview) return [];
+    const currentMap = new Map<
+      string,
+      {
+        total: number;
+        txCount: number;
+        monthly: Array<{ month: string; total: number }>;
+      }
+    >();
+    expenseSourceRows.forEach((row) =>
+      currentMap.set(row.source, {
+        total: row.total,
+        txCount: row.txCount,
+        monthly: row.monthly,
+      }),
+    );
+    const prevMap = new Map<
+      string,
+      {
+        total: number;
+        txCount: number;
+        monthly: Array<{ month: string; total: number }>;
+      }
+    >();
+    prevExpenseSourceRows.forEach((row) =>
+      prevMap.set(row.source, {
+        total: row.total,
+        txCount: row.txCount,
+        monthly: row.monthly,
+      }),
+    );
+    const zeroMonthly = Array.from({ length: 12 }, (_, idx) => ({
+      month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
+      total: 0,
+    }));
+
+    const keys = new Set([...currentMap.keys(), ...prevMap.keys()]);
+    return Array.from(keys)
+      .map((source) => {
+        const currentRow = currentMap.get(source);
+        const prevRow = prevMap.get(source);
+        const current = currentRow?.total ?? 0;
+        const prev = prevRow?.total ?? 0;
+        const delta = current - prev;
+        const deltaPct = prev > 0 ? (delta / prev) * 100 : null;
+        return {
+          source,
+          current,
+          prev,
+          delta,
+          deltaPct,
+          txCount: currentRow?.txCount ?? 0,
+          monthly: currentRow?.monthly ?? zeroMonthly,
+          prevMonthly: prevRow?.monthly,
+        };
+      })
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  }, [expenseSourceRows, overview, prevExpenseSourceRows, prevOverview, year]);
+
+  const yearlyIncomeSourceDeltas = useMemo(() => {
+    if (!overview || !prevOverview) return [];
+    const currentMap = new Map<
+      string,
+      {
+        total: number;
+        txCount: number;
+        monthly: Array<{ month: string; total: number }>;
+      }
+    >();
+    incomeSourceRows.forEach((row) =>
+      currentMap.set(row.source, {
+        total: row.total,
+        txCount: row.txCount,
+        monthly: row.monthly,
+      }),
+    );
+    const prevMap = new Map<
+      string,
+      {
+        total: number;
+        txCount: number;
+        monthly: Array<{ month: string; total: number }>;
+      }
+    >();
+    prevIncomeSourceRows.forEach((row) =>
+      prevMap.set(row.source, {
+        total: row.total,
+        txCount: row.txCount,
+        monthly: row.monthly,
+      }),
+    );
+    const zeroMonthly = Array.from({ length: 12 }, (_, idx) => ({
+      month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
+      total: 0,
+    }));
+
+    const keys = new Set([...currentMap.keys(), ...prevMap.keys()]);
+    return Array.from(keys)
+      .map((source) => {
+        const currentRow = currentMap.get(source);
+        const prevRow = prevMap.get(source);
+        const current = currentRow?.total ?? 0;
+        const prev = prevRow?.total ?? 0;
+        const delta = current - prev;
+        const deltaPct = prev > 0 ? (delta / prev) * 100 : null;
+        return {
+          source,
+          current,
+          prev,
+          delta,
+          deltaPct,
+          txCount: currentRow?.txCount ?? 0,
+          monthly: currentRow?.monthly ?? zeroMonthly,
+          prevMonthly: prevRow?.monthly,
+        };
+      })
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  }, [incomeSourceRows, overview, prevIncomeSourceRows, prevOverview, year]);
+
+  const yearlySavingsDecomposition = useMemo(() => {
+    if (!overview || !prevOverview) return null;
+    const incomeNow = Number(overview.stats.total_income);
+    const expenseNow = Number(overview.stats.total_expense);
+    const netNow = Number(overview.stats.net_savings);
+    const incomePrev = Number(prevOverview.stats.total_income);
+    const expensePrev = Number(prevOverview.stats.total_expense);
+    const netPrev = Number(prevOverview.stats.net_savings);
+    const incomeDelta = incomeNow - incomePrev;
+    const expenseDelta = expenseNow - expensePrev;
+    const netDelta = netNow - netPrev;
+
+    const contributions: Array<{
+      kind: "income" | "expense";
+      id: string | null;
+      name: string;
+      contribution: number;
+    }> = [];
+
+    yearlyIncomeCategoryDeltas.forEach((row) => {
+      contributions.push({
+        kind: "income",
+        id: row.id,
+        name: row.name,
+        contribution: row.delta,
+      });
+    });
+    yearlyExpenseCategoryDeltas.forEach((row) => {
+      contributions.push({
+        kind: "expense",
+        id: row.id,
+        name: row.name,
+        contribution: -row.delta,
+      });
+    });
+    contributions.sort(
+      (a, b) => Math.abs(b.contribution) - Math.abs(a.contribution),
+    );
+
+    return {
+      incomeNow,
+      expenseNow,
+      netNow,
+      incomePrev,
+      expensePrev,
+      netPrev,
+      incomeDelta,
+      expenseDelta,
+      netDelta,
+      contributions,
+    };
+  }, [
+    overview,
+    prevOverview,
+    yearlyExpenseCategoryDeltas,
+    yearlyIncomeCategoryDeltas,
+  ]);
+
+  const openYearlySourceDetail = (
+    flow: "income" | "expense",
+    source: string,
+  ) => {
+    const zeroMonthly = (yearForLabels: number) =>
+      Array.from({ length: 12 }, (_, idx) => ({
+        month: monthLabel(
+          new Date(Date.UTC(yearForLabels, idx, 1)).toISOString(),
+        ),
+        total: 0,
+      }));
+
+    const current =
+      flow === "income"
+        ? incomeSourceRows.find((row) => row.source === source)
+        : expenseSourceRows.find((row) => row.source === source);
+    const prev =
+      flow === "income"
+        ? prevIncomeSourceRows.find((row) => row.source === source)
+        : prevExpenseSourceRows.find((row) => row.source === source);
+
+    if (!current && !prev) return;
+
+    openDetailDialog({
+      kind: "source",
+      title: source,
+      subtitle: `${flow === "income" ? "Income" : "Expense"} • ${year}`,
+      monthly: current?.monthly ?? zeroMonthly(year),
+      total: current?.total ?? 0,
+      txCount: current?.txCount ?? 0,
+      ...(prev
+        ? {
+            compareLabel: String(year - 1),
+            compareTotal: prev.total,
+            compareMonthly: prev.monthly,
+          }
+        : {}),
+    });
+  };
+
   const totalKpis = useMemo(() => {
     if (!totalOverview) return null;
     const kpis = totalOverview.kpis;
@@ -682,7 +1174,7 @@ export const Reports: React.FC = () => {
     };
   }, [totalOverview]);
 
-  const totalNetWorthSeries = useMemo(() => {
+  const totalNetWorthSeriesAll = useMemo(() => {
     if (!totalOverview) return [];
     return totalOverview.net_worth_series.map((row) => ({
       date: row.date,
@@ -693,6 +1185,13 @@ export const Reports: React.FC = () => {
       netWorth: Number(row.net_worth),
     }));
   }, [totalOverview]);
+
+  const totalNetWorthSeries = useMemo(() => {
+    if (!totalWindowRange) return totalNetWorthSeriesAll;
+    return totalNetWorthSeriesAll.filter(
+      (row) => row.date >= totalWindowRange.start,
+    );
+  }, [totalNetWorthSeriesAll, totalWindowRange]);
 
   const totalNetWorthStats = useMemo(() => {
     if (!totalNetWorthSeries.length) return null;
@@ -743,9 +1242,94 @@ export const Reports: React.FC = () => {
     };
   }, [totalNetWorthSeries]);
 
+  const totalMonthlyIncomeExpense = useMemo(() => {
+    if (!totalOverview) return [];
+    return totalOverview.monthly_income_expense.map((row) => {
+      const parsed = new Date(row.date);
+      return {
+        date: row.date,
+        year: parsed.getUTCFullYear(),
+        month: parsed.getUTCMonth() + 1,
+        income: Number(row.income),
+        expense: Number(row.expense),
+      };
+    });
+  }, [totalOverview]);
+
+  const totalNetWorthAttribution = useMemo(() => {
+    if (!totalOverview) return null;
+    if (!totalWindowRange) return null;
+    if (totalNetWorthSeries.length < 2) return null;
+
+    const startNetWorth = totalNetWorthSeries[0].netWorth;
+    const endNetWorth =
+      totalNetWorthSeries[totalNetWorthSeries.length - 1].netWorth;
+    const netWorthDelta = endNetWorth - startNetWorth;
+
+    const savings = totalMonthlyIncomeExpense
+      .filter(
+        (row) =>
+          row.date >= totalWindowRange.start &&
+          row.date <= totalWindowRange.end,
+      )
+      .reduce((sum, row) => sum + (row.income - row.expense), 0);
+
+    const debtSeries = totalOverview.debt.series
+      .map((row) => ({ date: row.date, debt: Number(row.debt) }))
+      .filter(
+        (row) =>
+          row.date >= totalWindowRange.start &&
+          row.date <= totalWindowRange.end,
+      );
+    const debtStart = debtSeries.length ? debtSeries[0].debt : 0;
+    const debtEnd = debtSeries.length
+      ? debtSeries[debtSeries.length - 1].debt
+      : 0;
+    const debtDelta = debtEnd - debtStart;
+    const debtContribution = -debtDelta;
+
+    const invSeries = (totalOverview.investments?.series ?? [])
+      .map((row) => ({ date: row.date, value: Number(row.value) }))
+      .filter(
+        (row) =>
+          row.date >= totalWindowRange.start &&
+          row.date <= totalWindowRange.end,
+      );
+    const invStart = invSeries.length ? invSeries[0].value : 0;
+    const invEnd = invSeries.length ? invSeries[invSeries.length - 1].value : 0;
+    const investmentsContribution = totalOverview.investments
+      ? invEnd - invStart
+      : null;
+
+    const explained =
+      savings +
+      debtContribution +
+      (investmentsContribution === null ? 0 : investmentsContribution);
+    const remainder = netWorthDelta - explained;
+
+    return {
+      windowStart: totalWindowRange.start,
+      windowEnd: totalWindowRange.end,
+      netWorthDelta,
+      savings,
+      investmentsContribution,
+      debtContribution,
+      remainder,
+    };
+  }, [
+    totalMonthlyIncomeExpense,
+    totalNetWorthSeries,
+    totalOverview,
+    totalWindowRange,
+  ]);
+
   const totalYearly = useMemo(() => {
     if (!totalOverview) return [];
+    const windowStartYear = totalWindowRange
+      ? Number(totalWindowRange.start.slice(0, 4))
+      : null;
     return totalOverview.yearly
+      .filter((row) => (windowStartYear ? row.year >= windowStartYear : true))
       .map((row) => ({
         year: row.year,
         income: Number(row.income),
@@ -754,13 +1338,19 @@ export const Reports: React.FC = () => {
         savingsRate: row.savings_rate_pct ? Number(row.savings_rate_pct) : null,
       }))
       .sort((a, b) => a.year - b.year);
-  }, [totalOverview]);
+  }, [totalOverview, totalWindowRange]);
 
   const totalExpenseMix = useMemo(() => {
     if (!totalOverview) {
       return { data: [], keys: [], colors: {} as Record<string, string> };
     }
-    const recent = totalOverview.expense_category_mix_by_year.slice(-6);
+    const windowStartYear = totalWindowRange
+      ? Number(totalWindowRange.start.slice(0, 4))
+      : null;
+    const filtered = totalOverview.expense_category_mix_by_year.filter((row) =>
+      windowStartYear ? row.year >= windowStartYear : true,
+    );
+    const recent = filtered.slice(-6);
     const latest = recent[recent.length - 1];
     const keys = (latest?.categories ?? [])
       .filter((c) => c.name !== "Other")
@@ -783,13 +1373,19 @@ export const Reports: React.FC = () => {
       return entry;
     });
     return { data, keys, colors };
-  }, [totalOverview]);
+  }, [totalOverview, totalWindowRange]);
 
   const totalIncomeMix = useMemo(() => {
     if (!totalOverview) {
       return { data: [], keys: [], colors: {} as Record<string, string> };
     }
-    const recent = totalOverview.income_category_mix_by_year.slice(-6);
+    const windowStartYear = totalWindowRange
+      ? Number(totalWindowRange.start.slice(0, 4))
+      : null;
+    const filtered = totalOverview.income_category_mix_by_year.filter((row) =>
+      windowStartYear ? row.year >= windowStartYear : true,
+    );
+    const recent = filtered.slice(-6);
     const latest = recent[recent.length - 1];
     const keys = (latest?.categories ?? [])
       .filter((c) => c.name !== "Other")
@@ -812,7 +1408,7 @@ export const Reports: React.FC = () => {
       return entry;
     });
     return { data, keys, colors };
-  }, [totalOverview]);
+  }, [totalOverview, totalWindowRange]);
 
   const totalInvestments = useMemo(() => {
     if (!totalOverview?.investments) return null;
@@ -972,25 +1568,16 @@ export const Reports: React.FC = () => {
       .sort((a, b) => b.current - a.current);
   }, [totalOverview]);
 
-  const totalMonthlyIncomeExpense = useMemo(() => {
-    if (!totalOverview) return [];
-    return totalOverview.monthly_income_expense.map((row) => {
-      const parsed = new Date(row.date);
-      return {
-        date: row.date,
-        year: parsed.getUTCFullYear(),
-        month: parsed.getUTCMonth() + 1,
-        income: Number(row.income),
-        expense: Number(row.expense),
-      };
-    });
-  }, [totalOverview]);
-
   const totalSeasonalityHeatmaps = useMemo(() => {
     if (!totalMonthlyIncomeExpense.length) return null;
+    const windowStartYear = totalWindowRange
+      ? Number(totalWindowRange.start.slice(0, 4))
+      : null;
     const years = Array.from(
       new Set(totalMonthlyIncomeExpense.map((row) => row.year)),
-    ).sort((a, b) => a - b);
+    )
+      .filter((yr) => (windowStartYear ? yr >= windowStartYear : true))
+      .sort((a, b) => a - b);
     const yearIndex = new Map<number, number>();
     years.forEach((yr, idx) => yearIndex.set(yr, idx));
     const income = years.map(() => Array.from({ length: 12 }, () => 0));
@@ -1009,37 +1596,153 @@ export const Reports: React.FC = () => {
       monthLabel(new Date(Date.UTC(2000, idx, 1)).toISOString()),
     );
     return { years, months, income, expense, maxIncome, maxExpense };
-  }, [totalMonthlyIncomeExpense]);
+  }, [totalMonthlyIncomeExpense, totalWindowRange]);
 
   const totalExpenseCategoryYearHeatmap = useMemo(() => {
     if (!totalOverview) return null;
     const heatmap = totalOverview.expense_category_heatmap_by_year;
-    const years = heatmap.years;
+    const windowStartYear = totalWindowRange
+      ? Number(totalWindowRange.start.slice(0, 4))
+      : null;
+    const yearIndices = heatmap.years
+      .map((yr, idx) => ({ yr, idx }))
+      .filter((entry) =>
+        windowStartYear ? entry.yr >= windowStartYear : true,
+      );
+    const years = yearIndices.map((entry) => entry.yr);
     const rows = heatmap.rows.map((row) => ({
       categoryId: row.category_id ?? null,
       name: row.name,
       icon: row.icon ?? null,
       color: row.color_hex ?? null,
-      totals: row.totals.map((value) => Number(value)),
+      totals: yearIndices.map((entry) => Number(row.totals[entry.idx] ?? 0)),
     }));
     const max = Math.max(0, ...rows.flatMap((row) => row.totals));
     return { years, rows, max };
-  }, [totalOverview]);
+  }, [totalOverview, totalWindowRange]);
 
   const totalIncomeCategoryYearHeatmap = useMemo(() => {
     if (!totalOverview) return null;
     const heatmap = totalOverview.income_category_heatmap_by_year;
-    const years = heatmap.years;
+    const windowStartYear = totalWindowRange
+      ? Number(totalWindowRange.start.slice(0, 4))
+      : null;
+    const yearIndices = heatmap.years
+      .map((yr, idx) => ({ yr, idx }))
+      .filter((entry) =>
+        windowStartYear ? entry.yr >= windowStartYear : true,
+      );
+    const years = yearIndices.map((entry) => entry.yr);
     const rows = heatmap.rows.map((row) => ({
       categoryId: row.category_id ?? null,
       name: row.name,
       icon: row.icon ?? null,
       color: row.color_hex ?? null,
-      totals: row.totals.map((value) => Number(value)),
+      totals: yearIndices.map((entry) => Number(row.totals[entry.idx] ?? 0)),
     }));
     const max = Math.max(0, ...rows.flatMap((row) => row.totals));
     return { years, rows, max };
-  }, [totalOverview]);
+  }, [totalOverview, totalWindowRange]);
+
+  const totalDrilldownAnomalies = useMemo(() => {
+    if (!totalDrilldown) return [];
+    if (
+      totalDrilldown.kind !== "category" &&
+      totalDrilldown.kind !== "source" &&
+      totalDrilldown.kind !== "account"
+    ) {
+      return [];
+    }
+    if (!totalDrilldownSeries.length) return [];
+    const values = totalDrilldownSeries.map((row) => {
+      if (totalDrilldown.kind === "account") return row.net;
+      return totalDrilldown.flow === "expense" ? row.expense : row.income;
+    });
+    const med = median(values);
+    const mad = medianAbsoluteDeviation(values, med);
+    const scale = mad > 0 ? mad * 1.4826 : 0;
+    const mean =
+      values.reduce((sum, value) => sum + value, 0) /
+      Math.max(1, values.length);
+    const variance =
+      values.reduce((sum, value) => sum + (value - mean) ** 2, 0) /
+      Math.max(1, values.length);
+    const std = Math.sqrt(variance);
+    const denom = scale > 0 ? scale : std > 0 ? std : 1;
+
+    const labeled = totalDrilldownSeries.map((row, idx) => {
+      const value = values[idx] ?? 0;
+      const score = (value - med) / denom;
+      return {
+        period: row.period,
+        value,
+        score,
+      };
+    });
+
+    return labeled
+      .filter((row) => row.score >= 2.8 && row.value !== 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6);
+  }, [totalDrilldown, totalDrilldownSeries]);
+
+  const totalDataQuality = useMemo(() => {
+    if (!totalOverview) return null;
+    if (!totalWindowRange) return null;
+    const asOf = totalOverview.as_of.slice(0, 10);
+    const windowMonths = totalMonthlyIncomeExpense.filter(
+      (row) =>
+        row.date >= totalWindowRange.start && row.date <= totalWindowRange.end,
+    );
+    const emptyMonths = windowMonths.filter(
+      (row) => row.income === 0 && row.expense === 0,
+    );
+    const emptyMonthLabels = emptyMonths.slice(-6).map((row) =>
+      new Date(row.date).toLocaleDateString("sv-SE", {
+        year: "numeric",
+        month: "short",
+      }),
+    );
+
+    const accountsWithoutTransactions = totalAccountsOverview.filter(
+      (row) => !row.firstDate,
+    );
+
+    const lastSnapshot = totalOverview.investments?.series?.length
+      ? totalOverview.investments.series[
+          totalOverview.investments.series.length - 1
+        ].date
+      : null;
+    const snapshotAgeDays =
+      lastSnapshot && asOf
+        ? Math.round(
+            (new Date(asOf).getTime() - new Date(lastSnapshot).getTime()) /
+              (1000 * 60 * 60 * 24),
+          )
+        : null;
+
+    return {
+      asOf,
+      windowStart: totalWindowRange.start,
+      windowEnd: totalWindowRange.end,
+      monthsCovered: windowMonths.length,
+      emptyMonthsCount: emptyMonths.length,
+      emptyMonthLabels,
+      accountsWithoutTransactions: accountsWithoutTransactions.map(
+        (row) => row.name,
+      ),
+      lastSnapshot,
+      snapshotAgeDays,
+      investmentsSuppressedByFilter:
+        selectedAccounts.length > 0 && !totalOverview.investments,
+    };
+  }, [
+    selectedAccounts.length,
+    totalAccountsOverview,
+    totalMonthlyIncomeExpense,
+    totalOverview,
+    totalWindowRange,
+  ]);
 
   const openDetailDialog = (state: DetailDialogState) => {
     setDetailDialog(state);
@@ -1049,6 +1752,74 @@ export const Reports: React.FC = () => {
   const openTotalDrilldownDialog = (state: TotalDrilldownState) => {
     setTotalDrilldown(state);
     setTotalDrilldownOpen(true);
+  };
+
+  const exportTotalSummaryCsv = () => {
+    if (!totalOverview || !totalKpis || !totalWindowRange) return;
+    const attribution = totalNetWorthAttribution;
+    downloadCsv("reports-total-summary.csv", [
+      {
+        as_of: totalOverview.as_of,
+        window_start: totalWindowRange.start,
+        window_end: totalWindowRange.end,
+        net_worth_now: totalKpis.netWorth,
+        cash_balance_now: totalKpis.cashBalance,
+        debt_total_now: totalKpis.debtTotal,
+        investments_value_now: totalKpis.investmentsValue ?? "",
+        lifetime_income: totalKpis.lifetimeIncome,
+        lifetime_expense: totalKpis.lifetimeExpense,
+        lifetime_saved: totalKpis.lifetimeSaved,
+        lifetime_savings_rate_pct: totalKpis.lifetimeSavingsRate ?? "",
+        window_net_worth_delta: attribution?.netWorthDelta ?? "",
+        window_savings_net: attribution?.savings ?? "",
+        window_investments_delta: attribution?.investmentsContribution ?? "",
+        window_debt_contribution: attribution?.debtContribution ?? "",
+        window_remainder: attribution?.remainder ?? "",
+      },
+    ]);
+  };
+
+  const exportTotalYearlyCsv = () => {
+    if (!totalYearly.length) return;
+    downloadCsv(
+      "reports-total-yearly.csv",
+      totalYearly.map((row) => ({
+        year: row.year,
+        income: row.income,
+        expense: row.expense,
+        net: row.net,
+        savings_rate_pct: row.savingsRate ?? "",
+      })),
+    );
+  };
+
+  const exportTotalNetWorthCsv = () => {
+    if (!totalNetWorthSeries.length) return;
+    downloadCsv(
+      "reports-total-net-worth.csv",
+      totalNetWorthSeries.map((row) => ({
+        date: row.date,
+        net_worth: row.netWorth,
+      })),
+    );
+  };
+
+  const exportTotalMonthlyIncomeExpenseCsv = () => {
+    if (!totalWindowRange) return;
+    const rows = totalMonthlyIncomeExpense
+      .filter(
+        (row) =>
+          row.date >= totalWindowRange.start &&
+          row.date <= totalWindowRange.end,
+      )
+      .map((row) => ({
+        date: row.date,
+        income: row.income,
+        expense: row.expense,
+        net: row.income - row.expense,
+      }));
+    if (!rows.length) return;
+    downloadCsv("reports-total-monthly-income-expense.csv", rows);
   };
 
   return (
@@ -1090,7 +1861,20 @@ export const Reports: React.FC = () => {
                 ))}
               </select>
             ) : (
-              <div className="h-9" />
+              <select
+                className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900"
+                value={totalWindowPreset}
+                onChange={(e) =>
+                  setTotalWindowPreset(
+                    e.target.value as "all" | "10" | "5" | "3",
+                  )
+                }
+              >
+                <option value="all">All time</option>
+                <option value="10">Last 10y</option>
+                <option value="5">Last 5y</option>
+                <option value="3">Last 3y</option>
+              </select>
             )}
           </div>
           <Button
@@ -1109,6 +1893,37 @@ export const Reports: React.FC = () => {
           >
             Total
           </Button>
+          {routeMode === "total" ? (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportTotalSummaryCsv}
+                disabled={!totalOverview}
+              >
+                Export summary
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportTotalYearlyCsv}
+                disabled={!totalYearly.length}
+              >
+                Export yearly
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  exportTotalNetWorthCsv();
+                  exportTotalMonthlyIncomeExpenseCsv();
+                }}
+                disabled={!totalNetWorthSeries.length}
+              >
+                Export series
+              </Button>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -1251,7 +2066,7 @@ export const Reports: React.FC = () => {
           <div className="grid gap-3 lg:grid-cols-2">
             <ChartCard
               title={`Income vs expense (${year})`}
-              description="Two bars per month."
+              description="Stacked bars + net line for seasonality and turning points."
               loading={overviewLoading}
             >
               {!overview && !overviewLoading ? (
@@ -1271,7 +2086,7 @@ export const Reports: React.FC = () => {
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={yearOverviewMonthChart}>
+                  <BarChart data={yearSeasonalityChart}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis
                       dataKey="month"
@@ -1283,11 +2098,17 @@ export const Reports: React.FC = () => {
                       tickLine={false}
                       axisLine={false}
                       tick={{ fill: "#475569", fontSize: 12 }}
+                      tickFormatter={(v) => compactCurrency(Number(v))}
                     />
                     <Tooltip
                       content={({ active, payload }) => {
                         if (!active || !payload?.length) return null;
                         const label = payload[0]?.payload?.month;
+                        const record = payload[0]?.payload;
+                        const net =
+                          isRecord(record) && typeof record.net === "number"
+                            ? record.net
+                            : null;
                         return (
                           <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
                             <p className="font-semibold text-slate-800">
@@ -1298,26 +2119,45 @@ export const Reports: React.FC = () => {
                                 key={String(item.dataKey)}
                                 className="text-slate-600"
                               >
-                                {item.name}: {currency(Number(item.value))}
+                                {item.name}:{" "}
+                                {item.dataKey === "expenseNeg"
+                                  ? currency(Math.abs(Number(item.value)))
+                                  : currency(Number(item.value))}
                               </p>
                             ))}
+                            {net !== null ? (
+                              <p className="pt-1 font-semibold text-slate-900">
+                                Net: {currency(net)}
+                              </p>
+                            ) : null}
                           </div>
                         );
                       }}
                     />
+                    <ReferenceLine y={0} stroke="#cbd5e1" />
                     <Bar
                       dataKey="income"
                       name="Income"
+                      stackId="cash"
                       fill="#10b981"
                       radius={[6, 6, 4, 4]}
                       barSize={12}
                     />
                     <Bar
-                      dataKey="expense"
+                      dataKey="expenseNeg"
                       name="Expense"
+                      stackId="cash"
                       fill="#ef4444"
                       radius={[6, 6, 4, 4]}
                       barSize={12}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="net"
+                      name="Net"
+                      stroke="#0f172a"
+                      strokeWidth={2}
+                      dot={false}
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -1605,6 +2445,312 @@ export const Reports: React.FC = () => {
                         )}
                         )
                       </p>
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid gap-3 lg:grid-cols-4">
+            <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="flex flex-col gap-2 pb-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">
+                    Category drivers
+                  </CardTitle>
+                  <p className="text-xs text-slate-500">
+                    Biggest YoY shifts (expense + income).
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setYearlyExtraDialog({ kind: "categoryDrivers" })
+                  }
+                  disabled={!overview || !prevOverview}
+                >
+                  Details
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {!overview ? (
+                  <Skeleton className="h-44 w-full" />
+                ) : prevOverviewLoading ? (
+                  <Skeleton className="h-44 w-full" />
+                ) : !prevOverview ? (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+                    Need prior-year data to compute YoY drivers.
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-xs text-slate-600">
+                      Comparing {year} vs {year - 1}
+                    </div>
+                    <div className="grid gap-2">
+                      {yearlyExpenseCategoryDeltas
+                        .filter((row) => row.delta > 0)
+                        .slice(0, 3)
+                        .map((row) => (
+                          <button
+                            key={`exp-up-${row.key}`}
+                            type="button"
+                            className="flex w-full items-center justify-between rounded-md border border-slate-100 bg-white px-3 py-2 text-left text-xs"
+                            onClick={() => {
+                              if (!row.id) return;
+                              setSelectedCategoryFlow("expense");
+                              setSelectedCategoryId(row.id);
+                            }}
+                            disabled={!row.id}
+                          >
+                            <span className="max-w-[140px] truncate font-medium text-slate-900">
+                              {row.name}
+                            </span>
+                            <span className="font-semibold text-rose-700">
+                              +{currency(row.delta)}
+                            </span>
+                          </button>
+                        ))}
+                      {yearlyExpenseCategoryDeltas
+                        .filter((row) => row.delta < 0)
+                        .slice(0, 2)
+                        .map((row) => (
+                          <button
+                            key={`exp-down-${row.key}`}
+                            type="button"
+                            className="flex w-full items-center justify-between rounded-md border border-slate-100 bg-white px-3 py-2 text-left text-xs"
+                            onClick={() => {
+                              if (!row.id) return;
+                              setSelectedCategoryFlow("expense");
+                              setSelectedCategoryId(row.id);
+                            }}
+                            disabled={!row.id}
+                          >
+                            <span className="max-w-[140px] truncate font-medium text-slate-900">
+                              {row.name}
+                            </span>
+                            <span className="font-semibold text-emerald-700">
+                              −{currency(Math.abs(row.delta))}
+                            </span>
+                          </button>
+                        ))}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Tip: click an item to open its monthly breakdown.
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="flex flex-col gap-2 pb-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">
+                    Merchant deltas
+                  </CardTitle>
+                  <p className="text-xs text-slate-500">
+                    Biggest YoY shifts by description.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setYearlyExtraDialog({
+                      kind: "merchantDrivers",
+                      flow: "expense",
+                    })
+                  }
+                  disabled={!overview || !prevOverview}
+                >
+                  Details
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {!overview ? (
+                  <Skeleton className="h-44 w-full" />
+                ) : prevOverviewLoading ? (
+                  <Skeleton className="h-44 w-full" />
+                ) : !prevOverview ? (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+                    Need prior-year data to compute merchant deltas.
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-xs text-slate-600">
+                      Comparing {year} vs {year - 1}
+                    </div>
+                    <div className="grid gap-2">
+                      {yearlyExpenseSourceDeltas.slice(0, 5).map((row) => (
+                        <button
+                          key={row.source}
+                          type="button"
+                          className="flex w-full items-center justify-between rounded-md border border-slate-100 bg-white px-3 py-2 text-left text-xs"
+                          onClick={() =>
+                            openYearlySourceDetail("expense", row.source)
+                          }
+                        >
+                          <span className="max-w-[150px] truncate font-medium text-slate-900">
+                            {row.source}
+                          </span>
+                          <span
+                            className={
+                              row.delta <= 0
+                                ? "font-semibold text-emerald-700"
+                                : "font-semibold text-rose-700"
+                            }
+                          >
+                            {row.delta >= 0 ? "+" : "−"}
+                            {currency(Math.abs(row.delta))}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      Click a merchant to compare monthly patterns.
+                    </div>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="flex flex-col gap-2 pb-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">
+                    One-off transactions
+                  </CardTitle>
+                  <p className="text-xs text-slate-500">
+                    Largest single expenses this year.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setYearlyExtraDialog({ kind: "oneOffs" })}
+                  disabled={!overview || !overview.largest_transactions.length}
+                >
+                  Details
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                {!overview ? (
+                  <Skeleton className="h-44 w-full" />
+                ) : overview.largest_transactions.length ? (
+                  overview.largest_transactions.slice(0, 5).map((row) => (
+                    <button
+                      key={row.id}
+                      type="button"
+                      className="flex w-full items-center justify-between rounded-md border border-slate-100 bg-white px-3 py-2 text-left text-xs"
+                      onClick={() => setYearlyExtraDialog({ kind: "oneOffs" })}
+                    >
+                      <span className="max-w-[150px] truncate font-medium text-slate-900">
+                        {row.merchant}
+                      </span>
+                      <span className="font-semibold text-slate-900">
+                        {currency(Number(row.amount))}
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+                    No large transactions yet.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="flex flex-col gap-2 pb-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">
+                    Savings decomposition
+                  </CardTitle>
+                  <p className="text-xs text-slate-500">
+                    Net = income − expense, vs last year.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    setYearlyExtraDialog({ kind: "savingsDecomposition" })
+                  }
+                  disabled={!yearlySavingsDecomposition}
+                >
+                  Details
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {!overview ? (
+                  <Skeleton className="h-44 w-full" />
+                ) : prevOverviewLoading ? (
+                  <Skeleton className="h-44 w-full" />
+                ) : !yearlySavingsDecomposition ? (
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+                    Need prior-year data to decompose savings.
+                  </div>
+                ) : (
+                  <>
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        Net change ({year} vs {year - 1})
+                      </p>
+                      <p
+                        className={
+                          yearlySavingsDecomposition.netDelta >= 0
+                            ? "text-2xl font-semibold text-emerald-700"
+                            : "text-2xl font-semibold text-rose-700"
+                        }
+                      >
+                        {yearlySavingsDecomposition.netDelta >= 0 ? "+" : "−"}
+                        {currency(
+                          Math.abs(yearlySavingsDecomposition.netDelta),
+                        )}
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        {currency(yearlySavingsDecomposition.netPrev)} →{" "}
+                        {currency(yearlySavingsDecomposition.netNow)}
+                      </p>
+                    </div>
+                    <div className="grid gap-2">
+                      {yearlySavingsDecomposition.contributions
+                        .slice(0, 4)
+                        .map((row) => (
+                          <button
+                            key={`${row.kind}-${row.name}`}
+                            type="button"
+                            className="flex w-full items-center justify-between rounded-md border border-slate-100 bg-white px-3 py-2 text-left text-xs"
+                            onClick={() => {
+                              if (!row.id) return;
+                              setSelectedCategoryFlow(
+                                row.kind === "income" ? "income" : "expense",
+                              );
+                              setSelectedCategoryId(row.id);
+                            }}
+                            disabled={!row.id}
+                          >
+                            <span className="max-w-[150px] truncate font-medium text-slate-900">
+                              {row.name}
+                            </span>
+                            <span
+                              className={
+                                row.contribution >= 0
+                                  ? "font-semibold text-emerald-700"
+                                  : "font-semibold text-rose-700"
+                              }
+                            >
+                              {row.contribution >= 0 ? "+" : "−"}
+                              {currency(Math.abs(row.contribution))}
+                            </span>
+                          </button>
+                        ))}
                     </div>
                   </>
                 )}
@@ -2159,14 +3305,7 @@ export const Reports: React.FC = () => {
                           key={row.source}
                           className="cursor-pointer"
                           onClick={() => {
-                            openDetailDialog({
-                              kind: "source",
-                              title: row.source,
-                              subtitle: `Income • ${year}`,
-                              monthly: row.monthly,
-                              total: row.total,
-                              txCount: row.txCount,
-                            });
+                            openYearlySourceDetail("income", row.source);
                           }}
                         >
                           <TableCell className="max-w-[220px] truncate font-medium">
@@ -2219,14 +3358,7 @@ export const Reports: React.FC = () => {
                           key={row.source}
                           className="cursor-pointer"
                           onClick={() => {
-                            openDetailDialog({
-                              kind: "source",
-                              title: row.source,
-                              subtitle: `Expense • ${year}`,
-                              monthly: row.monthly,
-                              total: row.total,
-                              txCount: row.txCount,
-                            });
+                            openYearlySourceDetail("expense", row.source);
                           }}
                         >
                           <TableCell className="max-w-[220px] truncate font-medium">
@@ -2354,7 +3486,13 @@ export const Reports: React.FC = () => {
                     </TableHeader>
                     <TableBody>
                       {overview.top_merchants.slice(0, 8).map((row) => (
-                        <TableRow key={row.merchant}>
+                        <TableRow
+                          key={row.merchant}
+                          className="cursor-pointer"
+                          onClick={() =>
+                            openYearlySourceDetail("expense", row.merchant)
+                          }
+                        >
                           <TableCell className="max-w-[160px] truncate font-medium">
                             {row.merchant}
                           </TableCell>
@@ -2392,7 +3530,13 @@ export const Reports: React.FC = () => {
                     </TableHeader>
                     <TableBody>
                       {overview.largest_transactions.slice(0, 8).map((row) => (
-                        <TableRow key={row.id}>
+                        <TableRow
+                          key={row.id}
+                          className="cursor-pointer"
+                          onClick={() =>
+                            setYearlyExtraDialog({ kind: "oneOffs" })
+                          }
+                        >
                           <TableCell className="max-w-[160px] truncate font-medium">
                             {row.merchant}
                           </TableCell>
@@ -2462,7 +3606,17 @@ export const Reports: React.FC = () => {
                   </TableHeader>
                   <TableBody>
                     {overview.category_changes.map((row) => (
-                      <TableRow key={row.name}>
+                      <TableRow
+                        key={row.name}
+                        className={
+                          row.category_id ? "cursor-pointer" : undefined
+                        }
+                        onClick={() => {
+                          if (!row.category_id) return;
+                          setSelectedCategoryFlow("expense");
+                          setSelectedCategoryId(row.category_id);
+                        }}
+                      >
                         <TableCell className="font-medium">
                           {row.name}
                         </TableCell>
@@ -2484,6 +3638,562 @@ export const Reports: React.FC = () => {
               )}
             </CardContent>
           </Card>
+
+          <Dialog
+            open={Boolean(yearlyExtraDialog)}
+            onOpenChange={(open) => {
+              if (!open) setYearlyExtraDialog(null);
+            }}
+          >
+            <DialogContent className="max-w-5xl">
+              <DialogHeader>
+                <DialogTitle>
+                  {yearlyExtraDialog?.kind === "categoryDrivers"
+                    ? `Category drivers (${year} vs ${year - 1})`
+                    : yearlyExtraDialog?.kind === "merchantDrivers"
+                      ? `Merchant deltas (${year} vs ${year - 1})`
+                      : yearlyExtraDialog?.kind === "oneOffs"
+                        ? `Largest transactions (${year})`
+                        : yearlyExtraDialog?.kind === "savingsDecomposition"
+                          ? `Savings decomposition (${year} vs ${year - 1})`
+                          : "Details"}
+                </DialogTitle>
+              </DialogHeader>
+              {!yearlyExtraDialog ? null : yearlyExtraDialog.kind ===
+                "categoryDrivers" ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-md border border-slate-100 bg-white">
+                    <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                      <span>Expenses</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          if (!yearlyExpenseCategoryDeltas.length) return;
+                          downloadCsv(
+                            `reports-yearly-${year}-expense-category-deltas.csv`,
+                            yearlyExpenseCategoryDeltas.map((row) => ({
+                              category: row.name,
+                              delta: row.delta,
+                              this_year: row.current,
+                              last_year: row.prev,
+                              delta_pct: row.deltaPct ?? "",
+                            })),
+                          );
+                        }}
+                        disabled={!yearlyExpenseCategoryDeltas.length}
+                      >
+                        Export
+                      </Button>
+                    </div>
+                    <div className="max-h-[26rem] overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Category</TableHead>
+                            <TableHead className="text-right">Δ</TableHead>
+                            <TableHead className="text-right">This</TableHead>
+                            <TableHead className="text-right">YoY</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {yearlyExpenseCategoryDeltas.map((row) => (
+                            <TableRow
+                              key={`exp-${row.key}`}
+                              className={row.id ? "cursor-pointer" : undefined}
+                              onClick={() => {
+                                if (!row.id) return;
+                                setYearlyExtraDialog(null);
+                                setSelectedCategoryFlow("expense");
+                                setSelectedCategoryId(row.id);
+                              }}
+                            >
+                              <TableCell className="max-w-[220px] truncate font-medium">
+                                {row.name}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                <span
+                                  className={
+                                    row.delta <= 0
+                                      ? "text-emerald-700"
+                                      : "text-rose-700"
+                                  }
+                                >
+                                  {row.delta >= 0 ? "+" : "−"}
+                                  {currency(Math.abs(row.delta))}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {currency(row.current)}
+                              </TableCell>
+                              <TableCell className="text-right text-xs text-slate-600">
+                                {row.deltaPct !== null
+                                  ? `${Math.round(row.deltaPct)}%`
+                                  : "—"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                  <div className="rounded-md border border-slate-100 bg-white">
+                    <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                      <span>Income</span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          if (!yearlyIncomeCategoryDeltas.length) return;
+                          downloadCsv(
+                            `reports-yearly-${year}-income-category-deltas.csv`,
+                            yearlyIncomeCategoryDeltas.map((row) => ({
+                              category: row.name,
+                              delta: row.delta,
+                              this_year: row.current,
+                              last_year: row.prev,
+                              delta_pct: row.deltaPct ?? "",
+                            })),
+                          );
+                        }}
+                        disabled={!yearlyIncomeCategoryDeltas.length}
+                      >
+                        Export
+                      </Button>
+                    </div>
+                    <div className="max-h-[26rem] overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Category</TableHead>
+                            <TableHead className="text-right">Δ</TableHead>
+                            <TableHead className="text-right">This</TableHead>
+                            <TableHead className="text-right">YoY</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {yearlyIncomeCategoryDeltas.map((row) => (
+                            <TableRow
+                              key={`inc-${row.key}`}
+                              className={row.id ? "cursor-pointer" : undefined}
+                              onClick={() => {
+                                if (!row.id) return;
+                                setYearlyExtraDialog(null);
+                                setSelectedCategoryFlow("income");
+                                setSelectedCategoryId(row.id);
+                              }}
+                            >
+                              <TableCell className="max-w-[220px] truncate font-medium">
+                                {row.name}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                <span
+                                  className={
+                                    row.delta >= 0
+                                      ? "text-emerald-700"
+                                      : "text-rose-700"
+                                  }
+                                >
+                                  {row.delta >= 0 ? "+" : "−"}
+                                  {currency(Math.abs(row.delta))}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {currency(row.current)}
+                              </TableCell>
+                              <TableCell className="text-right text-xs text-slate-600">
+                                {row.deltaPct !== null
+                                  ? `${Math.round(row.deltaPct)}%`
+                                  : "—"}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
+              ) : yearlyExtraDialog.kind === "merchantDrivers" ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-xs text-slate-600">
+                      Click a row for monthly comparison. Uses transaction
+                      descriptions, so rename noise as needed.
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={
+                          yearlyExtraDialog.flow === "expense"
+                            ? "default"
+                            : "outline"
+                        }
+                        onClick={() =>
+                          setYearlyExtraDialog({
+                            kind: "merchantDrivers",
+                            flow: "expense",
+                          })
+                        }
+                      >
+                        Expense
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={
+                          yearlyExtraDialog.flow === "income"
+                            ? "default"
+                            : "outline"
+                        }
+                        onClick={() =>
+                          setYearlyExtraDialog({
+                            kind: "merchantDrivers",
+                            flow: "income",
+                          })
+                        }
+                      >
+                        Income
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          const rows =
+                            yearlyExtraDialog.flow === "income"
+                              ? yearlyIncomeSourceDeltas
+                              : yearlyExpenseSourceDeltas;
+                          if (!rows.length) return;
+                          downloadCsv(
+                            `reports-yearly-${year}-${yearlyExtraDialog.flow}-merchant-deltas.csv`,
+                            rows.map((row) => ({
+                              source: row.source,
+                              delta: row.delta,
+                              this_year: row.current,
+                              last_year: row.prev,
+                              delta_pct: row.deltaPct ?? "",
+                              tx_count: row.txCount,
+                            })),
+                          );
+                        }}
+                        disabled={
+                          (yearlyExtraDialog.flow === "income"
+                            ? yearlyIncomeSourceDeltas
+                            : yearlyExpenseSourceDeltas
+                          ).length === 0
+                        }
+                      >
+                        Export
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="max-h-[28rem] overflow-auto rounded-md border border-slate-100 bg-white">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Source</TableHead>
+                          <TableHead className="text-right">Δ</TableHead>
+                          <TableHead className="text-right">This</TableHead>
+                          <TableHead className="text-right">Last</TableHead>
+                          <TableHead className="hidden text-right md:table-cell">
+                            YoY
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(yearlyExtraDialog.flow === "income"
+                          ? yearlyIncomeSourceDeltas
+                          : yearlyExpenseSourceDeltas
+                        ).map((row) => (
+                          <TableRow
+                            key={row.source}
+                            className="cursor-pointer"
+                            onClick={() => {
+                              setYearlyExtraDialog(null);
+                              openYearlySourceDetail(
+                                yearlyExtraDialog.flow,
+                                row.source,
+                              );
+                            }}
+                          >
+                            <TableCell className="max-w-[260px] truncate font-medium">
+                              {row.source}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">
+                              <span
+                                className={
+                                  yearlyExtraDialog.flow === "expense"
+                                    ? row.delta <= 0
+                                      ? "text-emerald-700"
+                                      : "text-rose-700"
+                                    : row.delta >= 0
+                                      ? "text-emerald-700"
+                                      : "text-rose-700"
+                                }
+                              >
+                                {row.delta >= 0 ? "+" : "−"}
+                                {currency(Math.abs(row.delta))}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {currency(row.current)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {currency(row.prev)}
+                            </TableCell>
+                            <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
+                              {row.deltaPct !== null
+                                ? `${Math.round(row.deltaPct)}%`
+                                : "—"}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              ) : yearlyExtraDialog.kind === "oneOffs" ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-xs text-slate-600">
+                      Largest expenses captured as individual transactions.
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        if (!overview?.largest_transactions.length) return;
+                        downloadCsv(
+                          `reports-yearly-${year}-largest-transactions.csv`,
+                          overview.largest_transactions.map((row) => ({
+                            id: row.id,
+                            occurred_at: row.occurred_at,
+                            merchant: row.merchant,
+                            amount: Number(row.amount),
+                            category: row.category_name,
+                            notes: row.notes ?? "",
+                          })),
+                        );
+                      }}
+                      disabled={!overview?.largest_transactions.length}
+                    >
+                      Export
+                    </Button>
+                  </div>
+                  {!overview ? (
+                    <Skeleton className="h-56 w-full" />
+                  ) : (
+                    <div className="max-h-[28rem] overflow-auto rounded-md border border-slate-100 bg-white">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Merchant</TableHead>
+                            <TableHead className="hidden md:table-cell">
+                              Category
+                            </TableHead>
+                            <TableHead className="text-right">Amount</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {overview.largest_transactions.map((row) => (
+                            <TableRow key={row.id}>
+                              <TableCell className="text-xs text-slate-600">
+                                {new Date(row.occurred_at).toLocaleDateString(
+                                  "sv-SE",
+                                  {
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "2-digit",
+                                  },
+                                )}
+                              </TableCell>
+                              <TableCell className="max-w-[260px] truncate font-medium">
+                                {row.merchant}
+                              </TableCell>
+                              <TableCell className="hidden max-w-[220px] truncate text-xs text-slate-600 md:table-cell">
+                                {row.category_name}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {currency(Number(row.amount))}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </div>
+              ) : yearlyExtraDialog.kind === "savingsDecomposition" ? (
+                <div className="space-y-4">
+                  {!yearlySavingsDecomposition ? (
+                    <Skeleton className="h-56 w-full" />
+                  ) : (
+                    <>
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                          <p className="text-xs tracking-wide text-slate-500 uppercase">
+                            Net delta
+                          </p>
+                          <p
+                            className={
+                              yearlySavingsDecomposition.netDelta >= 0
+                                ? "text-xl font-semibold text-emerald-700"
+                                : "text-xl font-semibold text-rose-700"
+                            }
+                          >
+                            {yearlySavingsDecomposition.netDelta >= 0
+                              ? "+"
+                              : "−"}
+                            {currency(
+                              Math.abs(yearlySavingsDecomposition.netDelta),
+                            )}
+                          </p>
+                          <p className="text-xs text-slate-600">
+                            {currency(yearlySavingsDecomposition.netPrev)} →{" "}
+                            {currency(yearlySavingsDecomposition.netNow)}
+                          </p>
+                        </div>
+                        <div className="rounded-md border border-slate-100 bg-white p-3">
+                          <p className="text-xs tracking-wide text-slate-500 uppercase">
+                            Income delta
+                          </p>
+                          <p
+                            className={
+                              yearlySavingsDecomposition.incomeDelta >= 0
+                                ? "text-xl font-semibold text-emerald-700"
+                                : "text-xl font-semibold text-rose-700"
+                            }
+                          >
+                            {yearlySavingsDecomposition.incomeDelta >= 0
+                              ? "+"
+                              : "−"}
+                            {currency(
+                              Math.abs(yearlySavingsDecomposition.incomeDelta),
+                            )}
+                          </p>
+                        </div>
+                        <div className="rounded-md border border-slate-100 bg-white p-3">
+                          <p className="text-xs tracking-wide text-slate-500 uppercase">
+                            Expense delta
+                          </p>
+                          <p
+                            className={
+                              yearlySavingsDecomposition.expenseDelta <= 0
+                                ? "text-xl font-semibold text-emerald-700"
+                                : "text-xl font-semibold text-rose-700"
+                            }
+                          >
+                            {yearlySavingsDecomposition.expenseDelta >= 0
+                              ? "+"
+                              : "−"}
+                            {currency(
+                              Math.abs(yearlySavingsDecomposition.expenseDelta),
+                            )}
+                          </p>
+                          <p className="text-xs text-slate-600">
+                            (positive means you spent more)
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-xs text-slate-600">
+                          Contributions rank by impact on net delta (income up
+                          helps, spend up hurts).
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            downloadCsv(
+                              `reports-yearly-${year}-savings-decomposition.csv`,
+                              yearlySavingsDecomposition.contributions.map(
+                                (row) => ({
+                                  kind: row.kind,
+                                  name: row.name,
+                                  contribution: row.contribution,
+                                }),
+                              ),
+                            );
+                          }}
+                          disabled={
+                            !yearlySavingsDecomposition.contributions.length
+                          }
+                        >
+                          Export
+                        </Button>
+                      </div>
+
+                      <div className="max-h-[28rem] overflow-auto rounded-md border border-slate-100 bg-white">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Driver</TableHead>
+                              <TableHead className="hidden md:table-cell">
+                                Type
+                              </TableHead>
+                              <TableHead className="text-right">
+                                Contribution
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {yearlySavingsDecomposition.contributions.map(
+                              (row) => (
+                                <TableRow
+                                  key={`${row.kind}-${row.name}`}
+                                  className={
+                                    row.id ? "cursor-pointer" : undefined
+                                  }
+                                  onClick={() => {
+                                    if (!row.id) return;
+                                    setYearlyExtraDialog(null);
+                                    setSelectedCategoryFlow(
+                                      row.kind === "income"
+                                        ? "income"
+                                        : "expense",
+                                    );
+                                    setSelectedCategoryId(row.id);
+                                  }}
+                                >
+                                  <TableCell className="max-w-[260px] truncate font-medium">
+                                    {row.name}
+                                  </TableCell>
+                                  <TableCell className="hidden text-xs text-slate-600 md:table-cell">
+                                    {row.kind === "income"
+                                      ? "Income category"
+                                      : "Expense category"}
+                                  </TableCell>
+                                  <TableCell className="text-right font-semibold">
+                                    <span
+                                      className={
+                                        row.contribution >= 0
+                                          ? "text-emerald-700"
+                                          : "text-rose-700"
+                                      }
+                                    >
+                                      {row.contribution >= 0 ? "+" : "−"}
+                                      {currency(Math.abs(row.contribution))}
+                                    </span>
+                                  </TableCell>
+                                </TableRow>
+                              ),
+                            )}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : null}
+            </DialogContent>
+          </Dialog>
 
           <Dialog
             open={detailDialogOpen}
@@ -2844,6 +4554,31 @@ export const Reports: React.FC = () => {
                       <p className="text-xs text-slate-600">
                         {detailDialog.txCount} transactions
                       </p>
+                      {typeof detailDialog.compareTotal === "number" ? (
+                        <p className="pt-1 text-xs text-slate-600">
+                          {detailDialog.compareLabel ?? "Last year"}:{" "}
+                          {currency(detailDialog.compareTotal)}{" "}
+                          <span
+                            className={
+                              detailDialog.total - detailDialog.compareTotal >=
+                              0
+                                ? "font-semibold text-emerald-700"
+                                : "font-semibold text-rose-700"
+                            }
+                          >
+                            (
+                            {detailDialog.total - detailDialog.compareTotal >= 0
+                              ? "+"
+                              : "−"}
+                            {currency(
+                              Math.abs(
+                                detailDialog.total - detailDialog.compareTotal,
+                              ),
+                            )}
+                            )
+                          </span>
+                        </p>
+                      ) : null}
                     </div>
                     <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
                       This is grouped by transaction description (good for
@@ -2852,7 +4587,14 @@ export const Reports: React.FC = () => {
                   </div>
                   <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={detailDialog.monthly}>
+                      <BarChart
+                        data={detailDialog.monthly.map((row, idx) => ({
+                          month: row.month,
+                          current: row.total,
+                          compare:
+                            detailDialog.compareMonthly?.[idx]?.total ?? null,
+                        }))}
+                      >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis
                           dataKey="month"
@@ -2871,11 +4613,19 @@ export const Reports: React.FC = () => {
                           contentStyle={{ fontSize: 12 }}
                         />
                         <Bar
-                          dataKey="total"
-                          name="Total"
+                          dataKey="current"
+                          name={detailDialog.subtitle}
                           fill="#334155"
                           radius={[6, 6, 4, 4]}
                         />
+                        {detailDialog.compareMonthly?.length ? (
+                          <Bar
+                            dataKey="compare"
+                            name={detailDialog.compareLabel ?? "Last year"}
+                            fill="#94a3b8"
+                            radius={[6, 6, 4, 4]}
+                          />
+                        ) : null}
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2907,9 +4657,11 @@ export const Reports: React.FC = () => {
                   <div className="h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
-                        data={categoryDetail.monthly.map((m) => ({
+                        data={categoryDetail.monthly.map((m, idx) => ({
                           month: monthLabel(m.date),
                           amount: Number(m.amount),
+                          prevAmount:
+                            categoryDetailPrevMonthly?.[idx] ?? undefined,
                         }))}
                       >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -2921,11 +4673,15 @@ export const Reports: React.FC = () => {
                         />
                         <YAxis hide />
                         <Tooltip
-                          formatter={(value) => currency(Number(value))}
+                          formatter={(value, name) => [
+                            currency(Number(value)),
+                            String(name),
+                          ]}
                           contentStyle={{ fontSize: 12 }}
                         />
                         <Bar
                           dataKey="amount"
+                          name={String(year)}
                           fill={
                             selectedCategoryFlow === "income"
                               ? "#10b981"
@@ -2933,6 +4689,14 @@ export const Reports: React.FC = () => {
                           }
                           radius={[6, 6, 6, 6]}
                         />
+                        {categoryDetailPrevMonthly ? (
+                          <Bar
+                            dataKey="prevAmount"
+                            name={String(year - 1)}
+                            fill="#94a3b8"
+                            radius={[6, 6, 6, 6]}
+                          />
+                        ) : null}
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -2977,7 +4741,11 @@ export const Reports: React.FC = () => {
           <div className="grid gap-3 lg:grid-cols-2">
             <ChartCard
               title="Net worth (lifetime)"
-              description="Monthly net worth snapshot (ledger + investments)."
+              description={
+                totalWindowPreset === "all"
+                  ? "Monthly net worth snapshot (ledger + investments)."
+                  : `Monthly net worth snapshot (last ${totalWindowPreset} years).`
+              }
               loading={totalOverviewLoading}
             >
               {!totalOverview && !totalOverviewLoading ? (
@@ -3087,6 +4855,104 @@ export const Reports: React.FC = () => {
                             totalNetWorthStats.allTimeHighDate,
                           ).toLocaleDateString("sv-SE")}
                         </p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {totalNetWorthAttribution ? (
+                    <div className="rounded-md border border-slate-100 bg-white p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold tracking-wide text-slate-700 uppercase">
+                            Change Attribution
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {new Date(
+                              totalNetWorthAttribution.windowStart,
+                            ).getFullYear()}
+                            –
+                            {new Date(
+                              totalNetWorthAttribution.windowEnd,
+                            ).getFullYear()}
+                          </p>
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {totalNetWorthAttribution.netWorthDelta >= 0
+                            ? "+"
+                            : "−"}
+                          {currency(
+                            Math.abs(totalNetWorthAttribution.netWorthDelta),
+                          )}
+                        </p>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {(
+                          [
+                            {
+                              label: "Savings (income − expense)",
+                              value: totalNetWorthAttribution.savings,
+                              color: "bg-emerald-500",
+                            },
+                            totalNetWorthAttribution.investmentsContribution ===
+                            null
+                              ? null
+                              : {
+                                  label: "Investments change",
+                                  value:
+                                    totalNetWorthAttribution.investmentsContribution,
+                                  color: "bg-indigo-500",
+                                },
+                            {
+                              label: "Debt change",
+                              value: totalNetWorthAttribution.debtContribution,
+                              color: "bg-orange-500",
+                            },
+                            {
+                              label: "Remainder",
+                              value: totalNetWorthAttribution.remainder,
+                              color: "bg-slate-400",
+                            },
+                          ] as Array<null | {
+                            label: string;
+                            value: number;
+                            color: string;
+                          }>
+                        )
+                          .filter(Boolean)
+                          .map((row) => {
+                            if (!row) return null;
+                            const total = Math.max(
+                              1,
+                              Math.abs(totalNetWorthAttribution.netWorthDelta),
+                            );
+                            const pct = (Math.abs(row.value) / total) * 100;
+                            return (
+                              <div key={row.label} className="space-y-1">
+                                <div className="flex items-center justify-between text-xs text-slate-600">
+                                  <span>{row.label}</span>
+                                  <span
+                                    className={
+                                      row.value >= 0
+                                        ? "font-medium text-emerald-700"
+                                        : "font-medium text-rose-700"
+                                    }
+                                  >
+                                    {row.value >= 0 ? "+" : "−"}
+                                    {currency(Math.abs(row.value))}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Progress
+                                    value={Math.min(100, pct)}
+                                    className="h-2"
+                                  />
+                                  <span className="w-10 text-right text-[11px] text-slate-500">
+                                    {percent(pct)}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
                       </div>
                     </div>
                   ) : null}
@@ -4685,6 +6551,113 @@ export const Reports: React.FC = () => {
           <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
             <CardHeader className="pb-2">
               <CardTitle className="text-base font-semibold text-slate-900">
+                Data quality
+              </CardTitle>
+              <p className="text-xs text-slate-500">
+                Coverage checks and quick warnings for the selected window.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {!totalDataQuality ? (
+                <Skeleton className="h-32 w-full" />
+              ) : (
+                <>
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        Window
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {totalDataQuality.windowStart} →{" "}
+                        {totalDataQuality.windowEnd}
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        As of {totalDataQuality.asOf}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        Empty months
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {totalDataQuality.emptyMonthsCount}
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        Months with zero income and expense.
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        Accounts without tx
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {totalDataQuality.accountsWithoutTransactions.length}
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        In the current account set.
+                      </p>
+                    </div>
+                  </div>
+
+                  {totalDataQuality.emptyMonthLabels.length ? (
+                    <div className="rounded-md border border-slate-100 bg-white p-3 text-sm">
+                      <p className="text-xs font-semibold tracking-wide text-slate-700 uppercase">
+                        Recent empty months
+                      </p>
+                      <p className="mt-1 text-sm text-slate-700">
+                        {totalDataQuality.emptyMonthLabels.join(", ")}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {totalDataQuality.accountsWithoutTransactions.length ? (
+                    <div className="rounded-md border border-slate-100 bg-white p-3 text-sm">
+                      <p className="text-xs font-semibold tracking-wide text-slate-700 uppercase">
+                        Accounts missing transactions
+                      </p>
+                      <p className="mt-1 text-sm text-slate-700">
+                        {totalDataQuality.accountsWithoutTransactions.join(
+                          ", ",
+                        )}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {totalDataQuality.investmentsSuppressedByFilter ? (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                      Investment snapshots are hidden while an account filter is
+                      active.
+                    </div>
+                  ) : totalDataQuality.lastSnapshot ? (
+                    <div
+                      className={
+                        totalDataQuality.snapshotAgeDays !== null &&
+                        totalDataQuality.snapshotAgeDays > 40
+                          ? "rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+                          : "rounded-md border border-slate-100 bg-white p-3 text-sm text-slate-700"
+                      }
+                    >
+                      Latest investment snapshot:{" "}
+                      {new Date(
+                        totalDataQuality.lastSnapshot,
+                      ).toLocaleDateString("sv-SE")}
+                      {totalDataQuality.snapshotAgeDays !== null
+                        ? ` (${totalDataQuality.snapshotAgeDays} days ago)`
+                        : ""}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
+                      No investment snapshots found (net worth is ledger-only).
+                    </div>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-slate-900">
                 Insights
               </CardTitle>
               <p className="text-xs text-slate-500">
@@ -4744,6 +6717,44 @@ export const Reports: React.FC = () => {
           {!totalDrilldown ? null : totalDrilldown.kind === "category" ||
             totalDrilldown.kind === "source" ? (
             <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-slate-500">
+                  Window:{" "}
+                  {totalWindowRange
+                    ? `${totalWindowRange.start} → ${totalWindowRange.end}`
+                    : "—"}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!totalDrilldownSeries.length}
+                  onClick={() => {
+                    const base =
+                      totalDrilldown.kind === "category"
+                        ? totalDrilldown.name
+                        : totalDrilldown.source;
+                    const safe = base
+                      .toLowerCase()
+                      .replace(/[^a-z0-9]+/g, "-")
+                      .replace(/^-+|-+$/g, "");
+                    downloadCsv(
+                      `reports-total-${totalDrilldown.kind}-${safe}.csv`,
+                      totalDrilldownSeries.map((row) => ({
+                        period: row.period,
+                        income: row.income,
+                        expense: row.expense,
+                        net: row.net,
+                        value:
+                          totalDrilldown.flow === "expense"
+                            ? row.expense
+                            : row.income,
+                      })),
+                    );
+                  }}
+                >
+                  Download CSV
+                </Button>
+              </div>
               {totalDrilldownError ? (
                 <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
                   {totalDrilldownError}
@@ -4772,6 +6783,37 @@ export const Reports: React.FC = () => {
                       Monthly buckets from /reports/custom (transfers excluded).
                     </p>
                   </div>
+                  {totalDrilldownAnomalies.length ? (
+                    <div className="rounded-md border border-slate-100 bg-white p-3">
+                      <p className="text-xs font-semibold tracking-wide text-slate-700 uppercase">
+                        Notable months
+                      </p>
+                      <div className="mt-2 space-y-2">
+                        {totalDrilldownAnomalies.map((row) => (
+                          <div
+                            key={row.period}
+                            className="flex items-center justify-between text-xs"
+                          >
+                            <span className="text-slate-600">
+                              {new Date(row.period).toLocaleDateString(
+                                "sv-SE",
+                                {
+                                  year: "numeric",
+                                  month: "short",
+                                },
+                              )}
+                            </span>
+                            <span className="font-semibold text-slate-900">
+                              {currency(row.value)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="mt-2 text-[11px] text-slate-500">
+                        Flagged as unusually high vs typical month.
+                      </p>
+                    </div>
+                  ) : null}
                   <div className="max-h-72 overflow-auto rounded-md border border-slate-100 bg-white">
                     <Table>
                       <TableHeader>
@@ -4889,6 +6931,35 @@ export const Reports: React.FC = () => {
             </>
           ) : totalDrilldown.kind === "account" ? (
             <>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-slate-500">
+                  Window:{" "}
+                  {totalWindowRange
+                    ? `${totalWindowRange.start} → ${totalWindowRange.end}`
+                    : "—"}
+                </p>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!totalDrilldownSeries.length}
+                  onClick={() => {
+                    const safe = totalDrilldown.name
+                      .toLowerCase()
+                      .replace(/[^a-z0-9]+/g, "-")
+                      .replace(/^-+|-+$/g, "");
+                    downloadCsv(`reports-total-account-${safe}.csv`, [
+                      ...totalDrilldownSeries.map((row) => ({
+                        period: row.period,
+                        income: row.income,
+                        expense: row.expense,
+                        net: row.net,
+                      })),
+                    ]);
+                  }}
+                >
+                  Download CSV
+                </Button>
+              </div>
               {totalDrilldownError ? (
                 <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
                   {totalDrilldownError}
@@ -4941,6 +7012,41 @@ export const Reports: React.FC = () => {
                     This uses /reports/custom (income/expense only). Transfers
                     are excluded.
                   </div>
+                  {totalDrilldownAnomalies.length ? (
+                    <div className="rounded-md border border-slate-100 bg-white p-3">
+                      <p className="text-xs font-semibold tracking-wide text-slate-700 uppercase">
+                        Notable months (net)
+                      </p>
+                      <div className="mt-2 space-y-2">
+                        {totalDrilldownAnomalies.map((row) => (
+                          <div
+                            key={row.period}
+                            className="flex items-center justify-between text-xs"
+                          >
+                            <span className="text-slate-600">
+                              {new Date(row.period).toLocaleDateString(
+                                "sv-SE",
+                                {
+                                  year: "numeric",
+                                  month: "short",
+                                },
+                              )}
+                            </span>
+                            <span
+                              className={
+                                row.value >= 0
+                                  ? "font-semibold text-emerald-700"
+                                  : "font-semibold text-rose-700"
+                              }
+                            >
+                              {row.value >= 0 ? "+" : "−"}
+                              {currency(Math.abs(row.value))}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="h-80 rounded-md border border-slate-100 bg-white p-2">
                   {totalDrilldownLoading ? (
@@ -5013,301 +7119,404 @@ export const Reports: React.FC = () => {
               </div>
             </>
           ) : totalDrilldown.kind === "investments" ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-3">
-                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                  <p className="text-xs tracking-wide text-slate-500 uppercase">
-                    Latest value
-                  </p>
-                  <p className="font-semibold text-slate-900">
-                    {totalKpis?.investmentsValue === null
-                      ? "—"
-                      : currency(totalKpis?.investmentsValue ?? 0)}
-                  </p>
-                  <p className="text-xs text-slate-600">
-                    Snapshot-based (clear account filters to include).
-                  </p>
-                </div>
-                <div className="max-h-72 overflow-auto rounded-md border border-slate-100 bg-white">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Year</TableHead>
-                        <TableHead className="text-right">End</TableHead>
-                        <TableHead className="hidden text-right md:table-cell">
-                          Net contrib
-                        </TableHead>
-                        <TableHead className="hidden text-right md:table-cell">
-                          Implied return
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(totalOverview?.investments?.yearly ?? []).map((row) => (
-                        <TableRow key={row.year}>
-                          <TableCell className="font-medium">
-                            {row.year}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold">
-                            {currency(Number(row.end_value))}
-                          </TableCell>
-                          <TableCell className="hidden text-right md:table-cell">
-                            {currency(Number(row.net_contributions))}
-                          </TableCell>
-                          <TableCell className="hidden text-right md:table-cell">
-                            {row.implied_return === null
-                              ? "—"
-                              : currency(Number(row.implied_return))}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-              <div className="h-80 rounded-md border border-slate-100 bg-white p-2">
-                {!totalOverview?.investments?.series?.length ? (
-                  <div className="flex h-full items-center justify-center text-sm text-slate-500">
-                    No investment snapshots yet.
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={totalOverview.investments.series.map((row) => ({
-                        date: row.date,
-                        label: new Date(row.date).toLocaleDateString("sv-SE", {
-                          month: "short",
-                          year: "2-digit",
-                        }),
-                        value: Number(row.value),
-                      }))}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis
-                        dataKey="label"
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: "#475569", fontSize: 12 }}
-                      />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: "#475569", fontSize: 12 }}
-                        tickFormatter={(v) => compactCurrency(Number(v))}
-                      />
-                      <Tooltip
-                        formatter={(value) => currency(Number(value))}
-                        labelFormatter={(_label, payload) =>
-                          payload?.[0]?.payload?.date
-                            ? new Date(
-                                String(payload[0].payload.date),
-                              ).toLocaleDateString("sv-SE", {
-                                year: "numeric",
-                                month: "long",
-                              })
-                            : String(_label)
-                        }
-                        contentStyle={{ fontSize: 12 }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="value"
-                        stroke="#4f46e5"
-                        fill="rgba(79,70,229,0.15)"
-                        strokeWidth={2}
-                        isAnimationActive={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
-            </div>
-          ) : totalDrilldown.kind === "debt" ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-3">
-                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                  <p className="text-xs tracking-wide text-slate-500 uppercase">
-                    Total debt
-                  </p>
-                  <p className="font-semibold text-slate-900">
-                    {totalOverview
-                      ? currency(Number(totalOverview.debt.total_current))
-                      : "—"}
-                  </p>
-                  <p className="text-xs text-slate-600">
-                    Accounts shown as-of now.
-                  </p>
-                </div>
-                <div className="max-h-72 overflow-auto rounded-md border border-slate-100 bg-white">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Account</TableHead>
-                        <TableHead className="text-right">Debt</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {totalDebtAccounts.map((row) => (
-                        <TableRow key={row.id}>
-                          <TableCell className="max-w-[220px] truncate font-medium">
-                            {row.name}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold">
-                            {currency(row.current)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              </div>
-              <div className="h-80 rounded-md border border-slate-100 bg-white p-2">
-                {totalDebtSeries.length ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
-                      data={totalOverview?.debt.series.map((row) => ({
-                        date: row.date,
-                        label: new Date(row.date).toLocaleDateString("sv-SE", {
-                          month: "short",
-                          year: "2-digit",
-                        }),
-                        debt: Number(row.debt),
-                      }))}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis
-                        dataKey="label"
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: "#475569", fontSize: 12 }}
-                      />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: "#475569", fontSize: 12 }}
-                        tickFormatter={(v) => compactCurrency(Number(v))}
-                      />
-                      <Tooltip
-                        formatter={(value) => currency(Number(value))}
-                        labelFormatter={(_label, payload) =>
-                          payload?.[0]?.payload?.date
-                            ? new Date(
-                                String(payload[0].payload.date),
-                              ).toLocaleDateString("sv-SE", {
-                                year: "numeric",
-                                month: "long",
-                              })
-                            : String(_label)
-                        }
-                        contentStyle={{ fontSize: 12 }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="debt"
-                        stroke="#ef4444"
-                        strokeWidth={2}
-                        dot={false}
-                        isAnimationActive={false}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-slate-500">
-                    No debt history yet.
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-3">
-                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                  <p className="text-xs tracking-wide text-slate-500 uppercase">
-                    As of
-                  </p>
-                  <p className="font-semibold text-slate-900">
-                    {totalOverview
-                      ? new Date(totalOverview.as_of).toLocaleDateString(
-                          "sv-SE",
+            <>
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!totalOverview?.investments}
+                  onClick={() => {
+                    if (!totalOverview?.investments) return;
+                    const windowStart = totalWindowRange?.start ?? "0000-01-01";
+                    const windowStartYear = totalWindowRange
+                      ? Number(totalWindowRange.start.slice(0, 4))
+                      : null;
+                    downloadCsv(
+                      "reports-total-investments-series.csv",
+                      totalOverview.investments.series
+                        .filter((row) => row.date >= windowStart)
+                        .map((row) => ({
+                          date: row.date,
+                          value: Number(row.value),
+                        })),
+                    );
+                    downloadCsv(
+                      "reports-total-investments-yearly.csv",
+                      totalOverview.investments.yearly
+                        .filter((row) =>
+                          windowStartYear ? row.year >= windowStartYear : true,
                         )
-                      : "—"}
-                  </p>
-                  <p className="text-xs text-slate-600">
-                    Ledger + investment snapshots.
-                  </p>
-                </div>
-                {totalNetWorthStats ? (
-                  <div className="rounded-md border border-slate-100 bg-white p-3">
+                        .map((row) => ({
+                          year: row.year,
+                          end_value: Number(row.end_value),
+                          contributions: Number(row.contributions),
+                          withdrawals: Number(row.withdrawals),
+                          net_contributions: Number(row.net_contributions),
+                          implied_return: row.implied_return
+                            ? Number(row.implied_return)
+                            : "",
+                        })),
+                    );
+                  }}
+                >
+                  Download CSV
+                </Button>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
                     <p className="text-xs tracking-wide text-slate-500 uppercase">
-                      Current
+                      Latest value
                     </p>
                     <p className="font-semibold text-slate-900">
-                      {currency(totalNetWorthStats.current)}
+                      {totalKpis?.investmentsValue === null
+                        ? "—"
+                        : currency(totalKpis?.investmentsValue ?? 0)}
                     </p>
                     <p className="text-xs text-slate-600">
-                      Range: {currency(totalNetWorthStats.allTimeLow)} →{" "}
-                      {currency(totalNetWorthStats.allTimeHigh)}
+                      Snapshot-based (clear account filters to include).
                     </p>
                   </div>
-                ) : null}
-              </div>
-              <div className="h-80 rounded-md border border-slate-100 bg-white p-2">
-                {totalOverview?.net_worth_series.length ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart
-                      data={totalOverview.net_worth_series.map((row) => ({
-                        date: row.date,
-                        label: new Date(row.date).toLocaleDateString("sv-SE", {
-                          month: "short",
-                          year: "2-digit",
-                        }),
-                        netWorth: Number(row.net_worth),
-                      }))}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis
-                        dataKey="label"
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: "#475569", fontSize: 12 }}
-                      />
-                      <YAxis
-                        tickLine={false}
-                        axisLine={false}
-                        tick={{ fill: "#475569", fontSize: 12 }}
-                        tickFormatter={(v) => compactCurrency(Number(v))}
-                      />
-                      <Tooltip
-                        formatter={(value) => currency(Number(value))}
-                        labelFormatter={(_label, payload) =>
-                          payload?.[0]?.payload?.date
-                            ? new Date(
-                                String(payload[0].payload.date),
-                              ).toLocaleDateString("sv-SE", {
-                                year: "numeric",
-                                month: "long",
-                              })
-                            : String(_label)
-                        }
-                        contentStyle={{ fontSize: 12 }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="netWorth"
-                        stroke="#0f172a"
-                        fill="rgba(15,23,42,0.12)"
-                        strokeWidth={2}
-                        isAnimationActive={false}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex h-full items-center justify-center text-sm text-slate-500">
-                    No net worth history yet.
+                  <div className="max-h-72 overflow-auto rounded-md border border-slate-100 bg-white">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Year</TableHead>
+                          <TableHead className="text-right">End</TableHead>
+                          <TableHead className="hidden text-right md:table-cell">
+                            Net contrib
+                          </TableHead>
+                          <TableHead className="hidden text-right md:table-cell">
+                            Implied return
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {(totalOverview?.investments?.yearly ?? []).map(
+                          (row) => (
+                            <TableRow key={row.year}>
+                              <TableCell className="font-medium">
+                                {row.year}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {currency(Number(row.end_value))}
+                              </TableCell>
+                              <TableCell className="hidden text-right md:table-cell">
+                                {currency(Number(row.net_contributions))}
+                              </TableCell>
+                              <TableCell className="hidden text-right md:table-cell">
+                                {row.implied_return === null
+                                  ? "—"
+                                  : currency(Number(row.implied_return))}
+                              </TableCell>
+                            </TableRow>
+                          ),
+                        )}
+                      </TableBody>
+                    </Table>
                   </div>
-                )}
+                </div>
+                <div className="h-80 rounded-md border border-slate-100 bg-white p-2">
+                  {!totalOverview?.investments?.series?.length ? (
+                    <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                      No investment snapshots yet.
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={totalOverview.investments.series.map((row) => ({
+                          date: row.date,
+                          label: new Date(row.date).toLocaleDateString(
+                            "sv-SE",
+                            {
+                              month: "short",
+                              year: "2-digit",
+                            },
+                          ),
+                          value: Number(row.value),
+                        }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="label"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                          tickFormatter={(v) => compactCurrency(Number(v))}
+                        />
+                        <Tooltip
+                          formatter={(value) => currency(Number(value))}
+                          labelFormatter={(_label, payload) =>
+                            payload?.[0]?.payload?.date
+                              ? new Date(
+                                  String(payload[0].payload.date),
+                                ).toLocaleDateString("sv-SE", {
+                                  year: "numeric",
+                                  month: "long",
+                                })
+                              : String(_label)
+                          }
+                          contentStyle={{ fontSize: 12 }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="value"
+                          stroke="#4f46e5"
+                          fill="rgba(79,70,229,0.15)"
+                          strokeWidth={2}
+                          isAnimationActive={false}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
               </div>
-            </div>
+            </>
+          ) : totalDrilldown.kind === "debt" ? (
+            <>
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!totalOverview}
+                  onClick={() => {
+                    if (!totalOverview) return;
+                    const windowStart = totalWindowRange?.start ?? "0000-01-01";
+                    downloadCsv(
+                      "reports-total-debt-series.csv",
+                      totalOverview.debt.series
+                        .filter((row) => row.date >= windowStart)
+                        .map((row) => ({
+                          date: row.date,
+                          debt: Number(row.debt),
+                        })),
+                    );
+                    downloadCsv(
+                      "reports-total-debt-accounts.csv",
+                      totalOverview.debt.accounts.map((row) => ({
+                        account_id: row.account_id,
+                        name: row.name,
+                        current_debt: Number(row.current_debt),
+                        prev_year_end_debt: row.prev_year_end_debt
+                          ? Number(row.prev_year_end_debt)
+                          : "",
+                        delta: row.delta ? Number(row.delta) : "",
+                      })),
+                    );
+                  }}
+                >
+                  Download CSV
+                </Button>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                    <p className="text-xs tracking-wide text-slate-500 uppercase">
+                      Total debt
+                    </p>
+                    <p className="font-semibold text-slate-900">
+                      {totalOverview
+                        ? currency(Number(totalOverview.debt.total_current))
+                        : "—"}
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      Accounts shown as-of now.
+                    </p>
+                  </div>
+                  <div className="max-h-72 overflow-auto rounded-md border border-slate-100 bg-white">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Account</TableHead>
+                          <TableHead className="text-right">Debt</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {totalDebtAccounts.map((row) => (
+                          <TableRow key={row.id}>
+                            <TableCell className="max-w-[220px] truncate font-medium">
+                              {row.name}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {currency(row.current)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+                <div className="h-80 rounded-md border border-slate-100 bg-white p-2">
+                  {totalDebtSeries.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart
+                        data={totalOverview?.debt.series.map((row) => ({
+                          date: row.date,
+                          label: new Date(row.date).toLocaleDateString(
+                            "sv-SE",
+                            {
+                              month: "short",
+                              year: "2-digit",
+                            },
+                          ),
+                          debt: Number(row.debt),
+                        }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="label"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                          tickFormatter={(v) => compactCurrency(Number(v))}
+                        />
+                        <Tooltip
+                          formatter={(value) => currency(Number(value))}
+                          labelFormatter={(_label, payload) =>
+                            payload?.[0]?.payload?.date
+                              ? new Date(
+                                  String(payload[0].payload.date),
+                                ).toLocaleDateString("sv-SE", {
+                                  year: "numeric",
+                                  month: "long",
+                                })
+                              : String(_label)
+                          }
+                          contentStyle={{ fontSize: 12 }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="debt"
+                          stroke="#ef4444"
+                          strokeWidth={2}
+                          dot={false}
+                          isAnimationActive={false}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                      No debt history yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!totalNetWorthSeries.length}
+                  onClick={exportTotalNetWorthCsv}
+                >
+                  Download CSV
+                </Button>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                    <p className="text-xs tracking-wide text-slate-500 uppercase">
+                      As of
+                    </p>
+                    <p className="font-semibold text-slate-900">
+                      {totalOverview
+                        ? new Date(totalOverview.as_of).toLocaleDateString(
+                            "sv-SE",
+                          )
+                        : "—"}
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      Ledger + investment snapshots.
+                    </p>
+                  </div>
+                  {totalNetWorthStats ? (
+                    <div className="rounded-md border border-slate-100 bg-white p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        Current
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {currency(totalNetWorthStats.current)}
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        Range: {currency(totalNetWorthStats.allTimeLow)} →{" "}
+                        {currency(totalNetWorthStats.allTimeHigh)}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+                <div className="h-80 rounded-md border border-slate-100 bg-white p-2">
+                  {totalOverview?.net_worth_series.length ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart
+                        data={totalOverview.net_worth_series.map((row) => ({
+                          date: row.date,
+                          label: new Date(row.date).toLocaleDateString(
+                            "sv-SE",
+                            {
+                              month: "short",
+                              year: "2-digit",
+                            },
+                          ),
+                          netWorth: Number(row.net_worth),
+                        }))}
+                      >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="label"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                          tickFormatter={(v) => compactCurrency(Number(v))}
+                        />
+                        <Tooltip
+                          formatter={(value) => currency(Number(value))}
+                          labelFormatter={(_label, payload) =>
+                            payload?.[0]?.payload?.date
+                              ? new Date(
+                                  String(payload[0].payload.date),
+                                ).toLocaleDateString("sv-SE", {
+                                  year: "numeric",
+                                  month: "long",
+                                })
+                              : String(_label)
+                          }
+                          contentStyle={{ fontSize: 12 }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="netWorth"
+                          stroke="#0f172a"
+                          fill="rgba(15,23,42,0.12)"
+                          strokeWidth={2}
+                          isAnimationActive={false}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                      No net worth history yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
           )}
         </DialogContent>
       </Dialog>
