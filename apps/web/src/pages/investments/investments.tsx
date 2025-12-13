@@ -44,14 +44,6 @@ import {
 } from "@/types/api";
 import { transactionListSchema } from "@/types/schemas";
 
-type DerivedHolding = Record<string, unknown> & {
-  name?: string;
-  quantity?: number | string | null;
-  market_value_sek?: number | string | null;
-  value_sek?: number | string | null;
-  currency?: string | null;
-};
-
 const coerceNumber = (value: unknown): number | undefined => {
   const num = Number(value);
   return Number.isFinite(num) ? num : undefined;
@@ -70,41 +62,13 @@ const formatCompact = (value: number) =>
     maximumFractionDigits: 1,
   }).format(value);
 
+const formatSignedSek = (value: number) =>
+  `${value >= 0 ? "+" : "-"}${formatSek(Math.abs(value))}`;
+
 const toChartId = (value: string) =>
   value.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
 
-const extractHoldings = (
-  payload?: Record<string, unknown>,
-): DerivedHolding[] => {
-  if ((payload as { holdings?: unknown })?.holdings) {
-    const list = (payload as { holdings: unknown }).holdings;
-    if (Array.isArray(list)) {
-      return list as DerivedHolding[];
-    }
-  }
-  if (!payload) return [];
-  const fromHoldings = (payload as { holdings?: unknown }).holdings;
-  const fromRows = (payload as { rows?: unknown }).rows;
-  if (Array.isArray(fromHoldings)) return fromHoldings as DerivedHolding[];
-  if (Array.isArray(fromRows)) return fromRows as DerivedHolding[];
-  return [];
-};
-
-const deriveHoldingsValue = (holding: DerivedHolding): number => {
-  return (
-    coerceNumber(holding.market_value_sek) ??
-    coerceNumber(holding.value_sek) ??
-    coerceNumber(holding.value) ??
-    0
-  );
-};
-
-const sumHoldings = (payload?: Record<string, unknown>): number => {
-  return extractHoldings(payload).reduce(
-    (sum, h) => sum + deriveHoldingsValue(h),
-    0,
-  );
-};
+const normalizeKey = (value: string) => value.trim().toLowerCase();
 
 const exportCsv = (rows: Record<string, unknown>[], filename: string) => {
   if (!rows.length) return;
@@ -132,21 +96,36 @@ const exportCsv = (rows: Record<string, unknown>[], filename: string) => {
   document.body.removeChild(link);
 };
 
-const deriveSnapshotValue = (snapshot: InvestmentSnapshot): number => {
-  const val =
+const extractSnapshotAccountValues = (
+  snapshot: InvestmentSnapshot,
+): Record<string, number> => {
+  const payload =
+    (snapshot.cleaned_payload as Record<string, unknown> | null | undefined) ??
+    (snapshot.parsed_payload as Record<string, unknown> | null | undefined) ??
+    {};
+
+  const accounts = (payload as { accounts?: unknown }).accounts;
+  if (accounts && typeof accounts === "object" && !Array.isArray(accounts)) {
+    const out: Record<string, number> = {};
+    Object.entries(accounts as Record<string, unknown>).forEach(
+      ([name, value]) => {
+        const num = coerceNumber(value);
+        if (num === undefined) return;
+        out[name] = num;
+      },
+    );
+    return out;
+  }
+
+  const fromSingleAccount = (snapshot.account_name ?? "").trim();
+  const portfolioValue =
     coerceNumber(snapshot.portfolio_value) ??
     coerceNumber((snapshot as { portfolio_value?: string }).portfolio_value);
-  if (val !== undefined) return val;
-  if (snapshot.holdings?.length) {
-    return snapshot.holdings.reduce(
-      (sum, h) => sum + (coerceNumber(h.value_sek) ?? 0),
-      0,
-    );
+  if (fromSingleAccount && portfolioValue !== undefined) {
+    return { [fromSingleAccount]: portfolioValue };
   }
-  const payload =
-    (snapshot.cleaned_payload as Record<string, unknown>) ??
-    (snapshot.parsed_payload as Record<string, unknown>);
-  return sumHoldings(payload);
+
+  return {};
 };
 
 const ChartCard: React.FC<{
@@ -174,26 +153,6 @@ const ChartCard: React.FC<{
   </Card>
 );
 
-const getSnapshotHoldings = (
-  snapshot: InvestmentSnapshot,
-): DerivedHolding[] => {
-  if (snapshot.holdings?.length) {
-    return snapshot.holdings as DerivedHolding[];
-  }
-  const payload =
-    (snapshot.cleaned_payload as { cleaned_rows?: unknown; holdings?: unknown })
-      ?.cleaned_rows ??
-    (snapshot.cleaned_payload as { holdings?: unknown })?.holdings ??
-    snapshot.parsed_payload;
-  if (Array.isArray(payload)) return payload as DerivedHolding[];
-  if (payload && typeof payload === "object") {
-    if (Array.isArray((payload as { holdings?: unknown }).holdings)) {
-      return (payload as { holdings: unknown[] }).holdings as DerivedHolding[];
-    }
-  }
-  return [];
-};
-
 export const Investments: React.FC = () => {
   const token = useAppSelector(selectToken);
   const {
@@ -201,8 +160,7 @@ export const Investments: React.FC = () => {
     loading: accountsLoading,
     fetchAccounts,
   } = useAccountsApi();
-  const { snapshots, metrics, loading, fetchSnapshots, fetchMetrics } =
-    useInvestmentsApi();
+  const { snapshots, loading, fetchSnapshots } = useInvestmentsApi();
 
   const [showAllAccounts, setShowAllAccounts] = useState(false);
   const [focusedAccount, setFocusedAccount] = useState<string>("ALL");
@@ -216,9 +174,8 @@ export const Investments: React.FC = () => {
 
   useEffect(() => {
     fetchSnapshots();
-    fetchMetrics();
     fetchAccounts();
-  }, [fetchAccounts, fetchMetrics, fetchSnapshots]);
+  }, [fetchAccounts, fetchSnapshots]);
 
   const investmentAccounts = useMemo(() => {
     return (accounts ?? []).filter(
@@ -238,12 +195,32 @@ export const Investments: React.FC = () => {
     [investmentAccountIds],
   );
 
-  const cashflowWindowStart = useMemo(() => {
-    const now = new Date();
-    const start = new Date(now);
-    start.setDate(now.getDate() - 365);
-    return start.toISOString().slice(0, 10);
-  }, []);
+  const investmentAccountsByKey = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>();
+    investmentAccounts.forEach((account) => {
+      map.set(normalizeKey(account.name), {
+        id: account.id,
+        name: account.name,
+      });
+    });
+    return map;
+  }, [investmentAccounts]);
+
+  const cashflowFetchStart = useMemo(() => {
+    const fallback = (() => {
+      const now = new Date();
+      const start = new Date(now);
+      start.setDate(now.getDate() - 365);
+      return start.toISOString().slice(0, 10);
+    })();
+
+    const earliest = snapshots
+      .map((snap) => String(snap.snapshot_date).slice(0, 10))
+      .filter(Boolean)
+      .sort()[0];
+
+    return earliest ?? fallback;
+  }, [snapshots]);
 
   useEffect(() => {
     const fetchCashflows = async () => {
@@ -271,7 +248,7 @@ export const Investments: React.FC = () => {
           }>({
             path: "/transactions",
             query: {
-              start_date: cashflowWindowStart,
+              start_date: cashflowFetchStart,
               account_ids: accountIds,
               limit,
               offset,
@@ -302,46 +279,50 @@ export const Investments: React.FC = () => {
     };
 
     void fetchCashflows();
-  }, [cashflowRefreshKey, cashflowWindowStart, investmentAccountIds, token]);
+  }, [cashflowFetchStart, cashflowRefreshKey, investmentAccountIds, token]);
 
-  const latestSnapshot = useMemo(() => {
-    if (!snapshots.length) return undefined;
-    return [...snapshots].sort(
-      (a, b) =>
-        new Date(b.snapshot_date).getTime() -
-        new Date(a.snapshot_date).getTime(),
-    )[0];
-  }, [snapshots]);
-
-  const portfolioSeries = useMemo(() => {
+  const investmentValueByDate = useMemo(() => {
     const byDate = new Map<
       string,
-      Map<string, { snapshot: InvestmentSnapshot; updatedAtMs: number }>
+      Map<string, { value: number; updatedAtMs: number }>
     >();
 
     snapshots.forEach((snap) => {
       const date = String(snap.snapshot_date).slice(0, 10);
       if (!date) return;
-      const accountKey =
-        (snap.account_name ?? "Unlabeled").trim() || "Unlabeled";
       const updatedAtMs = new Date(snap.updated_at).getTime();
+      const accountValues = extractSnapshotAccountValues(snap);
+      Object.entries(accountValues).forEach(([rawName, value]) => {
+        const canonical = investmentAccountsByKey.get(normalizeKey(rawName));
+        if (!canonical) return;
 
-      const bucket = byDate.get(date) ?? new Map();
-      const existing = bucket.get(accountKey);
-      if (!existing || updatedAtMs > existing.updatedAtMs) {
-        bucket.set(accountKey, { snapshot: snap, updatedAtMs });
-      }
-      byDate.set(date, bucket);
+        const bucket = byDate.get(date) ?? new Map();
+        const existing = bucket.get(canonical.name);
+        if (!existing || updatedAtMs > existing.updatedAtMs) {
+          bucket.set(canonical.name, { value, updatedAtMs });
+        }
+        byDate.set(date, bucket);
+      });
     });
 
-    const sorted = Array.from(byDate.entries())
-      .map(([date, accounts]) => {
-        const total = Array.from(accounts.values()).reduce((sum, entry) => {
-          return sum + deriveSnapshotValue(entry.snapshot);
-        }, 0);
-        return { date, value: total };
-      })
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return byDate;
+  }, [investmentAccountsByKey, snapshots]);
+
+  const datesWithValues = useMemo(() => {
+    return Array.from(investmentValueByDate.keys()).sort();
+  }, [investmentValueByDate]);
+
+  const portfolioSeries = useMemo(() => {
+    const sorted = datesWithValues.map((date) => {
+      const bucket = investmentValueByDate.get(date);
+      const total = bucket
+        ? Array.from(bucket.values()).reduce(
+            (sum, entry) => sum + entry.value,
+            0,
+          )
+        : 0;
+      return { date, value: total, year: new Date(date).getFullYear() };
+    });
 
     if (!sorted.length) return [];
 
@@ -349,25 +330,12 @@ export const Investments: React.FC = () => {
     const last = sorted.at(-1);
     const extended =
       last && last.date !== today
-        ? [...sorted, { date: today, value: last.value }]
+        ? [...sorted, { ...last, date: today }]
         : sorted;
+    return extended;
+  }, [datesWithValues, investmentValueByDate]);
 
-    return extended.map((row) => ({
-      ...row,
-      year: new Date(row.date).getFullYear(),
-    }));
-  }, [snapshots]);
-
-  const totalValue =
-    coerceNumber(metrics?.total_value) ??
-    coerceNumber(portfolioSeries.at(-1)?.value) ??
-    0;
-  const invested = coerceNumber(metrics?.invested) ?? 0;
-  const realizedPl = coerceNumber(metrics?.realized_pl) ?? 0;
-  const unrealizedPl = coerceNumber(metrics?.unrealized_pl) ?? 0;
-  const twr = coerceNumber(metrics?.twr);
-  const irr = coerceNumber(metrics?.irr);
-  const benchmarkChange = coerceNumber(metrics?.benchmarks?.[0]?.change_pct);
+  const portfolioCurrentValue = portfolioSeries.at(-1)?.value ?? 0;
 
   const portfolioDomain = useMemo<[number, number]>(() => {
     if (!portfolioSeries.length) return [0, 0];
@@ -377,101 +345,55 @@ export const Investments: React.FC = () => {
     return [0, max + upperPad];
   }, [portfolioSeries]);
 
-  const portfolioStartValue = coerceNumber(portfolioSeries[0]?.value);
-  const portfolioEndValue = coerceNumber(portfolioSeries.at(-1)?.value);
-  const portfolioDelta =
-    portfolioStartValue !== undefined && portfolioEndValue !== undefined
-      ? portfolioEndValue - portfolioStartValue
-      : undefined;
-  const portfolioDeltaPct =
-    portfolioDelta !== undefined && portfolioStartValue
-      ? (portfolioDelta / portfolioStartValue) * 100
-      : null;
+  const portfolioStartValue = portfolioSeries.at(0)?.value ?? 0;
+  const portfolioEndValue = portfolioSeries.at(-1)?.value ?? 0;
 
   const accountSummaries = useMemo(() => {
-    const byAccount = new Map<
-      string,
-      Map<string, { snapshot: InvestmentSnapshot; updatedAtMs: number }>
-    >();
-
-    snapshots.forEach((snap) => {
-      const date = String(snap.snapshot_date).slice(0, 10);
-      if (!date) return;
-      const accountName =
-        (snap.account_name ?? "Unlabeled").trim() || "Unlabeled";
-      const updatedAtMs = new Date(snap.updated_at).getTime();
-
-      const bucket = byAccount.get(accountName) ?? new Map();
-      const existing = bucket.get(date);
-      if (!existing || updatedAtMs > existing.updatedAtMs) {
-        bucket.set(date, { snapshot: snap, updatedAtMs });
-      }
-      byAccount.set(accountName, bucket);
-    });
-
-    const summaries = Array.from(byAccount.entries())
-      .map(([accountName, dateMap]) => {
-        const baseSeries = Array.from(dateMap.entries())
-          .map(([date, entry]) => ({
+    const today = new Date().toISOString().slice(0, 10);
+    return investmentAccounts
+      .map((account) => {
+        const baseSeries = datesWithValues
+          .map((date) => ({
             date,
-            snapshot: entry.snapshot,
-            value: deriveSnapshotValue(entry.snapshot),
+            value: investmentValueByDate.get(date)?.get(account.name)?.value,
           }))
-          .sort(
-            (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
-          );
+          .filter((row) => row.value !== undefined) as {
+          date: string;
+          value: number;
+        }[];
 
         if (!baseSeries.length) {
           return {
-            accountName,
+            accountId: account.id,
+            accountName: account.name,
             latestDate: undefined as string | undefined,
             latestValue: 0,
-            growth: undefined as number | undefined,
-            growthPct: null as number | null,
-            holdingsCount: 0,
-            snapshotsCount: 0,
+            startDate: undefined as string | undefined,
+            startValue: 0,
+            series: [] as { date: string; value: number }[],
             sparkline: [] as { date: string; value: number }[],
           };
         }
 
-        const today = new Date().toISOString().slice(0, 10);
         const last = baseSeries.at(-1);
         const extended =
           last && last.date !== today
             ? [...baseSeries, { ...last, date: today }]
             : baseSeries;
 
-        const latest = extended.at(-1);
-        const first = extended[0];
-        const latestValue = latest?.value ?? 0;
-        const firstValue = first?.value ?? 0;
-        const growth = latest && first ? latestValue - firstValue : undefined;
-        const growthPct =
-          growth !== undefined && firstValue
-            ? (growth / firstValue) * 100
-            : null;
-
-        const holdingsCount = latest
-          ? getSnapshotHoldings(latest.snapshot).length
-          : 0;
-
         return {
-          accountName,
-          latestDate: latest?.date,
-          latestValue,
-          growth,
-          growthPct,
-          holdingsCount,
-          snapshotsCount: baseSeries.length,
-          sparkline: extended
-            .slice(-18)
-            .map((p) => ({ date: p.date, value: p.value })),
+          accountId: account.id,
+          accountName: account.name,
+          latestDate: extended.at(-1)?.date,
+          latestValue: extended.at(-1)?.value ?? 0,
+          startDate: extended[0]?.date,
+          startValue: extended[0]?.value ?? 0,
+          series: extended,
+          sparkline: extended.slice(-18),
         };
       })
       .sort((a, b) => b.latestValue - a.latestValue);
-
-    return summaries;
-  }, [snapshots]);
+  }, [datesWithValues, investmentAccounts, investmentValueByDate]);
 
   const visibleAccounts = showAllAccounts
     ? accountSummaries
@@ -492,6 +414,9 @@ export const Investments: React.FC = () => {
     const iso30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
       .toISOString()
       .slice(0, 10);
+    const iso12m = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
     const isoYtd = new Date(now.getFullYear(), 0, 1).toISOString().slice(0, 10);
 
     const byAccountId = new Map<
@@ -501,8 +426,8 @@ export const Investments: React.FC = () => {
         withdrawals30: number;
         depositsYtd: number;
         withdrawalsYtd: number;
-        deposits365: number;
-        withdrawals365: number;
+        deposits12m: number;
+        withdrawals12m: number;
       }
     >();
 
@@ -514,8 +439,8 @@ export const Investments: React.FC = () => {
         withdrawals30: 0,
         depositsYtd: 0,
         withdrawalsYtd: 0,
-        deposits365: 0,
-        withdrawals365: 0,
+        deposits12m: 0,
+        withdrawals12m: 0,
       };
       byAccountId.set(accountId, created);
       return created;
@@ -526,7 +451,7 @@ export const Investments: React.FC = () => {
       const occurred = String(tx.occurred_at).slice(0, 10);
       const is30 = occurred >= iso30;
       const isYtd = occurred >= isoYtd;
-      const is365 = occurred >= cashflowWindowStart;
+      const is12m = occurred >= iso12m;
 
       tx.legs.forEach((leg) => {
         if (!investmentAccountIdSet.has(leg.account_id)) return;
@@ -544,9 +469,9 @@ export const Investments: React.FC = () => {
           bucket.depositsYtd += deposit;
           bucket.withdrawalsYtd += withdrawal;
         }
-        if (is365) {
-          bucket.deposits365 += deposit;
-          bucket.withdrawals365 += withdrawal;
+        if (is12m) {
+          bucket.deposits12m += deposit;
+          bucket.withdrawals12m += withdrawal;
         }
       });
     });
@@ -557,29 +482,30 @@ export const Investments: React.FC = () => {
         withdrawals30: acc.withdrawals30 + row.withdrawals30,
         depositsYtd: acc.depositsYtd + row.depositsYtd,
         withdrawalsYtd: acc.withdrawalsYtd + row.withdrawalsYtd,
-        deposits365: acc.deposits365 + row.deposits365,
-        withdrawals365: acc.withdrawals365 + row.withdrawals365,
+        deposits12m: acc.deposits12m + row.deposits12m,
+        withdrawals12m: acc.withdrawals12m + row.withdrawals12m,
       }),
       {
         deposits30: 0,
         withdrawals30: 0,
         depositsYtd: 0,
         withdrawalsYtd: 0,
-        deposits365: 0,
-        withdrawals365: 0,
+        deposits12m: 0,
+        withdrawals12m: 0,
       },
     );
 
     return {
       iso30,
+      iso12m,
       isoYtd,
       byAccountId,
       totals,
       net30: totals.deposits30 - totals.withdrawals30,
       netYtd: totals.depositsYtd - totals.withdrawalsYtd,
-      net365: totals.deposits365 - totals.withdrawals365,
+      net12m: totals.deposits12m - totals.withdrawals12m,
     };
-  }, [cashflowTransactions, cashflowWindowStart, investmentAccountIdSet]);
+  }, [cashflowTransactions, investmentAccountIdSet]);
 
   const recentCashTransfers = useMemo(() => {
     const rows = cashflowTransactions
@@ -606,12 +532,72 @@ export const Investments: React.FC = () => {
     return rows.slice(0, 12);
   }, [cashflowTransactions, investmentAccountIdSet]);
 
-  const investmentAccountIdByName = useMemo(() => {
-    const normalize = (value: string) => value.trim().toLowerCase();
-    return new Map(
-      investmentAccounts.map((acc) => [normalize(acc.name), acc.id]),
-    );
-  }, [investmentAccounts]);
+  const portfolioPerformance = useMemo(() => {
+    if (!portfolioSeries.length) {
+      return {
+        startDate: null as string | null,
+        marketSinceStart: 0,
+        marketSinceStartPct: null as number | null,
+        market12m: 0,
+        market12mPct: null as number | null,
+      };
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const startDate = portfolioSeries[0]?.date ?? today;
+
+    let depositsSinceStart = 0;
+    let withdrawalsSinceStart = 0;
+
+    cashflowTransactions.forEach((tx) => {
+      if (tx.transaction_type !== TransactionType.TRANSFER) return;
+      const occurred = String(tx.occurred_at).slice(0, 10);
+      if (occurred < startDate || occurred > today) return;
+      tx.legs.forEach((leg) => {
+        if (!investmentAccountIdSet.has(leg.account_id)) return;
+        const amount = Number(leg.amount);
+        if (!Number.isFinite(amount) || amount === 0) return;
+        if (amount > 0) depositsSinceStart += amount;
+        else withdrawalsSinceStart += Math.abs(amount);
+      });
+    });
+
+    const netSinceStart = depositsSinceStart - withdrawalsSinceStart;
+    const marketSinceStart =
+      portfolioEndValue - portfolioStartValue - netSinceStart;
+    const investedBaseSinceStart = portfolioStartValue + depositsSinceStart;
+    const marketSinceStartPct =
+      investedBaseSinceStart > 0
+        ? (marketSinceStart / investedBaseSinceStart) * 100
+        : null;
+
+    const startPoint12m =
+      portfolioSeries.find((p) => p.date >= cashflowSummary.iso12m) ??
+      portfolioSeries[0];
+    const startValue12m = startPoint12m?.value ?? portfolioStartValue;
+    const market12m =
+      portfolioEndValue - startValue12m - cashflowSummary.net12m;
+    const investedBase12m = startValue12m + cashflowSummary.totals.deposits12m;
+    const market12mPct =
+      investedBase12m > 0 ? (market12m / investedBase12m) * 100 : null;
+
+    return {
+      startDate,
+      marketSinceStart,
+      marketSinceStartPct,
+      market12m,
+      market12mPct,
+    };
+  }, [
+    cashflowSummary.iso12m,
+    cashflowSummary.net12m,
+    cashflowSummary.totals.deposits12m,
+    cashflowTransactions,
+    investmentAccountIdSet,
+    portfolioEndValue,
+    portfolioSeries,
+    portfolioStartValue,
+  ]);
 
   return (
     <MotionPage className="space-y-6">
@@ -636,7 +622,6 @@ export const Investments: React.FC = () => {
             size="sm"
             onClick={() => {
               fetchSnapshots();
-              fetchMetrics();
               fetchAccounts();
               setCashflowRefreshKey((v) => v + 1);
             }}
@@ -669,21 +654,20 @@ export const Investments: React.FC = () => {
               <div className="text-right">
                 <p className="text-xs text-slate-500">Current</p>
                 <p className="text-sm font-semibold text-slate-900">
-                  {formatSek(totalValue)}
+                  {formatSek(portfolioCurrentValue)}
                 </p>
-                {portfolioDelta !== undefined ? (
+                {portfolioPerformance.startDate ? (
                   <p
                     className={cn(
                       "text-xs font-medium",
-                      portfolioDelta >= 0
+                      portfolioPerformance.marketSinceStart >= 0
                         ? "text-emerald-700"
                         : "text-rose-700",
                     )}
                   >
-                    {portfolioDelta >= 0 ? "+" : ""}
-                    {formatCompact(portfolioDelta)}
-                    {portfolioDeltaPct !== null
-                      ? ` (${portfolioDeltaPct >= 0 ? "+" : ""}${portfolioDeltaPct.toFixed(
+                    {formatSignedSek(portfolioPerformance.marketSinceStart)}{" "}
+                    {portfolioPerformance.marketSinceStartPct !== null
+                      ? `(${portfolioPerformance.marketSinceStartPct >= 0 ? "+" : ""}${portfolioPerformance.marketSinceStartPct.toFixed(
                           1,
                         )}%)`
                       : ""}
@@ -773,7 +757,7 @@ export const Investments: React.FC = () => {
               </ChartContainer>
             ) : (
               <div className="flex h-full w-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-600">
-                No investment snapshots yet.
+                No investment values yet.
               </div>
             )}
           </ChartCard>
@@ -790,13 +774,7 @@ export const Investments: React.FC = () => {
               <div className="flex items-center justify-between gap-3">
                 <span className="text-slate-500">Total value</span>
                 <span className="font-medium text-slate-900">
-                  {formatSek(totalValue)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-500">Invested</span>
-                <span className="font-medium text-slate-900">
-                  {formatSek(invested)}
+                  {formatSek(portfolioCurrentValue)}
                 </span>
               </div>
               <div className="space-y-2 rounded-md border border-slate-200 bg-slate-50/60 p-3">
@@ -838,9 +816,7 @@ export const Investments: React.FC = () => {
                   >
                     {cashflowLoading
                       ? "—"
-                      : `${cashflowSummary.net30 >= 0 ? "+" : ""}${formatSek(
-                          Math.abs(cashflowSummary.net30),
-                        )}`}
+                      : formatSignedSek(cashflowSummary.net30)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3 pt-1">
@@ -848,7 +824,7 @@ export const Investments: React.FC = () => {
                   <span className="font-medium text-slate-900">
                     {cashflowLoading
                       ? "—"
-                      : formatSek(cashflowSummary.totals.deposits365)}
+                      : formatSek(cashflowSummary.totals.deposits12m)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-3">
@@ -856,53 +832,63 @@ export const Investments: React.FC = () => {
                   <span className="font-medium text-slate-900">
                     {cashflowLoading
                       ? "—"
-                      : formatSek(cashflowSummary.totals.withdrawals365)}
+                      : formatSek(cashflowSummary.totals.withdrawals12m)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-slate-500">Net flow (12m)</span>
+                  <span
+                    className={cn(
+                      "font-medium",
+                      cashflowSummary.net12m >= 0
+                        ? "text-emerald-700"
+                        : "text-rose-700",
+                    )}
+                  >
+                    {cashflowLoading
+                      ? "—"
+                      : formatSignedSek(cashflowSummary.net12m)}
                   </span>
                 </div>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-500">Unrealized P/L</span>
+                <span className="text-slate-500">Growth (excl. transfers)</span>
                 <span
                   className={cn(
                     "font-medium",
-                    unrealizedPl >= 0 ? "text-emerald-700" : "text-rose-700",
+                    portfolioPerformance.market12m >= 0
+                      ? "text-emerald-700"
+                      : "text-rose-700",
                   )}
                 >
-                  {unrealizedPl >= 0 ? "+" : ""}
-                  {formatSek(unrealizedPl)}
+                  {formatSignedSek(portfolioPerformance.market12m)}{" "}
+                  {portfolioPerformance.market12mPct !== null
+                    ? `(${portfolioPerformance.market12mPct >= 0 ? "+" : ""}${portfolioPerformance.market12mPct.toFixed(
+                        1,
+                      )}%)`
+                    : ""}
                 </span>
               </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-500">Realized P/L</span>
-                <span className="font-medium text-slate-900">
-                  {realizedPl >= 0 ? "+" : ""}
-                  {formatSek(realizedPl)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-500">TWR</span>
-                <span className="font-medium text-slate-900">
-                  {twr !== undefined && twr !== null
-                    ? `${(twr * 100).toFixed(1)}%`
-                    : "-"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-500">IRR</span>
-                <span className="font-medium text-slate-900">
-                  {irr !== undefined && irr !== null
-                    ? `${(irr * 100).toFixed(1)}%`
-                    : "-"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-slate-500">Benchmark</span>
-                <span className="font-medium text-slate-900">
-                  {benchmarkChange !== undefined && benchmarkChange !== null
-                    ? `${(benchmarkChange * 100).toFixed(1)}%`
-                    : "-"}
-                </span>
-              </div>
+              {portfolioPerformance.startDate ? (
+                <p className="text-xs text-slate-500">
+                  Since {portfolioPerformance.startDate}:{" "}
+                  <span
+                    className={cn(
+                      "font-medium",
+                      portfolioPerformance.marketSinceStart >= 0
+                        ? "text-emerald-700"
+                        : "text-rose-700",
+                    )}
+                  >
+                    {formatSignedSek(portfolioPerformance.marketSinceStart)}
+                    {portfolioPerformance.marketSinceStartPct !== null
+                      ? ` (${portfolioPerformance.marketSinceStartPct >= 0 ? "+" : ""}${portfolioPerformance.marketSinceStartPct.toFixed(
+                          1,
+                        )}%)`
+                      : ""}
+                  </span>
+                </p>
+              ) : null}
             </CardContent>
           </Card>
         </motion.div>
@@ -1052,63 +1038,87 @@ export const Investments: React.FC = () => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <p className="text-xl font-semibold text-slate-900">
-                        {formatSek(acct.latestValue)}
-                      </p>
-                      {acct.growth !== undefined ? (
-                        <Badge
-                          className={cn(
-                            "text-xs",
-                            acct.growth >= 0
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-rose-50 text-rose-700",
-                          )}
-                        >
-                          {acct.growth >= 0 ? "+" : ""}
-                          {formatCompact(acct.growth)}
-                          {acct.growthPct !== null
-                            ? ` (${acct.growthPct >= 0 ? "+" : ""}${acct.growthPct.toFixed(
-                                1,
-                              )}%)`
-                            : ""}
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-slate-100 text-xs text-slate-700">
-                          First snapshot
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-slate-500">
-                      <span>
-                        {acct.holdingsCount}{" "}
-                        {acct.holdingsCount === 1 ? "holding" : "holdings"}
-                      </span>
-                      <span>
-                        {acct.latestDate ? `As of ${acct.latestDate}` : "-"}
-                      </span>
-                    </div>
                     {(() => {
-                      const accountId = investmentAccountIdByName.get(
-                        acct.accountName.trim().toLowerCase(),
-                      );
-                      if (!accountId) return null;
-                      const flow = cashflowSummary.byAccountId.get(accountId);
-                      if (!flow) return null;
-                      const net = flow.deposits365 - flow.withdrawals365;
+                      const flow = cashflowSummary.byAccountId.get(
+                        acct.accountId,
+                      ) ?? {
+                        deposits30: 0,
+                        withdrawals30: 0,
+                        depositsYtd: 0,
+                        withdrawalsYtd: 0,
+                        deposits12m: 0,
+                        withdrawals12m: 0,
+                      };
+                      const net12m = flow.deposits12m - flow.withdrawals12m;
+                      const hasHistory = acct.series.length > 0;
+                      const startPoint12m = hasHistory
+                        ? (acct.series.find(
+                            (point) => point.date >= cashflowSummary.iso12m,
+                          ) ?? acct.series[0])
+                        : undefined;
+                      const startValue12m =
+                        startPoint12m?.value ?? acct.latestValue;
+                      const market12m = hasHistory
+                        ? acct.latestValue - startValue12m - net12m
+                        : null;
+                      const investedBase12m = startValue12m + flow.deposits12m;
+                      const market12mPct =
+                        market12m !== null && investedBase12m > 0
+                          ? (market12m / investedBase12m) * 100
+                          : null;
+
                       return (
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-500">Net flow (12m)</span>
-                          <span
-                            className={cn(
-                              "font-medium tabular-nums",
-                              net >= 0 ? "text-emerald-700" : "text-rose-700",
+                        <>
+                          <div className="flex items-baseline justify-between gap-2">
+                            <p className="text-xl font-semibold text-slate-900">
+                              {formatSek(acct.latestValue)}
+                            </p>
+                            {acct.latestDate ? (
+                              <Badge className="bg-slate-100 text-xs text-slate-700">
+                                As of {acct.latestDate}
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-slate-100 text-xs text-slate-700">
+                                No value history
+                              </Badge>
                             )}
-                          >
-                            {net >= 0 ? "+" : ""}
-                            {formatSek(Math.abs(net))}
-                          </span>
-                        </div>
+                          </div>
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-slate-500">
+                              Growth (12m, excl. transfers)
+                            </span>
+                            <span
+                              className={cn(
+                                "font-medium tabular-nums",
+                                market12m !== null && market12m >= 0
+                                  ? "text-emerald-700"
+                                  : "text-rose-700",
+                              )}
+                            >
+                              {market12m === null
+                                ? "—"
+                                : `${formatSignedSek(market12m)}${
+                                    market12mPct !== null
+                                      ? ` (${market12mPct >= 0 ? "+" : ""}${market12mPct.toFixed(
+                                          1,
+                                        )}%)`
+                                      : ""
+                                  }`}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-slate-500">
+                            <span>Added (12m)</span>
+                            <span className="font-medium text-slate-900">
+                              {formatSek(flow.deposits12m)}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-slate-500">
+                            <span>Withdrawn (12m)</span>
+                            <span className="font-medium text-slate-900">
+                              {formatSek(flow.withdrawals12m)}
+                            </span>
+                          </div>
+                        </>
                       );
                     })()}
                     <div className="h-14">
@@ -1147,10 +1157,6 @@ export const Investments: React.FC = () => {
                         </ResponsiveContainer>
                       ) : null}
                     </div>
-                    <p className="text-xs text-slate-500">
-                      {acct.snapshotsCount}{" "}
-                      {acct.snapshotsCount === 1 ? "snapshot" : "snapshots"}
-                    </p>
                   </CardContent>
                 </Card>
               </motion.div>
@@ -1160,7 +1166,7 @@ export const Investments: React.FC = () => {
           <motion.div variants={fadeInUp}>
             <Card className="border-dashed border-slate-200 bg-slate-50/70">
               <CardContent className="py-8 text-center text-sm text-slate-600">
-                No investment snapshots yet.
+                No investment values yet.
               </CardContent>
             </Card>
           </motion.div>
@@ -1208,10 +1214,10 @@ export const Investments: React.FC = () => {
                       withdrawals30: 0,
                       depositsYtd: 0,
                       withdrawalsYtd: 0,
-                      deposits365: 0,
-                      withdrawals365: 0,
+                      deposits12m: 0,
+                      withdrawals12m: 0,
                     };
-                    const net12m = flow.deposits365 - flow.withdrawals365;
+                    const net12m = flow.deposits12m - flow.withdrawals12m;
                     const net30 = flow.deposits30 - flow.withdrawals30;
                     return (
                       <TableRow key={account.id}>
@@ -1234,10 +1240,10 @@ export const Investments: React.FC = () => {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          {formatSek(flow.deposits365)}
+                          {formatSek(flow.deposits12m)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {formatSek(flow.withdrawals365)}
+                          {formatSek(flow.withdrawals12m)}
                         </TableCell>
                         <TableCell
                           className={cn(
@@ -1262,63 +1268,6 @@ export const Investments: React.FC = () => {
         </Card>
 
         <div className="space-y-4">
-          <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-slate-800">
-                Latest snapshot holdings
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {latestSnapshot ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Holding</TableHead>
-                      <TableHead className="text-right">Value (SEK)</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {getSnapshotHoldings(latestSnapshot).map((holding, idx) => (
-                      <TableRow key={`${latestSnapshot.id}-${idx}`}>
-                        <TableCell className="font-medium">
-                          {(holding.name as string) ?? "Unknown"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {deriveHoldingsValue(holding).toLocaleString(
-                            "sv-SE",
-                            {
-                              maximumFractionDigits: 0,
-                            },
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right text-slate-500">
-                          {holding.quantity ?? "-"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : loading ? (
-                <div className="space-y-2">
-                  <div className="h-5 w-24 animate-pulse rounded bg-slate-200" />
-                  <div className="space-y-1">
-                    {[1, 2, 3, 4].map((i) => (
-                      <div
-                        key={i}
-                        className="h-8 animate-pulse rounded bg-slate-100"
-                      />
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500">
-                  Save a snapshot to see holdings here.
-                </p>
-              )}
-            </CardContent>
-          </Card>
-
           <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
             <CardHeader className="flex items-center justify-between pb-2">
               <CardTitle className="text-sm text-slate-800">
