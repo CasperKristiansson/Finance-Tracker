@@ -45,9 +45,14 @@ import {
   AccountType,
   type TransactionListResponse,
   type TransactionRead,
+  type YearlyReportEntry,
   type YearlyOverviewResponse,
 } from "@/types/api";
-import { transactionListSchema, yearlyOverviewSchema } from "@/types/schemas";
+import {
+  transactionListSchema,
+  yearlyOverviewSchema,
+  yearlyReportSchema,
+} from "@/types/schemas";
 import { AccountModal } from "./children/account-modal";
 
 const formatCurrency = (value: number) =>
@@ -76,6 +81,11 @@ const formatAccountType = (type: AccountType) => {
 
 const startOfYear = (year: number) => `${year}-01-01`;
 const todayIso = () => new Date().toISOString().slice(0, 10);
+const monthKeyFromDate = (date: Date) => date.getFullYear() * 12 + date.getMonth();
+const formatMonthLabel = (year: number, monthIndex: number) =>
+  new Date(year, monthIndex, 1).toLocaleString("en-US", { month: "short" });
+const formatMonthLabelWithYear = (year: number, monthIndex: number) =>
+  `${formatMonthLabel(year, monthIndex)} '${String(year).slice(-2)}`;
 
 const normalizeKey = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -87,6 +97,7 @@ export const AccountDetails: React.FC = () => {
     "overview" | "transactions" | "settings"
   >("overview");
   const [refreshSeq, setRefreshSeq] = useState(0);
+  const [range, setRange] = useState<"ytd" | "1y" | "3y" | "all">("ytd");
 
   const {
     items: accounts,
@@ -110,9 +121,51 @@ export const AccountDetails: React.FC = () => {
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
-  const year = useMemo(() => new Date().getFullYear(), []);
-  const ytdStart = useMemo(() => startOfYear(year), [year]);
-  const ytdEnd = useMemo(() => todayIso(), []);
+  const now = useMemo(() => new Date(), []);
+  const currentYear = useMemo(() => now.getFullYear(), [now]);
+  const currentMonthKey = useMemo(() => monthKeyFromDate(now), [now]);
+  const endIso = useMemo(() => todayIso(), []);
+
+  const rangeStartIso = useMemo(() => {
+    if (range === "ytd") return startOfYear(currentYear);
+    if (range === "1y") {
+      const d = new Date(now);
+      d.setFullYear(d.getFullYear() - 1);
+      d.setDate(d.getDate() + 1);
+      return d.toISOString().slice(0, 10);
+    }
+    if (range === "3y") {
+      const d = new Date(now);
+      d.setFullYear(d.getFullYear() - 3);
+      d.setDate(d.getDate() + 1);
+      return d.toISOString().slice(0, 10);
+    }
+    return null;
+  }, [currentYear, now, range]);
+
+  const startMonthKey = useMemo(() => {
+    if (range === "ytd") return currentYear * 12;
+    if (range === "1y") return currentMonthKey - 11;
+    if (range === "3y") return currentMonthKey - 35;
+    return Number.NEGATIVE_INFINITY;
+  }, [currentMonthKey, currentYear, range]);
+
+  const yearsForFixedRange = useMemo(() => {
+    if (!Number.isFinite(startMonthKey)) return [];
+    const startYear = Math.floor(startMonthKey / 12);
+    const endYear = Math.floor(currentMonthKey / 12);
+    return Array.from(
+      { length: endYear - startYear + 1 },
+      (_, idx) => startYear + idx,
+    );
+  }, [currentMonthKey, startMonthKey]);
+
+  const rangeLabel = useMemo(() => {
+    if (range === "ytd") return `YTD (${startOfYear(currentYear)} → ${endIso})`;
+    if (range === "1y") return `Last 1Y (${rangeStartIso} → ${endIso})`;
+    if (range === "3y") return `Last 3Y (${rangeStartIso} → ${endIso})`;
+    return "All time";
+  }, [currentYear, endIso, range, rangeStartIso]);
 
   const account = useMemo(
     () => accounts.find((acc) => acc.id === accountId) ?? null,
@@ -138,37 +191,88 @@ export const AccountDetails: React.FC = () => {
     token,
   ]);
 
-  const [yearlyOverview, setYearlyOverview] =
-    useState<YearlyOverviewResponse | null>(null);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [availableYearsLoading, setAvailableYearsLoading] = useState(false);
+  const [yearlyOverviews, setYearlyOverviews] = useState<
+    Record<number, YearlyOverviewResponse>
+  >({});
   const [yearlyOverviewLoading, setYearlyOverviewLoading] = useState(false);
 
   useEffect(() => {
-    const load = async () => {
+    const loadAvailableYears = async () => {
       if (!token) return;
       if (!accountId) return;
-      setYearlyOverviewLoading(true);
+      setAvailableYearsLoading(true);
       try {
-        const { data } = await apiFetch<YearlyOverviewResponse>({
-          path: "/reports/yearly-overview",
-          schema: yearlyOverviewSchema,
-          query: { year, account_ids: accountId },
+        const { data } = await apiFetch<{ results: YearlyReportEntry[] }>({
+          path: "/reports/yearly",
+          schema: yearlyReportSchema,
+          query: { account_ids: accountId },
           token,
         });
-        setYearlyOverview(data);
+        const years = (data.results ?? [])
+          .map((row) => Number(row.year))
+          .filter((y) => Number.isFinite(y))
+          .sort((a, b) => a - b);
+        setAvailableYears(years);
+      } catch (err) {
+        console.error("Failed to fetch yearly totals for account", err);
+        setAvailableYears([]);
+      } finally {
+        setAvailableYearsLoading(false);
+      }
+    };
+    void loadAvailableYears();
+  }, [accountId, token]);
+
+  useEffect(() => {
+    const loadOverviews = async () => {
+      if (!token) return;
+      if (!accountId) return;
+      const years =
+        range === "all"
+          ? availableYears
+          : yearsForFixedRange.filter((y) => y > 1900 && y < 3000);
+      if (!years.length) {
+        setYearlyOverviews({});
+        return;
+      }
+
+      setYearlyOverviewLoading(true);
+      try {
+        const results = await Promise.all(
+          years.map(async (year) => {
+            const { data } = await apiFetch<YearlyOverviewResponse>({
+              path: "/reports/yearly-overview",
+              schema: yearlyOverviewSchema,
+              query: { year, account_ids: accountId },
+              token,
+            });
+            return [year, data] as const;
+          }),
+        );
+        setYearlyOverviews(Object.fromEntries(results));
       } catch (err) {
         console.error("Failed to fetch yearly overview for account", err);
-        setYearlyOverview(null);
+        setYearlyOverviews({});
       } finally {
         setYearlyOverviewLoading(false);
       }
     };
-    void load();
-  }, [accountId, refreshSeq, token, year]);
+    void loadOverviews();
+  }, [
+    accountId,
+    availableYears,
+    range,
+    refreshSeq,
+    token,
+    yearsForFixedRange,
+  ]);
 
   const accountFlow = useMemo(() => {
-    const flows = yearlyOverview?.account_flows ?? [];
+    const flows = yearlyOverviews[currentYear]?.account_flows ?? [];
     return flows.find((f) => f.account_id === accountId) ?? flows[0] ?? null;
-  }, [accountId, yearlyOverview?.account_flows]);
+  }, [accountId, currentYear, yearlyOverviews]);
 
   const investmentSeries = useMemo(() => {
     if (!account) return null;
@@ -187,60 +291,103 @@ export const AccountDetails: React.FC = () => {
 
   const balanceSeries = useMemo(() => {
     const currentMonthIndex = new Date().getMonth();
+    const isSingleYear = range === "ytd";
 
     if (account?.account_type === AccountType.INVESTMENT && investmentSeries) {
       const byMonth = new Map<number, number>();
       investmentSeries.forEach((p) => {
         const date = new Date(p.date);
-        if (date.getFullYear() !== year) return;
+        const year = date.getFullYear();
         const monthIndex = date.getMonth();
         const value = Number(p.value);
         if (Number.isFinite(value)) {
-          byMonth.set(monthIndex, value);
+          byMonth.set(year * 12 + monthIndex, value);
         }
       });
 
-      const known = [...byMonth.keys()];
-      const maxKnown = known.length ? Math.max(...known) : -1;
-      return Array.from({ length: 12 }, (_, monthIndex) => {
-        const month = new Date(year, monthIndex, 1).toLocaleString("en-US", {
-          month: "short",
+      const points = [...byMonth.entries()]
+        .map(([monthKey, value]) => ({ monthKey, value }))
+        .sort((a, b) => a.monthKey - b.monthKey);
+
+      if (range === "all") {
+        const byYear = new Map<number, number>();
+        points.forEach((p) => {
+          const year = Math.floor(p.monthKey / 12);
+          byYear.set(year, p.value);
         });
-        if (monthIndex > Math.min(currentMonthIndex, maxKnown)) {
-          return { month, balance: null as number | null };
+        return [...byYear.entries()]
+          .sort((a, b) => a[0] - b[0])
+          .map(([year, balance]) => ({ month: String(year), balance }));
+      }
+
+      const filtered = points.filter(
+        (p) => p.monthKey >= startMonthKey && p.monthKey <= currentMonthKey,
+      );
+      return filtered.map((p) => {
+        const year = Math.floor(p.monthKey / 12);
+        const monthIndex = p.monthKey % 12;
+        const label = isSingleYear
+          ? formatMonthLabel(year, monthIndex)
+          : formatMonthLabelWithYear(year, monthIndex);
+        return { month: label, balance: p.value };
+      });
+    }
+
+    const points: Array<{ monthKey: number; balance: number }> = [];
+    Object.entries(yearlyOverviews).forEach(([yearStr, overview]) => {
+      const year = Number(yearStr);
+      if (!Number.isFinite(year)) return;
+      const flow =
+        overview.account_flows.find((f) => f.account_id === accountId) ??
+        overview.account_flows[0];
+      if (!flow) return;
+
+      if (range === "all") {
+        const endBalance = Number(flow.end_balance);
+        if (Number.isFinite(endBalance)) {
+          points.push({ monthKey: year * 12 + 11, balance: endBalance });
         }
-        return { month, balance: byMonth.get(monthIndex) ?? null };
+        return;
+      }
+
+      const startBalance = Number(flow.start_balance);
+      const changes = flow.monthly_change.map((v) => Number(v) || 0);
+      let running = Number.isFinite(startBalance) ? startBalance : 0;
+      changes.forEach((change, monthIndex) => {
+        running += change;
+        points.push({ monthKey: year * 12 + monthIndex, balance: running });
       });
-    }
-
-    if (!accountFlow) return [];
-    const startBalance = Number(accountFlow.start_balance);
-    const changes = accountFlow.monthly_change.map((v) => Number(v) || 0);
-
-    let running = Number.isFinite(startBalance) ? startBalance : 0;
-    const balancesByMonth = changes.map((change) => {
-      running += change;
-      return running;
     });
 
-    let lastMonthIndex = -1;
-    for (let idx = balancesByMonth.length - 1; idx >= 0; idx -= 1) {
-      if (Number.isFinite(balancesByMonth[idx])) {
-        lastMonthIndex = idx;
-        break;
-      }
+    const sorted = points.sort((a, b) => a.monthKey - b.monthKey);
+
+    if (range === "all") {
+      return sorted.map((p) => ({
+        month: String(Math.floor(p.monthKey / 12)),
+        balance: p.balance,
+      }));
     }
 
-    return Array.from({ length: 12 }, (_, monthIndex) => {
-      const month = new Date(year, monthIndex, 1).toLocaleString("en-US", {
-        month: "short",
-      });
-      if (monthIndex > Math.min(currentMonthIndex, lastMonthIndex)) {
-        return { month, balance: null as number | null };
-      }
-      return { month, balance: balancesByMonth[monthIndex] ?? null };
+    const filtered = sorted.filter(
+      (p) => p.monthKey >= startMonthKey && p.monthKey <= currentMonthKey,
+    );
+    return filtered.map((p) => {
+      const year = Math.floor(p.monthKey / 12);
+      const monthIndex = p.monthKey % 12;
+      const label = isSingleYear
+        ? formatMonthLabel(year, monthIndex)
+        : formatMonthLabelWithYear(year, monthIndex);
+      return { month: label, balance: p.balance };
     });
-  }, [account?.account_type, accountFlow, investmentSeries, year]);
+  }, [
+    account?.account_type,
+    accountId,
+    currentMonthKey,
+    range,
+    startMonthKey,
+    investmentSeries,
+    yearlyOverviews,
+  ]);
 
   const cashflowSeries = useMemo(() => {
     if (!accountFlow) return [];

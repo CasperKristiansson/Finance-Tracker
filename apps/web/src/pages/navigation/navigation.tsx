@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, LogOut } from "lucide-react";
 import React from "react";
+import { useLocation } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { AppSidebar } from "@/components/app-sidebar";
 import { pageFade } from "@/components/motion-presets";
@@ -155,9 +156,15 @@ export const Navigation: React.FC<{
   children: React.ReactNode;
 }> = ({ children, title }) => {
   const dispatch = useAppDispatch();
+  const location = useLocation();
+  const contentRef = React.useRef<HTMLDivElement>(null);
   const user = useAppSelector(selectUser);
   const isDemo = useAppSelector(selectIsDemo);
   const { firstName, lastName } = useSettings();
+
+  React.useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [location.pathname]);
 
   const displayName = React.useMemo(() => {
     const name = [firstName, lastName]
@@ -248,7 +255,10 @@ export const Navigation: React.FC<{
                 </DropdownMenu>
               </div>
             </motion.header>
-            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4 pt-0">
+            <div
+              ref={contentRef}
+              className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4 pt-0"
+            >
               {children}
             </div>
           </motion.div>

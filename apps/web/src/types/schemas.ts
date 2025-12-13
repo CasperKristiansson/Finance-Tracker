@@ -145,11 +145,11 @@ export const categorySchema = z.object({
   color_hex: nullableString,
   icon: nullableString,
   is_archived: z.boolean(),
-  created_at: dateString,
-  updated_at: dateString,
-  transaction_count: numeric,
+  created_at: dateString.optional().default(""),
+  updated_at: dateString.optional().default(""),
+  transaction_count: numeric.optional().default(0),
   last_used_at: nullableString,
-  lifetime_total: money,
+  lifetime_total: money.optional().default(0),
 });
 
 export const categoryCreateRequestSchema = z.object({
