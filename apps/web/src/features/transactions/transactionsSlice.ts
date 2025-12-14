@@ -1,5 +1,5 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { TransactionRead, TransactionStatus } from "@/types/api";
+import type { TransactionRead } from "@/types/api";
 
 export interface TransactionFilters {
   startDate?: string | null;
@@ -9,7 +9,6 @@ export interface TransactionFilters {
   offset?: number;
   categoryIds?: string[];
   subscriptionIds?: string[];
-  status?: string[];
   minAmount?: string;
   maxAmount?: string;
   search?: string;
@@ -98,15 +97,6 @@ const transactionsSlice = createSlice({
     ) {
       state.pagination = { ...state.pagination, ...action.payload };
     },
-    setTransactionStatus(
-      state,
-      action: PayloadAction<{ id: string; status: TransactionStatus }>,
-    ) {
-      const tx = state.items.find((item) => item.id === action.payload.id);
-      if (tx) {
-        tx.status = action.payload.status;
-      }
-    },
     setRecentTransactions(state, action: PayloadAction<TransactionRead[]>) {
       state.recent.items = action.payload;
       state.recent.error = undefined;
@@ -143,7 +133,6 @@ export const {
   setTransactionsError,
   setTransactionFilters,
   setPagination,
-  setTransactionStatus,
   setRecentTransactions,
   setRecentLoading,
   setRecentError,

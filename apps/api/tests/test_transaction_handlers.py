@@ -21,7 +21,6 @@ from apps.api.models import Account, Loan, LoanEvent, Subscription
 from apps.api.shared import (
     AccountType,
     InterestCompound,
-    TransactionStatus,
     configure_engine,
     get_default_user_id,
     get_engine,
@@ -86,7 +85,6 @@ def test_create_and_list_transactions():
     created = _json_body(create_response)
     transaction_id = created["id"]
     assert len(created["legs"]) == 2
-    assert created["status"] == TransactionStatus.RECORDED
 
     list_response = list_transactions({"queryStringParameters": None}, None)
     assert list_response["statusCode"] == 200
@@ -300,7 +298,6 @@ def test_update_and_delete_transaction():
 
     update_payload = {
         "description": "Updated",
-        "status": TransactionStatus.REVIEWED,
     }
     update_response = update_transaction(
         {
@@ -313,7 +310,6 @@ def test_update_and_delete_transaction():
     assert update_response["statusCode"] == 200
     updated = _json_body(update_response)
     assert updated["description"] == "Updated"
-    assert updated["status"] == TransactionStatus.REVIEWED
 
     delete_response = delete_transaction(
         {"pathParameters": {"transaction_id": transaction_id}},

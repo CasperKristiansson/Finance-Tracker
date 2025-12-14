@@ -509,7 +509,6 @@ export const Dashboard: React.FC = () => {
         account_id: primaryLeg?.account_id || "",
         category: tx.category_id || "—",
         type: txType,
-        status: "reviewed",
       };
     });
   }, [recent.items]);
@@ -1554,9 +1553,6 @@ export const Dashboard: React.FC = () => {
                           {currency(Math.abs(tx.amount))}
                         </span>
                       )}
-                      <span className="rounded-full bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-700">
-                        {tx.status}
-                      </span>
                     </div>
                   </div>
                 ))}

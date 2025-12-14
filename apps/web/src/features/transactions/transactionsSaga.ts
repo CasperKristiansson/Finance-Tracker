@@ -22,14 +22,12 @@ import type {
   TransactionCreate,
   TransactionListResponse,
   TransactionRead,
-  TransactionStatus,
   TransactionUpdateRequest,
 } from "@/types/api";
 import {
   transactionCreateSchema,
   transactionListSchema,
   transactionSchema,
-  transactionStatusUpdateSchema,
   transactionUpdateRequestSchema,
 } from "@/types/schemas";
 
@@ -48,10 +46,6 @@ export const UpdateTransaction = createAction<{
   id: string;
   data: TransactionUpdateRequest;
 }>("transactions/update");
-export const UpdateTransactionStatus = createAction<{
-  id: string;
-  status: TransactionStatus;
-}>("transactions/updateStatus");
 export const DeleteTransaction = createAction<string>("transactions/delete");
 
 const serializeAccounts = (ids?: string[]) => {
@@ -84,7 +78,6 @@ function* handleFetchTransactions(
       ...(filters.subscriptionIds?.length
         ? { subscription_ids: filters.subscriptionIds.join(",") }
         : {}),
-      ...(filters.status?.length ? { status: filters.status.join(",") } : {}),
       ...(filters.minAmount ? { min_amount: filters.minAmount } : {}),
       ...(filters.maxAmount ? { max_amount: filters.maxAmount } : {}),
       ...(filters.search ? { search: filters.search } : {}),
@@ -216,32 +209,6 @@ function* handleUpdateTransaction(
   }
 }
 
-function* handleUpdateTransactionStatus(
-  action: ReturnType<typeof UpdateTransactionStatus>,
-) {
-  try {
-    const body = transactionStatusUpdateSchema.parse({
-      status: action.payload.status,
-    });
-    const response: TransactionRead = yield call(
-      callApiWithAuth,
-      {
-        path: `/transactions/${action.payload.id}`,
-        method: "PATCH",
-        body,
-      },
-      { loadingKey: "transaction-status" },
-    );
-    yield put(upsertTransaction(response));
-  } catch (error) {
-    yield put(
-      setTransactionsError(
-        error instanceof Error ? error.message : "Failed to update status",
-      ),
-    );
-  }
-}
-
 function* handleDeleteTransaction(
   action: ReturnType<typeof DeleteTransaction>,
 ) {
@@ -266,6 +233,5 @@ export function* TransactionsSaga() {
   yield takeLatest(FetchRecentTransactions.type, handleFetchRecentTransactions);
   yield takeLatest(CreateTransaction.type, handleCreateTransaction);
   yield takeLatest(UpdateTransaction.type, handleUpdateTransaction);
-  yield takeLatest(UpdateTransactionStatus.type, handleUpdateTransactionStatus);
   yield takeLatest(DeleteTransaction.type, handleDeleteTransaction);
 }

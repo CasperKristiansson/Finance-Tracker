@@ -42,7 +42,6 @@ class TransactionType(StrEnum):
     INVESTMENT_EVENT = "investment_event"
 
 
-class TransactionStatus(StrEnum):
 class SystemAccountCode(StrEnum):
     RETAINED_EARNINGS = "retained_earnings"
     INTEREST_EXPENSE = "interest_expense"

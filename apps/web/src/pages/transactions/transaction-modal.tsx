@@ -9,8 +9,6 @@ import {
   useCategoriesApi,
   useTransactionsApi,
 } from "@/hooks/use-api";
-import { cn } from "@/lib/utils";
-import { TransactionStatus } from "@/types/api";
 
 const legSchema = z.object({
   account_id: z.string().min(1, "Pick an account"),
@@ -22,7 +20,6 @@ const transactionFormSchema = z
     description: z.string().min(1, "Description required").trim(),
     notes: z.string().optional(),
     category_id: z.string().optional(),
-    status: z.enum(TransactionStatus),
     occurred_at: z.string().min(1, "Occurred date required"),
     posted_at: z.string().optional(),
     legs: z.array(legSchema).min(2, "Add at least two legs"),
@@ -51,24 +48,6 @@ const transactionFormSchema = z
 
 type TransactionFormValues = z.infer<typeof transactionFormSchema>;
 
-const statusTone: Record<TransactionStatus, string> = {
-  [TransactionStatus.RECORDED]: "bg-slate-100 text-slate-700",
-  [TransactionStatus.IMPORTED]: "bg-amber-100 text-amber-800",
-  [TransactionStatus.REVIEWED]: "bg-emerald-100 text-emerald-800",
-  [TransactionStatus.FLAGGED]: "bg-rose-100 text-rose-800",
-};
-
-const statusBadge = (status: TransactionStatus) => (
-  <span
-    className={cn(
-      "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
-      statusTone[status],
-    )}
-  >
-    {status}
-  </span>
-);
-
 export const TransactionModal: React.FC<{
   open: boolean;
   onClose: () => void;
@@ -83,7 +62,6 @@ export const TransactionModal: React.FC<{
     register,
     handleSubmit,
     reset,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
@@ -91,7 +69,6 @@ export const TransactionModal: React.FC<{
       description: "",
       notes: "",
       category_id: "",
-      status: TransactionStatus.RECORDED,
       occurred_at: today,
       posted_at: today,
       legs: [
@@ -113,8 +90,6 @@ export const TransactionModal: React.FC<{
     }
   }, [fetchAccounts, fetchCategories, open]);
 
-  const statusValue = watch("status");
-
   const onSubmit = handleSubmit(async (values) => {
     await createTransaction({
       description: values.description,
@@ -124,7 +99,6 @@ export const TransactionModal: React.FC<{
       posted_at: values.posted_at
         ? new Date(values.posted_at).toISOString()
         : undefined,
-      status: values.status,
       legs: values.legs.map((leg) => ({
         account_id: leg.account_id,
         amount: leg.amount,
@@ -134,7 +108,6 @@ export const TransactionModal: React.FC<{
       description: "",
       notes: "",
       category_id: "",
-      status: TransactionStatus.RECORDED,
       occurred_at: today,
       posted_at: today,
       legs: [
@@ -166,7 +139,6 @@ export const TransactionModal: React.FC<{
             <h2 className="text-lg font-semibold text-slate-900">
               Add Transaction
             </h2>
-            {statusBadge(statusValue)}
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
@@ -226,21 +198,6 @@ export const TransactionModal: React.FC<{
                       {cat.name}
                     </option>
                   ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-slate-700">
-                Status
-                <select
-                  className="rounded border border-slate-200 px-3 py-2"
-                  {...register("status")}
-                >
-                  {Object.values(TransactionStatus)
-                    .filter((status) => status !== TransactionStatus.REVIEWED)
-                    .map((status) => (
-                      <option key={status} value={status}>
-                        {status}
-                      </option>
-                    ))}
                 </select>
               </label>
             </div>

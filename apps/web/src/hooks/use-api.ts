@@ -117,7 +117,6 @@ import {
   CreateTransaction,
   UpdateTransaction,
   DeleteTransaction,
-  UpdateTransactionStatus,
 } from "@/features/transactions/transactionsSaga";
 import {
   selectTransactionFilters,
@@ -137,7 +136,6 @@ import type {
   ImportCreateRequest,
   ImportCommitRow,
   TransactionCreate,
-  TransactionStatus,
   TransactionUpdateRequest,
   ThemePreference,
   NordnetSnapshotCreateRequest,
@@ -265,11 +263,6 @@ export const useTransactionsApi = () => {
       dispatch(UpdateTransaction({ id, data })),
     [dispatch],
   );
-  const updateTransactionStatus = useCallback(
-    (id: string, status: TransactionStatus) =>
-      dispatch(UpdateTransactionStatus({ id, status })),
-    [dispatch],
-  );
   const deleteTransaction = useCallback(
     (id: string) => dispatch(DeleteTransaction(id)),
     [dispatch],
@@ -299,7 +292,6 @@ export const useTransactionsApi = () => {
     fetchRecentTransactions,
     createTransaction,
     updateTransaction,
-    updateTransactionStatus,
     deleteTransaction,
   };
 };

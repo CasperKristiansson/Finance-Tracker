@@ -32,20 +32,10 @@ import {
 } from "@/hooks/use-api";
 import { formatCategoryLabel } from "@/lib/category-icons";
 import { cn } from "@/lib/utils";
-import {
-  TransactionStatus,
-  TransactionType,
-  type CategoryRead,
-} from "@/types/api";
+import { TransactionType, type CategoryRead } from "@/types/api";
 import TransactionModal from "./transaction-modal";
 
-type SortKey =
-  | "date"
-  | "description"
-  | "amount"
-  | "status"
-  | "category"
-  | "type";
+type SortKey = "date" | "description" | "amount" | "category" | "type";
 
 type ColumnKey =
   | "date"
@@ -54,7 +44,6 @@ type ColumnKey =
   | "accounts"
   | "category"
   | "amount"
-  | "status"
   | "notes";
 
 type ColumnConfig = {
@@ -70,7 +59,6 @@ const columns: ColumnConfig[] = [
   { key: "accounts", label: "Account" },
   { key: "category", label: "Category" },
   { key: "amount", label: "Amount", align: "right" },
-  { key: "status", label: "Status" },
   { key: "notes", label: "Notes" },
 ];
 
@@ -80,7 +68,6 @@ const columnWidthClass: Partial<Record<ColumnKey, string>> = {
   accounts: "w-72",
   category: "w-48",
   amount: "w-36",
-  status: "w-32",
   notes: "w-56",
 };
 
@@ -100,24 +87,6 @@ const formatDate = (iso?: string) =>
         year: "numeric",
       })
     : "—";
-
-const statusTone: Record<TransactionStatus, string> = {
-  [TransactionStatus.RECORDED]: "bg-slate-100 text-slate-700",
-  [TransactionStatus.IMPORTED]: "bg-amber-100 text-amber-800",
-  [TransactionStatus.REVIEWED]: "bg-emerald-100 text-emerald-800",
-  [TransactionStatus.FLAGGED]: "bg-rose-100 text-rose-800",
-};
-
-const badge = (status: TransactionStatus) => (
-  <span
-    className={cn(
-      "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-      statusTone[status],
-    )}
-  >
-    {status.charAt(0).toUpperCase() + status.slice(1)}
-  </span>
-);
 
 const typeTone: Record<TransactionType, string> = {
   [TransactionType.INCOME]: "bg-emerald-100 text-emerald-800",
@@ -208,12 +177,10 @@ export const Transactions: React.FC = () => {
     accounts: true,
     category: true,
     amount: true,
-    status: true,
     notes: false,
   });
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [accountFilter, setAccountFilter] = useState<string>("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
   const [search, setSearch] = useState<string>("");
   const [minAmount, setMinAmount] = useState<string>("");
   const [maxAmount, setMaxAmount] = useState<string>("");
@@ -252,7 +219,6 @@ export const Transactions: React.FC = () => {
         offset: 0,
         accountIds: accountFilter ? [accountFilter] : undefined,
         categoryIds: categoryFilter ? [categoryFilter] : undefined,
-        status: statusFilter ? [statusFilter] : undefined,
         search: search || undefined,
         minAmount: minAmount || undefined,
         maxAmount: maxAmount || undefined,
@@ -265,7 +231,6 @@ export const Transactions: React.FC = () => {
   }, [
     accountFilter,
     categoryFilter,
-    statusFilter,
     search,
     minAmount,
     maxAmount,
@@ -313,9 +278,6 @@ export const Transactions: React.FC = () => {
           const aSum = a.legs.reduce((sum, leg) => sum + Number(leg.amount), 0);
           const bSum = b.legs.reduce((sum, leg) => sum + Number(leg.amount), 0);
           return (aSum - bSum) * direction;
-        }
-        if (sortKey === "status") {
-          return a.status.localeCompare(b.status) * direction;
         }
         if (sortKey === "type") {
           return (
@@ -458,7 +420,6 @@ export const Transactions: React.FC = () => {
             offset: 0,
             accountIds: accountFilter ? [accountFilter] : undefined,
             categoryIds: categoryFilter ? [categoryFilter] : undefined,
-            status: statusFilter ? [statusFilter] : undefined,
             search: search || undefined,
             minAmount: minAmount || undefined,
             maxAmount: maxAmount || undefined,
@@ -534,20 +495,6 @@ export const Transactions: React.FC = () => {
                     {cat.name}
                   </option>
                 ))}
-              </select>
-              <select
-                className="rounded border border-slate-200 bg-white px-2 py-1 text-slate-800"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="">All status</option>
-                {Object.values(TransactionStatus)
-                  .filter((status) => status !== TransactionStatus.REVIEWED)
-                  .map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
               </select>
               <input
                 type="number"
@@ -775,16 +722,6 @@ export const Transactions: React.FC = () => {
                               )}
                             >
                               {formatCurrency(displayAmount)}
-                            </td>
-                          );
-                        }
-                        if (col.key === "status") {
-                          return (
-                            <td
-                              key={`${row.id}-status`}
-                              className={bodyCellClass("status")}
-                            >
-                              {badge(row.status)}
                             </td>
                           );
                         }

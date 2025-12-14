@@ -20,7 +20,6 @@ from apps.api.models import Account, Budget, Category, Transaction, TransactionL
 from apps.api.shared import (
     AccountType,
     BudgetPeriod,
-    TransactionStatus,
     TransactionType,
     configure_engine,
     get_engine,
@@ -173,7 +172,6 @@ def test_merge_categories_moves_transactions_and_budgets():
             description="Coffee",
             occurred_at=datetime.now(timezone.utc),
             posted_at=datetime.now(timezone.utc),
-            status=TransactionStatus.RECORDED,
         )
         txn.legs = [
             TransactionLeg(account_id=account.id, amount=-50),

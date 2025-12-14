@@ -1,9 +1,17 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Merge, Pencil, Plus, RefreshCw } from "lucide-react";
+import {
+  ChevronRight,
+  Loader2,
+  Merge,
+  Pencil,
+  Plus,
+  RefreshCw,
+} from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
+import { useAppSelector } from "@/app/hooks";
 import { LucideIconPicker } from "@/components/lucide-icon-picker";
 import { MotionPage } from "@/components/motion-presets";
 import { Badge } from "@/components/ui/badge";
@@ -18,11 +26,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
+import { selectToken } from "@/features/auth/authSlice";
 import { useCategoriesApi } from "@/hooks/use-api";
+import { apiFetch } from "@/lib/apiClient";
 import { formatCategoryLabel, renderCategoryIcon } from "@/lib/category-icons";
-import { CategoryType, type CategoryRead } from "@/types/api";
-import { categorySchema } from "@/types/schemas";
+import {
+  CategoryType,
+  TransactionType,
+  type CategoryRead,
+  type TransactionListResponse,
+  type TransactionRead,
+} from "@/types/api";
+import { categorySchema, transactionListSchema } from "@/types/schemas";
 
 const formatCategory = (cat: CategoryRead) =>
   formatCategoryLabel(cat.name, cat.icon);
@@ -92,6 +115,28 @@ const usageText = (cat: CategoryRead) => {
   return `${count} tx • last ${lastUsed} • ${formatCurrency(total)}`;
 };
 
+const formatDateCompact = (value?: string | null) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("sv-SE", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+  });
+};
+
+const transactionAmountMagnitude = (tx: TransactionRead) => {
+  const largest = tx.legs.reduce<null | { amount: number }>((best, leg) => {
+    const numeric = Number(leg.amount);
+    if (!best) return { amount: numeric };
+    return Math.abs(numeric) > Math.abs(best.amount)
+      ? { amount: numeric }
+      : best;
+  }, null);
+  return largest ? Math.abs(largest.amount) : 0;
+};
+
 const sparklinePath = (values: number[], width: number, height: number) => {
   if (values.length < 2) return "";
   const min = Math.min(...values);
@@ -110,6 +155,7 @@ const sparklinePath = (values: number[], width: number, height: number) => {
 };
 
 export const Categories: React.FC = () => {
+  const token = useAppSelector(selectToken);
   const {
     items,
     loading,
@@ -130,6 +176,12 @@ export const Categories: React.FC = () => {
   const [mergeTargetId, setMergeTargetId] = useState<string>("");
   const [mergeRename, setMergeRename] = useState<string>("");
   const [showNewSheet, setShowNewSheet] = useState(false);
+  const [detailsId, setDetailsId] = useState<string | null>(null);
+  const [detailsTransactions, setDetailsTransactions] = useState<
+    TransactionRead[]
+  >([]);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const createForm = useForm<CategoryFormValues>({
@@ -316,6 +368,11 @@ export const Categories: React.FC = () => {
     return copy;
   }, [filteredCategories, sortKey]);
 
+  const detailsCategory = useMemo(
+    () => (detailsId ? items.find((cat) => cat.id === detailsId) : null),
+    [detailsId, items],
+  );
+
   const mergeSource = useMemo(
     () => (mergeSourceId ? items.find((c) => c.id === mergeSourceId) : null),
     [items, mergeSourceId],
@@ -336,6 +393,63 @@ export const Categories: React.FC = () => {
     setMergeRename("");
     setMergeOpen(true);
   };
+
+  const openDetails = (categoryId: string) => {
+    setDetailsId(categoryId);
+  };
+
+  const closeDetails = () => {
+    setDetailsId(null);
+    setDetailsTransactions([]);
+    setDetailsLoading(false);
+    setDetailsError(null);
+  };
+
+  useEffect(() => {
+    if (!detailsId || !token) return;
+
+    let cancelled = false;
+    setDetailsTransactions([]);
+    setDetailsLoading(true);
+    setDetailsError(null);
+
+    apiFetch<TransactionListResponse>({
+      path: "/transactions",
+      token,
+      query: { category_ids: detailsId, limit: 20 },
+      schema: transactionListSchema,
+    })
+      .then(({ data }) => {
+        if (cancelled) return;
+        setDetailsTransactions(
+          data.transactions.filter(
+            (tx) => tx.transaction_type !== TransactionType.TRANSFER,
+          ),
+        );
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setDetailsError(err instanceof Error ? err.message : "Failed to load");
+        setDetailsTransactions([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setDetailsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [detailsId, token]);
+
+  useEffect(() => {
+    if (detailsId && !detailsCategory) {
+      setDetailsId(null);
+      setDetailsTransactions([]);
+      setDetailsLoading(false);
+      setDetailsError(null);
+    }
+  }, [detailsId, detailsCategory]);
 
   const submitMerge = () => {
     if (!mergeSourceId || !mergeTargetId) return;
@@ -518,7 +632,8 @@ export const Categories: React.FC = () => {
                 return (
                   <div
                     key={cat.id}
-                    className="grid grid-cols-1 gap-3 px-3 py-2 lg:grid-cols-[minmax(0,1fr)_110px_130px_150px_140px_auto] lg:items-center"
+                    className="group grid cursor-pointer grid-cols-1 gap-3 px-3 py-2 transition-colors hover:bg-slate-50 lg:grid-cols-[minmax(0,1fr)_110px_130px_150px_140px_auto] lg:items-center"
+                    onClick={() => openDetails(cat.id)}
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div
@@ -533,8 +648,11 @@ export const Categories: React.FC = () => {
                       )}
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <div className="truncate font-medium text-slate-900">
-                            {cat.name}
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <div className="truncate font-medium text-slate-900">
+                              {cat.name}
+                            </div>
+                            <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 opacity-0 transition-opacity group-hover:opacity-100" />
                           </div>
                           <Badge
                             variant="secondary"
@@ -615,7 +733,10 @@ export const Categories: React.FC = () => {
                         variant="outline"
                         size="sm"
                         className="gap-2"
-                        onClick={() => openMerge(cat.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openMerge(cat.id);
+                        }}
                         disabled={cat.is_archived}
                         title={
                           cat.is_archived
@@ -630,7 +751,10 @@ export const Categories: React.FC = () => {
                         variant="ghost"
                         size="sm"
                         className="gap-1"
-                        onClick={() => setEditingId(cat.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingId(cat.id);
+                        }}
                       >
                         <Pencil className="h-4 w-4" />
                         Edit
@@ -786,6 +910,228 @@ export const Categories: React.FC = () => {
             ) : null}
           </DialogContent>
         </Dialog>
+
+        <Sheet
+          open={Boolean(detailsId)}
+          onOpenChange={(open) => {
+            if (!open) closeDetails();
+          }}
+        >
+          <SheetContent side="right" className="bg-white sm:max-w-lg">
+            {detailsCategory ? (
+              <>
+                <SheetHeader className="border-b border-slate-100">
+                  <div className="flex items-start gap-3 pr-8">
+                    <div
+                      className="mt-2 h-3 w-3 shrink-0 rounded-full border border-slate-200"
+                      style={{
+                        backgroundColor: detailsCategory.color_hex ?? "#e2e8f0",
+                      }}
+                      title={detailsCategory.color_hex ?? "No color"}
+                    />
+                    {renderCategoryIcon(
+                      detailsCategory.icon ?? "",
+                      detailsCategory.name,
+                      "h-7 w-7 text-slate-700 flex items-center justify-center",
+                    )}
+                    <div className="min-w-0">
+                      <SheetTitle className="truncate text-lg">
+                        {detailsCategory.name}
+                      </SheetTitle>
+                      <SheetDescription className="mt-1 flex flex-wrap items-center gap-2">
+                        <Badge
+                          variant="secondary"
+                          className={
+                            detailsCategory.category_type ===
+                            CategoryType.INCOME
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-rose-50 text-rose-700"
+                          }
+                        >
+                          {detailsCategory.category_type}
+                        </Badge>
+                        {detailsCategory.is_archived ? (
+                          <Badge variant="outline">Archived</Badge>
+                        ) : null}
+                      </SheetDescription>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => {
+                        closeDetails();
+                        setEditingId(detailsCategory.id);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      disabled={detailsCategory.is_archived}
+                      title={
+                        detailsCategory.is_archived
+                          ? "Unarchive to merge"
+                          : "Merge into another category"
+                      }
+                      onClick={() => {
+                        closeDetails();
+                        openMerge(detailsCategory.id);
+                      }}
+                    >
+                      <Merge className="h-4 w-4" />
+                      Merge
+                    </Button>
+                  </div>
+                </SheetHeader>
+
+                <div className="flex-1 space-y-4 overflow-y-auto p-4">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-lg border border-slate-100 bg-white p-3">
+                      <div className="text-xs text-slate-500">Transactions</div>
+                      <div className="mt-1 text-lg font-semibold text-slate-900 tabular-nums">
+                        {Number(
+                          detailsCategory.transaction_count ?? 0,
+                        ).toLocaleString("sv-SE")}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-slate-100 bg-white p-3">
+                      <div className="text-xs text-slate-500">Last used</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900">
+                        {formatShortDate(detailsCategory.last_used_at ?? null)}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-slate-100 bg-white p-3 text-right">
+                      <div className="text-xs text-slate-500">Lifetime</div>
+                      <div className="mt-1 text-sm font-semibold text-slate-900 tabular-nums">
+                        {formatCurrency(
+                          Number(detailsCategory.lifetime_total ?? 0),
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-slate-100 bg-white p-3">
+                    <div className="mb-2 text-sm font-semibold text-slate-900">
+                      Last 6 months
+                    </div>
+                    {(() => {
+                      const trend = (detailsCategory.recent_months ?? []).map(
+                        (p) => Number(p.total ?? 0),
+                      );
+                      const hasTrend = trend.length >= 2;
+                      const stroke =
+                        detailsCategory.color_hex ??
+                        (detailsCategory.category_type === CategoryType.INCOME
+                          ? "#10b981"
+                          : "#ef4444");
+                      return hasTrend ? (
+                        <svg
+                          width="100%"
+                          height="80"
+                          viewBox="0 0 320 80"
+                          preserveAspectRatio="none"
+                          className="overflow-visible"
+                        >
+                          <path
+                            d={sparklinePath(trend, 320, 80)}
+                            fill="none"
+                            stroke={stroke}
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      ) : (
+                        <div className="text-sm text-slate-500">
+                          No recent activity.
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="rounded-lg border border-slate-100 bg-white p-3">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <div className="text-sm font-semibold text-slate-900">
+                        Recent transactions
+                      </div>
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2 text-slate-700"
+                      >
+                        <a href="/transactions">View all</a>
+                      </Button>
+                    </div>
+
+                    {detailsLoading ? (
+                      <div className="space-y-2">
+                        <div className="h-12 rounded-md bg-slate-100" />
+                        <div className="h-12 rounded-md bg-slate-100" />
+                        <div className="h-12 rounded-md bg-slate-100" />
+                      </div>
+                    ) : detailsError ? (
+                      <div className="text-sm text-rose-600">
+                        {detailsError}
+                      </div>
+                    ) : detailsTransactions.length === 0 ? (
+                      <div className="text-sm text-slate-500">
+                        No transactions yet.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {detailsTransactions.slice(0, 12).map((tx) => {
+                          const magnitude = transactionAmountMagnitude(tx);
+                          const sign =
+                            detailsCategory.category_type ===
+                            CategoryType.EXPENSE
+                              ? -1
+                              : 1;
+                          const signed = magnitude * sign;
+                          const amountColor =
+                            sign > 0 ? "text-emerald-700" : "text-rose-700";
+
+                          return (
+                            <div
+                              key={tx.id}
+                              className="flex items-start justify-between gap-3 rounded-md border border-slate-100 px-3 py-2"
+                            >
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-semibold text-slate-900">
+                                  {tx.description || "(No description)"}
+                                </div>
+                                <div className="text-xs text-slate-500">
+                                  {formatDateCompact(tx.occurred_at)} •{" "}
+                                  {tx.transaction_type}
+                                </div>
+                              </div>
+                              <div
+                                className={`shrink-0 text-sm font-semibold tabular-nums ${amountColor}`}
+                              >
+                                {formatCurrency(signed)}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="p-4 text-sm text-slate-500">
+                Select a category to see details.
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
 
         <Dialog
           open={mergeOpen}
