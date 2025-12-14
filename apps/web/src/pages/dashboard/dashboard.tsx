@@ -46,10 +46,12 @@ import { PageRoutes } from "@/data/routes";
 import { selectIsAuthenticated, selectToken } from "@/features/auth/authSlice";
 import {
   useAccountsApi,
+  useCategoriesApi,
   useReportsApi,
   useTransactionsApi,
 } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
+import { renderCategoryIcon } from "@/lib/category-icons";
 import {
   AccountType,
   type MonthlyReportEntry,
@@ -165,6 +167,7 @@ export const Dashboard: React.FC = () => {
     loading: accountsLoading,
     fetchAccounts,
   } = useAccountsApi();
+  const { items: categories, fetchCategories } = useCategoriesApi();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const token = useAppSelector(selectToken);
   const hasFetched = useRef(false);
@@ -187,6 +190,14 @@ export const Dashboard: React.FC = () => {
       ),
     [accounts],
   );
+  const accountNameById = useMemo(
+    () => new Map(accounts.map((acc) => [acc.id, acc.name])),
+    [accounts],
+  );
+  const categoryById = useMemo(
+    () => new Map(categories.map((cat) => [cat.id, cat])),
+    [categories],
+  );
 
   useEffect(() => {
     if (!isAuthenticated || hasFetched.current) return;
@@ -197,12 +208,14 @@ export const Dashboard: React.FC = () => {
     fetchTotalReport();
     fetchNetWorthReport();
     fetchAccounts();
+    fetchCategories();
   }, [
     fetchMonthlyReport,
     fetchYearlyReport,
     fetchTotalReport,
     fetchNetWorthReport,
     fetchAccounts,
+    fetchCategories,
     isAuthenticated,
   ]);
 
@@ -501,17 +514,51 @@ export const Dashboard: React.FC = () => {
         tx.transaction_type ||
         (amount >= 0 ? TransactionType.INCOME : TransactionType.EXPENSE);
 
+      const accountLabel = (() => {
+        const legs = tx.legs ?? [];
+        if (!legs.length) return "—";
+        if (txType === TransactionType.TRANSFER) {
+          const fromLeg = legs.find((leg) => Number(leg.amount) < 0);
+          const toLeg = legs.find((leg) => Number(leg.amount) > 0);
+          const fromName = fromLeg
+            ? (accountNameById.get(fromLeg.account_id) ?? "Unknown")
+            : "Unknown";
+          const toName = toLeg
+            ? (accountNameById.get(toLeg.account_id) ?? "Unknown")
+            : "Unknown";
+          return `${fromName} → ${toName}`;
+        }
+
+        const preferredSign = txType === TransactionType.EXPENSE ? -1 : 1;
+        const preferred =
+          legs.find(
+            (leg) =>
+              Number(leg.amount) * preferredSign > 0 &&
+              accountNameById.has(leg.account_id),
+          ) ??
+          legs.find((leg) => accountNameById.has(leg.account_id)) ??
+          legs[0];
+        return preferred
+          ? (accountNameById.get(preferred.account_id) ?? "Unknown")
+          : "—";
+      })();
+
+      const category = tx.category_id
+        ? (categoryById.get(tx.category_id) ?? null)
+        : null;
+
       return {
         id: tx.id,
         description: tx.description?.trim() || "Transaction",
         amount,
         occurred_at: tx.occurred_at,
         account_id: primaryLeg?.account_id || "",
-        category: tx.category_id || "—",
+        accountLabel,
+        category,
         type: txType,
       };
     });
-  }, [recent.items]);
+  }, [accountNameById, categoryById, recent.items]);
 
   const filteredRecentTransactions = useMemo(() => {
     if (recentTab === "all") return recentTransactions;
@@ -1523,36 +1570,84 @@ export const Dashboard: React.FC = () => {
                 {filteredRecentTransactions.map((tx) => (
                   <div
                     key={tx.id}
-                    className="flex items-center justify-between rounded-lg border border-slate-100 bg-white px-3 py-2 shadow-[0_8px_20px_-18px_rgba(15,23,42,0.4)]"
+                    className="rounded-lg border border-slate-100 bg-white px-3 py-2 shadow-[0_8px_20px_-18px_rgba(15,23,42,0.4)]"
                   >
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">
-                        {tx.description}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {new Date(tx.occurred_at).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {tx.type === TransactionType.TRANSFER ? (
-                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
-                          {currency(Math.abs(tx.amount))}
-                        </span>
-                      ) : (
+                    <div className="grid w-full items-start gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_auto] sm:items-center sm:gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-900">
+                          {tx.description}
+                        </p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span>
+                            {new Date(tx.occurred_at).toLocaleDateString(
+                              "en-US",
+                              {
+                                month: "short",
+                                day: "numeric",
+                              },
+                            )}
+                          </span>
+                          <span className="text-slate-300">•</span>
+                          <span className="truncate">{tx.accountLabel}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex min-w-0 items-center gap-2 sm:flex-nowrap sm:justify-end">
                         <span
                           className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                            tx.amount >= 0
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-rose-50 text-rose-700"
+                            tx.type === TransactionType.TRANSFER
+                              ? "bg-slate-100 text-slate-700"
+                              : tx.amount >= 0
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-rose-50 text-rose-700"
                           }`}
                         >
-                          {tx.amount >= 0 ? "+" : "-"}
-                          {currency(Math.abs(tx.amount))}
+                          {tx.type === TransactionType.TRANSFER
+                            ? "Transfer"
+                            : tx.amount >= 0
+                              ? "Income"
+                              : "Expense"}
                         </span>
-                      )}
+
+                        {tx.type ===
+                        TransactionType.TRANSFER ? null : tx.category ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+                            {renderCategoryIcon(
+                              tx.category.icon,
+                              tx.category.name,
+                              tx.category.icon?.startsWith("lucide:")
+                                ? "h-4 w-4 text-slate-700"
+                                : "text-sm leading-none",
+                            )}
+                            <span className="max-w-44 truncate">
+                              {tx.category.name}
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                            Unassigned
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-end">
+                        {tx.type === TransactionType.TRANSFER ? (
+                          <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
+                            {currency(Math.abs(tx.amount))}
+                          </span>
+                        ) : (
+                          <span
+                            className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                              tx.amount >= 0
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-rose-50 text-rose-700"
+                            }`}
+                          >
+                            {tx.amount >= 0 ? "+" : "-"}
+                            {currency(Math.abs(tx.amount))}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}

@@ -5,7 +5,6 @@ import {
   ArrowUpWideNarrow,
   Eye,
   Filter,
-  Layers,
   Loader2,
   MoreHorizontal,
   Plus,
@@ -107,7 +106,7 @@ const typeLabel: Record<TransactionType, string> = {
 const typeBadge = (type: TransactionType) => (
   <span
     className={cn(
-      "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+      "inline-flex items-center rounded-full px-2 py-0.5 text-xs leading-none font-medium",
       typeTone[type],
     )}
   >
@@ -149,14 +148,8 @@ const ColumnToggle: React.FC<{
 
 export const Transactions: React.FC = () => {
   const location = useLocation();
-  const {
-    items,
-    loading,
-    error,
-    pagination,
-    runningBalances,
-    fetchTransactions,
-  } = useTransactionsApi();
+  const { items, loading, error, pagination, fetchTransactions } =
+    useTransactionsApi();
   const {
     items: accounts,
     fetchAccounts,
@@ -301,7 +294,7 @@ export const Transactions: React.FC = () => {
   const rowVirtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 64,
+    estimateSize: () => 48,
     overscan: 8,
   });
 
@@ -328,14 +321,14 @@ export const Transactions: React.FC = () => {
 
   const headerCellClass = (col: ColumnConfig) =>
     cn(
-      "py-2 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase",
+      "py-1.5 text-left text-[11px] font-semibold tracking-wide text-slate-500 uppercase",
       "px-3",
       columnWidthClass[col.key],
       col.align === "right" && "text-right",
     );
 
   const bodyCellClass = (key: ColumnKey, extra?: string) =>
-    cn("py-2 align-top", "px-3", columnWidthClass[key], extra);
+    cn("py-1 align-middle", "px-3", columnWidthClass[key], extra);
 
   return (
     <MotionPage className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
@@ -429,51 +422,33 @@ export const Transactions: React.FC = () => {
         }
       />
 
-      <Card className="flex min-h-0 flex-1 flex-col border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
-        <CardHeader className="flex shrink-0 flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <Layers className="h-4 w-4 text-slate-500" />
-            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
-              {Object.entries(runningBalances)
-                .filter(([accountId]) => Boolean(accountLookup[accountId]))
-                .map(([accountId, balance]) => (
-                  <span
-                    key={accountId}
-                    className="rounded-full bg-slate-100 px-2 py-1 font-medium text-slate-800"
-                  >
-                    {accountLookup[accountId]}: {formatCurrency(balance)}
-                  </span>
-                ))}
-              {Object.keys(runningBalances).length === 0
-                ? "No balances yet"
-                : null}
-            </div>
-          </div>
-          <div className="flex flex-col gap-3">
-            <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm shadow-[0_6px_16px_-12px_rgba(15,23,42,0.3)]">
+      <Card className="flex min-h-0 flex-1 flex-col gap-0 border-slate-200 py-2 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
+        <CardHeader className="flex shrink-0 flex-col gap-2 pb-2">
+          <div className="flex flex-col gap-2">
+            <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-2 text-[13px] shadow-[0_6px_16px_-12px_rgba(15,23,42,0.3)]">
               <Filter className="h-4 w-4 text-slate-500" />
               <input
                 type="date"
-                className="rounded border border-slate-200 px-2 py-1 text-slate-800"
+                className="h-8 rounded border border-slate-200 px-2 text-slate-800"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
               />
               <span className="text-slate-500">to</span>
               <input
                 type="date"
-                className="rounded border border-slate-200 px-2 py-1 text-slate-800"
+                className="h-8 rounded border border-slate-200 px-2 text-slate-800"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
               />
               <input
                 type="search"
                 placeholder="Search description"
-                className="w-48 rounded border border-slate-200 px-3 py-1 text-slate-800"
+                className="h-8 w-48 rounded border border-slate-200 px-3 text-slate-800"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
               <select
-                className="rounded border border-slate-200 bg-white px-2 py-1 text-slate-800"
+                className="h-8 rounded border border-slate-200 bg-white px-2 text-slate-800"
                 value={accountFilter}
                 onChange={(e) => setAccountFilter(e.target.value)}
               >
@@ -485,7 +460,7 @@ export const Transactions: React.FC = () => {
                 ))}
               </select>
               <select
-                className="rounded border border-slate-200 bg-white px-2 py-1 text-slate-800"
+                className="h-8 rounded border border-slate-200 bg-white px-2 text-slate-800"
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
               >
@@ -500,7 +475,7 @@ export const Transactions: React.FC = () => {
                 type="number"
                 step="0.01"
                 placeholder="Min"
-                className="w-24 rounded border border-slate-200 px-2 py-1 text-slate-800"
+                className="h-8 w-24 rounded border border-slate-200 px-2 text-slate-800"
                 value={minAmount}
                 onChange={(e) => setMinAmount(e.target.value)}
               />
@@ -508,7 +483,7 @@ export const Transactions: React.FC = () => {
                 type="number"
                 step="0.01"
                 placeholder="Max"
-                className="w-24 rounded border border-slate-200 px-2 py-1 text-slate-800"
+                className="h-8 w-24 rounded border border-slate-200 px-2 text-slate-800"
                 value={maxAmount}
                 onChange={(e) => setMaxAmount(e.target.value)}
               />
@@ -523,7 +498,7 @@ export const Transactions: React.FC = () => {
             ref={parentRef}
             className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
           >
-            <table className="w-full table-fixed text-sm">
+            <table className="w-full table-fixed text-[13px]">
               <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_rgba(0,0,0,0.05)]">
                 <tr
                   className="border-b"
@@ -629,8 +604,11 @@ export const Transactions: React.FC = () => {
                       className="border-b hover:bg-slate-50"
                       style={{
                         position: "absolute",
+                        top: 0,
+                        left: 0,
                         transform: `translateY(${virtualRow.start}px)`,
                         width: "100%",
+                        height: `${virtualRow.size}px`,
                         display: "table",
                         tableLayout: "fixed",
                       }}
@@ -642,7 +620,7 @@ export const Transactions: React.FC = () => {
                               key={`${row.id}-date`}
                               className={bodyCellClass("date")}
                             >
-                              <div className="text-sm font-medium text-slate-900">
+                              <div className="text-[13px] leading-none font-medium text-slate-900">
                                 {formatDate(row.occurred_at)}
                               </div>
                             </td>
@@ -667,14 +645,9 @@ export const Transactions: React.FC = () => {
                                 "min-w-0",
                               )}
                             >
-                              <div className="truncate font-semibold text-slate-900">
+                              <div className="truncate leading-none font-semibold text-slate-900">
                                 {row.description || "(No description)"}
                               </div>
-                              {row.notes ? (
-                                <div className="truncate text-xs text-slate-500">
-                                  {row.notes}
-                                </div>
-                              ) : null}
                             </td>
                           );
                         }
@@ -743,7 +716,7 @@ export const Transactions: React.FC = () => {
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-end border-t bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <div className="flex items-center justify-end border-t bg-white px-3 py-1.5 text-xs text-slate-600">
             <Button
               variant="outline"
               size="sm"
