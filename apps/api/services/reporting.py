@@ -232,24 +232,24 @@ class ReportingService:
         series = [(d, hist_by_day.get(d, Decimal("0"))) for d in window_days]
 
         if model == "simple" or len(series) < 30:
-            alert_at: Optional[str] = None
+            simple_alert_at: Optional[str] = None
             running = current_balance
-            points: list[dict[str, object]] = []
+            simple_points: list[dict[str, object]] = []
             for step in range(1, days + 1):
                 running += avg_daily
                 target = today + timedelta(days=step)
                 iso = target.isoformat()
-                points.append(
+                simple_points.append(
                     {"date": iso, "balance": running, "delta": avg_daily, "baseline": avg_daily}
                 )
-                if alert_at is None and running < threshold:
-                    alert_at = iso
+                if simple_alert_at is None and running < threshold:
+                    simple_alert_at = iso
             return {
                 "starting_balance": current_balance,
                 "average_daily": avg_daily,
                 "threshold": threshold,
-                "alert_below_threshold_at": alert_at,
-                "points": points,
+                "alert_below_threshold_at": simple_alert_at,
+                "points": simple_points,
                 "model": "simple",
                 "lookback_days": lookback_days,
                 "residual_std": None,
@@ -398,7 +398,7 @@ class ReportingService:
         current = coerce_decimal(history[-1].net_worth)
 
         if len(monthly_points) < 2:
-            points = [
+            flat_points = [
                 {
                     "date": self._add_months(date.today(), idx).isoformat(),
                     "net_worth": current,
@@ -410,7 +410,7 @@ class ReportingService:
             return {
                 "current": current,
                 "cagr": None,
-                "points": points,
+                "points": flat_points,
                 "recommended_method": "flat",
                 "methods": None,
                 "insights": ["Not enough net worth history to project trends."],
@@ -616,7 +616,7 @@ class ReportingService:
                 rows = projection_methods.get(method)
                 if not rows or step_idx >= len(rows):
                     continue
-                total += weight * coerce_decimal(rows[step_idx]["net_worth"])
+                total += weight * coerce_decimal(cast(Decimal, rows[step_idx]["net_worth"]))
                 used += weight
             if used == 0:
                 return None
@@ -633,7 +633,9 @@ class ReportingService:
         else:
             rows = projection_methods.get(recommended_method or "", [])
             if rows:
-                point_values = [coerce_decimal(row["net_worth"]) for row in rows[:months]]
+                point_values = [
+                    coerce_decimal(cast(Decimal, row["net_worth"])) for row in rows[:months]
+                ]
 
         # Uncertainty bands based on residual std of the recommended method.
         residuals = []

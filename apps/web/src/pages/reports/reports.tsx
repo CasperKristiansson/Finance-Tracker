@@ -270,14 +270,11 @@ export const Reports: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const params = useParams<{ year?: string }>();
-  const routeMode: ReportMode = location.pathname.startsWith(
-    PageRoutes.reportsTotal,
-  )
-    ? "total"
-    : "yearly";
+  const isTotalRoute = location.pathname.startsWith(PageRoutes.reportsTotal);
+  const isYearlyRoute = location.pathname.startsWith(PageRoutes.reportsYearly);
+  const routeMode: ReportMode = isTotalRoute ? "total" : "yearly";
   const currentYear = new Date().getFullYear();
-  const year =
-    routeMode === "yearly" ? Number(params.year) || currentYear : currentYear;
+  const year = isYearlyRoute ? Number(params.year) || currentYear : currentYear;
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [overview, setOverview] = useState<YearlyOverviewResponse | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
@@ -322,11 +319,11 @@ export const Reports: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (routeMode !== "yearly") return;
+    if (!isYearlyRoute) return;
     const parsed = Number(params.year);
     if (Number.isFinite(parsed) && parsed > 1900 && parsed < 3000) return;
     navigate(`${PageRoutes.reportsYearly}/${currentYear}`, { replace: true });
-  }, [currentYear, navigate, params.year, routeMode]);
+  }, [currentYear, isYearlyRoute, navigate, params.year]);
 
   useEffect(() => {
     fetchAccounts();
@@ -335,7 +332,7 @@ export const Reports: React.FC = () => {
   useEffect(() => {
     const loadOverview = async () => {
       if (!token) return;
-      if (routeMode !== "yearly") return;
+      if (!isYearlyRoute) return;
       setOverviewLoading(true);
       try {
         const accountIds = selectedAccounts.length
@@ -356,12 +353,12 @@ export const Reports: React.FC = () => {
       }
     };
     void loadOverview();
-  }, [routeMode, selectedAccounts, token, year]);
+  }, [isYearlyRoute, selectedAccounts, token, year]);
 
   useEffect(() => {
     const loadPrevOverview = async () => {
       if (!token) return;
-      if (routeMode !== "yearly") return;
+      if (!isYearlyRoute) return;
       if (year <= 1900) {
         setPrevOverview(null);
         return;
@@ -388,12 +385,12 @@ export const Reports: React.FC = () => {
       }
     };
     void loadPrevOverview();
-  }, [routeMode, selectedAccounts, token, year]);
+  }, [isYearlyRoute, selectedAccounts, token, year]);
 
   useEffect(() => {
     const loadTotalOverview = async () => {
       if (!token) return;
-      if (routeMode !== "total") return;
+      if (!isTotalRoute) return;
       setTotalOverviewLoading(true);
       try {
         const accountIds = selectedAccounts.length
@@ -414,7 +411,7 @@ export const Reports: React.FC = () => {
       }
     };
     void loadTotalOverview();
-  }, [routeMode, selectedAccounts, token]);
+  }, [isTotalRoute, selectedAccounts, token]);
 
   const totalAllRange = useMemo(() => {
     if (!totalOverview) return null;

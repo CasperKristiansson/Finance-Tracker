@@ -1172,7 +1172,9 @@ export const netWorthProjectionResponseSchema = z.object({
   cagr: nullableMoney,
   points: z.array(netWorthProjectionPointSchema),
   recommended_method: nullableString,
-  methods: z.record(z.array(netWorthProjectionPointSchema)).optional(),
+  methods: z
+    .record(z.string(), z.array(netWorthProjectionPointSchema))
+    .optional(),
   insights: z.array(z.string()).optional(),
 });
 

@@ -17,13 +17,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -32,11 +25,14 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PageRoutes } from "@/data/routes";
-import { apiFetch } from "@/lib/apiClient";
-import { cn } from "@/lib/utils";
 import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useReportsApi } from "@/hooks/use-api";
-import type { CashflowForecastResponse, NetWorthProjectionResponse } from "@/types/api";
+import { apiFetch } from "@/lib/apiClient";
+import { cn } from "@/lib/utils";
+import type {
+  CashflowForecastResponse,
+  NetWorthProjectionResponse,
+} from "@/types/api";
 import {
   cashflowForecastResponseSchema,
   netWorthProjectionResponseSchema,
@@ -169,17 +165,13 @@ export const CashFlow: React.FC = () => {
       setCashflowForecast(response.data);
     } catch (error) {
       setCashflowForecast(null);
-      setCashflowError(error instanceof Error ? error.message : "Failed to load");
+      setCashflowError(
+        error instanceof Error ? error.message : "Failed to load",
+      );
     } finally {
       setCashflowLoading(false);
     }
-  }, [
-    forecastDays,
-    forecastModel,
-    lookbackDays,
-    selectedAccounts,
-    token,
-  ]);
+  }, [forecastDays, forecastModel, lookbackDays, selectedAccounts, token]);
 
   const loadNetWorthProjection = useCallback(async () => {
     if (!token) return;
@@ -198,7 +190,9 @@ export const CashFlow: React.FC = () => {
       setNetWorthProjection(response.data);
     } catch (error) {
       setNetWorthProjection(null);
-      setNetWorthError(error instanceof Error ? error.message : "Failed to load");
+      setNetWorthError(
+        error instanceof Error ? error.message : "Failed to load",
+      );
     } finally {
       setNetWorthLoading(false);
     }
@@ -257,7 +251,8 @@ export const CashFlow: React.FC = () => {
         date: point.date,
         balance,
         delta: point.delta === null ? undefined : coerceMoney(point.delta),
-        baseline: point.baseline === null ? undefined : coerceMoney(point.baseline),
+        baseline:
+          point.baseline === null ? undefined : coerceMoney(point.baseline),
         weekdayComponent:
           point.weekday_component === null
             ? undefined
@@ -296,7 +291,10 @@ export const CashFlow: React.FC = () => {
     const methods = netWorthProjection?.methods;
     if (!methods) return undefined;
     const entries = Object.entries(methods);
-    const result: Record<string, Array<{ date: string; netWorth: number }>> = {};
+    const result: Record<
+      string,
+      Array<{ date: string; netWorth: number }>
+    > = {};
     for (const [key, points] of entries) {
       result[key] = points.map((point) => ({
         date: point.date,
@@ -330,7 +328,10 @@ export const CashFlow: React.FC = () => {
     const current = coerceMoney(netWorthProjection.current);
     const twelve = netWorthSeries[11]?.netWorth;
     const threeYears = netWorthSeries[35]?.netWorth;
-    const cagr = netWorthProjection.cagr === null ? null : coerceMoney(netWorthProjection.cagr);
+    const cagr =
+      netWorthProjection.cagr === null
+        ? null
+        : coerceMoney(netWorthProjection.cagr);
     return {
       current,
       twelve,
@@ -364,46 +365,51 @@ export const CashFlow: React.FC = () => {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Select
-            value={String(forecastDays)}
-            onValueChange={(value) => setForecastDays(Number(value))}
-          >
-            <SelectTrigger className="h-9 w-[150px]">
-              <SelectValue placeholder="Horizon" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="30">30 days</SelectItem>
-              <SelectItem value="60">60 days</SelectItem>
-              <SelectItem value="90">90 days</SelectItem>
-              <SelectItem value="180">180 days</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={forecastModel}
-            onValueChange={(value) => setForecastModel(value as ForecastModel)}
-          >
-            <SelectTrigger className="h-9 w-[170px]">
-              <SelectValue placeholder="Model" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ensemble">Ensemble (recommended)</SelectItem>
-              <SelectItem value="seasonal">Seasonal</SelectItem>
-              <SelectItem value="simple">Simple</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={String(lookbackDays)}
-            onValueChange={(value) => setLookbackDays(Number(value))}
-          >
-            <SelectTrigger className="h-9 w-[160px]">
-              <SelectValue placeholder="Lookback" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="90">Lookback 90d</SelectItem>
-              <SelectItem value="180">Lookback 180d</SelectItem>
-              <SelectItem value="365">Lookback 365d</SelectItem>
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
+            {[30, 60, 90, 180].map((days) => (
+              <Button
+                key={days}
+                size="sm"
+                variant={forecastDays === days ? "default" : "ghost"}
+                className="h-8 px-2.5 text-xs"
+                onClick={() => setForecastDays(days)}
+              >
+                {days}d
+              </Button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
+            {(
+              [
+                ["ensemble", "Ensemble"],
+                ["seasonal", "Seasonal"],
+                ["simple", "Simple"],
+              ] as const
+            ).map(([key, label]) => (
+              <Button
+                key={key}
+                size="sm"
+                variant={forecastModel === key ? "default" : "ghost"}
+                className="h-8 px-2.5 text-xs"
+                onClick={() => setForecastModel(key)}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
+            {[90, 180, 365].map((days) => (
+              <Button
+                key={days}
+                size="sm"
+                variant={lookbackDays === days ? "default" : "ghost"}
+                className="h-8 px-2.5 text-xs"
+                onClick={() => setLookbackDays(days)}
+              >
+                {days}d
+              </Button>
+            ))}
+          </div>
           <Button
             size="sm"
             variant="outline"
@@ -532,7 +538,10 @@ export const CashFlow: React.FC = () => {
                     </span>
                   </span>
                   {cashflowSummary.alertAt ? (
-                    <Badge variant="destructive">
+                    <Badge
+                      variant="outline"
+                      className="border-rose-200 bg-rose-50 text-rose-700"
+                    >
                       Below 0 on {cashflowSummary.alertAt}
                     </Badge>
                   ) : (
@@ -661,7 +670,9 @@ export const CashFlow: React.FC = () => {
                             if (name === "balance") {
                               return (
                                 <div className="flex w-full items-center justify-between gap-2">
-                                  <span className="text-slate-500">Balance</span>
+                                  <span className="text-slate-500">
+                                    Balance
+                                  </span>
                                   <span className="font-medium text-slate-900">
                                     {formatSek(Number(value))}
                                   </span>
@@ -671,11 +682,14 @@ export const CashFlow: React.FC = () => {
                             return null;
                           }}
                           labelFormatter={(label) =>
-                            new Date(String(label)).toLocaleDateString("sv-SE", {
-                              weekday: "short",
-                              month: "short",
-                              day: "2-digit",
-                            })
+                            new Date(String(label)).toLocaleDateString(
+                              "sv-SE",
+                              {
+                                weekday: "short",
+                                month: "short",
+                                day: "2-digit",
+                              },
+                            )
                           }
                         />
                       }
@@ -877,10 +891,13 @@ export const CashFlow: React.FC = () => {
                             return null;
                           }}
                           labelFormatter={(label) =>
-                            new Date(String(label)).toLocaleDateString("sv-SE", {
-                              year: "numeric",
-                              month: "long",
-                            })
+                            new Date(String(label)).toLocaleDateString(
+                              "sv-SE",
+                              {
+                                year: "numeric",
+                                month: "long",
+                              },
+                            )
                           }
                         />
                       }
@@ -1060,7 +1077,10 @@ export const CashFlow: React.FC = () => {
         </CardContent>
       </Card>
 
-      <Sheet open={Boolean(drilldown)} onOpenChange={(open) => !open && setDrilldown(null)}>
+      <Sheet
+        open={Boolean(drilldown)}
+        onOpenChange={(open) => !open && setDrilldown(null)}
+      >
         <SheetContent side="right" className="bg-white sm:max-w-lg">
           {drilldown?.kind === "cashflow" ? (
             <SheetHeader>

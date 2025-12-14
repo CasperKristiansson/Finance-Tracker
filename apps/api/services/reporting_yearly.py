@@ -353,13 +353,16 @@ def build_yearly_overview_enhancements(
                 withdrawals += abs(coerce_decimal(row.amount))
 
         monthly_values = [Decimal("0") for _ in range(12)]
-        snapshot_rows = repository.list_investment_snapshots_until(end=as_of_date)
+        investment_snapshot_rows = repository.list_investment_snapshots_until(end=as_of_date)
         snap_idx = 0
         latest = Decimal("0")
         for month_idx, month_end in enumerate(month_end_dates(year)):
             target = min(month_end, as_of_date)
-            while snap_idx < len(snapshot_rows) and snapshot_rows[snap_idx][0] <= target:
-                latest = snapshot_rows[snap_idx][1]
+            while (
+                snap_idx < len(investment_snapshot_rows)
+                and investment_snapshot_rows[snap_idx][0] <= target
+            ):
+                latest = investment_snapshot_rows[snap_idx][1]
                 snap_idx += 1
             monthly_values[month_idx] = latest
 
