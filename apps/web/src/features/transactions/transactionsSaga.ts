@@ -56,7 +56,8 @@ const serializeAccounts = (ids?: string[]) => {
 function* handleFetchTransactions(
   action: ReturnType<typeof FetchTransactions>,
 ) {
-  const filters = action.payload ?? {};
+  const stored: TransactionFilters = yield select(selectTransactionFilters);
+  const filters = { ...stored, ...(action.payload ?? {}) };
   yield put(setTransactionsLoading(true));
   if (action.payload) {
     yield put(setTransactionFilters(action.payload));
@@ -81,6 +82,8 @@ function* handleFetchTransactions(
       ...(filters.minAmount ? { min_amount: filters.minAmount } : {}),
       ...(filters.maxAmount ? { max_amount: filters.maxAmount } : {}),
       ...(filters.search ? { search: filters.search } : {}),
+      ...(filters.sortBy ? { sort_by: filters.sortBy } : {}),
+      ...(filters.sortDir ? { sort_dir: filters.sortDir } : {}),
       limit,
       offset,
     };

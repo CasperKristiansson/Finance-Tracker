@@ -3,11 +3,14 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowDownWideNarrow,
   ArrowUpWideNarrow,
+  Calendar,
   Eye,
   Filter,
   Loader2,
   MoreHorizontal,
+  Pencil,
   Plus,
+  Tag,
   AlertCircle,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -24,6 +27,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   useAccountsApi,
   useCategoriesApi,
@@ -61,6 +71,14 @@ const columns: ColumnConfig[] = [
   { key: "notes", label: "Notes" },
 ];
 
+const sortableColumnKey: Partial<Record<ColumnKey, SortKey>> = {
+  date: "date",
+  type: "type",
+  description: "description",
+  category: "category",
+  amount: "amount",
+};
+
 const columnWidthClass: Partial<Record<ColumnKey, string>> = {
   date: "w-40",
   type: "w-28",
@@ -86,6 +104,31 @@ const formatDate = (iso?: string) =>
         year: "numeric",
       })
     : "—";
+
+const normalizeMerchantKey = (value?: string | null) =>
+  (value ?? "")
+    .toLowerCase()
+    .replace(/\d+/g, " ")
+    .replace(/[^\p{L}\s]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const transactionAmountHint = (tx: {
+  transaction_type: TransactionType;
+  legs: Array<{ amount: string }>;
+}) => {
+  const largest = tx.legs.reduce<null | number>((best, leg) => {
+    const numeric = Number(leg.amount);
+    if (!Number.isFinite(numeric)) return best;
+    if (best === null) return numeric;
+    return Math.abs(numeric) > Math.abs(best) ? numeric : best;
+  }, null);
+  const value = largest ?? 0;
+  if (tx.transaction_type === TransactionType.TRANSFER) return Math.abs(value);
+  if (tx.transaction_type === TransactionType.INCOME) return Math.abs(value);
+  if (tx.transaction_type === TransactionType.EXPENSE) return -Math.abs(value);
+  return value;
+};
 
 const typeTone: Record<TransactionType, string> = {
   [TransactionType.INCOME]: "bg-emerald-100 text-emerald-800",
@@ -180,6 +223,10 @@ export const Transactions: React.FC = () => {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [modalOpen, setModalOpen] = useState(false);
+  const [modalTransaction, setModalTransaction] = useState<
+    (typeof items)[number] | null
+  >(null);
+  const [detailsId, setDetailsId] = useState<string | null>(null);
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const needsReconcile = useMemo(
     () => accounts.some((acc) => acc.needs_reconciliation),
@@ -199,6 +246,8 @@ export const Transactions: React.FC = () => {
       limit: pagination.limit,
       offset: 0,
       search: urlSearch || undefined,
+      sortBy: "occurred_at",
+      sortDir: sortAsc ? "asc" : "desc",
     });
     fetchAccounts({});
     fetchCategories();
@@ -207,6 +256,17 @@ export const Transactions: React.FC = () => {
 
   useEffect(() => {
     const debounce = setTimeout(() => {
+      const sortBy =
+        sortKey === "date"
+          ? "occurred_at"
+          : sortKey === "amount"
+            ? "amount"
+            : sortKey === "description"
+              ? "description"
+              : sortKey === "category"
+                ? "category"
+                : "type";
+
       fetchTransactions({
         limit: pagination.limit,
         offset: 0,
@@ -217,6 +277,8 @@ export const Transactions: React.FC = () => {
         maxAmount: maxAmount || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
+        sortBy,
+        sortDir: sortAsc ? "asc" : "desc",
       });
     }, 250);
     return () => clearTimeout(debounce);
@@ -229,6 +291,8 @@ export const Transactions: React.FC = () => {
     maxAmount,
     startDate,
     endDate,
+    sortKey,
+    sortAsc,
   ]);
 
   const accountLookup = useMemo(
@@ -246,53 +310,35 @@ export const Transactions: React.FC = () => {
     [categories],
   );
 
-  const filtered = useMemo(() => {
-    return items
-      .filter((tx) => {
-        const categoryMatch = categoryFilter
-          ? tx.category_id === categoryFilter
-          : true;
-        const accountMatch =
-          accountFilter === ""
-            ? true
-            : tx.legs.some((leg) => leg.account_id === accountFilter);
-        return categoryMatch && accountMatch;
-      })
-      .sort((a, b) => {
-        const direction = sortAsc ? 1 : -1;
-        if (sortKey === "date") {
-          return (
-            (new Date(a.occurred_at).getTime() -
-              new Date(b.occurred_at).getTime()) *
-            direction
-          );
-        }
-        if (sortKey === "amount") {
-          const aSum = a.legs.reduce((sum, leg) => sum + Number(leg.amount), 0);
-          const bSum = b.legs.reduce((sum, leg) => sum + Number(leg.amount), 0);
-          return (aSum - bSum) * direction;
-        }
-        if (sortKey === "type") {
-          return (
-            a.transaction_type.localeCompare(b.transaction_type) * direction
-          );
-        }
-        if (sortKey === "category") {
-          return (
-            (categoryLookup.get(a.category_id || "") || "").localeCompare(
-              categoryLookup.get(b.category_id || "") || "",
-            ) * direction
-          );
-        }
-        return (
-          (a.description || "").localeCompare(b.description || "") * direction
-        );
-      });
-  }, [items, categoryFilter, accountFilter, sortKey, sortAsc, categoryLookup]);
+  const selectedTransaction = useMemo(
+    () =>
+      detailsId ? (items.find((tx) => tx.id === detailsId) ?? null) : null,
+    [detailsId, items],
+  );
+
+  const openCreateModal = () => {
+    setModalTransaction(null);
+    setModalOpen(true);
+  };
+
+  const openEditModal = (tx: (typeof items)[number]) => {
+    setModalTransaction(tx);
+    setModalOpen(true);
+  };
+
+  const closeDetails = () => setDetailsId(null);
+
+  const openDetails = (id: string) => setDetailsId(id);
+
+  useEffect(() => {
+    if (detailsId && !selectedTransaction) setDetailsId(null);
+  }, [detailsId, selectedTransaction]);
+
+  const rows = items;
 
   const parentRef = useRef<HTMLDivElement | null>(null);
   const rowVirtualizer = useVirtualizer({
-    count: filtered.length,
+    count: rows.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 48,
     overscan: 8,
@@ -362,11 +408,7 @@ export const Transactions: React.FC = () => {
           >
             <RefreshIcon className="h-4 w-4" /> Refresh
           </Button>
-          <Button
-            size="sm"
-            className="gap-2"
-            onClick={() => setModalOpen(true)}
-          >
+          <Button size="sm" className="gap-2" onClick={openCreateModal}>
             <Plus className="h-4 w-4" /> Add transaction
           </Button>
         </div>
@@ -510,20 +552,26 @@ export const Transactions: React.FC = () => {
                 >
                   {visibleColumns.map((col) => (
                     <th key={col.key} className={headerCellClass(col)}>
-                      <button
-                        type="button"
-                        className="flex items-center gap-1 text-slate-700"
-                        onClick={() => toggleSort(col.key as SortKey)}
-                      >
-                        {col.label}
-                        {sortKey === col.key ? (
-                          sortAsc ? (
-                            <ArrowUpWideNarrow className="h-3 w-3" />
-                          ) : (
-                            <ArrowDownWideNarrow className="h-3 w-3" />
-                          )
-                        ) : null}
-                      </button>
+                      {sortableColumnKey[col.key] ? (
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 text-slate-700"
+                          onClick={() =>
+                            toggleSort(sortableColumnKey[col.key] as SortKey)
+                          }
+                        >
+                          {col.label}
+                          {sortKey === sortableColumnKey[col.key] ? (
+                            sortAsc ? (
+                              <ArrowUpWideNarrow className="h-3 w-3" />
+                            ) : (
+                              <ArrowDownWideNarrow className="h-3 w-3" />
+                            )
+                          ) : null}
+                        </button>
+                      ) : (
+                        <span className="text-slate-700">{col.label}</span>
+                      )}
                     </th>
                   ))}
                 </tr>
@@ -537,7 +585,7 @@ export const Transactions: React.FC = () => {
                 }}
               >
                 {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                  const row = filtered[virtualRow.index];
+                  const row = rows[virtualRow.index];
                   if (!row) return null;
                   const knownLegs = row.legs.filter((leg) =>
                     Boolean(accountLookup[leg.account_id]),
@@ -601,7 +649,8 @@ export const Transactions: React.FC = () => {
                     <tr
                       key={row.id}
                       data-index={virtualRow.index}
-                      className="border-b hover:bg-slate-50"
+                      className="cursor-pointer border-b hover:bg-slate-50"
+                      onClick={() => openDetails(row.id)}
                       style={{
                         position: "absolute",
                         top: 0,
@@ -734,7 +783,248 @@ export const Transactions: React.FC = () => {
           </div>
         </CardContent>
       </Card>
-      <TransactionModal open={modalOpen} onClose={() => setModalOpen(false)} />
+      <Sheet
+        open={Boolean(detailsId)}
+        onOpenChange={(open) => {
+          if (!open) closeDetails();
+        }}
+      >
+        <SheetContent side="right" className="bg-white sm:max-w-lg">
+          {selectedTransaction ? (
+            <>
+              <SheetHeader className="border-b border-slate-100">
+                <SheetTitle className="truncate text-lg">
+                  {selectedTransaction.description || "(No description)"}
+                </SheetTitle>
+                <SheetDescription className="mt-1 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {formatDate(selectedTransaction.occurred_at)}
+                  </span>
+                  {selectedTransaction.transaction_type !==
+                  TransactionType.TRANSFER ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                      <Tag className="h-3.5 w-3.5" />
+                      {selectedTransaction.category_id
+                        ? categoryLookup.get(selectedTransaction.category_id) ||
+                          "Assigned"
+                        : "Unassigned"}
+                    </span>
+                  ) : null}
+                </SheetDescription>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => {
+                      closeDetails();
+                      openEditModal(selectedTransaction);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </Button>
+                </div>
+              </SheetHeader>
+
+              <div className="flex-1 space-y-4 overflow-y-auto p-4">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg border border-slate-100 bg-white p-3">
+                    <div className="text-xs text-slate-500">Type</div>
+                    <div className="mt-1">
+                      {typeBadge(selectedTransaction.transaction_type)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-slate-100 bg-white p-3 text-right">
+                    <div className="text-xs text-slate-500">Amount (hint)</div>
+                    <div className="mt-1 text-sm font-semibold text-slate-900 tabular-nums">
+                      {formatCurrency(
+                        transactionAmountHint(selectedTransaction),
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-slate-100 bg-white p-3">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <div className="text-xs text-slate-500">Occurred</div>
+                      <div className="mt-1 font-medium text-slate-900">
+                        {formatDate(selectedTransaction.occurred_at)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-xs text-slate-500">Posted</div>
+                      <div className="mt-1 font-medium text-slate-900">
+                        {formatDate(selectedTransaction.posted_at)}
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <div className="text-xs text-slate-500">ID</div>
+                      <div className="mt-1 truncate font-mono text-xs text-slate-700">
+                        {selectedTransaction.id}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {selectedTransaction.notes ? (
+                  <div className="rounded-lg border border-slate-100 bg-white p-3">
+                    <div className="text-xs text-slate-500">Notes</div>
+                    <div className="mt-1 text-sm whitespace-pre-wrap text-slate-800">
+                      {selectedTransaction.notes}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="rounded-lg border border-slate-100 bg-white p-3">
+                  <div className="text-xs text-slate-500">Legs</div>
+                  <div className="mt-2 space-y-1.5">
+                    {selectedTransaction.legs.map((leg) => {
+                      const amt = Number(leg.amount);
+                      const tone =
+                        amt > 0
+                          ? "text-emerald-700"
+                          : amt < 0
+                            ? "text-rose-700"
+                            : "text-slate-700";
+                      return (
+                        <div
+                          key={leg.id}
+                          className="flex items-center justify-between gap-3 rounded-md border border-slate-100 px-3 py-2"
+                        >
+                          <div className="min-w-0 truncate text-sm text-slate-800">
+                            {accountLookup[leg.account_id] ?? leg.account_id}
+                          </div>
+                          <div
+                            className={cn(
+                              "shrink-0 text-sm font-semibold tabular-nums",
+                              tone,
+                            )}
+                          >
+                            {formatCurrency(amt)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {(() => {
+                  const merchantKey = normalizeMerchantKey(
+                    selectedTransaction.description,
+                  );
+                  const similarByMerchant = merchantKey
+                    ? items
+                        .filter((tx) => tx.id !== selectedTransaction.id)
+                        .filter((tx) => {
+                          const key = normalizeMerchantKey(tx.description);
+                          if (!key) return false;
+                          return (
+                            key === merchantKey ||
+                            key.includes(merchantKey) ||
+                            merchantKey.includes(key)
+                          );
+                        })
+                        .sort(
+                          (a, b) =>
+                            new Date(b.occurred_at).getTime() -
+                            new Date(a.occurred_at).getTime(),
+                        )
+                        .slice(0, 8)
+                    : [];
+
+                  const similarByCategory =
+                    selectedTransaction.category_id &&
+                    selectedTransaction.transaction_type !==
+                      TransactionType.TRANSFER
+                      ? items
+                          .filter((tx) => tx.id !== selectedTransaction.id)
+                          .filter(
+                            (tx) =>
+                              tx.category_id ===
+                              selectedTransaction.category_id,
+                          )
+                          .sort(
+                            (a, b) =>
+                              new Date(b.occurred_at).getTime() -
+                              new Date(a.occurred_at).getTime(),
+                          )
+                          .slice(0, 8)
+                      : [];
+
+                  const renderSimilar = (tx: (typeof items)[number]) => (
+                    <button
+                      key={tx.id}
+                      type="button"
+                      className="flex w-full items-start justify-between gap-3 rounded-md border border-slate-100 px-3 py-2 text-left hover:bg-slate-50"
+                      onClick={() => openDetails(tx.id)}
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-semibold text-slate-900">
+                          {tx.description || "(No description)"}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {formatDate(tx.occurred_at)} • {tx.transaction_type}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-sm font-semibold text-slate-900 tabular-nums">
+                        {formatCurrency(transactionAmountHint(tx))}
+                      </div>
+                    </button>
+                  );
+
+                  return (
+                    <div className="grid gap-4">
+                      <div className="rounded-lg border border-slate-100 bg-white p-3">
+                        <div className="mb-2 text-sm font-semibold text-slate-900">
+                          Similar merchant
+                        </div>
+                        {similarByMerchant.length ? (
+                          <div className="space-y-2">
+                            {similarByMerchant.map(renderSimilar)}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-slate-500">
+                            No similar transactions found in the current list.
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="rounded-lg border border-slate-100 bg-white p-3">
+                        <div className="mb-2 text-sm font-semibold text-slate-900">
+                          Same category
+                        </div>
+                        {similarByCategory.length ? (
+                          <div className="space-y-2">
+                            {similarByCategory.map(renderSimilar)}
+                          </div>
+                        ) : (
+                          <div className="text-sm text-slate-500">
+                            No same-category transactions found in the current
+                            list.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            </>
+          ) : (
+            <div className="p-4 text-sm text-slate-500">
+              Select a transaction to see details.
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      <TransactionModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        transaction={modalTransaction}
+      />
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
     </MotionPage>
   );

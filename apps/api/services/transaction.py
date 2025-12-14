@@ -48,6 +48,8 @@ class TransactionService:
         min_amount: Optional[Decimal] = None,
         max_amount: Optional[Decimal] = None,
         search: Optional[str] = None,
+        sort_by: str = "occurred_at",
+        sort_dir: str = "desc",
         limit: Optional[int] = None,
         offset: Optional[int] = None,
     ) -> List[Transaction]:
@@ -61,6 +63,8 @@ class TransactionService:
             min_amount=min_amount,
             max_amount=max_amount,
             search=search,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
             limit=limit,
             offset=offset,
         )

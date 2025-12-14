@@ -57,6 +57,8 @@ def list_transactions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             min_amount=query.min_amount,
             max_amount=query.max_amount,
             search=query.search,
+            sort_by=query.sort_by,
+            sort_dir=query.sort_dir,
             limit=query.limit,
             offset=query.offset,
         )

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
@@ -84,6 +84,10 @@ class TransactionListQuery(BaseModel):
     min_amount: Optional[Decimal] = Field(default=None, alias="min_amount")
     max_amount: Optional[Decimal] = Field(default=None, alias="max_amount")
     search: Optional[str] = None
+    sort_by: Literal["occurred_at", "amount", "description", "category", "type"] = Field(
+        default="occurred_at", alias="sort_by"
+    )
+    sort_dir: Literal["asc", "desc"] = Field(default="desc", alias="sort_dir")
     limit: int = Field(default=50, ge=1, le=200)
     offset: int = Field(default=0, ge=0)
 

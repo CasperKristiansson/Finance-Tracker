@@ -14,7 +14,13 @@ export type SankeyCategoryItem = {
 type SankeyNodePayload = {
   name: string;
   color: string;
-  kind: "incomeCategory" | "expenseCategory" | "income" | "expense" | "saved";
+  kind:
+    | "incomeCategory"
+    | "expenseCategory"
+    | "income"
+    | "expenses"
+    | "saved"
+    | "buffer";
 };
 
 type SankeyLinkDatum = { source: number; target: number; value: number };
@@ -30,24 +36,30 @@ type SankeyNodeRendererProps = {
   width: number;
   height: number;
   index: number;
-  depth: number;
-  payload: SankeyNodePayload;
-  value: number;
+  payload: SankeyNodePayload & { value: number };
 };
 
 type SankeyLinkRendererProps = {
-  linkPath: string;
+  sourceX: number;
+  sourceY: number;
+  sourceControlX: number;
+  targetX: number;
+  targetY: number;
+  targetControlX: number;
   linkWidth: number;
   source: { payload?: SankeyNodePayload } | number;
   target: { payload?: SankeyNodePayload } | number;
 };
 
-const formatCurrency = (value: number) =>
-  value.toLocaleString("sv-SE", {
+const formatCurrency = (value: unknown) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "—";
+  return numeric.toLocaleString("sv-SE", {
     style: "currency",
     currency: "SEK",
     maximumFractionDigits: 0,
   });
+};
 
 const clampPositive = (value: number) =>
   Number.isFinite(value) ? Math.max(0, value) : 0;
@@ -127,24 +139,30 @@ const buildMoneyFlowSankey = ({
     color: "#10b981",
     kind: "income",
   });
-  const expenseNode = addNode({
-    name: "Expenses",
-    color: "#ef4444",
-    kind: "expense",
-  });
+
+  const expensesNode =
+    expenseTotal > 0
+      ? addNode({
+          name: "Expenses",
+          color: "#ef4444",
+          kind: "expenses",
+        })
+      : null;
 
   const savedNode =
-    net >= 0
-      ? addNode({
-          name: "Saved",
-          color: "#0ea5e9",
-          kind: "saved",
-        })
-      : addNode({
-          name: "Buffer / debt",
-          color: "#f97316",
-          kind: "saved",
-        });
+    net === 0
+      ? null
+      : net > 0
+        ? addNode({
+            name: "Saved",
+            color: "#0ea5e9",
+            kind: "saved",
+          })
+        : addNode({
+            name: "Buffer / debt",
+            color: "#f97316",
+            kind: "buffer",
+          });
 
   incomeBuckets.forEach((bucket) => {
     const sourceIdx = addNode({
@@ -155,40 +173,45 @@ const buildMoneyFlowSankey = ({
     links.push({ source: sourceIdx, target: incomeNode, value: bucket.value });
   });
 
-  if (net >= 0) {
-    if (expenseTotal > 0) {
+  if (expensesNode !== null) {
+    if (net >= 0) {
       links.push({
         source: incomeNode,
-        target: expenseNode,
+        target: expensesNode,
         value: expenseTotal,
       });
-    }
-    if (net > 0) {
-      links.push({ source: incomeNode, target: savedNode, value: net });
-    }
-  } else {
-    if (incomeTotal > 0) {
+    } else {
       links.push({
         source: incomeNode,
-        target: expenseNode,
+        target: expensesNode,
         value: incomeTotal,
       });
+      if (savedNode !== null) {
+        links.push({
+          source: savedNode,
+          target: expensesNode,
+          value: Math.abs(net),
+        });
+      }
     }
-    links.push({
-      source: savedNode,
-      target: expenseNode,
-      value: Math.abs(net),
+
+    expenseBuckets.forEach((bucket) => {
+      const targetIdx = addNode({
+        name: bucket.name,
+        color: bucket.color,
+        kind: "expenseCategory",
+      });
+      links.push({
+        source: expensesNode,
+        target: targetIdx,
+        value: bucket.value,
+      });
     });
   }
 
-  expenseBuckets.forEach((bucket) => {
-    const targetIdx = addNode({
-      name: bucket.name,
-      color: bucket.color,
-      kind: "expenseCategory",
-    });
-    links.push({ source: expenseNode, target: targetIdx, value: bucket.value });
-  });
+  if (savedNode !== null && net > 0) {
+    links.push({ source: incomeNode, target: savedNode, value: net });
+  }
 
   return {
     data: { nodes, links },
@@ -198,18 +221,80 @@ const buildMoneyFlowSankey = ({
   };
 };
 
+type SankeyTooltipItem = {
+  name?: unknown;
+  value?: unknown;
+  payload?: unknown;
+};
+
+const formatPercent = (value: number) => {
+  if (!Number.isFinite(value)) return null;
+  return new Intl.NumberFormat("sv-SE", {
+    style: "percent",
+    maximumFractionDigits: value < 0.1 ? 1 : 0,
+  }).format(value);
+};
+
 const SankeyTooltip: React.FC<{
+  incomeTotal: number;
+  expenseTotal: number;
   active?: boolean;
-  payload?: Array<{ name?: unknown; value?: unknown }>;
-}> = ({ active, payload }) => {
+  payload?: SankeyTooltipItem[];
+}> = ({ active, payload, incomeTotal, expenseTotal }) => {
   if (!active || !payload?.length) return null;
-  const item = payload[0];
+  const item = payload[0] ?? {};
   const name = typeof item?.name === "string" ? item.name : "Flow";
   const value = clampPositive(Number(item?.value ?? 0));
+  const element = item.payload as
+    | { payload?: unknown; sourceX?: unknown; targetX?: unknown }
+    | undefined;
+  const elementPayload =
+    element && "payload" in element ? element.payload : null;
+
+  const isLink =
+    !!element &&
+    Number.isFinite(Number((element as { sourceX?: unknown }).sourceX)) &&
+    Number.isFinite(Number((element as { targetX?: unknown }).targetX));
+
+  const node =
+    !isLink && elementPayload && typeof elementPayload === "object"
+      ? (elementPayload as SankeyNodePayload & { value?: unknown })
+      : null;
+
+  const link =
+    isLink && elementPayload && typeof elementPayload === "object"
+      ? (elementPayload as {
+          source?: unknown;
+          target?: unknown;
+          value?: unknown;
+        })
+      : null;
+
+  const shareText = (() => {
+    if (link?.source && typeof link.source === "object") {
+      const sourceValue = clampPositive(
+        Number((link.source as { value?: unknown }).value),
+      );
+      return sourceValue > 0 ? formatPercent(value / sourceValue) : null;
+    }
+
+    const kind = node?.kind;
+    if (!kind) return null;
+    if (kind === "expenseCategory" || kind === "expenses") {
+      return expenseTotal > 0 ? formatPercent(value / expenseTotal) : null;
+    }
+    return incomeTotal > 0 ? formatPercent(value / incomeTotal) : null;
+  })();
+
   return (
     <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
       <p className="font-semibold text-slate-900">{name}</p>
-      <p className="text-slate-600">{formatCurrency(value)}</p>
+      <p className="text-slate-600">
+        {formatCurrency(node?.value ?? link?.value ?? value)}
+      </p>
+      {shareText ? (
+        <p className="text-[11px] text-slate-500">{shareText}</p>
+      ) : null}
     </div>
   );
 };
@@ -247,7 +332,7 @@ export const MoneyFlowSankeyCard: React.FC<{
         </CardTitle>
         <p className="text-xs text-slate-500">{description}</p>
       </CardHeader>
-      <CardContent className="flex h-[420px] flex-col gap-3">
+      <CardContent className="flex h-[750px] flex-col gap-3">
         {loading ? (
           <Skeleton className="h-full w-full" />
         ) : !result ? (
@@ -292,91 +377,194 @@ export const MoneyFlowSankeyCard: React.FC<{
               <ResponsiveContainer width="100%" height="100%">
                 <Sankey
                   data={result.data}
-                  iterations={48}
-                  nodeWidth={12}
+                  iterations={64}
+                  nodeWidth={14}
                   nodePadding={22}
-                  linkCurvature={0.6}
+                  linkCurvature={0.55}
+                  sort={false}
+                  margin={{ top: 12, right: 40, bottom: 12, left: 40 }}
                   node={(props: SankeyNodeRendererProps) => {
-                    const { x, y, width, height, payload, depth, value } =
-                      props;
-                    const rx = 4;
-                    const fill = payload.color;
-                    const isLeft = depth === 0;
-                    const isRight =
-                      depth > 0 &&
-                      (payload.kind === "expenseCategory" ||
-                        payload.kind === "saved");
-                    const labelX = isLeft
-                      ? x + width + 8
-                      : isRight
-                        ? x - 8
-                        : x + width / 2;
-                    const anchor = isLeft
-                      ? "start"
-                      : isRight
-                        ? "end"
-                        : "middle";
-                    const label = payload.name;
+                    const { x, y, width, height, payload } = props;
+                    const isExpenseCategory =
+                      payload.kind === "expenseCategory";
+                    const showLabel = isExpenseCategory ? true : height >= 16;
+                    const label =
+                      payload.name.length > 18
+                        ? `${payload.name.slice(0, 17)}…`
+                        : payload.name;
+                    const placement =
+                      payload.kind === "incomeCategory"
+                        ? "right"
+                        : payload.kind === "income"
+                          ? "center"
+                          : "left";
+                    const labelX =
+                      placement === "right"
+                        ? x + width + 8
+                        : placement === "left"
+                          ? x - 10
+                          : x + width / 2;
+                    const anchor =
+                      placement === "right"
+                        ? "start"
+                        : placement === "left"
+                          ? "end"
+                          : "middle";
                     const showValue =
                       payload.kind === "income" ||
-                      payload.kind === "expense" ||
-                      payload.kind === "saved";
+                      payload.kind === "expenses" ||
+                      payload.kind === "saved" ||
+                      payload.kind === "buffer";
+                    const showValueText =
+                      showValue &&
+                      (isExpenseCategory ? height >= 28 : height >= 18);
+                    const gradientId = `sankey-node-${payload.kind}-${props.index}`;
 
                     return (
                       <g>
+                        <defs>
+                          <linearGradient
+                            id={gradientId}
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="0%"
+                              stopColor={payload.color}
+                              stopOpacity={0.95}
+                            />
+                            <stop
+                              offset="100%"
+                              stopColor={payload.color}
+                              stopOpacity={0.65}
+                            />
+                          </linearGradient>
+                        </defs>
                         <rect
                           x={x}
                           y={y}
                           width={width}
                           height={height}
-                          rx={rx}
-                          fill={fill}
-                          fillOpacity={0.85}
+                          rx={4}
+                          fill={`url(#${gradientId})`}
                           stroke="rgba(15,23,42,0.18)"
                         />
-                        <text
-                          x={labelX}
-                          y={y + height / 2}
-                          textAnchor={anchor}
-                          dominantBaseline="middle"
-                          fill="#0f172a"
-                          fontSize={12}
-                        >
-                          {label}
-                        </text>
-                        {showValue ? (
-                          <text
-                            x={labelX}
-                            y={y + height / 2 + 16}
-                            textAnchor={anchor}
-                            dominantBaseline="middle"
-                            fill="#475569"
-                            fontSize={11}
-                          >
-                            {formatCurrency(value)}
-                          </text>
+                        {showLabel ? (
+                          <>
+                            <text
+                              x={labelX}
+                              y={y + height / 2}
+                              textAnchor={anchor}
+                              dominantBaseline="middle"
+                              fill="#0f172a"
+                              fontSize={
+                                payload.kind === "expenseCategory" ? 11 : 12
+                              }
+                              paintOrder={
+                                payload.kind === "expenseCategory"
+                                  ? "stroke"
+                                  : undefined
+                              }
+                              stroke={
+                                payload.kind === "expenseCategory"
+                                  ? "rgba(255,255,255,0.9)"
+                                  : undefined
+                              }
+                              strokeWidth={
+                                payload.kind === "expenseCategory"
+                                  ? 4
+                                  : undefined
+                              }
+                            >
+                              {label}
+                            </text>
+                            {showValueText ? (
+                              <text
+                                x={labelX}
+                                y={y + height / 2 + 16}
+                                textAnchor={anchor}
+                                dominantBaseline="middle"
+                                fill="#475569"
+                                fontSize={11}
+                              >
+                                {formatCurrency(payload.value)}
+                              </text>
+                            ) : null}
+                          </>
                         ) : null}
                       </g>
                     );
                   }}
                   link={(props: SankeyLinkRendererProps) => {
-                    const { linkPath, linkWidth, source } = props;
-                    const sourceColor =
-                      typeof source === "object" && source?.payload?.color
-                        ? source.payload.color
-                        : "#94a3b8";
+                    const {
+                      sourceX,
+                      sourceY,
+                      sourceControlX,
+                      targetX,
+                      targetY,
+                      targetControlX,
+                      linkWidth,
+                      source,
+                      target,
+                    } = props;
+                    const sourcePayload =
+                      typeof source === "object" ? source?.payload : undefined;
+                    const targetPayload =
+                      typeof target === "object" ? target?.payload : undefined;
+                    const { stroke, opacity } = (() => {
+                      if (sourcePayload?.kind === "incomeCategory") {
+                        return { stroke: "#10b981", opacity: 0.14 };
+                      }
+                      if (
+                        sourcePayload?.kind === "income" &&
+                        targetPayload?.kind === "expenses"
+                      ) {
+                        return { stroke: "#94a3b8", opacity: 0.22 };
+                      }
+                      if (
+                        sourcePayload?.kind === "income" &&
+                        targetPayload?.kind === "saved"
+                      ) {
+                        return { stroke: "#0ea5e9", opacity: 0.22 };
+                      }
+                      if (
+                        sourcePayload?.kind === "buffer" &&
+                        targetPayload?.kind === "expenses"
+                      ) {
+                        return { stroke: "#f97316", opacity: 0.22 };
+                      }
+                      if (
+                        sourcePayload?.kind === "expenses" &&
+                        targetPayload?.kind === "expenseCategory"
+                      ) {
+                        return { stroke: "#ef4444", opacity: 0.16 };
+                      }
+                      return { stroke: "#cbd5e1", opacity: 0.2 };
+                    })();
+                    const d = `M${sourceX},${sourceY} C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`;
                     return (
                       <path
-                        d={linkPath}
+                        d={d}
                         fill="none"
-                        stroke={sourceColor}
-                        strokeOpacity={0.18}
-                        strokeWidth={Math.max(1, linkWidth)}
+                        stroke={stroke}
+                        strokeOpacity={opacity}
+                        strokeWidth={Math.max(1, Number(linkWidth) || 0)}
+                        strokeLinecap="round"
                       />
                     );
                   }}
                 >
-                  <Tooltip content={<SankeyTooltip />} />
+                  <Tooltip
+                    cursor={false}
+                    content={
+                      <SankeyTooltip
+                        incomeTotal={result.income}
+                        expenseTotal={result.expense}
+                      />
+                    }
+                  />
                 </Sankey>
               </ResponsiveContainer>
             </div>

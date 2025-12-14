@@ -9,6 +9,8 @@ import {
   useCategoriesApi,
   useTransactionsApi,
 } from "@/hooks/use-api";
+import { cn } from "@/lib/utils";
+import type { TransactionRead } from "@/types/api";
 
 const legSchema = z.object({
   account_id: z.string().min(1, "Pick an account"),
@@ -51,11 +53,13 @@ type TransactionFormValues = z.infer<typeof transactionFormSchema>;
 export const TransactionModal: React.FC<{
   open: boolean;
   onClose: () => void;
-}> = ({ open, onClose }) => {
+  transaction?: TransactionRead | null;
+}> = ({ open, onClose, transaction }) => {
   const { items: accounts, fetchAccounts } = useAccountsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
-  const { createTransaction } = useTransactionsApi();
+  const { createTransaction, updateTransaction } = useTransactionsApi();
   const today = new Date().toISOString().slice(0, 10);
+  const isEdit = Boolean(transaction);
 
   const {
     control,
@@ -87,23 +91,66 @@ export const TransactionModal: React.FC<{
     if (open) {
       fetchAccounts({});
       fetchCategories();
+      if (!transaction) {
+        reset({
+          description: "",
+          notes: "",
+          category_id: "",
+          occurred_at: today,
+          posted_at: today,
+          legs: [
+            { account_id: "", amount: "" },
+            { account_id: "", amount: "" },
+          ],
+        });
+      }
     }
-  }, [fetchAccounts, fetchCategories, open]);
+  }, [fetchAccounts, fetchCategories, open, reset, today, transaction]);
 
-  const onSubmit = handleSubmit(async (values) => {
-    await createTransaction({
-      description: values.description,
-      notes: values.notes?.trim() || undefined,
-      category_id: values.category_id || undefined,
-      occurred_at: new Date(values.occurred_at).toISOString(),
-      posted_at: values.posted_at
-        ? new Date(values.posted_at).toISOString()
-        : undefined,
-      legs: values.legs.map((leg) => ({
+  useEffect(() => {
+    if (!open) return;
+    if (!transaction) return;
+
+    reset({
+      description: transaction.description ?? "",
+      notes: transaction.notes ?? "",
+      category_id: transaction.category_id ?? "",
+      occurred_at: (transaction.occurred_at ?? today).slice(0, 10),
+      posted_at: (transaction.posted_at ?? today).slice(0, 10),
+      legs: transaction.legs.map((leg) => ({
         account_id: leg.account_id,
-        amount: leg.amount,
+        amount: String(leg.amount),
       })),
     });
+  }, [open, reset, today, transaction]);
+
+  const onSubmit = handleSubmit(async (values) => {
+    if (transaction) {
+      await updateTransaction(transaction.id, {
+        description: values.description,
+        notes: values.notes?.trim() || null,
+        category_id: values.category_id || null,
+        occurred_at: new Date(values.occurred_at).toISOString(),
+        posted_at: values.posted_at
+          ? new Date(values.posted_at).toISOString()
+          : null,
+        subscription_id: transaction.subscription_id ?? null,
+      });
+    } else {
+      await createTransaction({
+        description: values.description,
+        notes: values.notes?.trim() || undefined,
+        category_id: values.category_id || undefined,
+        occurred_at: new Date(values.occurred_at).toISOString(),
+        posted_at: values.posted_at
+          ? new Date(values.posted_at).toISOString()
+          : undefined,
+        legs: values.legs.map((leg) => ({
+          account_id: leg.account_id,
+          amount: leg.amount,
+        })),
+      });
+    }
     reset({
       description: "",
       notes: "",
@@ -137,7 +184,7 @@ export const TransactionModal: React.FC<{
         <div className="flex items-center justify-between border-b px-6 py-4">
           <div className="flex items-center gap-3">
             <h2 className="text-lg font-semibold text-slate-900">
-              Add Transaction
+              {transaction ? "Edit transaction" : "Add transaction"}
             </h2>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
@@ -205,42 +252,65 @@ export const TransactionModal: React.FC<{
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold text-slate-800">Legs</p>
-              <Button size="sm" variant="outline" onClick={addLeg}>
-                <Plus className="h-4 w-4" /> Add leg
-              </Button>
+              {!isEdit ? (
+                <Button size="sm" variant="outline" onClick={addLeg}>
+                  <Plus className="h-4 w-4" /> Add leg
+                </Button>
+              ) : null}
             </div>
             <div className="space-y-2">
               {fields.map((leg, index) => (
                 <div
                   key={leg.id}
-                  className="grid grid-cols-[1.5fr,1fr,auto] items-center gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2"
+                  className={cn(
+                    "grid grid-cols-[1.5fr,1fr,auto] items-center gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2",
+                    isEdit && "opacity-90",
+                  )}
                 >
-                  <select
-                    className="rounded border border-slate-200 px-2 py-1 text-sm"
-                    {...register(`legs.${index}.account_id` as const)}
-                  >
-                    <option value="">Select account</option>
-                    {accounts.map((acc) => (
-                      <option key={acc.id} value={acc.id}>
-                        {acc.name}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="rounded border border-slate-200 px-2 py-1 text-sm"
-                    placeholder="0.00"
-                    {...register(`legs.${index}.amount` as const)}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeLeg(index)}
-                    disabled={fields.length <= 2}
-                  >
-                    <Trash2 className="h-4 w-4 text-slate-500" />
-                  </Button>
+                  {isEdit ? (
+                    <>
+                      <div className="truncate text-sm text-slate-800">
+                        {accounts.find((acc) => acc.id === leg.account_id)
+                          ?.name ?? leg.account_id}
+                      </div>
+                      <div className="text-sm font-semibold text-slate-900 tabular-nums">
+                        {Number(leg.amount).toLocaleString("sv-SE", {
+                          style: "currency",
+                          currency: "SEK",
+                        })}
+                      </div>
+                      <div />
+                    </>
+                  ) : (
+                    <>
+                      <select
+                        className="rounded border border-slate-200 px-2 py-1 text-sm"
+                        {...register(`legs.${index}.account_id` as const)}
+                      >
+                        <option value="">Select account</option>
+                        {accounts.map((acc) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.name}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className="rounded border border-slate-200 px-2 py-1 text-sm"
+                        placeholder="0.00"
+                        {...register(`legs.${index}.amount` as const)}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeLeg(index)}
+                        disabled={fields.length <= 2}
+                      >
+                        <Trash2 className="h-4 w-4 text-slate-500" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
@@ -251,10 +321,16 @@ export const TransactionModal: React.FC<{
                     errors.legs.find((err) => err?.message)?.message)}
               </div>
             ) : null}
-            <div className="rounded border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-              Legs must balance to zero. Debits are negative, credits are
-              positive. Minimum two legs.
-            </div>
+            {isEdit ? (
+              <div className="rounded border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                Editing legs isn’t supported yet (metadata only).
+              </div>
+            ) : (
+              <div className="rounded border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                Legs must balance to zero. Debits are negative, credits are
+                positive. Minimum two legs.
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center justify-end gap-2 border-t px-6 py-4">
@@ -262,7 +338,11 @@ export const TransactionModal: React.FC<{
             Cancel
           </Button>
           <Button onClick={onSubmit} disabled={isSubmitting}>
-            {isSubmitting ? "Saving..." : "Save transaction"}
+            {isSubmitting
+              ? "Saving..."
+              : transaction
+                ? "Save changes"
+                : "Save transaction"}
           </Button>
         </div>
       </div>

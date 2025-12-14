@@ -12,6 +12,8 @@ export interface TransactionFilters {
   minAmount?: string;
   maxAmount?: string;
   search?: string;
+  sortBy?: "occurred_at" | "amount" | "description" | "category" | "type";
+  sortDir?: "asc" | "desc";
 }
 
 export interface TransactionsState {

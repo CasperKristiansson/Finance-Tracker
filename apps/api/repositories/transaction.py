@@ -8,11 +8,11 @@ from decimal import Decimal
 from typing import Any, Iterable, List, Optional, cast
 from uuid import UUID
 
-from sqlalchemy import desc, func, or_
+from sqlalchemy import asc, desc, func, or_
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
-from ..models import LoanEvent, Transaction, TransactionImportBatch, TransactionLeg
+from ..models import Category, LoanEvent, Transaction, TransactionImportBatch, TransactionLeg
 from ..shared import (
     LoanEventType,
     TransactionType,
@@ -42,13 +42,13 @@ class TransactionRepository:
         min_amount: Optional[Decimal] = None,
         max_amount: Optional[Decimal] = None,
         search: Optional[str] = None,
+        sort_by: str = "occurred_at",
+        sort_dir: str = "desc",
         limit: Optional[int] = None,
         offset: Optional[int] = None,
     ) -> List[Transaction]:
-        statement = (
-            select(Transaction)
-            .options(selectinload(Transaction.legs))  # type: ignore[arg-type]
-            .order_by(desc(Transaction.occurred_at))  # type: ignore[arg-type]
+        statement = select(Transaction).options(
+            selectinload(Transaction.legs)  # type: ignore[arg-type]
         )
 
         if start_date is not None:
@@ -79,7 +79,9 @@ class TransactionRepository:
                 )
             )
 
-        if min_amount is not None or max_amount is not None:
+        needs_amount_join = min_amount is not None or max_amount is not None or sort_by == "amount"
+        leg_amounts = None
+        if needs_amount_join:
             leg_amounts = (
                 select(
                     TransactionLeg.transaction_id,
@@ -95,6 +97,31 @@ class TransactionRepository:
                 statement = statement.where(leg_amounts.c.max_abs_amount >= min_amount)
             if max_amount is not None:
                 statement = statement.where(leg_amounts.c.max_abs_amount <= max_amount)
+
+        if sort_by == "category":
+            statement = statement.join(
+                Category, cast(Any, Transaction.category_id == Category.id), isouter=True
+            )
+
+        direction = desc if sort_dir.lower() != "asc" else asc
+        order_by: list[Any] = []
+        if sort_by == "occurred_at":
+            order_by.append(direction(cast(Any, Transaction.occurred_at)))
+        elif sort_by == "amount" and leg_amounts is not None:
+            order_by.append(direction(leg_amounts.c.max_abs_amount))
+        elif sort_by == "description":
+            order_by.append(direction(func.coalesce(Transaction.description, "")))
+        elif sort_by == "type":
+            order_by.append(direction(cast(Any, Transaction.transaction_type)))
+        elif sort_by == "category":
+            order_by.append(direction(func.coalesce(Category.name, "")))
+        else:
+            order_by.append(desc(cast(Any, Transaction.occurred_at)))
+
+        if sort_by != "occurred_at":
+            order_by.append(desc(cast(Any, Transaction.occurred_at)))
+        order_by.append(desc(cast(Any, Transaction.id)))
+        statement = statement.order_by(*order_by)
         if limit is not None:
             statement = statement.limit(limit)
         if offset:

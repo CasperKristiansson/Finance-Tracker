@@ -115,13 +115,12 @@ def build_yearly_overview_enhancements(
     accounts_statement = select(Account).where(Account.user_id == user_id)
     if account_id_list:
         accounts_statement = accounts_statement.where(cast(Any, Account.id).in_(account_id_list))
+    else:
+        accounts_statement = accounts_statement.where(cast(Any, Account.is_active).is_(True))
     accounts = list(session.exec(accounts_statement).all())
     accounts = [acc for acc in accounts if acc.name not in {"Offset", "Unassigned"}]
 
     for account in accounts:
-        if account.account_type == AccountType.INVESTMENT:
-            continue
-
         start_balance = repository.sum_legs_before(before=start, account_ids=[account.id])
         end_balance = repository.sum_legs_before(before=end, account_ids=[account.id])
         change = end_balance - start_balance
