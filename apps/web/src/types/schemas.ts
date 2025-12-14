@@ -6,7 +6,6 @@ import {
   InterestCompound,
   LoanEventType,
   TaxEventType,
-  TransactionStatus,
   TransactionType,
 } from "./enums";
 
@@ -229,7 +228,6 @@ export const transactionCreateSchema = z.object({
   occurred_at: dateString,
   posted_at: z.string().nullable().optional(),
   transaction_type: z.enum(TransactionType).optional(),
-  status: z.enum(TransactionStatus).optional(),
   legs: z.array(transactionLegCreateSchema),
 });
 
@@ -240,11 +238,6 @@ export const transactionUpdateRequestSchema = z.object({
   posted_at: z.string().nullable().optional(),
   category_id: nullableString,
   subscription_id: nullableString,
-  status: z.enum(TransactionStatus).optional(),
-});
-
-export const transactionStatusUpdateSchema = z.object({
-  status: z.enum(TransactionStatus),
 });
 
 export const transactionSchema = z.object({
@@ -259,7 +252,6 @@ export const transactionSchema = z.object({
   posted_at: dateString,
   created_at: dateString,
   updated_at: dateString,
-  status: z.enum(TransactionStatus),
   legs: z.array(transactionLegSchema),
 });
 

@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from ..shared import TransactionStatus, TransactionType
+from ..shared import TransactionType
 
 
 class TransactionLegCreate(BaseModel):
@@ -40,7 +40,6 @@ class TransactionCreate(BaseModel):
     occurred_at: datetime
     posted_at: Optional[datetime] = None
     transaction_type: TransactionType = TransactionType.TRANSFER
-    status: TransactionStatus = TransactionStatus.RECORDED
     legs: List[TransactionLegCreate]
 
     @model_validator(mode="after")
@@ -68,7 +67,6 @@ class TransactionRead(BaseModel):
     posted_at: datetime
     created_at: datetime
     updated_at: datetime
-    status: TransactionStatus
     legs: List[TransactionLegRead]
 
 
@@ -80,7 +78,6 @@ class TransactionListQuery(BaseModel):
     account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
     category_ids: Optional[List[UUID]] = Field(default=None, alias="category_ids")
     subscription_ids: Optional[List[UUID]] = Field(default=None, alias="subscription_ids")
-    status: Optional[List[TransactionStatus]] = None
     transaction_type: Optional[List[TransactionType]] = Field(
         default=None, alias="transaction_type"
     )
@@ -156,24 +153,6 @@ class TransactionListQuery(BaseModel):
                         ) from exc
                 values["subscription_ids"] = converted_subscriptions
 
-        if isinstance(values, dict) and "status" in values and isinstance(values["status"], str):
-            statuses = [part.strip() for part in str(values["status"]).split(",") if part.strip()]
-            converted_status: List[TransactionStatus] = []
-            for status in statuses:
-                try:
-                    converted_status.append(TransactionStatus(status))
-                except ValueError as exc:  # pragma: no cover - validation
-                    raise ValidationError(
-                        [
-                            {
-                                "loc": ("status",),
-                                "msg": "Invalid status provided",
-                                "type": "value_error",
-                            }
-                        ],
-                        cls,
-                    ) from exc
-            values["status"] = converted_status
         if (
             isinstance(values, dict)
             and "transaction_type" in values
@@ -216,7 +195,6 @@ class TransactionUpdate(BaseModel):
     occurred_at: Optional[datetime] = None
     posted_at: Optional[datetime] = None
     category_id: Optional[UUID] = None
-    status: Optional[TransactionStatus] = None
     subscription_id: Optional[UUID] = None
 
     @model_validator(mode="after")

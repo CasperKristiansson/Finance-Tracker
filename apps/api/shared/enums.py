@@ -43,12 +43,6 @@ class TransactionType(StrEnum):
 
 
 class TransactionStatus(StrEnum):
-    RECORDED = "recorded"
-    IMPORTED = "imported"
-    REVIEWED = "reviewed"
-    FLAGGED = "flagged"
-
-
 class SystemAccountCode(StrEnum):
     RETAINED_EARNINGS = "retained_earnings"
     INTEREST_EXPENSE = "interest_expense"

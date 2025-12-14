@@ -12,7 +12,6 @@ from .enums import (
     SystemAccountCode,
     TaxEventType,
     ThemePreference,
-    TransactionStatus,
     TransactionType,
 )
 from .finance import (
@@ -54,7 +53,6 @@ __all__ = [
     "LoanEventType",
     "TaxEventType",
     "BudgetPeriod",
-    "TransactionStatus",
     "SystemAccountCode",
     "TransactionType",
     "ThemePreference",

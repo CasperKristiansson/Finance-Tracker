@@ -9,7 +9,6 @@ import {
   Loader2,
   MoreHorizontal,
   Plus,
-  Trash2,
   AlertCircle,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -49,7 +48,6 @@ type SortKey =
   | "type";
 
 type ColumnKey =
-  | "select"
   | "date"
   | "type"
   | "description"
@@ -66,7 +64,6 @@ type ColumnConfig = {
 };
 
 const columns: ColumnConfig[] = [
-  { key: "select", label: "" },
   { key: "date", label: "Date" },
   { key: "type", label: "Type" },
   { key: "description", label: "Payee / Description" },
@@ -78,7 +75,6 @@ const columns: ColumnConfig[] = [
 ];
 
 const columnWidthClass: Partial<Record<ColumnKey, string>> = {
-  select: "w-10",
   date: "w-40",
   type: "w-28",
   accounts: "w-72",
@@ -168,17 +164,15 @@ const ColumnToggle: React.FC<{
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuLabel>Show / hide</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {columns
-          .filter((col) => col.key !== "select")
-          .map((col) => (
-            <DropdownMenuCheckboxItem
-              key={col.key}
-              checked={visibility[col.key] !== false}
-              onCheckedChange={() => onToggle(col.key)}
-            >
-              {col.label}
-            </DropdownMenuCheckboxItem>
-          ))}
+        {columns.map((col) => (
+          <DropdownMenuCheckboxItem
+            key={col.key}
+            checked={visibility[col.key] !== false}
+            onCheckedChange={() => onToggle(col.key)}
+          >
+            {col.label}
+          </DropdownMenuCheckboxItem>
+        ))}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -193,9 +187,6 @@ export const Transactions: React.FC = () => {
     pagination,
     runningBalances,
     fetchTransactions,
-    updateTransaction,
-    updateTransactionStatus,
-    deleteTransaction,
   } = useTransactionsApi();
   const {
     items: accounts,
@@ -206,13 +197,11 @@ export const Transactions: React.FC = () => {
   } = useAccountsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
 
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortAsc, setSortAsc] = useState(false);
   const [columnVisibility, setColumnVisibility] = useState<
     Record<ColumnKey, boolean>
   >({
-    select: true,
     date: true,
     type: true,
     description: true,
@@ -231,7 +220,6 @@ export const Transactions: React.FC = () => {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
   const [modalOpen, setModalOpen] = useState(false);
-  const [bulkCategory, setBulkCategory] = useState<string>("");
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const needsReconcile = useMemo(
     () => accounts.some((acc) => acc.needs_reconciliation),
@@ -364,42 +352,6 @@ export const Transactions: React.FC = () => {
     }
   };
 
-  const toggleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedIds(new Set(filtered.map((tx) => tx.id)));
-    } else {
-      setSelectedIds(new Set());
-    }
-  };
-
-  const toggleRow = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const applyBulkCategory = () => {
-    if (!bulkCategory || selectedIds.size === 0) return;
-    selectedIds.forEach((id) =>
-      updateTransaction(id, { category_id: bulkCategory }),
-    );
-  };
-
-  const applyBulkStatus = (status: TransactionStatus) => {
-    selectedIds.forEach((id) => updateTransactionStatus(id, status));
-  };
-
-  const applyBulkDelete = () => {
-    selectedIds.forEach((id) => deleteTransaction(id));
-    setSelectedIds(new Set());
-  };
-
   const loadMore = () => {
     if (!pagination.hasMore || loading) return;
     fetchTransactions({
@@ -415,18 +367,13 @@ export const Transactions: React.FC = () => {
   const headerCellClass = (col: ColumnConfig) =>
     cn(
       "py-2 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase",
-      col.key === "select" ? "px-2" : "px-3",
+      "px-3",
       columnWidthClass[col.key],
       col.align === "right" && "text-right",
     );
 
   const bodyCellClass = (key: ColumnKey, extra?: string) =>
-    cn(
-      "py-2 align-top",
-      key === "select" ? "px-2" : "px-3",
-      columnWidthClass[key],
-      extra,
-    );
+    cn("py-2 align-top", "px-3", columnWidthClass[key], extra);
 
   return (
     <MotionPage className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
@@ -622,45 +569,6 @@ export const Transactions: React.FC = () => {
                 <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
               ) : null}
             </div>
-            <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
-              <span className="text-slate-600">Bulk:</span>
-              <select
-                className="bg-transparent text-slate-800 outline-none"
-                value={bulkCategory}
-                onChange={(e) => setBulkCategory(e.target.value)}
-              >
-                <option value="">Categorize...</option>
-                {categories?.map((cat: CategoryRead) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={applyBulkCategory}
-                disabled={!bulkCategory || selectedIds.size === 0}
-              >
-                Apply
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => applyBulkStatus(TransactionStatus.FLAGGED)}
-                disabled={selectedIds.size === 0}
-              >
-                Flag
-              </Button>
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={applyBulkDelete}
-                disabled={selectedIds.size === 0}
-              >
-                <Trash2 className="mr-1 h-4 w-4" /> Delete
-              </Button>
-            </div>
           </div>
         </CardHeader>
         <CardContent className="flex min-h-0 flex-1 flex-col p-0">
@@ -680,31 +588,20 @@ export const Transactions: React.FC = () => {
                 >
                   {visibleColumns.map((col) => (
                     <th key={col.key} className={headerCellClass(col)}>
-                      {col.key === "select" ? (
-                        <input
-                          type="checkbox"
-                          checked={
-                            selectedIds.size === filtered.length &&
-                            filtered.length > 0
-                          }
-                          onChange={(e) => toggleSelectAll(e.target.checked)}
-                        />
-                      ) : (
-                        <button
-                          type="button"
-                          className="flex items-center gap-1 text-slate-700"
-                          onClick={() => toggleSort(col.key as SortKey)}
-                        >
-                          {col.label}
-                          {sortKey === col.key ? (
-                            sortAsc ? (
-                              <ArrowUpWideNarrow className="h-3 w-3" />
-                            ) : (
-                              <ArrowDownWideNarrow className="h-3 w-3" />
-                            )
-                          ) : null}
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 text-slate-700"
+                        onClick={() => toggleSort(col.key as SortKey)}
+                      >
+                        {col.label}
+                        {sortKey === col.key ? (
+                          sortAsc ? (
+                            <ArrowUpWideNarrow className="h-3 w-3" />
+                          ) : (
+                            <ArrowDownWideNarrow className="h-3 w-3" />
+                          )
+                        ) : null}
+                      </button>
                     </th>
                   ))}
                 </tr>
@@ -792,20 +689,6 @@ export const Transactions: React.FC = () => {
                       }}
                     >
                       {visibleColumns.map((col) => {
-                        if (col.key === "select") {
-                          return (
-                            <td
-                              key={`${row.id}-select`}
-                              className={bodyCellClass("select")}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={selectedIds.has(row.id)}
-                                onChange={() => toggleRow(row.id)}
-                              />
-                            </td>
-                          );
-                        }
                         if (col.key === "date") {
                           return (
                             <td
@@ -923,33 +806,21 @@ export const Transactions: React.FC = () => {
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-between border-t bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                checked={
-                  selectedIds.size === filtered.length && filtered.length > 0
-                }
-                onChange={(e) => toggleSelectAll(e.target.checked)}
-              />
-              <span>{selectedIds.size} selected</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2 border-slate-300 text-slate-700"
-                onClick={loadMore}
-                disabled={!pagination.hasMore || loading}
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <MoreHorizontal className="h-4 w-4" />
-                )}
-                {pagination.hasMore ? "Load more" : "End of list"}
-              </Button>
-            </div>
+          <div className="flex items-center justify-end border-t bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 border-slate-300 text-slate-700"
+              onClick={loadMore}
+              disabled={!pagination.hasMore || loading}
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <MoreHorizontal className="h-4 w-4" />
+              )}
+              {pagination.hasMore ? "Load more" : "End of list"}
+            </Button>
           </div>
         </CardContent>
       </Card>

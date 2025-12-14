@@ -18,7 +18,6 @@ from ..shared import (
     AuditSourceMixin,
     LoanEventType,
     TimestampMixin,
-    TransactionStatus,
     TransactionType,
     UserOwnedMixin,
     UUIDPrimaryKeyMixin,
@@ -85,11 +84,6 @@ class Transaction(
             nullable=True,
         ),
     )
-    status: TransactionStatus = Field(
-        default=TransactionStatus.RECORDED,
-        sa_column=Column(SAEnum(TransactionStatus), nullable=False),
-    )
-
     if TYPE_CHECKING:  # pragma: no cover
         category: Optional["Category"]
         legs: List["TransactionLeg"]

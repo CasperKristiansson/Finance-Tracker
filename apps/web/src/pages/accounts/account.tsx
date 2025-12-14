@@ -3,10 +3,13 @@ import {
   Archive,
   ArrowLeft,
   Edit,
+  Landmark,
   Loader2,
   RefreshCw,
   Undo,
 } from "lucide-react";
+import * as LucideIcons from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
@@ -90,6 +93,35 @@ const formatMonthLabelWithYear = (year: number, monthIndex: number) =>
 
 const normalizeKey = (value: string) =>
   value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+const renderAccountIcon = (icon: string | null | undefined, name: string) => {
+  if (icon?.startsWith("lucide:")) {
+    const key = icon.slice("lucide:".length);
+    const IconComp = (
+      LucideIcons as unknown as Record<string, LucideIcon | undefined>
+    )[key];
+    if (IconComp) {
+      const Icon = IconComp as LucideIcon;
+      return (
+        <Icon className="h-9 w-9 rounded-full border border-slate-100 bg-white p-1 text-slate-700" />
+      );
+    }
+  }
+  if (icon) {
+    return (
+      <img
+        src={`/${icon}`}
+        alt={name}
+        className="h-9 w-9 rounded-full border border-slate-100 bg-white object-contain p-1"
+      />
+    );
+  }
+  return (
+    <div className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-100 bg-white">
+      <Landmark className="h-5 w-5 text-slate-600" />
+    </div>
+  );
+};
 
 export const AccountDetails: React.FC = () => {
   const { accountId } = useParams();
@@ -619,30 +651,37 @@ export const AccountDetails: React.FC = () => {
             <ArrowLeft className="h-4 w-4" />
             Back to accounts
           </Link>
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-2xl font-semibold text-slate-900">
-              {account?.name ?? "Account"}
-            </h1>
+          <div className="flex flex-wrap items-center gap-3">
             {account ? (
-              <>
-                <Badge className="bg-slate-100 text-slate-700">
-                  {formatAccountType(account.account_type)}
-                </Badge>
-                <Badge
-                  variant={account.is_active ? "default" : "outline"}
-                  className={
-                    account.is_active
-                      ? "bg-emerald-50 text-emerald-700"
-                      : "border-slate-300 text-slate-600"
-                  }
-                >
-                  {account.is_active ? "Active" : "Archived"}
-                </Badge>
-                {account.needs_reconciliation ? (
-                  <Badge className="bg-amber-100 text-amber-800">Stale</Badge>
-                ) : null}
-              </>
-            ) : null}
+              renderAccountIcon(account.icon, account.name)
+            ) : (
+              <Skeleton className="h-9 w-9 rounded-full" />
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-semibold text-slate-900">
+                {account?.name ?? "Account"}
+              </h1>
+              {account ? (
+                <>
+                  <Badge className="bg-slate-100 text-slate-700">
+                    {formatAccountType(account.account_type)}
+                  </Badge>
+                  <Badge
+                    variant={account.is_active ? "default" : "outline"}
+                    className={
+                      account.is_active
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "border-slate-300 text-slate-600"
+                    }
+                  >
+                    {account.is_active ? "Active" : "Archived"}
+                  </Badge>
+                  {account.needs_reconciliation ? (
+                    <Badge className="bg-amber-100 text-amber-800">Stale</Badge>
+                  ) : null}
+                </>
+              ) : null}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-sm text-slate-500">{rangeLabel}</p>

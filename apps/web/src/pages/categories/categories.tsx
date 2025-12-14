@@ -511,10 +511,14 @@ export const Categories: React.FC = () => {
                     ? "#10b981"
                     : "#ef4444");
 
+                const txCount = Number(cat.transaction_count ?? 0);
+                const lastUsed = formatShortDate(cat.last_used_at ?? null);
+                const lifetimeTotal = Number(cat.lifetime_total ?? 0);
+
                 return (
                   <div
                     key={cat.id}
-                    className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                    className="grid grid-cols-1 gap-3 px-3 py-2 lg:grid-cols-[minmax(0,1fr)_110px_130px_150px_140px_auto] lg:items-center"
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div
@@ -546,42 +550,67 @@ export const Categories: React.FC = () => {
                             <Badge variant="outline">Archived</Badge>
                           ) : null}
                         </div>
-                        <div className="text-xs text-slate-500">
+                        <div className="text-xs text-slate-500 lg:hidden">
                           {usageText(cat)}
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex shrink-0 items-center gap-2">
-                      <div className="hidden w-32 flex-col items-end gap-1 lg:flex">
-                        {hasSeries ? (
-                          <>
-                            <svg
-                              width="112"
-                              height="28"
-                              viewBox="0 0 112 28"
-                              className="overflow-visible"
-                            >
-                              <path
-                                d={sparklinePath(series, 112, 28)}
-                                fill="none"
-                                stroke={accent}
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                            <span className="text-[11px] font-semibold text-slate-600 tabular-nums">
-                              {deltaPct !== null
-                                ? `${delta >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%`
-                                : formatCurrency(delta)}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-xs text-slate-400">—</span>
-                        )}
+                    <div className="hidden lg:block">
+                      <div className="text-sm font-semibold text-slate-900 tabular-nums">
+                        {txCount.toLocaleString("sv-SE")}
                       </div>
+                      <div className="text-[11px] text-slate-500">
+                        Transactions
+                      </div>
+                    </div>
 
+                    <div className="hidden lg:block">
+                      <div className="text-sm font-semibold text-slate-900">
+                        {lastUsed}
+                      </div>
+                      <div className="text-[11px] text-slate-500">
+                        Last used
+                      </div>
+                    </div>
+
+                    <div className="hidden text-right lg:block">
+                      <div className="text-sm font-semibold text-slate-900 tabular-nums">
+                        {formatCurrency(lifetimeTotal)}
+                      </div>
+                      <div className="text-[11px] text-slate-500">Lifetime</div>
+                    </div>
+
+                    <div className="hidden flex-col items-end gap-1 lg:flex">
+                      {hasSeries ? (
+                        <>
+                          <svg
+                            width="112"
+                            height="28"
+                            viewBox="0 0 112 28"
+                            className="overflow-visible"
+                          >
+                            <path
+                              d={sparklinePath(series, 112, 28)}
+                              fill="none"
+                              stroke={accent}
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                          <span className="text-[11px] font-semibold text-slate-600 tabular-nums">
+                            {deltaPct !== null
+                              ? `${delta >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%`
+                              : formatCurrency(delta)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </div>
+
+                    <div className="flex shrink-0 items-center justify-end gap-2">
                       <Button
                         variant="outline"
                         size="sm"

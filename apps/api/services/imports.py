@@ -42,7 +42,6 @@ from ..shared import (
     BankImportType,
     CreatedSource,
     TaxEventType,
-    TransactionStatus,
     TransactionType,
 )
 from .transaction import TransactionService
@@ -356,7 +355,6 @@ class ImportService:
                     external_id=None,
                     occurred_at=occurred_at,
                     posted_at=occurred_at,
-                    status=TransactionStatus.RECORDED,
                     subscription_id=subscription_id,
                     created_source=CreatedSource.IMPORT,
                     import_batch_id=batch.id,
@@ -1432,7 +1430,6 @@ class ImportService:
                     external_id=None,
                     occurred_at=occurred_at,
                     posted_at=occurred_at,
-                    status=TransactionStatus.IMPORTED,
                     created_source=CreatedSource.IMPORT,
                 )
 

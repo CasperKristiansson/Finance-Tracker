@@ -20,13 +20,6 @@ export enum TransactionType {
   INVESTMENT_EVENT = "investment_event",
 }
 
-export enum TransactionStatus {
-  RECORDED = "recorded",
-  IMPORTED = "imported",
-  REVIEWED = "reviewed",
-  FLAGGED = "flagged",
-}
-
 export enum BudgetPeriod {
   MONTHLY = "monthly",
   QUARTERLY = "quarterly",

@@ -53,7 +53,6 @@ def list_transactions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             account_ids=query.account_ids,
             category_ids=query.category_ids,
             subscription_ids=query.subscription_ids,
-            status=query.status,
             transaction_types=query.transaction_type,
             min_amount=query.min_amount,
             max_amount=query.max_amount,
@@ -89,7 +88,6 @@ def create_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         external_id=data.external_id,
         occurred_at=data.occurred_at,
         posted_at=data.posted_at or data.occurred_at,
-        status=data.status,
     )
     legs = [TransactionLeg(account_id=leg.account_id, amount=leg.amount) for leg in data.legs]
 

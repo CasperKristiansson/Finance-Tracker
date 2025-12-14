@@ -23,7 +23,6 @@ from ..repositories.transaction import TransactionRepository
 from ..shared import (
     CategoryType,
     LoanEventType,
-    TransactionStatus,
     TransactionType,
     coerce_decimal,
     ensure_balanced_legs,
@@ -45,7 +44,6 @@ class TransactionService:
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
         subscription_ids: Optional[Iterable[UUID]] = None,
-        status: Optional[Iterable[TransactionStatus]] = None,
         transaction_types: Optional[Iterable["TransactionType"]] = None,
         min_amount: Optional[Decimal] = None,
         max_amount: Optional[Decimal] = None,
@@ -59,7 +57,6 @@ class TransactionService:
             account_ids=account_ids,
             category_ids=category_ids,
             subscription_ids=subscription_ids,
-            status=status,
             transaction_types=transaction_types,
             min_amount=min_amount,
             max_amount=max_amount,
@@ -107,7 +104,6 @@ class TransactionService:
         occurred_at: Optional[datetime] = None,
         posted_at: Optional[datetime] = None,
         category_id: Optional[UUID] = None,
-        status: Optional["TransactionStatus"] = None,
         subscription_id: Optional[UUID] = None,
         update_subscription: bool = False,
     ) -> Transaction:
@@ -123,7 +119,6 @@ class TransactionService:
             occurred_at=occurred_at,
             posted_at=posted_at,
             category_id=category_id,
-            status=status,
             subscription_id=subscription_id,
             update_subscription=update_subscription,
         )

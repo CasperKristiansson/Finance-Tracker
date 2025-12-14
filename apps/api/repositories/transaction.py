@@ -15,7 +15,6 @@ from sqlmodel import Session, select
 from ..models import LoanEvent, Transaction, TransactionImportBatch, TransactionLeg
 from ..shared import (
     LoanEventType,
-    TransactionStatus,
     TransactionType,
     coerce_decimal,
     ensure_balanced_legs,
@@ -39,7 +38,6 @@ class TransactionRepository:
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
         subscription_ids: Optional[Iterable[UUID]] = None,
-        status: Optional[Iterable[TransactionStatus]] = None,
         transaction_types: Optional[Iterable["TransactionType"]] = None,
         min_amount: Optional[Decimal] = None,
         max_amount: Optional[Decimal] = None,
@@ -67,8 +65,6 @@ class TransactionRepository:
             statement = statement.where(
                 cast(Any, Transaction.subscription_id).in_(list(subscription_ids))
             )
-        if status:
-            statement = statement.where(cast(Any, Transaction.status).in_(list(status)))
         if transaction_types:
             statement = statement.where(
                 cast(Any, Transaction.transaction_type).in_(list(transaction_types))
@@ -156,7 +152,6 @@ class TransactionRepository:
         occurred_at: Optional[datetime] = None,
         posted_at: Optional[datetime] = None,
         category_id: Optional[UUID] = None,
-        status: Optional[TransactionStatus] = None,
         subscription_id: Optional[UUID] = None,
         update_subscription: bool = False,
     ) -> Transaction:
@@ -170,8 +165,6 @@ class TransactionRepository:
             transaction.posted_at = posted_at
         if category_id is not None:
             transaction.category_id = category_id
-        if status is not None:
-            transaction.status = status
         if update_subscription:
             transaction.subscription_id = subscription_id
 
