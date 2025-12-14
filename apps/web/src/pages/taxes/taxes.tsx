@@ -1,11 +1,12 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Plus, Receipt } from "lucide-react";
+import { Calendar, Copy, Loader2, Plus, Receipt } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -23,6 +24,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -61,11 +69,20 @@ const monthLabel = (year: number, month: number) =>
     month: "short",
   });
 
+const isoDate = (value: string) => value.slice(0, 10);
+
 const toNumber = (value: unknown) => {
   if (typeof value === "number") return value;
   if (typeof value === "string") return Number(value);
   return 0;
 };
+
+const formatDisplayDate = (iso: string) =>
+  new Date(iso).toLocaleDateString("sv-SE", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 
 const createTaxEventSchema = z.object({
   event_type: taxEventTypeSchema,
@@ -98,10 +115,16 @@ export const Taxes: React.FC = () => {
   const [eventsLoading, setEventsLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [detailsId, setDetailsId] = useState<string | null>(null);
+  const closeDetails = () => setDetailsId(null);
 
   useEffect(() => {
     fetchAccounts();
   }, [fetchAccounts]);
+
+  useEffect(() => {
+    setDetailsId(null);
+  }, [year]);
 
   const yearOptions = useMemo(
     () => Array.from({ length: 11 }, (_, idx) => currentYear - idx),
@@ -138,16 +161,33 @@ export const Taxes: React.FC = () => {
     }
   };
 
-  const loadEvents = async () => {
+  const loadEvents = async (targetYear: number) => {
     if (!token) return;
     setEventsLoading(true);
     try {
-      const { data } = await apiFetch<TaxEventListResponse>({
-        path: "/tax/events",
-        schema: taxEventListResponseSchema,
-        token,
-      });
-      setEvents(data);
+      const start = new Date(Date.UTC(targetYear, 0, 1)).toISOString();
+      const end = new Date(Date.UTC(targetYear + 1, 0, 1)).toISOString();
+      const limit = 200;
+      const maxPages = 50;
+      const all: TaxEventListResponse["events"] = [];
+
+      for (let page = 0; page < maxPages; page += 1) {
+        const { data } = await apiFetch<TaxEventListResponse>({
+          path: "/tax/events",
+          query: {
+            start_date: start,
+            end_date: end,
+            limit,
+            offset: page * limit,
+          },
+          schema: taxEventListResponseSchema,
+          token,
+        });
+        all.push(...data.events);
+        if (data.events.length < limit) break;
+      }
+
+      setEvents({ events: all });
     } catch (error) {
       setEvents(null);
       toast.error("Unable to load tax events", {
@@ -161,7 +201,7 @@ export const Taxes: React.FC = () => {
 
   useEffect(() => {
     void loadSummary(year);
-    void loadEvents();
+    void loadEvents(year);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, year]);
 
@@ -207,7 +247,7 @@ export const Taxes: React.FC = () => {
         description: "Skatteverket",
         note: "",
       });
-      await Promise.all([loadSummary(year), loadEvents()]);
+      await Promise.all([loadSummary(year), loadEvents(year)]);
     } catch (error) {
       toast.error("Unable to create tax event", {
         description:
@@ -218,13 +258,62 @@ export const Taxes: React.FC = () => {
     }
   });
 
-  const chartData = useMemo(() => {
-    if (!summary) return [];
-    return summary.monthly.map((row) => ({
-      label: monthLabel(summary.year, row.month),
-      value: toNumber(row.net_tax_paid),
+  const gradientId = React.useId();
+
+  const selectedEvent = useMemo(() => {
+    if (!detailsId) return null;
+    return (events?.events ?? []).find((item) => item.id === detailsId) ?? null;
+  }, [detailsId, events?.events]);
+
+  const eventAmount = useMemo(() => {
+    if (!selectedEvent) return 0;
+    const amount = toNumber(selectedEvent.amount);
+    const sign = selectedEvent.event_type === TaxEventType.REFUND ? -1 : 1;
+    return sign * amount;
+  }, [selectedEvent]);
+
+  const monthlyBreakdown = useMemo(() => {
+    const base = Array.from({ length: 12 }, (_, idx) => ({
+      month: idx + 1,
+      label: monthLabel(year, idx + 1),
+      payments: 0,
+      refunds: 0,
+      net: 0,
     }));
-  }, [summary]);
+
+    for (const item of events?.events ?? []) {
+      const occurred = new Date(item.occurred_at);
+      const monthIdx = occurred.getUTCMonth();
+      const amount = toNumber(item.amount);
+      if (!Number.isFinite(amount) || amount <= 0) continue;
+      if (monthIdx < 0 || monthIdx > 11) continue;
+
+      if (item.event_type === TaxEventType.PAYMENT) {
+        base[monthIdx].payments += amount;
+        base[monthIdx].net += amount;
+      } else {
+        base[monthIdx].refunds -= amount; // negative for charting
+        base[monthIdx].net -= amount;
+      }
+    }
+
+    return base;
+  }, [events?.events, year]);
+
+  const totals = useMemo(() => {
+    let payments = 0;
+    let refunds = 0;
+    for (const row of monthlyBreakdown) {
+      payments += row.payments;
+      refunds += -row.refunds;
+    }
+    return { payments, refunds, net: payments - refunds };
+  }, [monthlyBreakdown]);
+
+  const hasEvents = useMemo(
+    () => totals.payments !== 0 || totals.refunds !== 0,
+    [totals.payments, totals.refunds],
+  );
 
   const kpis = useMemo(() => {
     if (!summary) {
@@ -246,6 +335,19 @@ export const Taxes: React.FC = () => {
           : null,
     };
   }, [summary]);
+
+  const copyValue = async (label: string, value?: string | null) => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success("Copied", { description: `${label} copied to clipboard.` });
+    } catch (error) {
+      toast.error("Unable to copy", {
+        description:
+          error instanceof Error ? error.message : "Please copy manually.",
+      });
+    }
+  };
 
   return (
     <MotionPage className="space-y-4">
@@ -280,8 +382,16 @@ export const Taxes: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
         {[
+          {
+            title: "Payments",
+            value: currency(totals.payments),
+          },
+          {
+            title: "Refunds",
+            value: currency(-totals.refunds),
+          },
           {
             title: "Net tax paid YTD",
             value: currency(kpis.ytd),
@@ -289,15 +399,6 @@ export const Taxes: React.FC = () => {
           {
             title: "Net tax paid last 12 months",
             value: currency(kpis.last12),
-          },
-          {
-            title: "Largest month",
-            value:
-              kpis.largestMonth && kpis.largestValue !== null
-                ? `${monthLabel(year, kpis.largestMonth)} · ${currency(
-                    kpis.largestValue,
-                  )}`
-                : "—",
           },
         ].map((card) => (
           <Card
@@ -310,49 +411,211 @@ export const Taxes: React.FC = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-2xl font-semibold text-slate-900">
-              {summaryLoading ? <Skeleton className="h-7 w-32" /> : card.value}
+              {summaryLoading || eventsLoading ? (
+                <Skeleton className="h-7 w-32" />
+              ) : (
+                card.value
+              )}
             </CardContent>
           </Card>
         ))}
       </div>
 
-      <Card className="border-slate-200 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base text-slate-800">
-            Net tax paid per month
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="h-[320px]">
-          {summaryLoading ? (
-            <Skeleton className="h-full w-full" />
-          ) : chartData.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-slate-600">
-              <Receipt className="h-6 w-6 text-slate-500" />
-              <p>No tax events yet.</p>
-              <Button size="sm" onClick={() => setDialogOpen(true)}>
-                Add your first tax event
-              </Button>
-            </div>
-          ) : (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="label" stroke="#64748b" fontSize={12} />
-                <YAxis
-                  stroke="#64748b"
-                  fontSize={12}
-                  tickFormatter={(value) => `${Math.round(value / 1000)}k`}
-                />
-                <Tooltip
-                  formatter={(value) => currency(Number(value))}
-                  labelStyle={{ color: "#0f172a" }}
-                />
-                <Bar dataKey="value" fill="#0f172a" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </CardContent>
-      </Card>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <Card className="border-slate-200 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-slate-800">
+              Net tax paid per month
+            </CardTitle>
+            <p className="text-xs text-slate-500">
+              {kpis.largestMonth && kpis.largestValue !== null
+                ? `Largest: ${monthLabel(year, kpis.largestMonth)} · ${currency(kpis.largestValue)}`
+                : "Refunds are negative."}
+            </p>
+          </CardHeader>
+          <CardContent className="h-[320px]">
+            {summaryLoading || eventsLoading ? (
+              <Skeleton className="h-full w-full" />
+            ) : !hasEvents ? (
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-slate-600">
+                <Receipt className="h-6 w-6 text-slate-500" />
+                <p>No tax events yet.</p>
+                <Button size="sm" onClick={() => setDialogOpen(true)}>
+                  Add your first tax event
+                </Button>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyBreakdown}>
+                  <defs>
+                    <linearGradient
+                      id={`${gradientId}-net-pos`}
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop offset="0%" stopColor="#fb7185" stopOpacity={0.9} />
+                      <stop
+                        offset="100%"
+                        stopColor="#ef4444"
+                        stopOpacity={0.55}
+                      />
+                    </linearGradient>
+                    <linearGradient
+                      id={`${gradientId}-net-neg`}
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop offset="0%" stopColor="#34d399" stopOpacity={0.9} />
+                      <stop
+                        offset="100%"
+                        stopColor="#10b981"
+                        stopOpacity={0.55}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="label" stroke="#64748b" fontSize={12} />
+                  <YAxis
+                    stroke="#64748b"
+                    fontSize={12}
+                    tickFormatter={(value) => `${Math.round(value / 1000)}k`}
+                  />
+                  <Tooltip
+                    formatter={(value) => currency(Number(value))}
+                    labelStyle={{ color: "#0f172a" }}
+                  />
+                  <Bar dataKey="net" radius={[6, 6, 6, 6]} barSize={16}>
+                    {monthlyBreakdown.map((row) => (
+                      <Cell
+                        key={row.month}
+                        fill={
+                          row.net >= 0
+                            ? `url(#${gradientId}-net-pos)`
+                            : `url(#${gradientId}-net-neg)`
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-slate-800">
+              Payments vs refunds
+            </CardTitle>
+            <p className="text-xs text-slate-500">
+              Hover a month to see the breakdown.
+            </p>
+          </CardHeader>
+          <CardContent className="h-[320px]">
+            {summaryLoading || eventsLoading ? (
+              <Skeleton className="h-full w-full" />
+            ) : !hasEvents ? (
+              <div className="flex h-full items-center justify-center text-sm text-slate-600">
+                No tax events yet.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyBreakdown}>
+                  <defs>
+                    <linearGradient
+                      id={`${gradientId}-payment`}
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="0%"
+                        stopColor="#fb7185"
+                        stopOpacity={0.95}
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor="#ef4444"
+                        stopOpacity={0.6}
+                      />
+                    </linearGradient>
+                    <linearGradient
+                      id={`${gradientId}-refund`}
+                      x1="0"
+                      y1="0"
+                      x2="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="0%"
+                        stopColor="#34d399"
+                        stopOpacity={0.95}
+                      />
+                      <stop
+                        offset="100%"
+                        stopColor="#10b981"
+                        stopOpacity={0.6}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="label" stroke="#64748b" fontSize={12} />
+                  <YAxis
+                    stroke="#64748b"
+                    fontSize={12}
+                    tickFormatter={(value) => `${Math.round(value / 1000)}k`}
+                  />
+                  <Tooltip
+                    labelStyle={{ color: "#0f172a" }}
+                    content={({ active, label, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const row = payload[0]?.payload as
+                        | { payments?: number; refunds?: number; net?: number }
+                        | undefined;
+                      const payments = row?.payments ?? 0;
+                      const refunds = row?.refunds ?? 0;
+                      const net = row?.net ?? 0;
+                      return (
+                        <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
+                          <p className="font-semibold text-slate-900">
+                            {label}
+                          </p>
+                          <p className="text-slate-600">
+                            Payments: {currency(payments)}
+                          </p>
+                          <p className="text-slate-600">
+                            Refunds: {currency(refunds)}
+                          </p>
+                          <p className="text-slate-600">Net: {currency(net)}</p>
+                        </div>
+                      );
+                    }}
+                  />
+                  <Bar
+                    dataKey="payments"
+                    name="Payments"
+                    fill={`url(#${gradientId}-payment)`}
+                    radius={[6, 6, 6, 6]}
+                    barSize={12}
+                  />
+                  <Bar
+                    dataKey="refunds"
+                    name="Refunds"
+                    fill={`url(#${gradientId}-refund)`}
+                    radius={[6, 6, 6, 6]}
+                    barSize={12}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Card className="border-slate-200 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
         <CardHeader className="pb-2">
@@ -382,7 +645,21 @@ export const Taxes: React.FC = () => {
                   const sign = item.event_type === TaxEventType.REFUND ? -1 : 1;
                   const amount = sign * toNumber(item.amount);
                   return (
-                    <TableRow key={item.id}>
+                    <TableRow
+                      key={item.id}
+                      className={cn(
+                        "cursor-pointer transition-colors hover:bg-slate-50 focus-visible:bg-slate-50",
+                        detailsId === item.id ? "bg-slate-50" : undefined,
+                      )}
+                      onClick={() => setDetailsId(item.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setDetailsId(item.id);
+                        }
+                      }}
+                      tabIndex={0}
+                    >
                       <TableCell className="whitespace-nowrap">
                         {new Date(item.occurred_at).toLocaleDateString("sv-SE")}
                       </TableCell>
@@ -418,6 +695,150 @@ export const Taxes: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      <Sheet
+        open={Boolean(detailsId)}
+        onOpenChange={(open) => {
+          if (!open) closeDetails();
+        }}
+      >
+        <SheetContent side="right" className="bg-white sm:max-w-lg">
+          {selectedEvent ? (
+            <>
+              <SheetHeader className="border-b border-slate-100">
+                <SheetTitle className="truncate text-lg">
+                  {selectedEvent.description ||
+                    selectedEvent.authority ||
+                    "Tax event"}
+                </SheetTitle>
+                <SheetDescription className="mt-1 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {formatDisplayDate(selectedEvent.occurred_at)}
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                    {selectedEvent.account_name ?? "Unknown account"}
+                  </span>
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold",
+                      typeTone[selectedEvent.event_type],
+                    )}
+                  >
+                    {selectedEvent.event_type}
+                  </span>
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="flex-1 space-y-4 overflow-y-auto p-4">
+                <div
+                  className={cn(
+                    "rounded-lg border p-4",
+                    eventAmount >= 0
+                      ? "border-rose-100 bg-rose-50"
+                      : "border-emerald-100 bg-emerald-50",
+                  )}
+                >
+                  <div className="text-xs text-slate-600">
+                    Net impact (refunds are negative)
+                  </div>
+                  <div
+                    className={cn(
+                      "mt-2 text-2xl font-semibold text-slate-900 tabular-nums",
+                      eventAmount >= 0 ? "text-rose-700" : "text-emerald-700",
+                    )}
+                  >
+                    {currency(eventAmount)}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg border border-slate-100 bg-white p-3">
+                    <div className="text-xs text-slate-500">Occurred</div>
+                    <div className="mt-1 font-medium text-slate-900">
+                      {isoDate(selectedEvent.occurred_at)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-slate-100 bg-white p-3 text-right">
+                    <div className="text-xs text-slate-500">Amount</div>
+                    <div className="mt-1 font-semibold text-slate-900 tabular-nums">
+                      {currency(eventAmount)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-slate-100 bg-white p-3">
+                  <div className="text-xs text-slate-500">Authority</div>
+                  <div className="mt-1 text-sm font-medium text-slate-900">
+                    {selectedEvent.authority || "Skatteverket"}
+                  </div>
+                  {selectedEvent.note ? (
+                    <>
+                      <div className="mt-3 text-xs text-slate-500">Note</div>
+                      <div className="mt-1 text-sm text-slate-700">
+                        {selectedEvent.note}
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+
+                <div className="rounded-lg border border-slate-100 bg-white p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs text-slate-500">
+                        Transaction id
+                      </div>
+                      <div className="mt-1 truncate font-mono text-xs text-slate-900">
+                        {selectedEvent.transaction_id}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() =>
+                        void copyValue(
+                          "Transaction id",
+                          selectedEvent.transaction_id,
+                        )
+                      }
+                    >
+                      <Copy className="h-4 w-4" />
+                      Copy
+                    </Button>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs text-slate-500">Event id</div>
+                      <div className="mt-1 truncate font-mono text-xs text-slate-900">
+                        {selectedEvent.id}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() =>
+                        void copyValue("Event id", selectedEvent.id)
+                      }
+                    >
+                      <Copy className="h-4 w-4" />
+                      Copy
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="p-4 text-sm text-slate-600">
+              Select a tax event to see details.
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
