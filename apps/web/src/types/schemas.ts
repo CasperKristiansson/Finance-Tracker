@@ -1139,6 +1139,12 @@ export const warmupResponseSchema = z.object({
 export const cashflowForecastPointSchema = z.object({
   date: z.string(),
   balance: money,
+  delta: nullableMoney,
+  low: nullableMoney,
+  high: nullableMoney,
+  baseline: nullableMoney,
+  weekday_component: nullableMoney,
+  monthday_component: nullableMoney,
 });
 
 export const cashflowForecastResponseSchema = z.object({
@@ -1147,17 +1153,27 @@ export const cashflowForecastResponseSchema = z.object({
   threshold: money,
   alert_below_threshold_at: nullableString,
   points: z.array(cashflowForecastPointSchema),
+  model: z.string().optional(),
+  lookback_days: numeric.optional(),
+  residual_std: nullableMoney,
+  weekday_averages: z.array(money).optional(),
+  monthday_averages: z.array(nullableMoney).optional(),
 });
 
 export const netWorthProjectionPointSchema = z.object({
   date: z.string(),
   net_worth: money,
+  low: nullableMoney,
+  high: nullableMoney,
 });
 
 export const netWorthProjectionResponseSchema = z.object({
   current: money,
   cagr: nullableMoney,
   points: z.array(netWorthProjectionPointSchema),
+  recommended_method: nullableString,
+  methods: z.record(z.array(netWorthProjectionPointSchema)).optional(),
+  insights: z.array(z.string()).optional(),
 });
 
 export const authSessionSchema = z.object({

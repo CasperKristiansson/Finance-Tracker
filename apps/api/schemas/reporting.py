@@ -393,6 +393,12 @@ class CashflowForecastPoint(BaseModel):
 
     date: str
     balance: Decimal
+    delta: Optional[Decimal] = None
+    low: Optional[Decimal] = None
+    high: Optional[Decimal] = None
+    baseline: Optional[Decimal] = None
+    weekday_component: Optional[Decimal] = None
+    monthday_component: Optional[Decimal] = None
 
 
 class CashflowForecastResponse(BaseModel):
@@ -403,6 +409,11 @@ class CashflowForecastResponse(BaseModel):
     threshold: Decimal
     alert_below_threshold_at: Optional[str] = None
     points: List[CashflowForecastPoint]
+    model: Optional[str] = None
+    lookback_days: Optional[int] = None
+    residual_std: Optional[Decimal] = None
+    weekday_averages: Optional[List[Decimal]] = None
+    monthday_averages: Optional[List[Optional[Decimal]]] = None
 
 
 class CashflowForecastQuery(_CsvUUIDMixin):
@@ -410,6 +421,8 @@ class CashflowForecastQuery(_CsvUUIDMixin):
 
     days: int = Field(default=60, ge=1, le=365)
     threshold: Decimal = Field(default=Decimal("0"))
+    lookback_days: int = Field(default=180, ge=30, le=730)
+    model: str = Field(default="ensemble", pattern="^(simple|seasonal|ensemble)$")
     account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
 
     @model_validator(mode="before")
@@ -439,6 +452,8 @@ class NetWorthProjectionPoint(BaseModel):
 
     date: str
     net_worth: Decimal
+    low: Optional[Decimal] = None
+    high: Optional[Decimal] = None
 
 
 class NetWorthProjectionResponse(BaseModel):
@@ -447,6 +462,9 @@ class NetWorthProjectionResponse(BaseModel):
     current: Decimal
     cagr: Optional[Decimal] = None
     points: List[NetWorthProjectionPoint]
+    recommended_method: Optional[str] = None
+    methods: Optional[dict[str, List[NetWorthProjectionPoint]]] = None
+    insights: Optional[List[str]] = None
 
 
 class YearlyOverviewQuery(_CsvUUIDMixin):

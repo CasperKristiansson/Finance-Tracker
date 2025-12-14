@@ -236,6 +236,8 @@ def cashflow_forecast(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         result = service.cashflow_forecast(
             days=query.days,
             threshold=query.threshold,
+            lookback_days=query.lookback_days,
+            model=query.model,
             account_ids=query.account_ids,
         )
         payload = CashflowForecastResponse.model_validate(result)

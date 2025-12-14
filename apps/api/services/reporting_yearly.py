@@ -53,6 +53,22 @@ def build_yearly_overview_enhancements(
 ]:
     """Compute yearly overview add-ons (sources, flows, debt, investments summary)."""
 
+    def _investment_value_at(
+        *,
+        account_name: str,
+        snapshots: List[Tuple[date, Dict[str, Decimal]]],
+        target: date,
+    ) -> Decimal:
+        key = account_name.strip().lower()
+        last: Decimal | None = None
+        for snapshot_date, values in snapshots:
+            if snapshot_date > target:
+                break
+            value = values.get(key)
+            if value is not None:
+                last = value
+        return last if last is not None else Decimal("0")
+
     income_sources: Dict[str, SourceBucket] = {}
     expense_sources: Dict[str, SourceBucket] = {}
     for row in rows:
@@ -120,7 +136,98 @@ def build_yearly_overview_enhancements(
     accounts = list(session.exec(accounts_statement).all())
     accounts = [acc for acc in accounts if acc.name not in {"Offset", "Unassigned"}]
 
+    snapshot_statement = (
+        select(
+            cast(Any, InvestmentSnapshot.snapshot_date),
+            cast(Any, InvestmentSnapshot.parsed_payload),
+            cast(Any, InvestmentSnapshot.cleaned_payload),
+        )
+        .where(InvestmentSnapshot.user_id == user_id)
+        .where(cast(Any, InvestmentSnapshot.snapshot_date) <= as_of_date)
+        .order_by(
+            cast(Any, InvestmentSnapshot.snapshot_date).asc(),
+            cast(Any, InvestmentSnapshot.created_at).asc(),
+        )
+    )
+    snapshot_rows = list(session.exec(snapshot_statement).all())
+    investment_snapshots: List[Tuple[date, Dict[str, Decimal]]] = []
+    for snapshot_date, parsed_payload, cleaned_payload in snapshot_rows:
+        payload: dict[str, Any] = {}
+        if isinstance(cleaned_payload, dict) and isinstance(cleaned_payload.get("accounts"), dict):
+            payload = cleaned_payload
+        elif isinstance(parsed_payload, dict) and isinstance(parsed_payload.get("accounts"), dict):
+            payload = parsed_payload
+
+        accounts_payload = payload.get("accounts") if isinstance(payload, dict) else None
+        if not isinstance(accounts_payload, dict):
+            continue
+
+        values: Dict[str, Decimal] = {}
+        for name, value in accounts_payload.items():
+            values[str(name).strip().lower()] = coerce_decimal(value)
+        investment_snapshots.append((cast(date, snapshot_date), values))
+
     for account in accounts:
+        if account.account_type == AccountType.INVESTMENT:
+            start_target = start.date() - timedelta(days=1)
+            start_value = _investment_value_at(
+                account_name=account.name,
+                snapshots=investment_snapshots,
+                target=start_target,
+            )
+            end_value = _investment_value_at(
+                account_name=account.name,
+                snapshots=investment_snapshots,
+                target=as_of_date,
+            )
+
+            monthly_income_by_acc = [Decimal("0") for _ in range(12)]
+            monthly_expense_by_acc = [Decimal("0") for _ in range(12)]
+            monthly_transfers_in = [Decimal("0") for _ in range(12)]
+            monthly_transfers_out = [Decimal("0") for _ in range(12)]
+
+            month_ends = month_end_dates(year)
+            month_end_values: List[Decimal] = []
+            for month_end in month_ends:
+                target = month_end if month_end <= as_of_date else as_of_date
+                month_end_values.append(
+                    _investment_value_at(
+                        account_name=account.name,
+                        snapshots=investment_snapshots,
+                        target=target,
+                    )
+                )
+
+            monthly_change: List[Decimal] = []
+            prev_value = start_value
+            for value in month_end_values:
+                monthly_change.append(value - prev_value)
+                prev_value = value
+
+            change = end_value - start_value
+            account_flows.append(
+                {
+                    "account_id": str(account.id),
+                    "name": account.name,
+                    "account_type": account.account_type,
+                    "start_balance": start_value,
+                    "end_balance": end_value,
+                    "change": change,
+                    "income": Decimal("0"),
+                    "expense": Decimal("0"),
+                    "transfers_in": Decimal("0"),
+                    "transfers_out": Decimal("0"),
+                    "net_operating": Decimal("0"),
+                    "net_transfers": Decimal("0"),
+                    "monthly_income": monthly_income_by_acc,
+                    "monthly_expense": monthly_expense_by_acc,
+                    "monthly_transfers_in": monthly_transfers_in,
+                    "monthly_transfers_out": monthly_transfers_out,
+                    "monthly_change": monthly_change,
+                }
+            )
+            continue
+
         start_balance = repository.sum_legs_before(before=start, account_ids=[account.id])
         end_balance = repository.sum_legs_before(before=end, account_ids=[account.id])
         change = end_balance - start_balance
