@@ -55,6 +55,14 @@ const formatSek = (value: number, digits = 0) =>
     minimumFractionDigits: digits,
   });
 
+const formatSekCompact = (value: number) =>
+  value.toLocaleString("sv-SE", {
+    style: "currency",
+    currency: "SEK",
+    notation: "compact",
+    maximumFractionDigits: 0,
+  });
+
 type Granularity = "monthly" | "quarterly";
 
 type HistoryPoint = {
@@ -794,7 +802,7 @@ export const CashFlow: React.FC = () => {
                 </div>
               ) : (
                 <ChartContainer
-                  className="h-full w-full"
+                  className="!aspect-auto h-full w-full"
                   config={{
                     netWorth: { label: "Net worth", color: "#4f46e5" },
                     band: { label: "Range", color: "#a5b4fc" },
@@ -802,7 +810,7 @@ export const CashFlow: React.FC = () => {
                 >
                   <AreaChart
                     data={netWorthSeries}
-                    margin={{ top: 10, right: 18, left: 0, bottom: 0 }}
+                    margin={{ top: 10, right: 18, left: 12, bottom: 0 }}
                     onClick={(state) => {
                       const payload = state?.activePayload?.[0]?.payload as
                         | (typeof netWorthSeries)[number]
@@ -868,26 +876,44 @@ export const CashFlow: React.FC = () => {
                       tickLine={false}
                       axisLine={false}
                       tickMargin={12}
-                      width={90}
-                      tickFormatter={(v) => formatSek(Number(v))}
+                      width={120}
+                      tickFormatter={(v) => formatSekCompact(Number(v))}
                     />
                     <Tooltip
                       content={
                         <ChartTooltipContent
-                          formatter={(value, name) => {
-                            if (Array.isArray(value)) return null;
-                            if (name === "netWorth") {
+                          formatter={(_value, _name, item) => {
+                            const dataKey = String(item?.dataKey ?? "");
+                            const rawValue = item?.value;
+
+                            if (dataKey === "netWorth") {
                               return (
                                 <div className="flex w-full items-center justify-between gap-2">
                                   <span className="text-slate-500">
                                     Net worth
                                   </span>
                                   <span className="font-medium text-slate-900">
-                                    {formatSek(Number(value))}
+                                    {formatSek(coerceMoney(rawValue))}
                                   </span>
                                 </div>
                               );
                             }
+
+                            if (dataKey === "band" && Array.isArray(rawValue)) {
+                              const [low, high] = rawValue as unknown[];
+                              return (
+                                <div className="flex w-full items-center justify-between gap-2">
+                                  <span className="text-slate-500">
+                                    Range (~80%)
+                                  </span>
+                                  <span className="font-medium text-slate-900">
+                                    {formatSek(coerceMoney(low))} –{" "}
+                                    {formatSek(coerceMoney(high))}
+                                  </span>
+                                </div>
+                              );
+                            }
+
                             return null;
                           }}
                           labelFormatter={(label) =>
