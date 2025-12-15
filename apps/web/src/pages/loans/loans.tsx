@@ -6,6 +6,7 @@ import {
   CreditCard,
   Plus,
   Loader2,
+  Pencil,
   RefreshCw,
 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
@@ -110,6 +111,11 @@ const formatDateTime = (value: string | null | undefined) => {
     hour: "2-digit",
     minute: "2-digit",
   });
+};
+
+const toDateInputValue = (value: string | null | undefined) => {
+  if (!value) return "";
+  return value.slice(0, 10);
 };
 
 const parseMoneyToCents = (value: string) => {
@@ -228,6 +234,8 @@ export const Loans: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"schedule" | "events">("schedule");
   const [createLoanOpen, setCreateLoanOpen] = useState(false);
   const [createLoanLoading, setCreateLoanLoading] = useState(false);
+  const [editLoanOpen, setEditLoanOpen] = useState(false);
+  const [editLoanLoading, setEditLoanLoading] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityKind, setActivityKind] = useState<"payment" | "draw">(
@@ -248,6 +256,13 @@ export const Loans: React.FC = () => {
     useState<InterestCompound>(InterestCompound.MONTHLY);
   const [loanMinimumPayment, setLoanMinimumPayment] = useState("");
   const [loanExpectedMaturityDate, setLoanExpectedMaturityDate] = useState("");
+  const [editOriginPrincipal, setEditOriginPrincipal] = useState("");
+  const [editCurrentPrincipal, setEditCurrentPrincipal] = useState("");
+  const [editInterestRateAnnual, setEditInterestRateAnnual] = useState("");
+  const [editInterestCompound, setEditInterestCompound] =
+    useState<InterestCompound>(InterestCompound.MONTHLY);
+  const [editMinimumPayment, setEditMinimumPayment] = useState("");
+  const [editExpectedMaturityDate, setEditExpectedMaturityDate] = useState("");
 
   useEffect(() => {
     fetchAccounts();
@@ -320,6 +335,24 @@ export const Loans: React.FC = () => {
     if (!accountId) return;
     fetchLoanSchedule({ accountId, asOfDate: asOfDate || undefined, periods });
     fetchLoanEvents({ accountId, limit: 50, offset: 0 });
+  };
+
+  const openEditLoan = () => {
+    if (!selectedAccount?.loan) {
+      toast.error("Loan details are not available for this account.");
+      return;
+    }
+    setEditOriginPrincipal(selectedAccount.loan.origin_principal ?? "");
+    setEditCurrentPrincipal(selectedAccount.loan.current_principal ?? "");
+    setEditInterestRateAnnual(selectedAccount.loan.interest_rate_annual ?? "");
+    setEditInterestCompound(
+      selectedAccount.loan.interest_compound ?? InterestCompound.MONTHLY,
+    );
+    setEditMinimumPayment(selectedAccount.loan.minimum_payment ?? "");
+    setEditExpectedMaturityDate(
+      toDateInputValue(selectedAccount.loan.expected_maturity_date),
+    );
+    setEditLoanOpen(true);
   };
 
   const fundingAccounts = useMemo(() => {
@@ -481,6 +514,63 @@ export const Loans: React.FC = () => {
       );
     } finally {
       setActivityLoading(false);
+    }
+  };
+
+  const updateLoan = async () => {
+    if (!token) {
+      toast.error("You must be logged in to update a loan.");
+      return;
+    }
+    if (!accountId) return;
+    if (!selectedAccount?.loan) return;
+
+    const originCents = parseMoneyToCents(editOriginPrincipal);
+    const currentCents = parseMoneyToCents(editCurrentPrincipal);
+    const rate = parseDecimalString(editInterestRateAnnual);
+    if (originCents === null || currentCents === null || rate === null) {
+      toast.error("Principal and interest rate must be valid numbers.");
+      return;
+    }
+
+    const minPay = editMinimumPayment.trim();
+    const minPayCents = minPay ? parseMoneyToCents(minPay) : null;
+    if (minPay && minPayCents === null) {
+      toast.error("Minimum payment must be a valid number.");
+      return;
+    }
+
+    setEditLoanLoading(true);
+    try {
+      await apiFetch({
+        path: `/loans/${accountId}`,
+        method: "PATCH",
+        token,
+        schema: loanSchema,
+        body: {
+          origin_principal: centsToMoneyString(originCents),
+          current_principal: centsToMoneyString(currentCents),
+          interest_rate_annual: rate,
+          interest_compound: editInterestCompound,
+          minimum_payment: minPay
+            ? centsToMoneyString(minPayCents ?? 0n)
+            : null,
+          expected_maturity_date: editExpectedMaturityDate.trim()
+            ? editExpectedMaturityDate.trim()
+            : null,
+        },
+      });
+
+      toast.success("Loan updated");
+      setEditLoanOpen(false);
+      fetchAccounts({ includeInactive });
+      refreshLoanData();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to update loan",
+      );
+    } finally {
+      setEditLoanLoading(false);
     }
   };
 
@@ -722,6 +812,22 @@ export const Loans: React.FC = () => {
           setLoanMinimumPayment={setLoanMinimumPayment}
           loanExpectedMaturityDate={loanExpectedMaturityDate}
           setLoanExpectedMaturityDate={setLoanExpectedMaturityDate}
+          editLoanOpen={editLoanOpen}
+          setEditLoanOpen={setEditLoanOpen}
+          editLoanLoading={editLoanLoading}
+          onUpdateLoan={updateLoan}
+          editOriginPrincipal={editOriginPrincipal}
+          setEditOriginPrincipal={setEditOriginPrincipal}
+          editCurrentPrincipal={editCurrentPrincipal}
+          setEditCurrentPrincipal={setEditCurrentPrincipal}
+          editInterestRateAnnual={editInterestRateAnnual}
+          setEditInterestRateAnnual={setEditInterestRateAnnual}
+          editInterestCompound={editInterestCompound}
+          setEditInterestCompound={setEditInterestCompound}
+          editMinimumPayment={editMinimumPayment}
+          setEditMinimumPayment={setEditMinimumPayment}
+          editExpectedMaturityDate={editExpectedMaturityDate}
+          setEditExpectedMaturityDate={setEditExpectedMaturityDate}
           activityOpen={activityOpen}
           setActivityOpen={setActivityOpen}
           activityLoading={activityLoading}
@@ -790,6 +896,19 @@ export const Loans: React.FC = () => {
             >
               <RefreshCw className="h-4 w-4" />
               Refresh account
+            </Button>
+            <Button
+              variant="outline"
+              className="gap-2 border-slate-300 text-slate-800"
+              onClick={openEditLoan}
+              disabled={
+                accountsLoading ||
+                selectedAccount?.account_type !== AccountType.DEBT ||
+                !selectedAccount?.loan
+              }
+            >
+              <Pencil className="h-4 w-4" />
+              Edit loan
             </Button>
             <Button
               variant="outline"
@@ -1239,6 +1358,22 @@ export const Loans: React.FC = () => {
         setLoanMinimumPayment={setLoanMinimumPayment}
         loanExpectedMaturityDate={loanExpectedMaturityDate}
         setLoanExpectedMaturityDate={setLoanExpectedMaturityDate}
+        editLoanOpen={editLoanOpen}
+        setEditLoanOpen={setEditLoanOpen}
+        editLoanLoading={editLoanLoading}
+        onUpdateLoan={updateLoan}
+        editOriginPrincipal={editOriginPrincipal}
+        setEditOriginPrincipal={setEditOriginPrincipal}
+        editCurrentPrincipal={editCurrentPrincipal}
+        setEditCurrentPrincipal={setEditCurrentPrincipal}
+        editInterestRateAnnual={editInterestRateAnnual}
+        setEditInterestRateAnnual={setEditInterestRateAnnual}
+        editInterestCompound={editInterestCompound}
+        setEditInterestCompound={setEditInterestCompound}
+        editMinimumPayment={editMinimumPayment}
+        setEditMinimumPayment={setEditMinimumPayment}
+        editExpectedMaturityDate={editExpectedMaturityDate}
+        setEditExpectedMaturityDate={setEditExpectedMaturityDate}
         activityOpen={activityOpen}
         setActivityOpen={setActivityOpen}
         activityLoading={activityLoading}
@@ -1281,6 +1416,22 @@ const LoansDialogs: React.FC<{
   setLoanMinimumPayment: (value: string) => void;
   loanExpectedMaturityDate: string;
   setLoanExpectedMaturityDate: (value: string) => void;
+  editLoanOpen: boolean;
+  setEditLoanOpen: (open: boolean) => void;
+  editLoanLoading: boolean;
+  onUpdateLoan: () => void;
+  editOriginPrincipal: string;
+  setEditOriginPrincipal: (value: string) => void;
+  editCurrentPrincipal: string;
+  setEditCurrentPrincipal: (value: string) => void;
+  editInterestRateAnnual: string;
+  setEditInterestRateAnnual: (value: string) => void;
+  editInterestCompound: InterestCompound;
+  setEditInterestCompound: (value: InterestCompound) => void;
+  editMinimumPayment: string;
+  setEditMinimumPayment: (value: string) => void;
+  editExpectedMaturityDate: string;
+  setEditExpectedMaturityDate: (value: string) => void;
   activityOpen: boolean;
   setActivityOpen: (open: boolean) => void;
   activityLoading: boolean;
@@ -1428,6 +1579,128 @@ const LoansDialogs: React.FC<{
                 <Plus className="h-4 w-4" />
               )}
               Create loan
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={props.editLoanOpen} onOpenChange={props.setEditLoanOpen}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Edit loan</DialogTitle>
+            <DialogDescription>
+              Update interest terms and set the current principal to match your
+              lender statement. This updates metadata and does not create a
+              transaction.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <label className="text-sm text-slate-700" htmlFor="edit-origin">
+                Original principal
+              </label>
+              <Input
+                id="edit-origin"
+                inputMode="decimal"
+                value={props.editOriginPrincipal}
+                onChange={(e) => props.setEditOriginPrincipal(e.target.value)}
+                placeholder="e.g., 100000.00"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm text-slate-700" htmlFor="edit-current">
+                Current principal (real balance)
+              </label>
+              <Input
+                id="edit-current"
+                inputMode="decimal"
+                value={props.editCurrentPrincipal}
+                onChange={(e) => props.setEditCurrentPrincipal(e.target.value)}
+                placeholder="e.g., 85600.00"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm text-slate-700" htmlFor="edit-rate">
+                Interest rate (annual %)
+              </label>
+              <Input
+                id="edit-rate"
+                inputMode="decimal"
+                value={props.editInterestRateAnnual}
+                onChange={(e) =>
+                  props.setEditInterestRateAnnual(e.target.value)
+                }
+                placeholder="e.g., 4.20"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <div className="text-sm text-slate-700">Compounding</div>
+              <Tabs
+                value={props.editInterestCompound}
+                onValueChange={(val) =>
+                  props.setEditInterestCompound(val as InterestCompound)
+                }
+              >
+                <TabsList className="w-full">
+                  <TabsTrigger value={InterestCompound.DAILY}>
+                    Daily
+                  </TabsTrigger>
+                  <TabsTrigger value={InterestCompound.MONTHLY}>
+                    Monthly
+                  </TabsTrigger>
+                  <TabsTrigger value={InterestCompound.YEARLY}>
+                    Yearly
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm text-slate-700" htmlFor="edit-minpay">
+                Minimum payment (optional)
+              </label>
+              <Input
+                id="edit-minpay"
+                inputMode="decimal"
+                value={props.editMinimumPayment}
+                onChange={(e) => props.setEditMinimumPayment(e.target.value)}
+                placeholder="e.g., 1200.00"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm text-slate-700" htmlFor="edit-maturity">
+                Expected maturity date (optional)
+              </label>
+              <Input
+                id="edit-maturity"
+                type="date"
+                value={props.editExpectedMaturityDate}
+                onChange={(e) =>
+                  props.setEditExpectedMaturityDate(e.target.value)
+                }
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              className="border-slate-300 text-slate-800"
+              onClick={() => props.setEditLoanOpen(false)}
+              disabled={props.editLoanLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={props.onUpdateLoan}
+              disabled={props.editLoanLoading}
+            >
+              {props.editLoanLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Pencil className="h-4 w-4" />
+              )}
+              Save changes
             </Button>
           </DialogFooter>
         </DialogContent>
