@@ -20,16 +20,16 @@ export const TotalNetWorthTrajectoryCard: React.FC<{
   data: Array<{ date: string; net: number; year: number }>;
   domain: [number, number];
 }> = ({ loading, data, domain }) => {
-  const yearMarkers = useMemo(
-    () =>
-      Array.from(new Set(data.map((point) => point.year)))
-        .sort((a, b) => a - b)
-        .map((year) => ({ year, first: data.find((d) => d.year === year) }))
-        .filter((entry): entry is { year: number; first: { date: string } } =>
-          Boolean(entry.first),
-        ),
-    [data],
-  );
+  const yearMarkers = useMemo(() => {
+    const seen = new Set<number>();
+    const markers: Array<{ year: number; date: string }> = [];
+    for (const point of data) {
+      if (seen.has(point.year)) continue;
+      seen.add(point.year);
+      markers.push({ year: point.year, date: point.date });
+    }
+    return markers;
+  }, [data]);
 
   return (
     <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
@@ -95,10 +95,10 @@ export const TotalNetWorthTrajectoryCard: React.FC<{
                 tickFormatter={(v) => compactCurrency(Number(v))}
               />
               <Tooltip content={<ChartTooltipContent />} />
-              {yearMarkers.map(({ year, first }) => (
+              {yearMarkers.map(({ year, date }) => (
                 <ReferenceLine
                   key={year}
-                  x={first.date}
+                  x={date}
                   stroke="#cbd5e1"
                   strokeDasharray="4 4"
                   label={{

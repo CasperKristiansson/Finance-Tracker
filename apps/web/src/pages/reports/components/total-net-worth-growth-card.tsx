@@ -1,14 +1,14 @@
-import React from "react";
 import { Sparkles } from "lucide-react";
+import React from "react";
 import { Link } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { PageRoutes } from "@/data/routes";
 
-import { ChartCard } from "./chart-card";
-import { currency, percent } from "../reports-utils";
 import type { TotalDrilldownState } from "../reports-types";
+import { currency, percent } from "../reports-utils";
+import { ChartCard } from "./chart-card";
 
 export type TotalNetWorthStats = {
   asOf: string;

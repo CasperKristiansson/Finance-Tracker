@@ -57,10 +57,10 @@ import { ReportsHeader } from "./components/reports-header";
 import { ReportsOverviewCard } from "./components/reports-overview-card";
 import { TotalAccountsOverviewCard } from "./components/total-accounts-overview-card";
 import { TotalCategoryByYearCard } from "./components/total-category-by-year-card";
-import { TotalDrilldownDialog } from "./components/total-drilldown-dialog";
-import { TotalHeatmapDialog } from "./components/total-heatmap-dialog";
 import { TotalCompositionOverTimeCard } from "./components/total-composition-over-time-card";
 import { TotalDebtOverviewCard } from "./components/total-debt-overview-card";
+import { TotalDrilldownDialog } from "./components/total-drilldown-dialog";
+import { TotalHeatmapDialog } from "./components/total-heatmap-dialog";
 import { TotalInvestmentsSnapshotCard } from "./components/total-investments-snapshot-card";
 import { TotalNetWorthBreakdownCard } from "./components/total-net-worth-breakdown-card";
 import { TotalNetWorthGrowthCard } from "./components/total-net-worth-growth-card";
@@ -83,7 +83,6 @@ import {
   compactCurrency,
   currency,
   downloadCsv,
-  heatColor,
   isRecord,
   median,
   medianAbsoluteDeviation,
