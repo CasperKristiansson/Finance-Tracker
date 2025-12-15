@@ -40,7 +40,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageRoutes } from "@/data/routes";
 import { selectToken } from "@/features/auth/authSlice";
-import { useAccountsApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import type {
   TotalOverviewResponse,
@@ -134,6 +133,10 @@ type TotalDrilldownState =
       accountType: string;
     }
   | {
+      kind: "year";
+      year: number;
+    }
+  | {
       kind: "investments";
     }
   | {
@@ -156,6 +159,40 @@ type YearlyExtraDialogState =
     }
   | {
       kind: "savingsDecomposition";
+    };
+
+type TotalHeatmapDialogState =
+  | {
+      kind: "seasonality";
+      flow: "income" | "expense";
+      year: number;
+      monthIndex: number;
+      monthLabel: string;
+      value: number;
+      yearValues: number[];
+      years: number[];
+      monthAcrossYears: Array<{ year: number; value: number }>;
+      yearTotal: number;
+      monthRank: number;
+      monthSharePct: number | null;
+      yoyDelta: number | null;
+      yoyDeltaPct: number | null;
+    }
+  | {
+      kind: "categoryByYear";
+      flow: "income" | "expense";
+      year: number;
+      categoryId: string | null;
+      categoryName: string;
+      color: string;
+      value: number;
+      years: number[];
+      totals: number[];
+      max: number;
+      yearTotal: number | null;
+      sharePct: number | null;
+      yoyDelta: number | null;
+      yoyDeltaPct: number | null;
     };
 
 const currency = (value: number) =>
@@ -249,7 +286,8 @@ const ChartCard: React.FC<{
   description?: string;
   children: React.ReactNode;
   loading?: boolean;
-}> = ({ title, description, children, loading }) => (
+  contentClassName?: string;
+}> = ({ title, description, children, loading, contentClassName }) => (
   <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
     <CardHeader className="pb-2">
       <CardTitle className="text-base font-semibold text-slate-900">
@@ -259,14 +297,13 @@ const ChartCard: React.FC<{
         <p className="text-xs text-slate-500">{description}</p>
       ) : null}
     </CardHeader>
-    <CardContent className="h-80">
+    <CardContent className={contentClassName ?? "h-80"}>
       {loading ? <Skeleton className="h-full w-full" /> : children}
     </CardContent>
   </Card>
 );
 
 export const Reports: React.FC = () => {
-  const { items: accounts, fetchAccounts } = useAccountsApi();
   const token = useAppSelector(selectToken);
   const location = useLocation();
   const navigate = useNavigate();
@@ -276,7 +313,6 @@ export const Reports: React.FC = () => {
   const routeMode: ReportMode = isTotalRoute ? "total" : "yearly";
   const currentYear = new Date().getFullYear();
   const year = isYearlyRoute ? Number(params.year) || currentYear : currentYear;
-  const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [overview, setOverview] = useState<YearlyOverviewResponse | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
   const [prevOverview, setPrevOverview] =
@@ -313,6 +349,28 @@ export const Reports: React.FC = () => {
   const [totalDrilldownSeries, setTotalDrilldownSeries] = useState<
     Array<{ period: string; income: number; expense: number; net: number }>
   >([]);
+  const [totalYearDrilldown, setTotalYearDrilldown] =
+    useState<YearlyOverviewResponse | null>(null);
+  const [totalYearDrilldownLoading, setTotalYearDrilldownLoading] =
+    useState(false);
+  const [totalYearDrilldownError, setTotalYearDrilldownError] = useState<
+    string | null
+  >(null);
+  const [totalHeatmapDialog, setTotalHeatmapDialog] =
+    useState<TotalHeatmapDialogState | null>(null);
+  const [totalHeatmapDialogOpen, setTotalHeatmapDialogOpen] = useState(false);
+  const [totalSeasonalityHover, setTotalSeasonalityHover] = useState<{
+    flow: "income" | "expense";
+    year: number;
+    monthIndex: number;
+    value: number;
+  } | null>(null);
+  const [totalCategoryYearHover, setTotalCategoryYearHover] = useState<{
+    flow: "income" | "expense";
+    year: number;
+    categoryName: string;
+    value: number;
+  } | null>(null);
 
   const yearOptions = useMemo(() => {
     const current = new Date().getFullYear();
@@ -327,22 +385,15 @@ export const Reports: React.FC = () => {
   }, [currentYear, isYearlyRoute, navigate, params.year]);
 
   useEffect(() => {
-    fetchAccounts();
-  }, [fetchAccounts]);
-
-  useEffect(() => {
     const loadOverview = async () => {
       if (!token) return;
       if (!isYearlyRoute) return;
       setOverviewLoading(true);
       try {
-        const accountIds = selectedAccounts.length
-          ? selectedAccounts.join(",")
-          : undefined;
         const { data } = await apiFetch<YearlyOverviewResponse>({
           path: "/reports/yearly-overview",
           schema: yearlyOverviewSchema,
-          query: accountIds ? { year, account_ids: accountIds } : { year },
+          query: { year },
           token,
         });
         setOverview(data);
@@ -354,7 +405,7 @@ export const Reports: React.FC = () => {
       }
     };
     void loadOverview();
-  }, [isYearlyRoute, selectedAccounts, token, year]);
+  }, [isYearlyRoute, token, year]);
 
   useEffect(() => {
     const loadPrevOverview = async () => {
@@ -366,15 +417,10 @@ export const Reports: React.FC = () => {
       }
       setPrevOverviewLoading(true);
       try {
-        const accountIds = selectedAccounts.length
-          ? selectedAccounts.join(",")
-          : undefined;
         const { data } = await apiFetch<YearlyOverviewResponse>({
           path: "/reports/yearly-overview",
           schema: yearlyOverviewSchema,
-          query: accountIds
-            ? { year: year - 1, account_ids: accountIds }
-            : { year: year - 1 },
+          query: { year: year - 1 },
           token,
         });
         setPrevOverview(data);
@@ -386,7 +432,7 @@ export const Reports: React.FC = () => {
       }
     };
     void loadPrevOverview();
-  }, [isYearlyRoute, selectedAccounts, token, year]);
+  }, [isYearlyRoute, token, year]);
 
   useEffect(() => {
     const loadTotalOverview = async () => {
@@ -394,13 +440,9 @@ export const Reports: React.FC = () => {
       if (!isTotalRoute) return;
       setTotalOverviewLoading(true);
       try {
-        const accountIds = selectedAccounts.length
-          ? selectedAccounts.join(",")
-          : undefined;
         const { data } = await apiFetch<TotalOverviewResponse>({
           path: "/reports/total-overview",
           schema: totalOverviewSchema,
-          query: accountIds ? { account_ids: accountIds } : undefined,
           token,
         });
         setTotalOverview(data);
@@ -412,7 +454,7 @@ export const Reports: React.FC = () => {
       }
     };
     void loadTotalOverview();
-  }, [isTotalRoute, selectedAccounts, token]);
+  }, [isTotalRoute, token]);
 
   const totalAllRange = useMemo(() => {
     if (!totalOverview) return null;
@@ -459,9 +501,7 @@ export const Reports: React.FC = () => {
         const accountIds =
           totalDrilldown.kind === "account"
             ? totalDrilldown.accountId
-            : selectedAccounts.length
-              ? selectedAccounts.join(",")
-              : undefined;
+            : undefined;
         const categoryIds =
           totalDrilldown.kind === "category"
             ? totalDrilldown.categoryId
@@ -506,14 +546,38 @@ export const Reports: React.FC = () => {
       }
     };
     void loadDrilldown();
-  }, [
-    routeMode,
-    selectedAccounts,
-    token,
-    totalDrilldown,
-    totalDrilldownOpen,
-    totalWindowRange,
-  ]);
+  }, [routeMode, token, totalDrilldown, totalDrilldownOpen, totalWindowRange]);
+
+  useEffect(() => {
+    const loadYearDrilldown = async () => {
+      if (!token) return;
+      if (routeMode !== "total") return;
+      if (!totalDrilldownOpen) return;
+      if (!totalDrilldown || totalDrilldown.kind !== "year") return;
+
+      setTotalYearDrilldownLoading(true);
+      setTotalYearDrilldownError(null);
+      setTotalYearDrilldown(null);
+
+      try {
+        const { data } = await apiFetch<YearlyOverviewResponse>({
+          path: "/reports/yearly-overview",
+          schema: yearlyOverviewSchema,
+          query: { year: totalDrilldown.year },
+          token,
+        });
+        setTotalYearDrilldown(data);
+      } catch (error) {
+        console.error(error);
+        setTotalYearDrilldown(null);
+        setTotalYearDrilldownError("Failed to load yearly details.");
+      } finally {
+        setTotalYearDrilldownLoading(false);
+      }
+    };
+
+    void loadYearDrilldown();
+  }, [routeMode, token, totalDrilldown, totalDrilldownOpen]);
 
   useEffect(() => {
     const loadCategoryDetail = async () => {
@@ -522,25 +586,14 @@ export const Reports: React.FC = () => {
       setCategoryDetailLoading(true);
       setCategoryDetail(null);
       try {
-        const accountIds = selectedAccounts.length
-          ? selectedAccounts.join(",")
-          : undefined;
-        const query = accountIds
-          ? {
-              year,
-              category_id: selectedCategoryId,
-              account_ids: accountIds,
-              flow: selectedCategoryFlow,
-            }
-          : {
-              year,
-              category_id: selectedCategoryId,
-              flow: selectedCategoryFlow,
-            };
         const { data } = await apiFetch<YearlyCategoryDetailResponse>({
           path: "/reports/yearly-category-detail",
           schema: yearlyCategoryDetailSchema,
-          query,
+          query: {
+            year,
+            category_id: selectedCategoryId,
+            flow: selectedCategoryFlow,
+          },
           token,
         });
         setCategoryDetail(data);
@@ -552,7 +605,7 @@ export const Reports: React.FC = () => {
       }
     };
     void loadCategoryDetail();
-  }, [selectedAccounts, selectedCategoryFlow, selectedCategoryId, token, year]);
+  }, [selectedCategoryFlow, selectedCategoryId, token, year]);
 
   const categoryDetailPrevMonthly = useMemo(() => {
     if (!prevOverview) return null;
@@ -565,12 +618,6 @@ export const Reports: React.FC = () => {
     if (!match) return null;
     return match.monthly.map((value) => Number(value));
   }, [prevOverview, selectedCategoryFlow, selectedCategoryId]);
-
-  const toggleAccount = (id: string) => {
-    setSelectedAccounts((prev) =>
-      prev.includes(id) ? prev.filter((acc) => acc !== id) : [...prev, id],
-    );
-  };
 
   const yearOverviewMonthChart = useMemo(
     () =>
@@ -1322,6 +1369,25 @@ export const Reports: React.FC = () => {
     totalWindowRange,
   ]);
 
+  const totalNetWorthTrajectoryData = useMemo(
+    () =>
+      totalNetWorthSeries.map((row) => ({
+        date: row.date,
+        net: row.netWorth,
+        year: new Date(row.date).getFullYear(),
+      })),
+    [totalNetWorthSeries],
+  );
+
+  const totalNetWorthTrajectoryDomain = useMemo<[number, number]>(() => {
+    if (!totalNetWorthTrajectoryData.length) return [0, 0];
+    const values = totalNetWorthTrajectoryData.map((d) => d.net);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const upperPad = Math.abs(max) * 0.05 || 1;
+    return [min, max + upperPad];
+  }, [totalNetWorthTrajectoryData]);
+
   const totalYearly = useMemo(() => {
     if (!totalOverview) return [];
     const windowStartYear = totalWindowRange
@@ -1338,6 +1404,11 @@ export const Reports: React.FC = () => {
       }))
       .sort((a, b) => a.year - b.year);
   }, [totalOverview, totalWindowRange]);
+
+  const totalYearlyTable = useMemo(
+    () => [...totalYearly].reverse(),
+    [totalYearly],
+  );
 
   const totalExpenseMix = useMemo(() => {
     if (!totalOverview) {
@@ -1428,6 +1499,14 @@ export const Reports: React.FC = () => {
       })),
     };
   }, [totalOverview?.investments]);
+
+  const totalInvestmentsYearlyTable = useMemo(
+    () =>
+      totalInvestments
+        ? [...totalInvestments.yearly].sort((a, b) => b.year - a.year)
+        : [],
+    [totalInvestments],
+  );
 
   const totalExpenseCategoriesLifetime = useMemo(() => {
     if (!totalOverview) return [];
@@ -1533,12 +1612,31 @@ export const Reports: React.FC = () => {
 
   const totalAccountsOverview = useMemo(() => {
     if (!totalOverview) return [];
+    const debtByAccountId = new Map<string, number>();
+    totalOverview.debt.accounts.forEach((row) => {
+      debtByAccountId.set(row.account_id, Number(row.current_debt));
+    });
+
+    const investmentsByAccountName = new Map<string, number>();
+    totalOverview.investments?.accounts_latest.forEach((row) => {
+      investmentsByAccountName.set(row.account_name, Number(row.value));
+    });
+
     return totalOverview.accounts
       .map((row) => ({
+        balance:
+          row.account_type === "investment" &&
+          investmentsByAccountName.has(row.name) &&
+          Number(row.current_balance) === 0
+            ? (investmentsByAccountName.get(row.name) ?? 0)
+            : row.account_type === "debt" &&
+                debtByAccountId.has(row.account_id) &&
+                Number(row.current_balance) === 0
+              ? -(debtByAccountId.get(row.account_id) ?? 0)
+              : Number(row.current_balance),
         id: row.account_id,
         name: row.name,
         type: row.account_type,
-        balance: Number(row.current_balance),
         netOperating: Number(row.net_operating),
         netTransfers: Number(row.net_transfers),
         firstDate: row.first_transaction_date ?? null,
@@ -1732,11 +1830,8 @@ export const Reports: React.FC = () => {
       ),
       lastSnapshot,
       snapshotAgeDays,
-      investmentsSuppressedByFilter:
-        selectedAccounts.length > 0 && !totalOverview.investments,
     };
   }, [
-    selectedAccounts.length,
     totalAccountsOverview,
     totalMonthlyIncomeExpense,
     totalOverview,
@@ -1753,73 +1848,12 @@ export const Reports: React.FC = () => {
     setTotalDrilldownOpen(true);
   };
 
-  const exportTotalSummaryCsv = () => {
-    if (!totalOverview || !totalKpis || !totalWindowRange) return;
-    const attribution = totalNetWorthAttribution;
-    downloadCsv("reports-total-summary.csv", [
-      {
-        as_of: totalOverview.as_of,
-        window_start: totalWindowRange.start,
-        window_end: totalWindowRange.end,
-        net_worth_now: totalKpis.netWorth,
-        cash_balance_now: totalKpis.cashBalance,
-        debt_total_now: totalKpis.debtTotal,
-        investments_value_now: totalKpis.investmentsValue ?? "",
-        lifetime_income: totalKpis.lifetimeIncome,
-        lifetime_expense: totalKpis.lifetimeExpense,
-        lifetime_saved: totalKpis.lifetimeSaved,
-        lifetime_savings_rate_pct: totalKpis.lifetimeSavingsRate ?? "",
-        window_net_worth_delta: attribution?.netWorthDelta ?? "",
-        window_savings_net: attribution?.savings ?? "",
-        window_investments_delta: attribution?.investmentsContribution ?? "",
-        window_debt_contribution: attribution?.debtContribution ?? "",
-        window_remainder: attribution?.remainder ?? "",
-      },
-    ]);
+  const openTotalHeatmapDialog = (state: TotalHeatmapDialogState) => {
+    setTotalHeatmapDialog(state);
+    setTotalHeatmapDialogOpen(true);
   };
 
-  const exportTotalYearlyCsv = () => {
-    if (!totalYearly.length) return;
-    downloadCsv(
-      "reports-total-yearly.csv",
-      totalYearly.map((row) => ({
-        year: row.year,
-        income: row.income,
-        expense: row.expense,
-        net: row.net,
-        savings_rate_pct: row.savingsRate ?? "",
-      })),
-    );
-  };
-
-  const exportTotalNetWorthCsv = () => {
-    if (!totalNetWorthSeries.length) return;
-    downloadCsv(
-      "reports-total-net-worth.csv",
-      totalNetWorthSeries.map((row) => ({
-        date: row.date,
-        net_worth: row.netWorth,
-      })),
-    );
-  };
-
-  const exportTotalMonthlyIncomeExpenseCsv = () => {
-    if (!totalWindowRange) return;
-    const rows = totalMonthlyIncomeExpense
-      .filter(
-        (row) =>
-          row.date >= totalWindowRange.start &&
-          row.date <= totalWindowRange.end,
-      )
-      .map((row) => ({
-        date: row.date,
-        income: row.income,
-        expense: row.expense,
-        net: row.income - row.expense,
-      }));
-    if (!rows.length) return;
-    downloadCsv("reports-total-monthly-income-expense.csv", rows);
-  };
+  // Exports removed for the total report view.
 
   return (
     <MotionPage className="space-y-4">
@@ -1892,66 +1926,16 @@ export const Reports: React.FC = () => {
           >
             Total
           </Button>
-          {routeMode === "total" ? (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={exportTotalSummaryCsv}
-                disabled={!totalOverview}
-              >
-                Export summary
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={exportTotalYearlyCsv}
-                disabled={!totalYearly.length}
-              >
-                Export yearly
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  exportTotalNetWorthCsv();
-                  exportTotalMonthlyIncomeExpenseCsv();
-                }}
-                disabled={!totalNetWorthSeries.length}
-              >
-                Export series
-              </Button>
-            </>
-          ) : null}
         </div>
       </div>
 
       <Card className="border-slate-200 shadow-[0_12px_36px_-26px_rgba(15,23,42,0.35)]">
         <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <CardTitle className="text-sm text-slate-700">Filters</CardTitle>
+            <CardTitle className="text-sm text-slate-700">Overview</CardTitle>
             <p className="text-sm text-slate-500">
-              Pick accounts to focus all report sections.
+              Key totals for {routeMode === "yearly" ? year : "all time"}.
             </p>
-          </div>
-          <div className="flex flex-wrap gap-2 text-sm text-slate-700 md:justify-end">
-            {accounts.map((account) => (
-              <button
-                key={account.id}
-                type="button"
-                onClick={() => toggleAccount(account.id)}
-                className={
-                  selectedAccounts.includes(account.id)
-                    ? "rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white"
-                    : "rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700"
-                }
-              >
-                {account.name}
-              </button>
-            ))}
-            {accounts.length === 0 ? (
-              <Skeleton className="h-6 w-24 rounded-full" />
-            ) : null}
           </div>
         </CardHeader>
         {routeMode === "yearly" && overview ? (
@@ -2331,11 +2315,7 @@ export const Reports: React.FC = () => {
 
             <ChartCard
               title="Net worth growth"
-              description={
-                selectedAccounts.length
-                  ? "Filtered to selected accounts."
-                  : "Includes investment snapshots when available."
-              }
+              description="Includes investment snapshots when available."
               loading={overviewLoading}
             >
               <ChartContainer
@@ -2423,32 +2403,101 @@ export const Reports: React.FC = () => {
           <div className="grid gap-3 lg:grid-cols-3">
             <ChartCard
               title="Debt"
-              description="Total debt over the year."
+              description="Trend and breakdown by account."
               loading={overviewLoading}
             >
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={debtChart}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="month"
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fill: "#475569", fontSize: 12 }}
-                  />
-                  <YAxis hide />
-                  <Tooltip
-                    formatter={(value) => currency(Number(value))}
-                    contentStyle={{ fontSize: 12 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="debt"
-                    stroke="#f97316"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <Tabs defaultValue="trend" className="flex h-full flex-col">
+                <TabsList className="self-start">
+                  <TabsTrigger value="trend">Trend</TabsTrigger>
+                  <TabsTrigger value="accounts">Accounts</TabsTrigger>
+                </TabsList>
+                <TabsContent value="trend" className="mt-2 min-h-0 flex-1">
+                  <div className="h-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={debtChart}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="month"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                        />
+                        <YAxis hide />
+                        <Tooltip
+                          formatter={(value) => currency(Number(value))}
+                          contentStyle={{ fontSize: 12 }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="debt"
+                          stroke="#f97316"
+                          strokeWidth={2}
+                          dot={false}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </TabsContent>
+                <TabsContent
+                  value="accounts"
+                  className="mt-2 min-h-0 flex-1 overflow-auto"
+                >
+                  {debtOverviewRows.length ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Account</TableHead>
+                          <TableHead className="text-right">End</TableHead>
+                          <TableHead className="hidden text-right md:table-cell">
+                            Δ
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {debtOverviewRows.map((row) => (
+                          <TableRow
+                            key={row.id}
+                            className="cursor-pointer"
+                            onClick={() => {
+                              openDetailDialog({
+                                kind: "debt",
+                                title: `${row.name} (${year})`,
+                                monthly: row.monthly,
+                                startDebt: row.startDebt,
+                                endDebt: row.endDebt,
+                                delta: row.delta,
+                              });
+                            }}
+                          >
+                            <TableCell className="max-w-[180px] truncate font-medium">
+                              {row.name}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {currency(row.endDebt)}
+                            </TableCell>
+                            <TableCell className="hidden text-right text-xs md:table-cell">
+                              <span
+                                className={
+                                  row.delta <= 0
+                                    ? "text-emerald-700"
+                                    : "text-rose-700"
+                                }
+                              >
+                                {row.delta >= 0 ? "+" : "−"}
+                                {currency(Math.abs(row.delta))}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                      No debt accounts found for this selection.
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             </ChartCard>
 
             <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
@@ -3151,7 +3200,7 @@ export const Reports: React.FC = () => {
             </Card>
           </div>
 
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid gap-3 lg:grid-cols-1">
             <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
               <CardHeader className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div>
@@ -3197,10 +3246,6 @@ export const Reports: React.FC = () => {
               <CardContent className="space-y-4">
                 {!overview || !investmentsSummary ? (
                   <Skeleton className="h-56 w-full" />
-                ) : selectedAccounts.length ? (
-                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-                    Clear the account filter to include investment snapshots.
-                  </div>
                 ) : (
                   <>
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -3366,75 +3411,6 @@ export const Reports: React.FC = () => {
                       </div>
                     </div>
                   </>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold text-slate-900">
-                  Debt overview
-                </CardTitle>
-                <p className="text-xs text-slate-500">
-                  End balance and change this year.
-                </p>
-              </CardHeader>
-              <CardContent className="max-h-[32rem] overflow-auto">
-                {!overview ? (
-                  <Skeleton className="h-56 w-full" />
-                ) : debtOverviewRows.length ? (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Account</TableHead>
-                        <TableHead className="text-right">End</TableHead>
-                        <TableHead className="hidden text-right md:table-cell">
-                          Δ
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {debtOverviewRows.map((row) => (
-                        <TableRow
-                          key={row.id}
-                          className="cursor-pointer"
-                          onClick={() => {
-                            openDetailDialog({
-                              kind: "debt",
-                              title: `${row.name} (${year})`,
-                              monthly: row.monthly,
-                              startDebt: row.startDebt,
-                              endDebt: row.endDebt,
-                              delta: row.delta,
-                            });
-                          }}
-                        >
-                          <TableCell className="max-w-[180px] truncate font-medium">
-                            {row.name}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold">
-                            {currency(row.endDebt)}
-                          </TableCell>
-                          <TableCell className="hidden text-right text-xs md:table-cell">
-                            <span
-                              className={
-                                row.delta <= 0
-                                  ? "text-emerald-700"
-                                  : "text-rose-700"
-                              }
-                            >
-                              {row.delta >= 0 ? "+" : "−"}
-                              {currency(Math.abs(row.delta))}
-                            </span>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                ) : (
-                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-                    No debt accounts found for this selection.
-                  </div>
                 )}
               </CardContent>
             </Card>
@@ -3739,87 +3715,60 @@ export const Reports: React.FC = () => {
             <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
               <CardHeader className="pb-2">
                 <CardTitle className="text-base font-semibold text-slate-900">
-                  Insights
+                  Category changes
                 </CardTitle>
                 <p className="text-xs text-slate-500">
-                  Auto-generated, small and actionable.
+                  Ranked by increased spend vs last year.
                 </p>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm text-slate-700">
+              <CardContent className="max-h-[22rem] overflow-auto">
                 {!overview ? (
-                  <Skeleton className="h-40 w-full" />
-                ) : overview.insights.length ? (
-                  overview.insights.map((text, idx) => (
-                    <div
-                      key={idx}
-                      className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs"
-                    >
-                      {text}
-                    </div>
-                  ))
+                  <Skeleton className="h-56 w-full" />
                 ) : (
-                  <p className="text-sm text-slate-500">No insights yet.</p>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Category</TableHead>
+                        <TableHead className="text-right">Δ</TableHead>
+                        <TableHead className="text-right">This year</TableHead>
+                        <TableHead className="text-right">YoY</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {overview.category_changes.map((row) => (
+                        <TableRow
+                          key={row.name}
+                          className={
+                            row.category_id ? "cursor-pointer" : undefined
+                          }
+                          onClick={() => {
+                            if (!row.category_id) return;
+                            setSelectedCategoryFlow("expense");
+                            setSelectedCategoryId(row.category_id);
+                          }}
+                        >
+                          <TableCell className="font-medium">
+                            {row.name}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {currency(Number(row.delta))}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {currency(Number(row.amount))}
+                          </TableCell>
+                          <TableCell className="text-right text-xs text-slate-600">
+                            {row.delta_pct
+                              ? `${Math.round(Number(row.delta_pct))}%`
+                              : "—"}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 )}
               </CardContent>
             </Card>
           </div>
-
-          <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold text-slate-900">
-                Category changes
-              </CardTitle>
-              <p className="text-xs text-slate-500">
-                Ranked by increased spend vs last year.
-              </p>
-            </CardHeader>
-            <CardContent className="max-h-80 overflow-auto">
-              {!overview ? (
-                <Skeleton className="h-56 w-full" />
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Category</TableHead>
-                      <TableHead className="text-right">Δ</TableHead>
-                      <TableHead className="text-right">This year</TableHead>
-                      <TableHead className="text-right">YoY</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {overview.category_changes.map((row) => (
-                      <TableRow
-                        key={row.name}
-                        className={
-                          row.category_id ? "cursor-pointer" : undefined
-                        }
-                        onClick={() => {
-                          if (!row.category_id) return;
-                          setSelectedCategoryFlow("expense");
-                          setSelectedCategoryId(row.category_id);
-                        }}
-                      >
-                        <TableCell className="font-medium">
-                          {row.name}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold">
-                          {currency(Number(row.delta))}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {currency(Number(row.amount))}
-                        </TableCell>
-                        <TableCell className="text-right text-xs text-slate-600">
-                          {row.delta_pct
-                            ? `${Math.round(Number(row.delta_pct))}%`
-                            : "—"}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
 
           <Dialog
             open={Boolean(yearlyExtraDialog)}
@@ -4920,15 +4869,123 @@ export const Reports: React.FC = () => {
         </>
       ) : (
         <>
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid gap-3">
+            <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">
+                    Net Worth
+                  </CardTitle>
+                  <p className="text-xs text-slate-500">Trajectory over time</p>
+                </div>
+              </CardHeader>
+              <CardContent className="h-80 md:h-96">
+                {totalOverviewLoading ? (
+                  <Skeleton className="h-full w-full" />
+                ) : !totalNetWorthTrajectoryData.length ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-slate-600">
+                    <p>No net worth history yet.</p>
+                  </div>
+                ) : (
+                  <ChartContainer
+                    className="h-full w-full"
+                    config={{
+                      net: {
+                        label: "Net worth",
+                        color: "#4f46e5",
+                      },
+                    }}
+                  >
+                    <AreaChart
+                      data={totalNetWorthTrajectoryData}
+                      margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
+                    >
+                      <defs>
+                        <linearGradient
+                          id="netFillTotalTrajectory"
+                          x1="0"
+                          y1="0"
+                          x2="0"
+                          y2="1"
+                        >
+                          <stop
+                            offset="5%"
+                            stopColor="#4f46e5"
+                            stopOpacity={0.3}
+                          />
+                          <stop
+                            offset="95%"
+                            stopColor="#4f46e5"
+                            stopOpacity={0}
+                          />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="date"
+                        tickFormatter={(value) =>
+                          new Date(value).toLocaleDateString("en-US", {
+                            month: "short",
+                          })
+                        }
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        domain={totalNetWorthTrajectoryDomain}
+                        allowDataOverflow
+                        tickMargin={12}
+                        width={90}
+                        tickFormatter={(v) => compactCurrency(Number(v))}
+                      />
+                      <Tooltip content={<ChartTooltipContent />} />
+                      {Array.from(
+                        new Set(totalNetWorthTrajectoryData.map((d) => d.year)),
+                      ).map((year) => {
+                        const firstPoint = totalNetWorthTrajectoryData.find(
+                          (d) => d.year === year,
+                        );
+                        return firstPoint ? (
+                          <ReferenceLine
+                            key={year}
+                            x={firstPoint.date}
+                            stroke="#cbd5e1"
+                            strokeDasharray="4 4"
+                            label={{
+                              value: `${year}`,
+                              position: "insideTopLeft",
+                              fill: "#475569",
+                              fontSize: 10,
+                            }}
+                          />
+                        ) : null;
+                      })}
+                      <Area
+                        type="monotoneX"
+                        connectNulls
+                        dataKey="net"
+                        stroke="#4f46e5"
+                        fill="url(#netFillTotalTrajectory)"
+                        strokeWidth={2}
+                        name="Net worth"
+                      />
+                    </AreaChart>
+                  </ChartContainer>
+                )}
+              </CardContent>
+            </Card>
+
             <ChartCard
-              title="Net worth (lifetime)"
+              title="Net worth growth"
               description={
                 totalWindowPreset === "all"
                   ? "Monthly net worth snapshot (ledger + investments)."
                   : `Monthly net worth snapshot (last ${totalWindowPreset} years).`
               }
               loading={totalOverviewLoading}
+              contentClassName="h-[26rem]"
             >
               {!totalOverview && !totalOverviewLoading ? (
                 <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-slate-600">
@@ -4953,7 +5010,13 @@ export const Reports: React.FC = () => {
                 <div className="flex h-full flex-col gap-3">
                   {totalNetWorthStats ? (
                     <div className="grid gap-2 sm:grid-cols-2">
-                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      <button
+                        type="button"
+                        className="rounded-md border border-slate-100 bg-slate-50 p-3 text-left"
+                        onClick={() =>
+                          openTotalDrilldownDialog({ kind: "netWorth" })
+                        }
+                      >
                         <p className="text-xs tracking-wide text-slate-500 uppercase">
                           Current (as of{" "}
                           {new Date(totalNetWorthStats.asOf).toLocaleDateString(
@@ -4964,8 +5027,14 @@ export const Reports: React.FC = () => {
                         <p className="font-semibold text-slate-900">
                           {currency(totalNetWorthStats.current)}
                         </p>
-                      </div>
-                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-md border border-slate-100 bg-slate-50 p-3 text-left"
+                        onClick={() =>
+                          openTotalDrilldownDialog({ kind: "netWorth" })
+                        }
+                      >
                         <p className="text-xs tracking-wide text-slate-500 uppercase">
                           Change (12m)
                         </p>
@@ -4995,8 +5064,14 @@ export const Reports: React.FC = () => {
                             </>
                           )}
                         </p>
-                      </div>
-                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-md border border-slate-100 bg-slate-50 p-3 text-left"
+                        onClick={() =>
+                          openTotalDrilldownDialog({ kind: "netWorth" })
+                        }
+                      >
                         <p className="text-xs tracking-wide text-slate-500 uppercase">
                           Change (since start)
                         </p>
@@ -5022,8 +5097,14 @@ export const Reports: React.FC = () => {
                             </span>
                           )}
                         </p>
-                      </div>
-                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-md border border-slate-100 bg-slate-50 p-3 text-left"
+                        onClick={() =>
+                          openTotalDrilldownDialog({ kind: "netWorth" })
+                        }
+                      >
                         <p className="text-xs tracking-wide text-slate-500 uppercase">
                           Range
                         </p>
@@ -5037,12 +5118,18 @@ export const Reports: React.FC = () => {
                             totalNetWorthStats.allTimeHighDate,
                           ).toLocaleDateString("sv-SE")}
                         </p>
-                      </div>
+                      </button>
                     </div>
                   ) : null}
 
                   {totalNetWorthAttribution ? (
-                    <div className="rounded-md border border-slate-100 bg-white p-3">
+                    <button
+                      type="button"
+                      className="rounded-md border border-slate-100 bg-white p-3 text-left"
+                      onClick={() =>
+                        openTotalDrilldownDialog({ kind: "netWorth" })
+                      }
+                    >
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-xs font-semibold tracking-wide text-slate-700 uppercase">
@@ -5136,55 +5223,8 @@ export const Reports: React.FC = () => {
                             );
                           })}
                       </div>
-                    </div>
+                    </button>
                   ) : null}
-
-                  <div
-                    className="min-h-0 flex-1 cursor-pointer rounded-md border border-slate-100 bg-white p-2"
-                    onClick={() =>
-                      openTotalDrilldownDialog({ kind: "netWorth" })
-                    }
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={totalNetWorthSeries}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis
-                          dataKey="label"
-                          tickLine={false}
-                          axisLine={false}
-                          tick={{ fill: "#475569", fontSize: 12 }}
-                        />
-                        <YAxis
-                          tickLine={false}
-                          axisLine={false}
-                          tick={{ fill: "#475569", fontSize: 12 }}
-                          tickFormatter={(v) => compactCurrency(Number(v))}
-                        />
-                        <Tooltip
-                          formatter={(value) => currency(Number(value))}
-                          labelFormatter={(_label, payload) =>
-                            payload?.[0]?.payload?.date
-                              ? new Date(
-                                  String(payload[0].payload.date),
-                                ).toLocaleDateString("sv-SE", {
-                                  year: "numeric",
-                                  month: "long",
-                                })
-                              : String(_label)
-                          }
-                          contentStyle={{ fontSize: 12 }}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="netWorth"
-                          stroke="#0f172a"
-                          fill="rgba(15,23,42,0.12)"
-                          strokeWidth={2}
-                          name="Net worth"
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
                 </div>
               )}
             </ChartCard>
@@ -5195,8 +5235,7 @@ export const Reports: React.FC = () => {
                   Year-by-year performance
                 </CardTitle>
                 <p className="text-xs text-slate-500">
-                  Income vs expense per year. Click a year to open the yearly
-                  report.
+                  Income vs expense per year. Click a year for details.
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -5206,7 +5245,28 @@ export const Reports: React.FC = () => {
                   <>
                     <div className="h-56 rounded-md border border-slate-100 bg-white p-2">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={totalYearly}>
+                        <BarChart
+                          data={totalYearly}
+                          onClick={(
+                            state:
+                              | {
+                                  activePayload?: Array<{
+                                    payload?: { year?: unknown };
+                                  }>;
+                                }
+                              | null
+                              | undefined,
+                          ) => {
+                            const clickedYear =
+                              state?.activePayload?.[0]?.payload?.year;
+                            if (typeof clickedYear === "number") {
+                              openTotalDrilldownDialog({
+                                kind: "year",
+                                year: clickedYear,
+                              });
+                            }
+                          }}
+                        >
                           <CartesianGrid
                             strokeDasharray="3 3"
                             vertical={false}
@@ -5286,14 +5346,15 @@ export const Reports: React.FC = () => {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {totalYearly.map((row) => (
+                          {totalYearlyTable.map((row) => (
                             <TableRow
                               key={row.year}
                               className="cursor-pointer"
                               onClick={() =>
-                                navigate(
-                                  `${PageRoutes.reportsYearly}/${row.year}`,
-                                )
+                                openTotalDrilldownDialog({
+                                  kind: "year",
+                                  year: row.year,
+                                })
                               }
                             >
                               <TableCell className="font-medium">
@@ -5330,14 +5391,32 @@ export const Reports: React.FC = () => {
 
                     <div className="flex flex-wrap gap-2 text-xs text-slate-600">
                       {totalOverview.best_year ? (
-                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
+                        <button
+                          type="button"
+                          className="rounded-full border border-slate-200 bg-white px-3 py-1"
+                          onClick={() =>
+                            openTotalDrilldownDialog({
+                              kind: "year",
+                              year: totalOverview.best_year ?? 0,
+                            })
+                          }
+                        >
                           Best: {totalOverview.best_year}
-                        </span>
+                        </button>
                       ) : null}
                       {totalOverview.worst_year ? (
-                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
+                        <button
+                          type="button"
+                          className="rounded-full border border-slate-200 bg-white px-3 py-1"
+                          onClick={() =>
+                            openTotalDrilldownDialog({
+                              kind: "year",
+                              year: totalOverview.worst_year ?? 0,
+                            })
+                          }
+                        >
                           Worst: {totalOverview.worst_year}
-                        </span>
+                        </button>
                       ) : null}
                       {totalKpis?.lifetimeSavingsRate != null ? (
                         <span className="rounded-full border border-slate-200 bg-white px-3 py-1">
@@ -5378,7 +5457,10 @@ export const Reports: React.FC = () => {
                     No seasonality data yet.
                   </div>
                 ) : (
-                  <div className="min-w-[560px]">
+                  <div
+                    className="min-w-[560px] space-y-3"
+                    onMouseLeave={() => setTotalSeasonalityHover(null)}
+                  >
                     <div className="grid grid-cols-[72px_repeat(12,minmax(28px,1fr))] gap-1 text-[11px] text-slate-600">
                       <div />
                       {totalSeasonalityHeatmaps.months.map((label) => (
@@ -5393,12 +5475,12 @@ export const Reports: React.FC = () => {
                           </div>
                           {totalSeasonalityHeatmaps.income[yrIdx].map(
                             (value, idx) => (
-                              <div
+                              <button
+                                type="button"
                                 key={`${yr}-${idx}`}
-                                title={`${yr} ${totalSeasonalityHeatmaps.months[idx]}: ${currency(
-                                  value,
-                                )}`}
-                                className="h-7 rounded-sm border border-slate-100"
+                                title={`${yr} ${totalSeasonalityHeatmaps.months[idx]}: ${currency(value)}`}
+                                aria-label={`${yr} ${totalSeasonalityHeatmaps.months[idx]} income ${currency(value)}`}
+                                className="h-7 rounded-sm border border-slate-100 transition hover:ring-1 hover:ring-slate-300 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:outline-none"
                                 style={{
                                   backgroundColor: heatColor(
                                     "16,185,129",
@@ -5406,11 +5488,93 @@ export const Reports: React.FC = () => {
                                     totalSeasonalityHeatmaps.maxIncome,
                                   ),
                                 }}
+                                onMouseEnter={() =>
+                                  setTotalSeasonalityHover({
+                                    flow: "income",
+                                    year: yr,
+                                    monthIndex: idx,
+                                    value,
+                                  })
+                                }
+                                onFocus={() =>
+                                  setTotalSeasonalityHover({
+                                    flow: "income",
+                                    year: yr,
+                                    monthIndex: idx,
+                                    value,
+                                  })
+                                }
+                                onClick={() => {
+                                  const yearValues =
+                                    totalSeasonalityHeatmaps.income[yrIdx];
+                                  const yearTotal = yearValues.reduce(
+                                    (sum, v) => sum + v,
+                                    0,
+                                  );
+                                  const monthAcrossYears =
+                                    totalSeasonalityHeatmaps.years.map(
+                                      (year, yearIdx) => ({
+                                        year,
+                                        value:
+                                          totalSeasonalityHeatmaps.income[
+                                            yearIdx
+                                          ][idx] ?? 0,
+                                      }),
+                                    );
+                                  const prevValue =
+                                    yrIdx > 0
+                                      ? (totalSeasonalityHeatmaps.income[
+                                          yrIdx - 1
+                                        ][idx] ?? 0)
+                                      : null;
+                                  const yoyDelta =
+                                    prevValue === null
+                                      ? null
+                                      : value - prevValue;
+                                  const yoyDeltaPct =
+                                    prevValue === null || prevValue === 0
+                                      ? null
+                                      : ((value - prevValue) / prevValue) * 100;
+                                  const monthRank =
+                                    1 +
+                                    yearValues.filter((v) => v > value).length;
+                                  const monthSharePct =
+                                    yearTotal > 0
+                                      ? (value / yearTotal) * 100
+                                      : null;
+                                  openTotalHeatmapDialog({
+                                    kind: "seasonality",
+                                    flow: "income",
+                                    year: yr,
+                                    monthIndex: idx,
+                                    monthLabel:
+                                      totalSeasonalityHeatmaps.months[idx],
+                                    value,
+                                    yearValues,
+                                    years: totalSeasonalityHeatmaps.years,
+                                    monthAcrossYears,
+                                    yearTotal,
+                                    monthRank,
+                                    monthSharePct,
+                                    yoyDelta,
+                                    yoyDeltaPct,
+                                  });
+                                }}
                               />
                             ),
                           )}
                         </React.Fragment>
                       ))}
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-slate-600">
+                      <span>
+                        {totalSeasonalityHover?.flow === "income"
+                          ? `${totalSeasonalityHover.year} ${totalSeasonalityHeatmaps.months[totalSeasonalityHover.monthIndex]}: ${currency(totalSeasonalityHover.value)}`
+                          : "Hover a cell to see the value."}
+                      </span>
+                      <span className="text-slate-500">
+                        Click a cell for details
+                      </span>
                     </div>
                   </div>
                 )}
@@ -5434,7 +5598,10 @@ export const Reports: React.FC = () => {
                     No seasonality data yet.
                   </div>
                 ) : (
-                  <div className="min-w-[560px]">
+                  <div
+                    className="min-w-[560px] space-y-3"
+                    onMouseLeave={() => setTotalSeasonalityHover(null)}
+                  >
                     <div className="grid grid-cols-[72px_repeat(12,minmax(28px,1fr))] gap-1 text-[11px] text-slate-600">
                       <div />
                       {totalSeasonalityHeatmaps.months.map((label) => (
@@ -5449,12 +5616,12 @@ export const Reports: React.FC = () => {
                           </div>
                           {totalSeasonalityHeatmaps.expense[yrIdx].map(
                             (value, idx) => (
-                              <div
+                              <button
+                                type="button"
                                 key={`${yr}-${idx}`}
-                                title={`${yr} ${totalSeasonalityHeatmaps.months[idx]}: ${currency(
-                                  value,
-                                )}`}
-                                className="h-7 rounded-sm border border-slate-100"
+                                title={`${yr} ${totalSeasonalityHeatmaps.months[idx]}: ${currency(value)}`}
+                                aria-label={`${yr} ${totalSeasonalityHeatmaps.months[idx]} expense ${currency(value)}`}
+                                className="h-7 rounded-sm border border-slate-100 transition hover:ring-1 hover:ring-slate-300 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:outline-none"
                                 style={{
                                   backgroundColor: heatColor(
                                     "239,68,68",
@@ -5462,11 +5629,93 @@ export const Reports: React.FC = () => {
                                     totalSeasonalityHeatmaps.maxExpense,
                                   ),
                                 }}
+                                onMouseEnter={() =>
+                                  setTotalSeasonalityHover({
+                                    flow: "expense",
+                                    year: yr,
+                                    monthIndex: idx,
+                                    value,
+                                  })
+                                }
+                                onFocus={() =>
+                                  setTotalSeasonalityHover({
+                                    flow: "expense",
+                                    year: yr,
+                                    monthIndex: idx,
+                                    value,
+                                  })
+                                }
+                                onClick={() => {
+                                  const yearValues =
+                                    totalSeasonalityHeatmaps.expense[yrIdx];
+                                  const yearTotal = yearValues.reduce(
+                                    (sum, v) => sum + v,
+                                    0,
+                                  );
+                                  const monthAcrossYears =
+                                    totalSeasonalityHeatmaps.years.map(
+                                      (year, yearIdx) => ({
+                                        year,
+                                        value:
+                                          totalSeasonalityHeatmaps.expense[
+                                            yearIdx
+                                          ][idx] ?? 0,
+                                      }),
+                                    );
+                                  const prevValue =
+                                    yrIdx > 0
+                                      ? (totalSeasonalityHeatmaps.expense[
+                                          yrIdx - 1
+                                        ][idx] ?? 0)
+                                      : null;
+                                  const yoyDelta =
+                                    prevValue === null
+                                      ? null
+                                      : value - prevValue;
+                                  const yoyDeltaPct =
+                                    prevValue === null || prevValue === 0
+                                      ? null
+                                      : ((value - prevValue) / prevValue) * 100;
+                                  const monthRank =
+                                    1 +
+                                    yearValues.filter((v) => v > value).length;
+                                  const monthSharePct =
+                                    yearTotal > 0
+                                      ? (value / yearTotal) * 100
+                                      : null;
+                                  openTotalHeatmapDialog({
+                                    kind: "seasonality",
+                                    flow: "expense",
+                                    year: yr,
+                                    monthIndex: idx,
+                                    monthLabel:
+                                      totalSeasonalityHeatmaps.months[idx],
+                                    value,
+                                    yearValues,
+                                    years: totalSeasonalityHeatmaps.years,
+                                    monthAcrossYears,
+                                    yearTotal,
+                                    monthRank,
+                                    monthSharePct,
+                                    yoyDelta,
+                                    yoyDeltaPct,
+                                  });
+                                }}
                               />
                             ),
                           )}
                         </React.Fragment>
                       ))}
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-slate-600">
+                      <span>
+                        {totalSeasonalityHover?.flow === "expense"
+                          ? `${totalSeasonalityHover.year} ${totalSeasonalityHeatmaps.months[totalSeasonalityHover.monthIndex]}: ${currency(totalSeasonalityHover.value)}`
+                          : "Hover a cell to see the value."}
+                      </span>
+                      <span className="text-slate-500">
+                        Click a cell for details
+                      </span>
                     </div>
                   </div>
                 )}
@@ -5484,7 +5733,7 @@ export const Reports: React.FC = () => {
                   Top categories (lifetime) across all years.
                 </p>
               </CardHeader>
-              <CardContent className="overflow-hidden">
+              <CardContent className="overflow-auto">
                 {!totalOverview ? (
                   <Skeleton className="h-56 w-full" />
                 ) : !totalExpenseCategoryYearHeatmap ? (
@@ -5497,6 +5746,7 @@ export const Reports: React.FC = () => {
                     style={{
                       gridTemplateColumns: `160px repeat(${totalExpenseCategoryYearHeatmap.years.length}, minmax(0, 1fr))`,
                     }}
+                    onMouseLeave={() => setTotalCategoryYearHover(null)}
                   >
                     <div />
                     {totalExpenseCategoryYearHeatmap.years.map((yr) => (
@@ -5534,17 +5784,74 @@ export const Reports: React.FC = () => {
                         {totalExpenseCategoryYearHeatmap.years.map(
                           (yr, idx) => {
                             const value = row.totals[idx] ?? 0;
+                            const yearTotal = totalYearly.find(
+                              (entry) => entry.year === yr,
+                            )?.expense;
                             return (
-                              <div
+                              <button
+                                type="button"
                                 key={`${row.name}-${yr}`}
                                 title={`${row.name} • ${yr}: ${currency(value)}`}
-                                className="h-5 rounded-sm border border-slate-100"
+                                aria-label={`${row.name} ${yr} expense ${currency(value)}`}
+                                className="h-5 rounded-sm border border-slate-100 transition hover:ring-1 hover:ring-slate-300 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:outline-none"
                                 style={{
                                   backgroundColor: heatColor(
                                     "239,68,68",
                                     value,
                                     totalExpenseCategoryYearHeatmap.max,
                                   ),
+                                }}
+                                onMouseEnter={() =>
+                                  setTotalCategoryYearHover({
+                                    flow: "expense",
+                                    year: yr,
+                                    categoryName: row.name,
+                                    value,
+                                  })
+                                }
+                                onFocus={() =>
+                                  setTotalCategoryYearHover({
+                                    flow: "expense",
+                                    year: yr,
+                                    categoryName: row.name,
+                                    value,
+                                  })
+                                }
+                                onClick={() => {
+                                  const prevValue =
+                                    idx > 0 ? (row.totals[idx - 1] ?? 0) : null;
+                                  const yoyDelta =
+                                    prevValue === null
+                                      ? null
+                                      : value - prevValue;
+                                  const yoyDeltaPct =
+                                    prevValue === null || prevValue === 0
+                                      ? null
+                                      : ((value - prevValue) / prevValue) * 100;
+                                  openTotalHeatmapDialog({
+                                    kind: "categoryByYear",
+                                    flow: "expense",
+                                    year: yr,
+                                    categoryId: row.categoryId,
+                                    categoryName: row.name,
+                                    color: row.color ?? "#ef4444",
+                                    value,
+                                    years:
+                                      totalExpenseCategoryYearHeatmap.years,
+                                    totals: row.totals,
+                                    max: totalExpenseCategoryYearHeatmap.max,
+                                    yearTotal:
+                                      typeof yearTotal === "number"
+                                        ? yearTotal
+                                        : null,
+                                    sharePct:
+                                      typeof yearTotal === "number" &&
+                                      yearTotal > 0
+                                        ? (value / yearTotal) * 100
+                                        : null,
+                                    yoyDelta,
+                                    yoyDeltaPct,
+                                  });
                                 }}
                               />
                             );
@@ -5554,6 +5861,18 @@ export const Reports: React.FC = () => {
                     ))}
                   </div>
                 )}
+                {totalExpenseCategoryYearHeatmap ? (
+                  <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
+                    <span>
+                      {totalCategoryYearHover?.flow === "expense"
+                        ? `${totalCategoryYearHover.categoryName} • ${totalCategoryYearHover.year}: ${currency(totalCategoryYearHover.value)}`
+                        : "Hover a cell to see the value."}
+                    </span>
+                    <span className="text-slate-500">
+                      Click a cell for details
+                    </span>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
 
@@ -5566,7 +5885,7 @@ export const Reports: React.FC = () => {
                   Top categories (lifetime) across all years.
                 </p>
               </CardHeader>
-              <CardContent className="overflow-hidden">
+              <CardContent className="overflow-auto">
                 {!totalOverview ? (
                   <Skeleton className="h-56 w-full" />
                 ) : !totalIncomeCategoryYearHeatmap ? (
@@ -5579,6 +5898,7 @@ export const Reports: React.FC = () => {
                     style={{
                       gridTemplateColumns: `160px repeat(${totalIncomeCategoryYearHeatmap.years.length}, minmax(0, 1fr))`,
                     }}
+                    onMouseLeave={() => setTotalCategoryYearHover(null)}
                   >
                     <div />
                     {totalIncomeCategoryYearHeatmap.years.map((yr) => (
@@ -5615,17 +5935,71 @@ export const Reports: React.FC = () => {
                         </div>
                         {totalIncomeCategoryYearHeatmap.years.map((yr, idx) => {
                           const value = row.totals[idx] ?? 0;
+                          const yearTotal = totalYearly.find(
+                            (entry) => entry.year === yr,
+                          )?.income;
                           return (
-                            <div
+                            <button
+                              type="button"
                               key={`${row.name}-${yr}`}
                               title={`${row.name} • ${yr}: ${currency(value)}`}
-                              className="h-5 rounded-sm border border-slate-100"
+                              aria-label={`${row.name} ${yr} income ${currency(value)}`}
+                              className="h-5 rounded-sm border border-slate-100 transition hover:ring-1 hover:ring-slate-300 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:outline-none"
                               style={{
                                 backgroundColor: heatColor(
                                   "16,185,129",
                                   value,
                                   totalIncomeCategoryYearHeatmap.max,
                                 ),
+                              }}
+                              onMouseEnter={() =>
+                                setTotalCategoryYearHover({
+                                  flow: "income",
+                                  year: yr,
+                                  categoryName: row.name,
+                                  value,
+                                })
+                              }
+                              onFocus={() =>
+                                setTotalCategoryYearHover({
+                                  flow: "income",
+                                  year: yr,
+                                  categoryName: row.name,
+                                  value,
+                                })
+                              }
+                              onClick={() => {
+                                const prevValue =
+                                  idx > 0 ? (row.totals[idx - 1] ?? 0) : null;
+                                const yoyDelta =
+                                  prevValue === null ? null : value - prevValue;
+                                const yoyDeltaPct =
+                                  prevValue === null || prevValue === 0
+                                    ? null
+                                    : ((value - prevValue) / prevValue) * 100;
+                                openTotalHeatmapDialog({
+                                  kind: "categoryByYear",
+                                  flow: "income",
+                                  year: yr,
+                                  categoryId: row.categoryId,
+                                  categoryName: row.name,
+                                  color: row.color ?? "#10b981",
+                                  value,
+                                  years: totalIncomeCategoryYearHeatmap.years,
+                                  totals: row.totals,
+                                  max: totalIncomeCategoryYearHeatmap.max,
+                                  yearTotal:
+                                    typeof yearTotal === "number"
+                                      ? yearTotal
+                                      : null,
+                                  sharePct:
+                                    typeof yearTotal === "number" &&
+                                    yearTotal > 0
+                                      ? (value / yearTotal) * 100
+                                      : null,
+                                  yoyDelta,
+                                  yoyDeltaPct,
+                                });
                               }}
                             />
                           );
@@ -5634,6 +6008,18 @@ export const Reports: React.FC = () => {
                     ))}
                   </div>
                 )}
+                {totalIncomeCategoryYearHeatmap ? (
+                  <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
+                    <span>
+                      {totalCategoryYearHover?.flow === "income"
+                        ? `${totalCategoryYearHover.categoryName} • ${totalCategoryYearHover.year}: ${currency(totalCategoryYearHover.value)}`
+                        : "Hover a cell to see the value."}
+                    </span>
+                    <span className="text-slate-500">
+                      Click a cell for details
+                    </span>
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           </div>
@@ -5645,17 +6031,12 @@ export const Reports: React.FC = () => {
                   Investments (snapshot-based)
                 </CardTitle>
                 <p className="text-xs text-slate-500">
-                  Value is tracked via snapshots. Clear account filters to
-                  include.
+                  Value is tracked via snapshots.
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
                 {!totalOverview ? (
                   <Skeleton className="h-56 w-full" />
-                ) : selectedAccounts.length ? (
-                  <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-                    Clear the account filter to include investment snapshots.
-                  </div>
                 ) : !totalInvestments ? (
                   <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
                     No investment snapshots yet.
@@ -5716,7 +6097,7 @@ export const Reports: React.FC = () => {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {totalInvestments.yearly.map((row) => (
+                          {totalInvestmentsYearlyTable.map((row) => (
                             <TableRow key={row.year}>
                               <TableCell className="font-medium">
                                 {row.year}
@@ -6805,12 +7186,7 @@ export const Reports: React.FC = () => {
                     </div>
                   ) : null}
 
-                  {totalDataQuality.investmentsSuppressedByFilter ? (
-                    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                      Investment snapshots are hidden while an account filter is
-                      active.
-                    </div>
-                  ) : totalDataQuality.lastSnapshot ? (
+                  {totalDataQuality.lastSnapshot ? (
                     <div
                       className={
                         totalDataQuality.snapshotAgeDays !== null &&
@@ -6874,6 +7250,8 @@ export const Reports: React.FC = () => {
             setTotalDrilldown(null);
             setTotalDrilldownSeries([]);
             setTotalDrilldownError(null);
+            setTotalYearDrilldown(null);
+            setTotalYearDrilldownError(null);
           }
         }}
       >
@@ -6886,13 +7264,15 @@ export const Reports: React.FC = () => {
                   ? `${totalDrilldown.source} (${totalDrilldown.flow})`
                   : totalDrilldown?.kind === "account"
                     ? `${totalDrilldown.name} (${totalDrilldown.accountType})`
-                    : totalDrilldown?.kind === "investments"
-                      ? "Investments"
-                      : totalDrilldown?.kind === "debt"
-                        ? "Debt overview"
-                        : totalDrilldown?.kind === "netWorth"
-                          ? "Net worth"
-                          : "Details"}
+                    : totalDrilldown?.kind === "year"
+                      ? `Year ${totalDrilldown.year}`
+                      : totalDrilldown?.kind === "investments"
+                        ? "Investments"
+                        : totalDrilldown?.kind === "debt"
+                          ? "Debt overview"
+                          : totalDrilldown?.kind === "netWorth"
+                            ? "Net worth"
+                            : "Details"}
             </DialogTitle>
           </DialogHeader>
 
@@ -6906,36 +7286,6 @@ export const Reports: React.FC = () => {
                     ? `${totalWindowRange.start} → ${totalWindowRange.end}`
                     : "—"}
                 </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!totalDrilldownSeries.length}
-                  onClick={() => {
-                    const base =
-                      totalDrilldown.kind === "category"
-                        ? totalDrilldown.name
-                        : totalDrilldown.source;
-                    const safe = base
-                      .toLowerCase()
-                      .replace(/[^a-z0-9]+/g, "-")
-                      .replace(/^-+|-+$/g, "");
-                    downloadCsv(
-                      `reports-total-${totalDrilldown.kind}-${safe}.csv`,
-                      totalDrilldownSeries.map((row) => ({
-                        period: row.period,
-                        income: row.income,
-                        expense: row.expense,
-                        net: row.net,
-                        value:
-                          totalDrilldown.flow === "expense"
-                            ? row.expense
-                            : row.income,
-                      })),
-                    );
-                  }}
-                >
-                  Download CSV
-                </Button>
               </div>
               {totalDrilldownError ? (
                 <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
@@ -7120,27 +7470,6 @@ export const Reports: React.FC = () => {
                     ? `${totalWindowRange.start} → ${totalWindowRange.end}`
                     : "—"}
                 </p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!totalDrilldownSeries.length}
-                  onClick={() => {
-                    const safe = totalDrilldown.name
-                      .toLowerCase()
-                      .replace(/[^a-z0-9]+/g, "-")
-                      .replace(/^-+|-+$/g, "");
-                    downloadCsv(`reports-total-account-${safe}.csv`, [
-                      ...totalDrilldownSeries.map((row) => ({
-                        period: row.period,
-                        income: row.income,
-                        expense: row.expense,
-                        net: row.net,
-                      })),
-                    ]);
-                  }}
-                >
-                  Download CSV
-                </Button>
               </div>
               {totalDrilldownError ? (
                 <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
@@ -7300,50 +7629,259 @@ export const Reports: React.FC = () => {
                 </div>
               </div>
             </>
-          ) : totalDrilldown.kind === "investments" ? (
+          ) : totalDrilldown.kind === "year" ? (
             <>
-              <div className="flex justify-end">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-slate-500">
+                  Snapshot of the yearly report. Use “Open yearly report” for
+                  the full page.
+                </p>
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={!totalOverview?.investments}
-                  onClick={() => {
-                    if (!totalOverview?.investments) return;
-                    const windowStart = totalWindowRange?.start ?? "0000-01-01";
-                    const windowStartYear = totalWindowRange
-                      ? Number(totalWindowRange.start.slice(0, 4))
-                      : null;
-                    downloadCsv(
-                      "reports-total-investments-series.csv",
-                      totalOverview.investments.series
-                        .filter((row) => row.date >= windowStart)
-                        .map((row) => ({
-                          date: row.date,
-                          value: Number(row.value),
-                        })),
-                    );
-                    downloadCsv(
-                      "reports-total-investments-yearly.csv",
-                      totalOverview.investments.yearly
-                        .filter((row) =>
-                          windowStartYear ? row.year >= windowStartYear : true,
-                        )
-                        .map((row) => ({
-                          year: row.year,
-                          end_value: Number(row.end_value),
-                          contributions: Number(row.contributions),
-                          withdrawals: Number(row.withdrawals),
-                          net_contributions: Number(row.net_contributions),
-                          implied_return: row.implied_return
-                            ? Number(row.implied_return)
-                            : "",
-                        })),
-                    );
-                  }}
+                  onClick={() =>
+                    navigate(
+                      `${PageRoutes.reportsYearly}/${totalDrilldown.year}`,
+                    )
+                  }
                 >
-                  Download CSV
+                  Open yearly report
                 </Button>
               </div>
+              {totalYearDrilldownError ? (
+                <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+                  {totalYearDrilldownError}
+                </div>
+              ) : null}
+              {totalYearDrilldownLoading ? (
+                <Skeleton className="h-80 w-full" />
+              ) : !totalYearDrilldown ? (
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                  No yearly details available.
+                </div>
+              ) : (
+                (() => {
+                  const monthly = totalYearDrilldown.monthly.map((row) => ({
+                    date: row.date,
+                    month: monthLabel(row.date),
+                    income: Number(row.income),
+                    expense: Number(row.expense),
+                    net: Number(row.net),
+                  }));
+                  const topExpenseCategories = [
+                    ...totalYearDrilldown.category_breakdown,
+                  ]
+                    .map((row) => ({
+                      name: row.name,
+                      total: Number(row.total),
+                      txCount: row.transaction_count,
+                    }))
+                    .sort((a, b) => b.total - a.total)
+                    .slice(0, 10);
+                  const topIncomeCategories = [
+                    ...totalYearDrilldown.income_category_breakdown,
+                  ]
+                    .map((row) => ({
+                      name: row.name,
+                      total: Number(row.total),
+                      txCount: row.transaction_count,
+                    }))
+                    .sort((a, b) => b.total - a.total)
+                    .slice(0, 10);
+
+                  return (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-3">
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          {[
+                            {
+                              label: "Income",
+                              value: Number(
+                                totalYearDrilldown.stats.total_income,
+                              ),
+                              className: "text-emerald-700",
+                            },
+                            {
+                              label: "Expense",
+                              value: Number(
+                                totalYearDrilldown.stats.total_expense,
+                              ),
+                              className: "text-rose-700",
+                            },
+                            {
+                              label: "Net saved",
+                              value: Number(
+                                totalYearDrilldown.stats.net_savings,
+                              ),
+                              className: "text-slate-900",
+                            },
+                            {
+                              label: "Savings rate",
+                              value: totalYearDrilldown.stats.savings_rate_pct
+                                ? Number(
+                                    totalYearDrilldown.stats.savings_rate_pct,
+                                  )
+                                : null,
+                              className: "text-slate-900",
+                              format: "percent" as const,
+                            },
+                          ].map((item) => (
+                            <div
+                              key={item.label}
+                              className="rounded-md border border-slate-100 bg-slate-50 p-3"
+                            >
+                              <p className="text-xs tracking-wide text-slate-500 uppercase">
+                                {item.label}
+                              </p>
+                              <p className={`font-semibold ${item.className}`}>
+                                {item.value === null
+                                  ? "—"
+                                  : item.format === "percent"
+                                    ? percent(item.value)
+                                    : currency(item.value)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={monthly}>
+                              <CartesianGrid
+                                strokeDasharray="3 3"
+                                vertical={false}
+                              />
+                              <XAxis
+                                dataKey="month"
+                                tickLine={false}
+                                axisLine={false}
+                                tick={{ fill: "#475569", fontSize: 12 }}
+                              />
+                              <YAxis
+                                tickLine={false}
+                                axisLine={false}
+                                tick={{ fill: "#475569", fontSize: 12 }}
+                                tickFormatter={(v) =>
+                                  compactCurrency(Math.abs(Number(v)))
+                                }
+                              />
+                              <Tooltip
+                                formatter={(value) =>
+                                  currency(Math.abs(Number(value)))
+                                }
+                                contentStyle={{ fontSize: 12 }}
+                              />
+                              <ReferenceLine y={0} stroke="#cbd5e1" />
+                              <Bar
+                                dataKey="income"
+                                name="Income"
+                                fill="#10b981"
+                                radius={[6, 6, 0, 0]}
+                                barSize={16}
+                                isAnimationActive={false}
+                              />
+                              <Bar
+                                dataKey="expense"
+                                name="Expense"
+                                fill="#ef4444"
+                                radius={[6, 6, 0, 0]}
+                                barSize={16}
+                                isAnimationActive={false}
+                              />
+                              <Line
+                                type="monotone"
+                                dataKey="net"
+                                name="Net"
+                                stroke="#0f172a"
+                                strokeWidth={2}
+                                dot={false}
+                                isAnimationActive={false}
+                              />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3">
+                        <div className="rounded-md border border-slate-100 bg-white">
+                          <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                            Top expense categories
+                          </div>
+                          <div className="max-h-72 overflow-auto">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Category</TableHead>
+                                  <TableHead className="text-right">
+                                    Total
+                                  </TableHead>
+                                  <TableHead className="hidden text-right md:table-cell">
+                                    Tx
+                                  </TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {topExpenseCategories.map((row) => (
+                                  <TableRow key={row.name}>
+                                    <TableCell className="font-medium">
+                                      {row.name}
+                                    </TableCell>
+                                    <TableCell className="text-right font-semibold">
+                                      {currency(row.total)}
+                                    </TableCell>
+                                    <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
+                                      {row.txCount}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+
+                        <div className="rounded-md border border-slate-100 bg-white">
+                          <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                            Top income categories
+                          </div>
+                          <div className="max-h-72 overflow-auto">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Category</TableHead>
+                                  <TableHead className="text-right">
+                                    Total
+                                  </TableHead>
+                                  <TableHead className="hidden text-right md:table-cell">
+                                    Tx
+                                  </TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {topIncomeCategories.map((row) => (
+                                  <TableRow key={row.name}>
+                                    <TableCell className="font-medium">
+                                      {row.name}
+                                    </TableCell>
+                                    <TableCell className="text-right font-semibold text-emerald-700">
+                                      {currency(row.total)}
+                                    </TableCell>
+                                    <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
+                                      {row.txCount}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+            </>
+          ) : totalDrilldown.kind === "investments" ? (
+            <>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-3">
                   <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
@@ -7355,9 +7893,7 @@ export const Reports: React.FC = () => {
                         ? "—"
                         : currency(totalKpis?.investmentsValue ?? 0)}
                     </p>
-                    <p className="text-xs text-slate-600">
-                      Snapshot-based (clear account filters to include).
-                    </p>
+                    <p className="text-xs text-slate-600">Snapshot-based.</p>
                   </div>
                   <div className="max-h-72 overflow-auto rounded-md border border-slate-100 bg-white">
                     <Table>
@@ -7374,26 +7910,24 @@ export const Reports: React.FC = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {(totalOverview?.investments?.yearly ?? []).map(
-                          (row) => (
-                            <TableRow key={row.year}>
-                              <TableCell className="font-medium">
-                                {row.year}
-                              </TableCell>
-                              <TableCell className="text-right font-semibold">
-                                {currency(Number(row.end_value))}
-                              </TableCell>
-                              <TableCell className="hidden text-right md:table-cell">
-                                {currency(Number(row.net_contributions))}
-                              </TableCell>
-                              <TableCell className="hidden text-right md:table-cell">
-                                {row.implied_return === null
-                                  ? "—"
-                                  : currency(Number(row.implied_return))}
-                              </TableCell>
-                            </TableRow>
-                          ),
-                        )}
+                        {totalInvestmentsYearlyTable.map((row) => (
+                          <TableRow key={row.year}>
+                            <TableCell className="font-medium">
+                              {row.year}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {currency(row.endValue)}
+                            </TableCell>
+                            <TableCell className="hidden text-right md:table-cell">
+                              {currency(row.netContributions)}
+                            </TableCell>
+                            <TableCell className="hidden text-right md:table-cell">
+                              {row.impliedReturn === null
+                                ? "—"
+                                : currency(row.impliedReturn)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
                       </TableBody>
                     </Table>
                   </div>
@@ -7461,40 +7995,6 @@ export const Reports: React.FC = () => {
             </>
           ) : totalDrilldown.kind === "debt" ? (
             <>
-              <div className="flex justify-end">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!totalOverview}
-                  onClick={() => {
-                    if (!totalOverview) return;
-                    const windowStart = totalWindowRange?.start ?? "0000-01-01";
-                    downloadCsv(
-                      "reports-total-debt-series.csv",
-                      totalOverview.debt.series
-                        .filter((row) => row.date >= windowStart)
-                        .map((row) => ({
-                          date: row.date,
-                          debt: Number(row.debt),
-                        })),
-                    );
-                    downloadCsv(
-                      "reports-total-debt-accounts.csv",
-                      totalOverview.debt.accounts.map((row) => ({
-                        account_id: row.account_id,
-                        name: row.name,
-                        current_debt: Number(row.current_debt),
-                        prev_year_end_debt: row.prev_year_end_debt
-                          ? Number(row.prev_year_end_debt)
-                          : "",
-                        delta: row.delta ? Number(row.delta) : "",
-                      })),
-                    );
-                  }}
-                >
-                  Download CSV
-                </Button>
-              </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-3">
                   <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
@@ -7596,16 +8096,6 @@ export const Reports: React.FC = () => {
             </>
           ) : (
             <>
-              <div className="flex justify-end">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={!totalNetWorthSeries.length}
-                  onClick={exportTotalNetWorthCsv}
-                >
-                  Download CSV
-                </Button>
-              </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-3">
                   <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
@@ -7624,17 +8114,181 @@ export const Reports: React.FC = () => {
                     </p>
                   </div>
                   {totalNetWorthStats ? (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-md border border-slate-100 bg-white p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Current
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(totalNetWorthStats.current)}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-white p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Change (12m)
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {totalNetWorthStats.delta12m === null ? (
+                            "—"
+                          ) : (
+                            <>
+                              <span
+                                className={
+                                  totalNetWorthStats.delta12m >= 0
+                                    ? "text-emerald-700"
+                                    : "text-rose-700"
+                                }
+                              >
+                                {totalNetWorthStats.delta12m >= 0 ? "+" : "−"}
+                                {currency(
+                                  Math.abs(totalNetWorthStats.delta12m),
+                                )}
+                              </span>
+                              {totalNetWorthStats.delta12mPct ===
+                              null ? null : (
+                                <span className="ml-2 text-xs text-slate-600">
+                                  ({percent(totalNetWorthStats.delta12mPct)})
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-white p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Change (since start)
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          <span
+                            className={
+                              totalNetWorthStats.deltaSinceStart >= 0
+                                ? "text-emerald-700"
+                                : "text-rose-700"
+                            }
+                          >
+                            {totalNetWorthStats.deltaSinceStart >= 0
+                              ? "+"
+                              : "−"}
+                            {currency(
+                              Math.abs(totalNetWorthStats.deltaSinceStart),
+                            )}
+                          </span>
+                          {totalNetWorthStats.deltaSinceStartPct ===
+                          null ? null : (
+                            <span className="ml-2 text-xs text-slate-600">
+                              ({percent(totalNetWorthStats.deltaSinceStartPct)})
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="rounded-md border border-slate-100 bg-white p-3">
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          Range
+                        </p>
+                        <p className="font-semibold text-slate-900">
+                          {currency(totalNetWorthStats.allTimeLow)} →{" "}
+                          {currency(totalNetWorthStats.allTimeHigh)}
+                        </p>
+                        <p className="text-xs text-slate-600">
+                          High:{" "}
+                          {new Date(
+                            totalNetWorthStats.allTimeHighDate,
+                          ).toLocaleDateString("sv-SE")}
+                        </p>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {totalNetWorthAttribution ? (
                     <div className="rounded-md border border-slate-100 bg-white p-3">
-                      <p className="text-xs tracking-wide text-slate-500 uppercase">
-                        Current
-                      </p>
-                      <p className="font-semibold text-slate-900">
-                        {currency(totalNetWorthStats.current)}
-                      </p>
-                      <p className="text-xs text-slate-600">
-                        Range: {currency(totalNetWorthStats.allTimeLow)} →{" "}
-                        {currency(totalNetWorthStats.allTimeHigh)}
-                      </p>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold tracking-wide text-slate-700 uppercase">
+                            Change Attribution
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {new Date(
+                              totalNetWorthAttribution.windowStart,
+                            ).getFullYear()}
+                            –
+                            {new Date(
+                              totalNetWorthAttribution.windowEnd,
+                            ).getFullYear()}
+                          </p>
+                        </div>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {totalNetWorthAttribution.netWorthDelta >= 0
+                            ? "+"
+                            : "−"}
+                          {currency(
+                            Math.abs(totalNetWorthAttribution.netWorthDelta),
+                          )}
+                        </p>
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {(
+                          [
+                            {
+                              label: "Savings (income − expense)",
+                              value: totalNetWorthAttribution.savings,
+                            },
+                            totalNetWorthAttribution.investmentsContribution ===
+                            null
+                              ? null
+                              : {
+                                  label: "Investments change",
+                                  value:
+                                    totalNetWorthAttribution.investmentsContribution,
+                                },
+                            {
+                              label: "Debt change",
+                              value: totalNetWorthAttribution.debtContribution,
+                            },
+                            {
+                              label: "Remainder",
+                              value: totalNetWorthAttribution.remainder,
+                            },
+                          ] as Array<null | { label: string; value: number }>
+                        )
+                          .filter(
+                            (row): row is { label: string; value: number } =>
+                              Boolean(row),
+                          )
+                          .map((row) => {
+                            const denominator = Math.max(
+                              1,
+                              Math.abs(totalNetWorthAttribution.netWorthDelta),
+                            );
+                            const pct =
+                              (Math.abs(row.value) / denominator) * 100;
+                            return (
+                              <div key={row.label} className="space-y-1">
+                                <div className="flex items-center justify-between text-xs text-slate-600">
+                                  <span>{row.label}</span>
+                                  <span
+                                    className={
+                                      row.value >= 0
+                                        ? "font-medium text-emerald-700"
+                                        : "font-medium text-rose-700"
+                                    }
+                                  >
+                                    {row.value >= 0 ? "+" : "−"}
+                                    {currency(Math.abs(row.value))}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <Progress
+                                    value={Math.min(100, pct)}
+                                    className="h-2"
+                                  />
+                                  <span className="w-10 text-right text-[11px] text-slate-500">
+                                    {percent(pct)}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
                     </div>
                   ) : null}
                 </div>
@@ -7703,9 +8357,297 @@ export const Reports: React.FC = () => {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={totalHeatmapDialogOpen}
+        onOpenChange={(open) => {
+          setTotalHeatmapDialogOpen(open);
+          if (!open) setTotalHeatmapDialog(null);
+        }}
+      >
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>
+              {totalHeatmapDialog?.kind === "seasonality"
+                ? `${totalHeatmapDialog.flow === "income" ? "Income" : "Expense"} seasonality • ${totalHeatmapDialog.year} ${totalHeatmapDialog.monthLabel}`
+                : totalHeatmapDialog?.kind === "categoryByYear"
+                  ? `${totalHeatmapDialog.flow === "income" ? "Income" : "Expense"} category • ${totalHeatmapDialog.categoryName} • ${totalHeatmapDialog.year}`
+                  : "Details"}
+            </DialogTitle>
+          </DialogHeader>
+
+          {!totalHeatmapDialog ? null : totalHeatmapDialog.kind ===
+            "seasonality" ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Amount
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {currency(totalHeatmapDialog.value)}
+                  </p>
+                </div>
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Share of year
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {totalHeatmapDialog.monthSharePct === null
+                      ? "—"
+                      : percent(totalHeatmapDialog.monthSharePct)}
+                  </p>
+                </div>
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Rank (month)
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    #{totalHeatmapDialog.monthRank} / 12
+                  </p>
+                </div>
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    YoY (same month)
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {totalHeatmapDialog.yoyDelta === null ? (
+                      "—"
+                    ) : (
+                      <span
+                        className={
+                          totalHeatmapDialog.yoyDelta >= 0
+                            ? "text-emerald-700"
+                            : "text-rose-700"
+                        }
+                      >
+                        {totalHeatmapDialog.yoyDelta >= 0 ? "+" : "−"}
+                        {currency(Math.abs(totalHeatmapDialog.yoyDelta))}
+                      </span>
+                    )}
+                  </p>
+                  {totalHeatmapDialog.yoyDeltaPct === null ? null : (
+                    <p className="text-xs text-slate-600">
+                      {percent(totalHeatmapDialog.yoyDeltaPct)}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="h-64 rounded-md border border-slate-100 bg-white p-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={totalHeatmapDialog.yearValues.map((value, idx) => ({
+                        month: new Date(
+                          Date.UTC(2000, idx, 1),
+                        ).toLocaleDateString("sv-SE", { month: "short" }),
+                        value,
+                      }))}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="month"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                        tickFormatter={(v) => compactCurrency(Number(v))}
+                      />
+                      <Tooltip
+                        formatter={(value) => currency(Number(value))}
+                        contentStyle={{ fontSize: 12 }}
+                      />
+                      <Bar dataKey="value" radius={[6, 6, 4, 4]}>
+                        {totalHeatmapDialog.yearValues.map((_value, idx) => (
+                          <Cell
+                            key={idx}
+                            fill={
+                              idx === totalHeatmapDialog.monthIndex
+                                ? totalHeatmapDialog.flow === "income"
+                                  ? "#059669"
+                                  : "#dc2626"
+                                : totalHeatmapDialog.flow === "income"
+                                  ? "#10b981"
+                                  : "#ef4444"
+                            }
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="h-64 rounded-md border border-slate-100 bg-white p-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={totalHeatmapDialog.monthAcrossYears.map((row) => ({
+                        year: String(row.year),
+                        value: row.value,
+                      }))}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="year"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                        tickFormatter={(v) => compactCurrency(Number(v))}
+                      />
+                      <Tooltip
+                        formatter={(value) => currency(Number(value))}
+                        contentStyle={{ fontSize: 12 }}
+                      />
+                      <Bar
+                        dataKey="value"
+                        radius={[6, 6, 4, 4]}
+                        fill={
+                          totalHeatmapDialog.flow === "income"
+                            ? "#10b981"
+                            : "#ef4444"
+                        }
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          ) : totalHeatmapDialog.kind === "categoryByYear" ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Amount
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {currency(totalHeatmapDialog.value)}
+                  </p>
+                </div>
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Share of year
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {totalHeatmapDialog.sharePct === null
+                      ? "—"
+                      : percent(totalHeatmapDialog.sharePct)}
+                  </p>
+                </div>
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    YoY
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {totalHeatmapDialog.yoyDelta === null ? (
+                      "—"
+                    ) : (
+                      <span
+                        className={
+                          totalHeatmapDialog.yoyDelta >= 0
+                            ? "text-emerald-700"
+                            : "text-rose-700"
+                        }
+                      >
+                        {totalHeatmapDialog.yoyDelta >= 0 ? "+" : "−"}
+                        {currency(Math.abs(totalHeatmapDialog.yoyDelta))}
+                      </span>
+                    )}
+                  </p>
+                  {totalHeatmapDialog.yoyDeltaPct === null ? null : (
+                    <p className="text-xs text-slate-600">
+                      {percent(totalHeatmapDialog.yoyDeltaPct)}
+                    </p>
+                  )}
+                </div>
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Actions
+                  </p>
+                  {totalHeatmapDialog.categoryId ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="mt-1 w-full"
+                      onClick={() => {
+                        const categoryId = totalHeatmapDialog.categoryId;
+                        if (!categoryId) return;
+                        setTotalHeatmapDialogOpen(false);
+                        setTotalHeatmapDialog(null);
+                        openTotalDrilldownDialog({
+                          kind: "category",
+                          flow: totalHeatmapDialog.flow,
+                          categoryId,
+                          name: totalHeatmapDialog.categoryName,
+                          color: totalHeatmapDialog.color,
+                        });
+                      }}
+                    >
+                      Open drilldown
+                    </Button>
+                  ) : (
+                    <p className="mt-1 text-xs text-slate-600">—</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={totalHeatmapDialog.years.map((year, idx) => ({
+                      year: String(year),
+                      value: totalHeatmapDialog.totals[idx] ?? 0,
+                      idx,
+                    }))}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="year"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: "#475569", fontSize: 12 }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: "#475569", fontSize: 12 }}
+                      tickFormatter={(v) => compactCurrency(Number(v))}
+                    />
+                    <Tooltip
+                      formatter={(value) => currency(Number(value))}
+                      contentStyle={{ fontSize: 12 }}
+                    />
+                    <Bar dataKey="value" radius={[6, 6, 4, 4]}>
+                      {totalHeatmapDialog.years.map((year) => (
+                        <Cell
+                          key={year}
+                          fill={
+                            year === totalHeatmapDialog.year
+                              ? totalHeatmapDialog.color
+                              : `${totalHeatmapDialog.color}99`
+                          }
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
       {/* Legacy total detail dialog (no longer used after /reports/total rework).
-      {routeMode === "total" ? (
-        <Dialog
+	      {routeMode === "total" ? (
+	        <Dialog
           open={detailDialogOpen}
           onOpenChange={(open) => {
             setDetailDialogOpen(open);
