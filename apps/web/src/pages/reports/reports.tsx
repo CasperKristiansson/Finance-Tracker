@@ -55,10 +55,21 @@ import {
 import { ChartCard } from "./components/chart-card";
 import { ReportsHeader } from "./components/reports-header";
 import { ReportsOverviewCard } from "./components/reports-overview-card";
+import { TotalAccountsOverviewCard } from "./components/total-accounts-overview-card";
+import { TotalCategoryByYearCard } from "./components/total-category-by-year-card";
 import { TotalDrilldownDialog } from "./components/total-drilldown-dialog";
 import { TotalHeatmapDialog } from "./components/total-heatmap-dialog";
+import { TotalCompositionOverTimeCard } from "./components/total-composition-over-time-card";
+import { TotalDebtOverviewCard } from "./components/total-debt-overview-card";
+import { TotalInvestmentsSnapshotCard } from "./components/total-investments-snapshot-card";
 import { TotalNetWorthBreakdownCard } from "./components/total-net-worth-breakdown-card";
+import { TotalNetWorthGrowthCard } from "./components/total-net-worth-growth-card";
+import { TotalNetWorthTrajectoryCard } from "./components/total-net-worth-trajectory-card";
+import { TotalSavingsRateCard } from "./components/total-savings-rate-card";
+import { TotalSeasonalityCard } from "./components/total-seasonality-card";
+import { TotalSourcesCard } from "./components/total-sources-card";
 import { TotalTimeseriesDialog } from "./components/total-timeseries-dialog";
+import { TotalYearByYearPerformanceCard } from "./components/total-year-by-year-performance-card";
 import { MoneyFlowSankeyCard } from "./reports-sankey";
 import type {
   DetailDialogState,
@@ -137,18 +148,6 @@ export const Reports: React.FC = () => {
   const [totalHeatmapDialog, setTotalHeatmapDialog] =
     useState<TotalHeatmapDialogState | null>(null);
   const [totalHeatmapDialogOpen, setTotalHeatmapDialogOpen] = useState(false);
-  const [totalSeasonalityHover, setTotalSeasonalityHover] = useState<{
-    flow: "income" | "expense";
-    year: number;
-    monthIndex: number;
-    value: number;
-  } | null>(null);
-  const [totalCategoryYearHover, setTotalCategoryYearHover] = useState<{
-    flow: "income" | "expense";
-    year: number;
-    categoryName: string;
-    value: number;
-  } | null>(null);
   const [totalTimeseriesDialog, setTotalTimeseriesDialog] =
     useState<TotalTimeseriesDialogState | null>(null);
   const [totalTimeseriesDialogOpen, setTotalTimeseriesDialogOpen] =
@@ -4736,509 +4735,30 @@ export const Reports: React.FC = () => {
               </CardContent>
             </Card>
 
-            <div className="grid gap-3 lg:grid-cols-2">
-              <TotalNetWorthBreakdownCard
-                loading={totalOverviewLoading}
-                series={totalNetWorthBreakdownSeries}
-                domain={totalNetWorthBreakdownDomain}
-                onOpenTimeseriesDialog={openTotalTimeseriesDialog}
-                onOpenDrilldownDialog={openTotalDrilldownDialog}
-              />
+	          <div className="grid gap-3 lg:grid-cols-2">
+	            <TotalNetWorthBreakdownCard
+	              loading={totalOverviewLoading}
+	              series={totalNetWorthBreakdownSeries}
+	              domain={totalNetWorthBreakdownDomain}
+	              onOpenTimeseriesDialog={openTotalTimeseriesDialog}
+	              onOpenDrilldownDialog={openTotalDrilldownDialog}
+	            />
 
-              <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
-                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-                  <div>
-                    <CardTitle className="text-base font-semibold text-slate-900">
-                      Savings rate
-                    </CardTitle>
-                    <p className="text-xs text-slate-500">
-                      Monthly vs rolling 12m (income − expense / income).
-                    </p>
-                  </div>
-                </CardHeader>
-                <CardContent className="h-80">
-                  {totalOverviewLoading ? (
-                    <Skeleton className="h-full w-full" />
-                  ) : !totalSavingsRateSeries.length ? (
-                    <div className="flex h-full items-center justify-center text-sm text-slate-600">
-                      No savings history yet.
-                    </div>
-                  ) : (
-                    <div className="h-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
-                          data={totalSavingsRateSeries}
-                          onClick={(
-                            state:
-                              | {
-                                  activePayload?: Array<{ payload?: unknown }>;
-                                }
-                              | null
-                              | undefined,
-                          ) => {
-                            const payload =
-                              state?.activePayload?.[0]?.payload ?? null;
-                            if (!isRecord(payload)) return;
-                            const date =
-                              typeof payload.date === "string"
-                                ? payload.date
-                                : null;
-                            if (!date) return;
-                            const income = Number(payload.income ?? 0);
-                            const expense = Number(payload.expense ?? 0);
-                            const net = Number(payload.net ?? income - expense);
-                            const ratePct =
-                              typeof payload.ratePct === "number"
-                                ? Number(payload.ratePct)
-                                : null;
-                            const rolling12mPct =
-                              typeof payload.rolling12mPct === "number"
-                                ? Number(payload.rolling12mPct)
-                                : null;
-                            const idx =
-                              typeof payload.index === "number"
-                                ? Number(payload.index)
-                                : null;
-                            if (idx === null) return;
-                            const window = totalSavingsRateSeriesAll
-                              .slice(Math.max(0, idx - 11), idx + 1)
-                              .map((row) => ({
-                                date: row.date,
-                                label: row.label,
-                                income: row.income,
-                                expense: row.expense,
-                                net: row.net,
-                                ratePct: row.ratePct,
-                              }));
-                            openTotalTimeseriesDialog({
-                              kind: "savingsRate",
-                              date,
-                              income,
-                              expense,
-                              net,
-                              ratePct,
-                              rolling12mPct,
-                              window,
-                            });
-                          }}
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            vertical={false}
-                          />
-                          <XAxis
-                            dataKey="label"
-                            tickLine={false}
-                            axisLine={false}
-                            tick={{ fill: "#475569", fontSize: 12 }}
-                          />
-                          <YAxis
-                            tickLine={false}
-                            axisLine={false}
-                            domain={totalSavingsRateDomain}
-                            tick={{ fill: "#475569", fontSize: 12 }}
-                            tickFormatter={(v) => `${Number(v)}%`}
-                          />
-                          <ReferenceLine y={0} stroke="#cbd5e1" />
-                          <Tooltip
-                            content={({ active, payload }) => {
-                              if (!active || !payload?.length) return null;
-                              const row = payload[0]?.payload;
-                              if (!isRecord(row)) return null;
-                              const date = String(row.date ?? "");
-                              const label = date
-                                ? new Date(date).toLocaleDateString("sv-SE", {
-                                    year: "numeric",
-                                    month: "long",
-                                  })
-                                : "Month";
-                              const income = Number(row.income ?? 0);
-                              const expense = Number(row.expense ?? 0);
-                              const net = Number(row.net ?? income - expense);
-                              const rate =
-                                typeof row.ratePct === "number"
-                                  ? Number(row.ratePct)
-                                  : null;
-                              const rolling =
-                                typeof row.rolling12mPct === "number"
-                                  ? Number(row.rolling12mPct)
-                                  : null;
-                              return (
-                                <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                                  <p className="font-semibold text-slate-800">
-                                    {label}
-                                  </p>
-                                  <div className="mt-1 space-y-0.5 text-slate-700">
-                                    <p>
-                                      Savings rate:{" "}
-                                      {rate === null
-                                        ? "—"
-                                        : `${rate.toFixed(1)}%`}
-                                    </p>
-                                    <p>
-                                      Rolling 12m:{" "}
-                                      {rolling === null
-                                        ? "—"
-                                        : `${rolling.toFixed(1)}%`}
-                                    </p>
-                                    <p>Income: {currency(income)}</p>
-                                    <p>Expense: {currency(expense)}</p>
-                                    <p>Net: {currency(net)}</p>
-                                  </div>
-                                  <p className="mt-2 text-[11px] text-slate-500">
-                                    Click for details
-                                  </p>
-                                </div>
-                              );
-                            }}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="rolling12mPct"
-                            stroke="#4f46e5"
-                            strokeWidth={2}
-                            dot={false}
-                            name="Rolling 12m"
-                            connectNulls
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="ratePct"
-                            stroke="#0f172a"
-                            strokeWidth={2}
-                            dot={false}
-                            name="Monthly"
-                            connectNulls
-                          />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+	            <TotalSavingsRateCard
+	              loading={totalOverviewLoading}
+	              series={totalSavingsRateSeries}
+	              seriesAll={totalSavingsRateSeriesAll}
+	              domain={totalSavingsRateDomain}
+	              onOpenTimeseriesDialog={openTotalTimeseriesDialog}
+	            />
+	            </div>
 
-            <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
-              <CardHeader className="pb-2">
-                <div>
-                  <CardTitle className="text-base font-semibold text-slate-900">
-                    Composition over time
-                  </CardTitle>
-                  <p className="text-xs text-slate-500">
-                    100% stacked by year for the biggest categories.
-                  </p>
-                </div>
-              </CardHeader>
-              <CardContent className="h-80">
-                {totalOverviewLoading ? (
-                  <Skeleton className="h-full w-full" />
-                ) : !totalExpenseComposition && !totalIncomeComposition ? (
-                  <div className="flex h-full items-center justify-center text-sm text-slate-600">
-                    No composition data yet.
-                  </div>
-                ) : (
-                  <Tabs defaultValue="expense" className="flex h-full flex-col">
-                    <TabsList className="self-start">
-                      <TabsTrigger value="expense">Expenses</TabsTrigger>
-                      <TabsTrigger value="income">Income</TabsTrigger>
-                    </TabsList>
-                    <TabsContent
-                      value="expense"
-                      className="mt-2 min-h-0 flex-1"
-                    >
-                      {!totalExpenseComposition ? (
-                        <div className="flex h-full items-center justify-center text-sm text-slate-600">
-                          No expense mix yet.
-                        </div>
-                      ) : (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={totalExpenseComposition.data}>
-                            <CartesianGrid
-                              strokeDasharray="3 3"
-                              vertical={false}
-                            />
-                            <XAxis
-                              dataKey="year"
-                              tickLine={false}
-                              axisLine={false}
-                              tick={{ fill: "#475569", fontSize: 12 }}
-                            />
-                            <YAxis
-                              domain={[0, 100]}
-                              tickLine={false}
-                              axisLine={false}
-                              tick={{ fill: "#475569", fontSize: 12 }}
-                              tickFormatter={(v) => `${Number(v)}%`}
-                            />
-                            <Tooltip
-                              content={({ active, payload, label }) => {
-                                if (!active || !payload?.length) return null;
-                                const year = Number(label);
-                                const total =
-                                  totalExpenseComposition.totalsByYear[year] ??
-                                  0;
-                                return (
-                                  <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                                    <p className="font-semibold text-slate-800">
-                                      {year}
-                                    </p>
-                                    <p className="text-slate-600">
-                                      Total: {currency(total)}
-                                    </p>
-                                    <div className="mt-2 space-y-1">
-                                      {payload
-                                        .slice()
-                                        .reverse()
-                                        .map((p) => {
-                                          const name = String(p.name ?? "");
-                                          const pct = Number(p.value ?? 0);
-                                          const amount =
-                                            totalExpenseComposition
-                                              .amountByYear[year]?.[name] ?? 0;
-                                          return (
-                                            <div
-                                              key={name}
-                                              className="flex items-center justify-between gap-3"
-                                            >
-                                              <span className="text-slate-700">
-                                                {name}
-                                              </span>
-                                              <span className="text-slate-600">
-                                                {pct.toFixed(0)}% •{" "}
-                                                {currency(amount)}
-                                              </span>
-                                            </div>
-                                          );
-                                        })}
-                                    </div>
-                                    <p className="mt-2 text-[11px] text-slate-500">
-                                      Click a segment for details
-                                    </p>
-                                  </div>
-                                );
-                              }}
-                            />
-                            {totalExpenseComposition.keys.map((key) => (
-                              <Bar
-                                key={key}
-                                dataKey={key}
-                                stackId="composition"
-                                fill={totalExpenseComposition.colors[key]}
-                                isAnimationActive={false}
-                                onClick={(data: unknown) => {
-                                  const payload = isRecord(data)
-                                    ? (data.payload as unknown)
-                                    : null;
-                                  if (!isRecord(payload)) return;
-                                  const year = Number(payload.year);
-                                  if (!Number.isFinite(year)) return;
-                                  const value =
-                                    totalExpenseComposition.amountByYear[
-                                      year
-                                    ]?.[key] ?? 0;
-                                  const totals =
-                                    totalExpenseComposition.years.map(
-                                      (yr) =>
-                                        totalExpenseComposition.amountByYear[
-                                          yr
-                                        ]?.[key] ?? 0,
-                                    );
-                                  const max = Math.max(0, ...totals);
-                                  const idx =
-                                    totalExpenseComposition.years.indexOf(year);
-                                  const prevValue =
-                                    idx > 0 ? (totals[idx - 1] ?? 0) : null;
-                                  const yoyDelta =
-                                    prevValue === null
-                                      ? null
-                                      : value - prevValue;
-                                  const yoyDeltaPct =
-                                    prevValue === null || prevValue === 0
-                                      ? null
-                                      : ((value - prevValue) / prevValue) * 100;
-                                  const yearTotal =
-                                    totalExpenseComposition.totalsByYear[
-                                      year
-                                    ] ?? null;
-                                  openTotalHeatmapDialog({
-                                    kind: "categoryByYear",
-                                    flow: "expense",
-                                    year,
-                                    categoryId:
-                                      totalExpenseComposition.ids[key] ?? null,
-                                    categoryName: key,
-                                    color:
-                                      totalExpenseComposition.colors[key] ??
-                                      "#ef4444",
-                                    value,
-                                    years: totalExpenseComposition.years,
-                                    totals,
-                                    max,
-                                    yearTotal,
-                                    sharePct:
-                                      typeof yearTotal === "number" &&
-                                      yearTotal > 0
-                                        ? (value / yearTotal) * 100
-                                        : null,
-                                    yoyDelta,
-                                    yoyDeltaPct,
-                                  });
-                                }}
-                              />
-                            ))}
-                          </BarChart>
-                        </ResponsiveContainer>
-                      )}
-                    </TabsContent>
-                    <TabsContent value="income" className="mt-2 min-h-0 flex-1">
-                      {!totalIncomeComposition ? (
-                        <div className="flex h-full items-center justify-center text-sm text-slate-600">
-                          No income mix yet.
-                        </div>
-                      ) : (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={totalIncomeComposition.data}>
-                            <CartesianGrid
-                              strokeDasharray="3 3"
-                              vertical={false}
-                            />
-                            <XAxis
-                              dataKey="year"
-                              tickLine={false}
-                              axisLine={false}
-                              tick={{ fill: "#475569", fontSize: 12 }}
-                            />
-                            <YAxis
-                              domain={[0, 100]}
-                              tickLine={false}
-                              axisLine={false}
-                              tick={{ fill: "#475569", fontSize: 12 }}
-                              tickFormatter={(v) => `${Number(v)}%`}
-                            />
-                            <Tooltip
-                              content={({ active, payload, label }) => {
-                                if (!active || !payload?.length) return null;
-                                const year = Number(label);
-                                const total =
-                                  totalIncomeComposition.totalsByYear[year] ??
-                                  0;
-                                return (
-                                  <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                                    <p className="font-semibold text-slate-800">
-                                      {year}
-                                    </p>
-                                    <p className="text-slate-600">
-                                      Total: {currency(total)}
-                                    </p>
-                                    <div className="mt-2 space-y-1">
-                                      {payload
-                                        .slice()
-                                        .reverse()
-                                        .map((p) => {
-                                          const name = String(p.name ?? "");
-                                          const pct = Number(p.value ?? 0);
-                                          const amount =
-                                            totalIncomeComposition.amountByYear[
-                                              year
-                                            ]?.[name] ?? 0;
-                                          return (
-                                            <div
-                                              key={name}
-                                              className="flex items-center justify-between gap-3"
-                                            >
-                                              <span className="text-slate-700">
-                                                {name}
-                                              </span>
-                                              <span className="text-slate-600">
-                                                {pct.toFixed(0)}% •{" "}
-                                                {currency(amount)}
-                                              </span>
-                                            </div>
-                                          );
-                                        })}
-                                    </div>
-                                    <p className="mt-2 text-[11px] text-slate-500">
-                                      Click a segment for details
-                                    </p>
-                                  </div>
-                                );
-                              }}
-                            />
-                            {totalIncomeComposition.keys.map((key) => (
-                              <Bar
-                                key={key}
-                                dataKey={key}
-                                stackId="composition"
-                                fill={totalIncomeComposition.colors[key]}
-                                isAnimationActive={false}
-                                onClick={(data: unknown) => {
-                                  const payload = isRecord(data)
-                                    ? (data.payload as unknown)
-                                    : null;
-                                  if (!isRecord(payload)) return;
-                                  const year = Number(payload.year);
-                                  if (!Number.isFinite(year)) return;
-                                  const value =
-                                    totalIncomeComposition.amountByYear[year]?.[
-                                      key
-                                    ] ?? 0;
-                                  const totals =
-                                    totalIncomeComposition.years.map(
-                                      (yr) =>
-                                        totalIncomeComposition.amountByYear[
-                                          yr
-                                        ]?.[key] ?? 0,
-                                    );
-                                  const max = Math.max(0, ...totals);
-                                  const idx =
-                                    totalIncomeComposition.years.indexOf(year);
-                                  const prevValue =
-                                    idx > 0 ? (totals[idx - 1] ?? 0) : null;
-                                  const yoyDelta =
-                                    prevValue === null
-                                      ? null
-                                      : value - prevValue;
-                                  const yoyDeltaPct =
-                                    prevValue === null || prevValue === 0
-                                      ? null
-                                      : ((value - prevValue) / prevValue) * 100;
-                                  const yearTotal =
-                                    totalIncomeComposition.totalsByYear[year] ??
-                                    null;
-                                  openTotalHeatmapDialog({
-                                    kind: "categoryByYear",
-                                    flow: "income",
-                                    year,
-                                    categoryId:
-                                      totalIncomeComposition.ids[key] ?? null,
-                                    categoryName: key,
-                                    color:
-                                      totalIncomeComposition.colors[key] ??
-                                      "#10b981",
-                                    value,
-                                    years: totalIncomeComposition.years,
-                                    totals,
-                                    max,
-                                    yearTotal,
-                                    sharePct:
-                                      typeof yearTotal === "number" &&
-                                      yearTotal > 0
-                                        ? (value / yearTotal) * 100
-                                        : null,
-                                    yoyDelta,
-                                    yoyDeltaPct,
-                                  });
-                                }}
-                              />
-                            ))}
-                          </BarChart>
-                        </ResponsiveContainer>
-                      )}
-                    </TabsContent>
-                  </Tabs>
-                )}
-              </CardContent>
-            </Card>
+	            <TotalCompositionOverTimeCard
+	              loading={totalOverviewLoading}
+	              expenseComposition={totalExpenseComposition}
+	              incomeComposition={totalIncomeComposition}
+	              onOpenHeatmapDialog={openTotalHeatmapDialog}
+	            />
 
             <ChartCard
               title="Net worth growth"
