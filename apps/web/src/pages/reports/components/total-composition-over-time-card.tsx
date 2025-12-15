@@ -31,7 +31,8 @@ export const TotalCompositionOverTimeCard: React.FC<{
   composition: Composition | null;
   onOpenHeatmapDialog: (state: TotalHeatmapDialogState) => void;
 }> = ({ flow, loading, composition, onOpenHeatmapDialog }) => {
-  const title = flow === "income" ? "Income composition" : "Expense composition";
+  const title =
+    flow === "income" ? "Income composition" : "Expense composition";
   const fallbackColor = flow === "income" ? "#10b981" : "#ef4444";
 
   return (
@@ -128,20 +129,23 @@ export const TotalCompositionOverTimeCard: React.FC<{
                         if (!isRecord(payload)) return;
                         const year = Number(payload.year);
                         if (!Number.isFinite(year)) return;
-                        const value = composition.amountByYear[year]?.[key] ?? 0;
+                        const value =
+                          composition.amountByYear[year]?.[key] ?? 0;
                         const totals = composition.years.map(
                           (yr) => composition.amountByYear[yr]?.[key] ?? 0,
                         );
                         const max = Math.max(0, ...totals);
                         const idx = composition.years.indexOf(year);
-                        const prevValue = idx > 0 ? (totals[idx - 1] ?? 0) : null;
+                        const prevValue =
+                          idx > 0 ? (totals[idx - 1] ?? 0) : null;
                         const yoyDelta =
                           prevValue === null ? null : value - prevValue;
                         const yoyDeltaPct =
                           prevValue === null || prevValue === 0
                             ? null
                             : ((value - prevValue) / prevValue) * 100;
-                        const yearTotal = composition.totalsByYear[year] ?? null;
+                        const yearTotal =
+                          composition.totalsByYear[year] ?? null;
                         onOpenHeatmapDialog({
                           kind: "categoryByYear",
                           flow,
@@ -172,7 +176,9 @@ export const TotalCompositionOverTimeCard: React.FC<{
               <span>
                 Buckets: {composition.keys.length} (top categories + other)
               </span>
-              <span className="text-slate-500">Click a segment for details</span>
+              <span className="text-slate-500">
+                Click a segment for details
+              </span>
             </div>
           </div>
         )}
@@ -180,4 +186,3 @@ export const TotalCompositionOverTimeCard: React.FC<{
     </Card>
   );
 };
-

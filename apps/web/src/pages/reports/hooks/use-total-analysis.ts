@@ -31,41 +31,66 @@ const buildComposition = (
   fallbackColor: string,
 ): Composition | null => {
   if (!rows.length) return null;
-  const latest = rows[rows.length - 1];
-  const sortedCats = [...latest.categories].sort(
-    (a, b) => Number(b.total) - Number(a.total),
-  );
-  const top = sortedCats.filter((c) => c.name !== "Other").slice(0, 7);
-  const includesOther = latest.categories.some((c) => c.name === "Other");
-  const keys = [...top.map((c) => c.name), ...(includesOther ? ["Other"] : [])];
+  const years = rows.map((row) => row.year);
 
-  const colors: Record<string, string> = {};
-  const ids: Record<string, string | null> = {};
-  const baseCats = [
-    ...top,
-    ...latest.categories.filter((c) => c.name === "Other"),
-  ];
-  baseCats.forEach((c) => {
-    colors[c.name] = c.color_hex ?? fallbackColor;
-    ids[c.name] = c.category_id ?? null;
+  const totalByName = new Map<string, number>();
+  rows.forEach((row) => {
+    row.categories.forEach((cat) => {
+      if (cat.name === "Other") return;
+      const prev = totalByName.get(cat.name) ?? 0;
+      totalByName.set(cat.name, prev + Math.abs(Number(cat.total)));
+    });
   });
 
-  const years = rows.map((row) => row.year);
+  const topNames = Array.from(totalByName.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 7)
+    .map(([name]) => name);
+
+  const keys = [...topNames, "Other"];
+
+  const colors: Record<string, string> = { Other: "#94a3b8" };
+  const ids: Record<string, string | null> = { Other: null };
+
+  keys.forEach((key) => {
+    if (key === "Other") return;
+    for (let idx = rows.length - 1; idx >= 0; idx -= 1) {
+      const match = rows[idx]?.categories.find((cat) => cat.name === key);
+      if (!match) continue;
+      colors[key] = match.color_hex ?? fallbackColor;
+      ids[key] = match.category_id ?? null;
+      break;
+    }
+    if (!colors[key]) colors[key] = fallbackColor;
+    if (!(key in ids)) ids[key] = null;
+  });
+
   const totalsByYear: Record<number, number> = {};
   const amountByYear: Record<number, Record<string, number>> = {};
 
   rows.forEach((row) => {
     const yearTotal = row.categories.reduce(
-      (sum, cat) => sum + Number(cat.total),
+      (sum, cat) => sum + Math.abs(Number(cat.total)),
       0,
     );
     totalsByYear[row.year] = yearTotal;
 
     const bucket: Record<string, number> = {};
+    let knownSum = 0;
     keys.forEach((key) => {
+      if (key === "Other") return;
       const match = row.categories.find((c) => c.name === key);
-      bucket[key] = match ? Number(match.total) : 0;
+      const amount = match ? Math.abs(Number(match.total)) : 0;
+      bucket[key] = amount;
+      knownSum += amount;
     });
+
+    const otherMatch = row.categories.find((c) => c.name === "Other");
+    const otherAmount = otherMatch
+      ? Math.abs(Number(otherMatch.total))
+      : Math.max(0, yearTotal - knownSum);
+    bucket.Other = otherAmount;
+
     amountByYear[row.year] = bucket;
   });
 
