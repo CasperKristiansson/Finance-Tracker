@@ -182,29 +182,58 @@ class ReportingService:
         if not snapshots:
             return ledger_points
 
+        investment_account_ids = self.repository.list_account_ids_by_type(AccountType.INVESTMENT)
+        investment_ledger_points = (
+            self.repository.get_net_worth_history(account_ids=investment_account_ids)
+            if investment_account_ids
+            else []
+        )
+
         ledger_by_day = {point.period: coerce_decimal(point.net_worth) for point in ledger_points}
+        investment_ledger_by_day = {
+            point.period: coerce_decimal(point.net_worth) for point in investment_ledger_points
+        }
         snapshot_days = {day for day, _value in snapshots}
-        all_days = sorted(set(ledger_by_day.keys()) | snapshot_days)
+        all_days = sorted(
+            set(ledger_by_day.keys()) | set(investment_ledger_by_day.keys()) | snapshot_days
+        )
         if not all_days:
             return []
 
         results: List[NetWorthPoint] = []
         running_ledger = Decimal("0")
+        running_investment_ledger = Decimal("0")
         snap_idx = 0
         latest_investments = Decimal("0")
+        investment_ledger_at_latest_snapshot = Decimal("0")
 
         for day in all_days:
             if day in ledger_by_day:
                 running_ledger = ledger_by_day[day]
+            if day in investment_ledger_by_day:
+                running_investment_ledger = investment_ledger_by_day[day]
             while snap_idx < len(snapshots) and snapshots[snap_idx][0] <= day:
                 latest_investments = coerce_decimal(snapshots[snap_idx][1])
+                investment_ledger_at_latest_snapshot = running_investment_ledger
                 snap_idx += 1
-            results.append(NetWorthPoint(period=day, net_worth=running_ledger + latest_investments))
+            results.append(
+                NetWorthPoint(
+                    period=day,
+                    net_worth=running_ledger
+                    + latest_investments
+                    - investment_ledger_at_latest_snapshot,
+                )
+            )
 
         today = date.today()
         if results and results[-1].period != today:
             results.append(
-                NetWorthPoint(period=today, net_worth=running_ledger + latest_investments)
+                NetWorthPoint(
+                    period=today,
+                    net_worth=running_ledger
+                    + latest_investments
+                    - investment_ledger_at_latest_snapshot,
+                )
             )
 
         return results
@@ -907,22 +936,21 @@ class ReportingService:
         )
 
         # Investments only apply to full net worth (no account filter).
-        investments_by_month: List[Decimal] = [Decimal("0") for _ in range(12)]
         if account_id_list is None:
-            snapshots = self.repository.list_investment_snapshots_until(end=as_of_date)
-            snap_idx = 0
-            latest = Decimal("0")
+            net_worth_history = self.net_worth_history(account_ids=None)
             month_ends = self._month_end_dates(year)
-            for month_idx, month_end in enumerate(month_ends):
-                while snap_idx < len(snapshots) and snapshots[snap_idx][0] <= month_end:
-                    latest = snapshots[snap_idx][1]
-                    snap_idx += 1
-                investments_by_month[month_idx] = latest
-
-        net_worth_points = [
-            {"date": d.isoformat(), "net_worth": bal + investments_by_month[idx]}
-            for idx, (d, bal) in enumerate(net_worth_series)
-        ]
+            net_worth_points: List[Dict[str, object]] = []
+            idx = 0
+            latest_value = Decimal("0")
+            for month_end in month_ends:
+                while idx < len(net_worth_history) and net_worth_history[idx].period <= month_end:
+                    latest_value = coerce_decimal(net_worth_history[idx].net_worth)
+                    idx += 1
+                net_worth_points.append({"date": month_end.isoformat(), "net_worth": latest_value})
+        else:
+            net_worth_points = [
+                {"date": d.isoformat(), "net_worth": bal} for d, bal in net_worth_series
+            ]
         debt_points = [
             {"date": d.isoformat(), "debt": -bal if bal < 0 else bal} for d, bal in debt_series
         ]
