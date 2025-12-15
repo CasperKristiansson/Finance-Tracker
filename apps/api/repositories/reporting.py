@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 from uuid import UUID
 
-from sqlalchemy import Table, desc, func
+from sqlalchemy import Table, case, desc, func
 from sqlalchemy import select as sa_select
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -84,6 +84,8 @@ class TransactionAmountRow:
     category_color_hex: Optional[str]
     subscription_id: Optional[UUID]
     amount: Decimal
+    inflow: Decimal
+    outflow: Decimal
 
 
 class ReportingRepository:
@@ -368,6 +370,24 @@ class ReportingRepository:
             cast(Any, category_table.c.color_hex).label("category_color_hex"),
             cast(Any, transaction_table.c.subscription_id).label("subscription_id"),
             func.sum(leg_table.c.amount).label("amount"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (cast(Any, leg_table.c.amount) > 0, cast(Any, leg_table.c.amount)),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("inflow"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (cast(Any, leg_table.c.amount) < 0, -cast(Any, leg_table.c.amount)),
+                        else_=0,
+                    )
+                ),
+                0,
+            ).label("outflow"),
         ]
 
         statement: Any = sa_select(*columns)
@@ -421,6 +441,8 @@ class ReportingRepository:
             category_color_hex,
             subscription_id,
             amount,
+            inflow,
+            outflow,
         ) in rows:
             result.append(
                 TransactionAmountRow(
@@ -435,6 +457,8 @@ class ReportingRepository:
                     category_color_hex=cast(Optional[str], category_color_hex),
                     subscription_id=cast(Optional[UUID], subscription_id),
                     amount=coerce_decimal(amount),
+                    inflow=coerce_decimal(inflow),
+                    outflow=coerce_decimal(outflow),
                 )
             )
         return result

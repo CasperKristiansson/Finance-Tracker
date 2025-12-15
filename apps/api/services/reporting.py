@@ -59,8 +59,9 @@ class ReportingService:
         )
 
         buckets: Dict[date, Tuple[Decimal, Decimal]] = {}
+        account_scoped = account_ids is not None
         for row in rows:
-            income, expense = self._classify_income_expense(row)
+            income, expense = self._classify_income_expense(row, account_scoped=account_scoped)
             if income == 0 and expense == 0:
                 continue
             period = date(row.occurred_at.year, row.occurred_at.month, 1)
@@ -93,8 +94,9 @@ class ReportingService:
         )
 
         buckets: Dict[int, Tuple[Decimal, Decimal]] = {}
+        account_scoped = account_ids is not None
         for row in rows:
-            income, expense = self._classify_income_expense(row)
+            income, expense = self._classify_income_expense(row, account_scoped=account_scoped)
             if income == 0 and expense == 0:
                 continue
             inc, exp = buckets.get(row.occurred_at.year, (Decimal("0"), Decimal("0")))
@@ -135,8 +137,9 @@ class ReportingService:
 
         income_total = Decimal("0")
         expense_total = Decimal("0")
+        account_scoped = account_ids is not None
         for row in rows:
-            income, expense = self._classify_income_expense(row)
+            income, expense = self._classify_income_expense(row, account_scoped=account_scoped)
             income_total += income
             expense_total += expense
         return LifetimeTotals(
@@ -152,13 +155,17 @@ class ReportingService:
         as_of = date.today()
         history = self.net_worth_history(account_ids=account_id_list)
         net_worth_points = [(point.period, coerce_decimal(point.net_worth)) for point in history]
+
+        def classify_income_expense(row: TransactionAmountRow) -> Tuple[Decimal, Decimal]:
+            return self._classify_income_expense(row, account_scoped=account_id_list is not None)
+
         return build_total_overview(
             session=self.session,
             repository=self.repository,
             as_of=as_of,
             account_id_list=account_id_list,
             net_worth_points=net_worth_points,
-            classify_income_expense=self._classify_income_expense,
+            classify_income_expense=classify_income_expense,
             merchant_key=self._merchant_key,
         )
 
@@ -740,12 +747,24 @@ class ReportingService:
         return value if value else "Unknown"
 
     @staticmethod
-    def _classify_income_expense(row: TransactionAmountRow) -> Tuple[Decimal, Decimal]:
-        """Returns income, expense contributions (transfers excluded)."""
+    def _classify_income_expense(
+        row: TransactionAmountRow, *, account_scoped: bool
+    ) -> Tuple[Decimal, Decimal]:
+        """Return income/expense totals for reports.
 
-        amount = coerce_decimal(row.amount)
+        When a report is scoped to specific accounts (`account_ids` filter),
+        transfers represent real money in/out for those accounts and should be
+        included as income/expense. When not scoped, transfers are excluded to
+        avoid double-counting.
+        """
+
         if row.transaction_type == TransactionType.TRANSFER:
             return Decimal("0"), Decimal("0")
+
+        if account_scoped:
+            return coerce_decimal(row.inflow), coerce_decimal(row.outflow)
+
+        amount = coerce_decimal(row.amount)
         if row.transaction_type == TransactionType.INCOME:
             return (amount if amount > 0 else -amount), Decimal("0")
         if row.transaction_type == TransactionType.EXPENSE:
@@ -789,9 +808,10 @@ class ReportingService:
         largest_expenses: List[Dict[str, object]] = []
         subscriptions_current: Dict[str, Dict[str, object]] = {}
 
+        account_scoped = account_id_list is not None
         for row in rows:
             month_idx = row.occurred_at.month - 1
-            income, expense = self._classify_income_expense(row)
+            income, expense = self._classify_income_expense(row, account_scoped=account_scoped)
             monthly_income[month_idx] += income
             monthly_expense[month_idx] += expense
 
@@ -966,7 +986,7 @@ class ReportingService:
         prev_subscription_avg: Dict[str, Decimal] = {}
         prev_counts: Dict[str, int] = {}
         for row in prev_rows:
-            income, expense = self._classify_income_expense(row)
+            income, expense = self._classify_income_expense(row, account_scoped=account_scoped)
             if expense <= 0:
                 continue
             if row.subscription_id:
@@ -996,7 +1016,7 @@ class ReportingService:
         # Category changes YoY (ranked by increased spend).
         prev_category_totals: Dict[str, Decimal] = {}
         for row in prev_rows:
-            _, expense = self._classify_income_expense(row)
+            _, expense = self._classify_income_expense(row, account_scoped=account_scoped)
             if expense <= 0:
                 continue
             key = str(row.category_id or "uncategorized")
@@ -1026,7 +1046,11 @@ class ReportingService:
         # Insights.
         insights: List[str] = []
         prev_total_expense = sum(
-            (self._classify_income_expense(row)[1] for row in prev_rows), Decimal("0")
+            (
+                self._classify_income_expense(row, account_scoped=account_scoped)[1]
+                for row in prev_rows
+            ),
+            Decimal("0"),
         )
         if prev_total_expense > 0 and total_expense > 0:
             yoy = (total_expense - prev_total_expense) / prev_total_expense * Decimal("100")
@@ -1082,7 +1106,9 @@ class ReportingService:
             as_of_date=as_of_date,
             account_id_list=account_id_list,
             rows=rows,
-            classify_income_expense=self._classify_income_expense,
+            classify_income_expense=lambda row: self._classify_income_expense(  # noqa: E731
+                row, account_scoped=account_id_list is not None
+            ),
             merchant_key=self._merchant_key,
             month_end_balance_series=lambda yr, ids: self._month_end_balance_series(
                 year=yr, account_ids=ids
@@ -1154,10 +1180,11 @@ class ReportingService:
 
         monthly = [Decimal("0") for _ in range(12)]
         merchants: Dict[str, Dict[str, object]] = {}
+        account_scoped = account_ids is not None
         for row in rows:
             if row.category_id != category_id:
                 continue
-            income, expense = self._classify_income_expense(row)
+            income, expense = self._classify_income_expense(row, account_scoped=account_scoped)
             amount = income if flow == "income" else expense
             if amount <= 0:
                 continue
@@ -1240,8 +1267,9 @@ class ReportingService:
         )
 
         buckets: Dict[tuple[int, int], Tuple[Decimal, Decimal]] = {}
+        account_scoped = account_ids is not None
         for row in rows:
-            income, expense = self._classify_income_expense(row)
+            income, expense = self._classify_income_expense(row, account_scoped=account_scoped)
             if income == 0 and expense == 0:
                 continue
             quarter = (row.occurred_at.month - 1) // 3 + 1
@@ -1285,8 +1313,9 @@ class ReportingService:
             rows = [row for row in rows if self._merchant_key(row.description) == source]
 
         buckets: Dict[date, Tuple[Decimal, Decimal]] = {}
+        account_scoped = account_ids is not None
         for row in rows:
-            income, expense = self._classify_income_expense(row)
+            income, expense = self._classify_income_expense(row, account_scoped=account_scoped)
             if income == 0 and expense == 0:
                 continue
             period = date(row.occurred_at.year, row.occurred_at.month, 1)

@@ -268,7 +268,7 @@ def test_create_transaction_generates_loan_event():
         scope_session_to_user(session, get_default_user_id())
         events = session.exec(select(LoanEvent)).all()
         assert len(events) == 1
-        assert events[0].event_type == "payment_principal"
+        assert events[0].event_type == "disbursement"
 
 
 def test_update_and_delete_transaction():

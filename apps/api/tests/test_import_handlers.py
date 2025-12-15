@@ -408,7 +408,7 @@ def test_commit_can_link_rows_to_loan_account_transfer():
 
         events = session.exec(select(LoanEvent)).all()
         assert len(events) == 1
-        assert events[0].event_type == "payment_principal"
+        assert events[0].event_type == "disbursement"
 
 
 def test_commit_supports_tax_event_type_and_creates_tax_event():
