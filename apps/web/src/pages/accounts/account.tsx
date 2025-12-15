@@ -38,14 +38,28 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer } from "@/components/ui/chart";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageRoutes } from "@/data/routes";
 import { selectToken } from "@/features/auth/authSlice";
-import { useAccountsApi, useInvestmentsApi } from "@/hooks/use-api";
+import {
+  useAccountsApi,
+  useCategoriesApi,
+  useInvestmentsApi,
+} from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
+import { formatCategoryLabel, renderCategoryIcon } from "@/lib/category-icons";
 import { cn } from "@/lib/utils";
 import {
   AccountType,
+  TransactionType,
   type TransactionListResponse,
   type TransactionRead,
   type YearlyReportEntry,
@@ -123,6 +137,22 @@ const renderAccountIcon = (icon: string | null | undefined, name: string) => {
   );
 };
 
+const transactionTypeLabel: Record<TransactionType, string> = {
+  [TransactionType.INCOME]: "Income",
+  [TransactionType.EXPENSE]: "Expense",
+  [TransactionType.TRANSFER]: "Transfer",
+  [TransactionType.ADJUSTMENT]: "Adjustment",
+  [TransactionType.INVESTMENT_EVENT]: "Investment",
+};
+
+const transactionTypeBadgeClass: Record<TransactionType, string> = {
+  [TransactionType.INCOME]: "bg-emerald-100 text-emerald-800",
+  [TransactionType.EXPENSE]: "bg-rose-100 text-rose-800",
+  [TransactionType.TRANSFER]: "bg-slate-100 text-slate-700",
+  [TransactionType.ADJUSTMENT]: "bg-amber-100 text-amber-800",
+  [TransactionType.INVESTMENT_EVENT]: "bg-indigo-100 text-indigo-800",
+};
+
 export const AccountDetails: React.FC = () => {
   const { accountId } = useParams();
   const token = useAppSelector(selectToken);
@@ -150,6 +180,8 @@ export const AccountDetails: React.FC = () => {
     loading: investmentsLoading,
     fetchOverview: fetchInvestmentsOverview,
   } = useInvestmentsApi();
+
+  const { items: categories, fetchCategories } = useCategoriesApi();
 
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -205,10 +237,21 @@ export const AccountDetails: React.FC = () => {
     [accountId, accounts],
   );
 
+  const categoryLookup = useMemo(() => {
+    const map = new Map<string, (typeof categories)[number]>();
+    categories.forEach((category) => map.set(category.id, category));
+    return map;
+  }, [categories]);
+
   useEffect(() => {
     if (accounts.length) return;
     fetchAccounts({ includeInactive: true });
   }, [accounts.length, fetchAccounts]);
+
+  useEffect(() => {
+    if (categories.length) return;
+    fetchCategories({ includeArchived: true });
+  }, [categories.length, fetchCategories]);
 
   useEffect(() => {
     if (!token) return;
@@ -1343,44 +1386,145 @@ export const AccountDetails: React.FC = () => {
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {txItems.map((tx) => {
-                      const leg = tx.legs?.find(
-                        (l) => l.account_id === accountId,
-                      );
-                      const amount = Number(leg?.amount ?? 0);
-                      const isPositive = amount >= 0;
-                      return (
-                        <div
-                          key={tx.id}
-                          className="flex items-center justify-between rounded-lg border border-slate-100 bg-white px-3 py-2 shadow-[0_10px_30px_-28px_rgba(15,23,42,0.25)]"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-slate-900">
-                              {tx.description?.trim() || "Transaction"}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              {new Date(tx.occurred_at).toLocaleDateString(
-                                "en-US",
-                                {
-                                  month: "short",
-                                  day: "numeric",
-                                  year: "numeric",
-                                },
-                              )}
-                            </p>
-                          </div>
-                          <div
-                            className={cn(
-                              "text-sm font-semibold tabular-nums",
-                              isPositive ? "text-emerald-700" : "text-rose-700",
-                            )}
-                          >
-                            {isPositive ? "+" : "−"}
-                            {formatCurrency(Math.abs(amount))}
-                          </div>
-                        </div>
-                      );
-                    })}
+                    <div className="rounded-lg border border-slate-100 bg-white shadow-[0_10px_30px_-28px_rgba(15,23,42,0.25)]">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead className="w-44">Date</TableHead>
+                            <TableHead>Description</TableHead>
+                            <TableHead className="hidden md:table-cell">
+                              Category
+                            </TableHead>
+                            <TableHead className="w-40 text-right">
+                              Amount
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {txItems.map((tx) => {
+                            const leg = tx.legs?.find(
+                              (l) => l.account_id === accountId,
+                            );
+                            const amount = Number(leg?.amount ?? 0);
+                            const isPositive = amount >= 0;
+                            const category = tx.category_id
+                              ? (categoryLookup.get(tx.category_id) ?? null)
+                              : null;
+
+                            const counterpartyNames = tx.legs
+                              ?.filter((l) => l.account_id !== accountId)
+                              .map(
+                                (l) =>
+                                  accounts.find(
+                                    (acc) => acc.id === l.account_id,
+                                  )?.name ?? "Other account",
+                              )
+                              .filter(Boolean);
+                            const counterparty =
+                              counterpartyNames && counterpartyNames.length
+                                ? counterpartyNames.join(", ")
+                                : null;
+
+                            return (
+                              <TableRow key={tx.id}>
+                                <TableCell className="align-top text-sm text-slate-700">
+                                  {new Date(tx.occurred_at).toLocaleDateString(
+                                    "en-US",
+                                    {
+                                      month: "short",
+                                      day: "numeric",
+                                      year: "numeric",
+                                    },
+                                  )}
+                                </TableCell>
+                                <TableCell className="align-top">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-semibold text-slate-900">
+                                      {tx.description?.trim() || "Transaction"}
+                                    </p>
+                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                      <span
+                                        className={cn(
+                                          "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                                          transactionTypeBadgeClass[
+                                            tx.transaction_type
+                                          ],
+                                        )}
+                                      >
+                                        {transactionTypeLabel[
+                                          tx.transaction_type
+                                        ] ?? tx.transaction_type}
+                                      </span>
+                                      {tx.transaction_type ===
+                                        TransactionType.TRANSFER &&
+                                      counterparty ? (
+                                        <span className="truncate">
+                                          {isPositive ? "From" : "To"}{" "}
+                                          {counterparty}
+                                        </span>
+                                      ) : null}
+                                      {tx.notes?.trim() ? (
+                                        <span className="hidden lg:inline">
+                                          • {tx.notes.trim()}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="hidden align-top md:table-cell">
+                                  {category ? (
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      {category.color_hex ? (
+                                        <span
+                                          className="h-2 w-2 shrink-0 rounded-full"
+                                          style={{
+                                            backgroundColor: category.color_hex,
+                                          }}
+                                        />
+                                      ) : null}
+                                      {renderCategoryIcon(
+                                        category.icon,
+                                        category.name,
+                                        "h-4 w-4 shrink-0 text-slate-700",
+                                      )}
+                                      <span className="min-w-0 truncate text-sm text-slate-700">
+                                        {formatCategoryLabel(
+                                          category.name,
+                                          category.icon,
+                                        )}
+                                      </span>
+                                      {category.is_archived ? (
+                                        <Badge
+                                          variant="outline"
+                                          className="ml-1 border-slate-300 text-slate-600"
+                                        >
+                                          Archived
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                  ) : (
+                                    <span className="text-sm text-slate-500">
+                                      Uncategorized
+                                    </span>
+                                  )}
+                                </TableCell>
+                                <TableCell
+                                  className={cn(
+                                    "text-right align-top text-sm font-semibold tabular-nums",
+                                    isPositive
+                                      ? "text-emerald-700"
+                                      : "text-rose-700",
+                                  )}
+                                >
+                                  {isPositive ? "+" : "−"}
+                                  {formatCurrency(Math.abs(amount))}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
 
                     <div className="pt-2">
                       <Button
