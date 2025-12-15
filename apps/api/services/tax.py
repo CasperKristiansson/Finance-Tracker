@@ -204,19 +204,19 @@ class TaxService:
 
         amount_abs = func.abs(cast(Any, TransactionLeg.amount))
         net_amount = case(
-            (TaxEvent.event_type == TaxEventType.PAYMENT, amount_abs),
+            (cast(Any, TaxEvent.event_type) == TaxEventType.PAYMENT, amount_abs),
             else_=-amount_abs,
         )
         payment_amount = case(
-            (TaxEvent.event_type == TaxEventType.PAYMENT, amount_abs),
-            else_=Decimal("0"),
+            (cast(Any, TaxEvent.event_type) == TaxEventType.PAYMENT, amount_abs),
+            else_=0,
         )
         refund_amount = case(
-            (TaxEvent.event_type == TaxEventType.REFUND, amount_abs),
-            else_=Decimal("0"),
+            (cast(Any, TaxEvent.event_type) == TaxEventType.REFUND, amount_abs),
+            else_=0,
         )
 
-        year_expr = cast(Any, extract("year", Transaction.occurred_at))
+        year_expr = cast(Any, extract("year", cast(Any, Transaction.occurred_at)))
         statement: Any = (
             select(
                 year_expr.label("year"),
@@ -255,7 +255,9 @@ class TaxService:
 
         today = datetime.now(timezone.utc).date()
         ytd_start = datetime(today.year, 1, 1, tzinfo=timezone.utc)
-        ytd_end = datetime.combine(today + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+        ytd_end = datetime.combine(
+            today + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
+        )
         net_tax_paid_ytd = self._net_tax_paid_between(
             offset_account_id=offset_account.id, start_date=ytd_start, end_date=ytd_end
         )
@@ -318,7 +320,7 @@ class TaxService:
     ) -> Decimal:
         amount_abs = func.abs(cast(Any, TransactionLeg.amount))
         net_amount = case(
-            (TaxEvent.event_type == TaxEventType.PAYMENT, amount_abs),
+            (cast(Any, TaxEvent.event_type) == TaxEventType.PAYMENT, amount_abs),
             else_=-amount_abs,
         )
         statement: Any = (

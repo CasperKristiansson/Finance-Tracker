@@ -121,9 +121,9 @@ from .tax import (
     TaxEventListQuery,
     TaxEventListResponse,
     TaxEventRead,
-    TaxTotalSummaryResponse,
     TaxSummaryQuery,
     TaxSummaryResponse,
+    TaxTotalSummaryResponse,
 )
 from .transaction import (
     TransactionCreate,
