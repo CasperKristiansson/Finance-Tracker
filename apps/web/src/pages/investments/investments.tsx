@@ -632,7 +632,7 @@ export const Investments: React.FC = () => {
                 Account-level contributions and growth. Click a row for details.
               </p>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="flex h-80 flex-col gap-3">
               <Tabs
                 value={accountWindow}
                 onValueChange={(v) => setAccountWindow(v as "since" | "12m")}
@@ -643,7 +643,7 @@ export const Investments: React.FC = () => {
                 </TabsList>
               </Tabs>
               {accountSummaries.length ? (
-                <div className="overflow-x-auto rounded-lg border border-slate-100">
+                <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-slate-100">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -721,7 +721,7 @@ export const Investments: React.FC = () => {
                   </Table>
                 </div>
               ) : (
-                <div className="rounded-lg border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+                <div className="flex flex-1 items-center justify-center rounded-lg border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
                   {isLoading
                     ? "Loading accounts…"
                     : "No investment accounts found."}
