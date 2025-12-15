@@ -298,107 +298,6 @@ export const useTotalAnalysis = ({
     return [min, max + upperPad];
   }, [totalNetWorthTrajectoryData]);
 
-  const totalNetWorthBreakdownSeries = useMemo(() => {
-    if (!totalOverview) return [];
-    const invMap = new Map<string, number>();
-    (totalOverview.investments?.series ?? []).forEach((row) => {
-      invMap.set(row.date, Number(row.value));
-    });
-    const debtMap = new Map<string, number>();
-    totalOverview.debt.series.forEach((row) => {
-      debtMap.set(row.date, Number(row.debt));
-    });
-    const start = totalWindowRange?.start ?? null;
-    return totalOverview.net_worth_series
-      .filter((row) => (start ? row.date >= start : true))
-      .map((row) => {
-        const investments = invMap.get(row.date) ?? 0;
-        const debt = debtMap.get(row.date) ?? 0;
-        const netWorth = Number(row.net_worth);
-        const cash = netWorth - investments + debt;
-        return {
-          date: row.date,
-          label: new Date(row.date).toLocaleDateString("sv-SE", {
-            month: "short",
-            year: "2-digit",
-          }),
-          cash,
-          investments,
-          debtNeg: -debt,
-          debt,
-          netWorth,
-        };
-      });
-  }, [totalOverview, totalWindowRange]);
-
-  const totalNetWorthBreakdownDomain = useMemo<[number, number]>(() => {
-    if (!totalNetWorthBreakdownSeries.length) return [0, 0];
-    const values = totalNetWorthBreakdownSeries.flatMap((row) => [
-      row.cash,
-      row.investments,
-      row.debtNeg,
-      row.netWorth,
-    ]);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const pad = Math.max(1, Math.abs(max) * 0.08);
-    return [min - pad * 0.2, max + pad];
-  }, [totalNetWorthBreakdownSeries]);
-
-  const totalSavingsRateSeriesAll = useMemo(() => {
-    const sorted = [...totalMonthlyIncomeExpense].sort((a, b) =>
-      a.date.localeCompare(b.date),
-    );
-    return sorted.map((row, idx) => {
-      const net = row.income - row.expense;
-      const ratePct = row.income > 0 ? (net / row.income) * 100 : null;
-      const window = sorted.slice(Math.max(0, idx - 11), idx + 1);
-      const windowIncome = window.reduce((sum, w) => sum + w.income, 0);
-      const windowNet = window.reduce(
-        (sum, w) => sum + (w.income - w.expense),
-        0,
-      );
-      const rolling12mPct =
-        windowIncome > 0 ? (windowNet / windowIncome) * 100 : null;
-      return {
-        date: row.date,
-        label: new Date(row.date).toLocaleDateString("sv-SE", {
-          month: "short",
-          year: "2-digit",
-        }),
-        income: row.income,
-        expense: row.expense,
-        net,
-        ratePct,
-        rolling12mPct,
-        index: idx,
-      };
-    });
-  }, [totalMonthlyIncomeExpense]);
-
-  const totalSavingsRateSeries = useMemo(() => {
-    const start = totalWindowRange?.start ?? null;
-    return totalSavingsRateSeriesAll.filter((row) =>
-      start ? row.date >= start : true,
-    );
-  }, [totalSavingsRateSeriesAll, totalWindowRange]);
-
-  const totalSavingsRateDomain = useMemo<[number, number]>(() => {
-    const values = totalSavingsRateSeries.flatMap((row) =>
-      [row.ratePct, row.rolling12mPct].filter(
-        (value): value is number => typeof value === "number",
-      ),
-    );
-    if (!values.length) return [0, 100];
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const pad = Math.max(5, (max - min) * 0.12);
-    return [
-      Math.floor((min - pad) / 10) * 10,
-      Math.ceil((max + pad) / 10) * 10,
-    ];
-  }, [totalSavingsRateSeries]);
-
   const totalExpenseComposition = useMemo(() => {
     if (!totalOverview) return null;
     const windowStartYear = totalWindowRange
@@ -762,18 +661,12 @@ export const useTotalAnalysis = ({
     totalAllRange,
     totalWindowRange,
     totalKpis,
-    totalNetWorthSeriesAll,
     totalNetWorthSeries,
     totalNetWorthStats,
     totalMonthlyIncomeExpense,
     totalNetWorthAttribution,
     totalNetWorthTrajectoryData,
     totalNetWorthTrajectoryDomain,
-    totalNetWorthBreakdownSeries,
-    totalNetWorthBreakdownDomain,
-    totalSavingsRateSeriesAll,
-    totalSavingsRateSeries,
-    totalSavingsRateDomain,
     totalExpenseComposition,
     totalIncomeComposition,
     totalYearly,

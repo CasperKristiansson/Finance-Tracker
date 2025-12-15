@@ -30,13 +30,10 @@ import { TotalDrilldownDialog } from "./components/total-drilldown-dialog";
 import { TotalHeatmapDialog } from "./components/total-heatmap-dialog";
 import { TotalInvestmentsSnapshotCard } from "./components/total-investments-snapshot-card";
 import { TotalLifetimeCategoriesCard } from "./components/total-lifetime-categories-card";
-import { TotalNetWorthBreakdownCard } from "./components/total-net-worth-breakdown-card";
 import { TotalNetWorthGrowthCard } from "./components/total-net-worth-growth-card";
 import { TotalNetWorthTrajectoryCard } from "./components/total-net-worth-trajectory-card";
-import { TotalSavingsRateCard } from "./components/total-savings-rate-card";
 import { TotalSeasonalityCard } from "./components/total-seasonality-card";
 import { TotalSourcesCard } from "./components/total-sources-card";
-import { TotalTimeseriesDialog } from "./components/total-timeseries-dialog";
 import { TotalYearByYearPerformanceCard } from "./components/total-year-by-year-performance-card";
 import { YearlyAccountFlowsCard } from "./components/yearly-account-flows-card";
 import { YearlyCategoryBreakdownCard } from "./components/yearly-category-breakdown-card";
@@ -61,7 +58,6 @@ import type {
   ReportMode,
   TotalDrilldownState,
   TotalHeatmapDialogState,
-  TotalTimeseriesDialogState,
   YearlyExtraDialogState,
 } from "./reports-types";
 import { monthLabel } from "./reports-utils";
@@ -127,10 +123,6 @@ export const Reports: React.FC = () => {
   const [totalHeatmapDialog, setTotalHeatmapDialog] =
     useState<TotalHeatmapDialogState | null>(null);
   const [totalHeatmapDialogOpen, setTotalHeatmapDialogOpen] = useState(false);
-  const [totalTimeseriesDialog, setTotalTimeseriesDialog] =
-    useState<TotalTimeseriesDialogState | null>(null);
-  const [totalTimeseriesDialogOpen, setTotalTimeseriesDialogOpen] =
-    useState(false);
 
   const yearOptions = useMemo(() => {
     const current = new Date().getFullYear();
@@ -224,11 +216,6 @@ export const Reports: React.FC = () => {
     totalNetWorthAttribution,
     totalNetWorthTrajectoryData,
     totalNetWorthTrajectoryDomain,
-    totalNetWorthBreakdownSeries,
-    totalNetWorthBreakdownDomain,
-    totalSavingsRateSeriesAll,
-    totalSavingsRateSeries,
-    totalSavingsRateDomain,
     totalExpenseComposition,
     totalIncomeComposition,
     totalYearly,
@@ -418,11 +405,6 @@ export const Reports: React.FC = () => {
   const openTotalHeatmapDialog = (state: TotalHeatmapDialogState) => {
     setTotalHeatmapDialog(state);
     setTotalHeatmapDialogOpen(true);
-  };
-
-  const openTotalTimeseriesDialog = (state: TotalTimeseriesDialogState) => {
-    setTotalTimeseriesDialog(state);
-    setTotalTimeseriesDialogOpen(true);
   };
 
   const openYearlySourceDetail = (
@@ -665,29 +647,20 @@ export const Reports: React.FC = () => {
             />
 
             <div className="grid gap-3 lg:grid-cols-2">
-              <TotalNetWorthBreakdownCard
+              <TotalCompositionOverTimeCard
+                flow="income"
                 loading={totalOverviewLoading}
-                series={totalNetWorthBreakdownSeries}
-                domain={totalNetWorthBreakdownDomain}
-                onOpenTimeseriesDialog={openTotalTimeseriesDialog}
-                onOpenDrilldownDialog={openTotalDrilldownDialog}
+                composition={totalIncomeComposition}
+                onOpenHeatmapDialog={openTotalHeatmapDialog}
               />
 
-              <TotalSavingsRateCard
+              <TotalCompositionOverTimeCard
+                flow="expense"
                 loading={totalOverviewLoading}
-                series={totalSavingsRateSeries}
-                seriesAll={totalSavingsRateSeriesAll}
-                domain={totalSavingsRateDomain}
-                onOpenTimeseriesDialog={openTotalTimeseriesDialog}
+                composition={totalExpenseComposition}
+                onOpenHeatmapDialog={openTotalHeatmapDialog}
               />
             </div>
-
-            <TotalCompositionOverTimeCard
-              loading={totalOverviewLoading}
-              expenseComposition={totalExpenseComposition}
-              incomeComposition={totalIncomeComposition}
-              onOpenHeatmapDialog={openTotalHeatmapDialog}
-            />
 
             <TotalNetWorthGrowthCard
               loading={totalOverviewLoading}
@@ -917,19 +890,6 @@ export const Reports: React.FC = () => {
             name: args.name,
             color: args.color,
           });
-        }}
-      />
-
-      <TotalTimeseriesDialog
-        open={totalTimeseriesDialogOpen}
-        onOpenChange={(open) => {
-          setTotalTimeseriesDialogOpen(open);
-          if (!open) setTotalTimeseriesDialog(null);
-        }}
-        state={totalTimeseriesDialog}
-        savingsRateDomain={totalSavingsRateDomain}
-        onOpenNetWorthDetails={() => {
-          openTotalDrilldownDialog({ kind: "netWorth" });
         }}
       />
     </MotionPage>
