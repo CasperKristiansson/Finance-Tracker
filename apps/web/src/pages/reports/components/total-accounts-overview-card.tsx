@@ -86,7 +86,9 @@ export const TotalAccountsOverviewCard: React.FC<{
                     {currency(row.netTransfers)}
                   </TableCell>
                   <TableCell className="hidden text-xs text-slate-600 md:table-cell">
-                    {row.firstDate ? new Date(row.firstDate).getFullYear() : "—"}
+                    {row.firstDate
+                      ? new Date(row.firstDate).getFullYear()
+                      : "—"}
                   </TableCell>
                 </TableRow>
               ))}
@@ -101,4 +103,3 @@ export const TotalAccountsOverviewCard: React.FC<{
     </Card>
   );
 };
-

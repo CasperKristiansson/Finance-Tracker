@@ -39,14 +39,21 @@ export const TotalInvestmentsSnapshotCard: React.FC<{
   investments: TotalInvestmentsSnapshot | null;
   investmentsYearlyTable: TotalInvestmentsSnapshot["yearly"];
   onOpenDrilldownDialog: (state: TotalDrilldownState) => void;
-}> = ({ hasOverview, investments, investmentsYearlyTable, onOpenDrilldownDialog }) => {
+}> = ({
+  hasOverview,
+  investments,
+  investmentsYearlyTable,
+  onOpenDrilldownDialog,
+}) => {
   return (
     <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold text-slate-900">
           Investments (snapshot-based)
         </CardTitle>
-        <p className="text-xs text-slate-500">Value is tracked via snapshots.</p>
+        <p className="text-xs text-slate-500">
+          Value is tracked via snapshots.
+        </p>
       </CardHeader>
       <CardContent className="space-y-4">
         {!hasOverview ? (
@@ -117,7 +124,9 @@ export const TotalInvestmentsSnapshotCard: React.FC<{
                         {currency(row.netContributions)}
                       </TableCell>
                       <TableCell className="hidden text-right md:table-cell">
-                        {row.impliedReturn === null ? "—" : currency(row.impliedReturn)}
+                        {row.impliedReturn === null
+                          ? "—"
+                          : currency(row.impliedReturn)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -153,4 +162,3 @@ export const TotalInvestmentsSnapshotCard: React.FC<{
     </Card>
   );
 };
-

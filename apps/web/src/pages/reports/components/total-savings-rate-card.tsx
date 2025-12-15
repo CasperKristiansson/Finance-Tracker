@@ -67,18 +67,24 @@ export const TotalSavingsRateCard: React.FC<{
               ) => {
                 const payload = state?.activePayload?.[0]?.payload ?? null;
                 if (!isRecord(payload)) return;
-                const date = typeof payload.date === "string" ? payload.date : null;
+                const date =
+                  typeof payload.date === "string" ? payload.date : null;
                 if (!date) return;
                 const income = Number(payload.income ?? 0);
                 const expense = Number(payload.expense ?? 0);
                 const net = Number(payload.net ?? income - expense);
                 const ratePct =
-                  typeof payload.ratePct === "number" ? Number(payload.ratePct) : null;
+                  typeof payload.ratePct === "number"
+                    ? Number(payload.ratePct)
+                    : null;
                 const rolling12mPct =
                   typeof payload.rolling12mPct === "number"
                     ? Number(payload.rolling12mPct)
                     : null;
-                const idx = typeof payload.index === "number" ? Number(payload.index) : null;
+                const idx =
+                  typeof payload.index === "number"
+                    ? Number(payload.index)
+                    : null;
                 if (idx === null) return;
                 const window = seriesAll
                   .slice(Math.max(0, idx - 11), idx + 1)
@@ -133,7 +139,9 @@ export const TotalSavingsRateCard: React.FC<{
                   const expense = Number(row.expense ?? 0);
                   const net = Number(row.net ?? income - expense);
                   const rate =
-                    typeof row.ratePct === "number" ? Number(row.ratePct) : null;
+                    typeof row.ratePct === "number"
+                      ? Number(row.ratePct)
+                      : null;
                   const rolling =
                     typeof row.rolling12mPct === "number"
                       ? Number(row.rolling12mPct)
@@ -143,7 +151,8 @@ export const TotalSavingsRateCard: React.FC<{
                       <p className="font-semibold text-slate-800">{label}</p>
                       <div className="mt-1 space-y-0.5 text-slate-700">
                         <p>
-                          Savings rate: {rate === null ? "—" : `${rate.toFixed(1)}%`}
+                          Savings rate:{" "}
+                          {rate === null ? "—" : `${rate.toFixed(1)}%`}
                         </p>
                         <p>
                           Rolling 12m:{" "}
@@ -185,4 +194,3 @@ export const TotalSavingsRateCard: React.FC<{
     </CardContent>
   </Card>
 );
-

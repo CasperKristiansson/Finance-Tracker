@@ -25,9 +25,8 @@ export const TotalNetWorthTrajectoryCard: React.FC<{
       Array.from(new Set(data.map((point) => point.year)))
         .sort((a, b) => a - b)
         .map((year) => ({ year, first: data.find((d) => d.year === year) }))
-        .filter(
-          (entry): entry is { year: number; first: { date: string } } =>
-            Boolean(entry.first),
+        .filter((entry): entry is { year: number; first: { date: string } } =>
+          Boolean(entry.first),
         ),
     [data],
   );
@@ -126,4 +125,3 @@ export const TotalNetWorthTrajectoryCard: React.FC<{
     </Card>
   );
 };
-

@@ -1,5 +1,13 @@
 import React from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,7 +31,12 @@ export const TotalCompositionOverTimeCard: React.FC<{
   expenseComposition: Composition | null;
   incomeComposition: Composition | null;
   onOpenHeatmapDialog: (state: TotalHeatmapDialogState) => void;
-}> = ({ loading, expenseComposition, incomeComposition, onOpenHeatmapDialog }) => (
+}> = ({
+  loading,
+  expenseComposition,
+  incomeComposition,
+  onOpenHeatmapDialog,
+}) => (
   <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
     <CardHeader className="pb-2">
       <div>
@@ -89,13 +102,17 @@ export const TotalCompositionOverTimeCard: React.FC<{
                                 const name = String(p.name ?? "");
                                 const pct = Number(p.value ?? 0);
                                 const amount =
-                                  expenseComposition.amountByYear[year]?.[name] ?? 0;
+                                  expenseComposition.amountByYear[year]?.[
+                                    name
+                                  ] ?? 0;
                                 return (
                                   <div
                                     key={name}
                                     className="flex items-center justify-between gap-3"
                                   >
-                                    <span className="text-slate-700">{name}</span>
+                                    <span className="text-slate-700">
+                                      {name}
+                                    </span>
                                     <span className="text-slate-600">
                                       {pct.toFixed(0)}% • {currency(amount)}
                                     </span>
@@ -118,25 +135,30 @@ export const TotalCompositionOverTimeCard: React.FC<{
                       fill={expenseComposition.colors[key]}
                       isAnimationActive={false}
                       onClick={(data: unknown) => {
-                        const payload = isRecord(data) ? (data.payload as unknown) : null;
+                        const payload = isRecord(data)
+                          ? (data.payload as unknown)
+                          : null;
                         if (!isRecord(payload)) return;
                         const year = Number(payload.year);
                         if (!Number.isFinite(year)) return;
                         const value =
                           expenseComposition.amountByYear[year]?.[key] ?? 0;
                         const totals = expenseComposition.years.map(
-                          (yr) => expenseComposition.amountByYear[yr]?.[key] ?? 0,
+                          (yr) =>
+                            expenseComposition.amountByYear[yr]?.[key] ?? 0,
                         );
                         const max = Math.max(0, ...totals);
                         const idx = expenseComposition.years.indexOf(year);
-                        const prevValue = idx > 0 ? (totals[idx - 1] ?? 0) : null;
+                        const prevValue =
+                          idx > 0 ? (totals[idx - 1] ?? 0) : null;
                         const yoyDelta =
                           prevValue === null ? null : value - prevValue;
                         const yoyDeltaPct =
                           prevValue === null || prevValue === 0
                             ? null
                             : ((value - prevValue) / prevValue) * 100;
-                        const yearTotal = expenseComposition.totalsByYear[year] ?? null;
+                        const yearTotal =
+                          expenseComposition.totalsByYear[year] ?? null;
                         onOpenHeatmapDialog({
                           kind: "categoryByYear",
                           flow: "expense",
@@ -205,13 +227,17 @@ export const TotalCompositionOverTimeCard: React.FC<{
                                 const name = String(p.name ?? "");
                                 const pct = Number(p.value ?? 0);
                                 const amount =
-                                  incomeComposition.amountByYear[year]?.[name] ?? 0;
+                                  incomeComposition.amountByYear[year]?.[
+                                    name
+                                  ] ?? 0;
                                 return (
                                   <div
                                     key={name}
                                     className="flex items-center justify-between gap-3"
                                   >
-                                    <span className="text-slate-700">{name}</span>
+                                    <span className="text-slate-700">
+                                      {name}
+                                    </span>
                                     <span className="text-slate-600">
                                       {pct.toFixed(0)}% • {currency(amount)}
                                     </span>
@@ -234,24 +260,30 @@ export const TotalCompositionOverTimeCard: React.FC<{
                       fill={incomeComposition.colors[key]}
                       isAnimationActive={false}
                       onClick={(data: unknown) => {
-                        const payload = isRecord(data) ? (data.payload as unknown) : null;
+                        const payload = isRecord(data)
+                          ? (data.payload as unknown)
+                          : null;
                         if (!isRecord(payload)) return;
                         const year = Number(payload.year);
                         if (!Number.isFinite(year)) return;
-                        const value = incomeComposition.amountByYear[year]?.[key] ?? 0;
+                        const value =
+                          incomeComposition.amountByYear[year]?.[key] ?? 0;
                         const totals = incomeComposition.years.map(
-                          (yr) => incomeComposition.amountByYear[yr]?.[key] ?? 0,
+                          (yr) =>
+                            incomeComposition.amountByYear[yr]?.[key] ?? 0,
                         );
                         const max = Math.max(0, ...totals);
                         const idx = incomeComposition.years.indexOf(year);
-                        const prevValue = idx > 0 ? (totals[idx - 1] ?? 0) : null;
+                        const prevValue =
+                          idx > 0 ? (totals[idx - 1] ?? 0) : null;
                         const yoyDelta =
                           prevValue === null ? null : value - prevValue;
                         const yoyDeltaPct =
                           prevValue === null || prevValue === 0
                             ? null
                             : ((value - prevValue) / prevValue) * 100;
-                        const yearTotal = incomeComposition.totalsByYear[year] ?? null;
+                        const yearTotal =
+                          incomeComposition.totalsByYear[year] ?? null;
                         onOpenHeatmapDialog({
                           kind: "categoryByYear",
                           flow: "income",
@@ -283,4 +315,3 @@ export const TotalCompositionOverTimeCard: React.FC<{
     </CardContent>
   </Card>
 );
-

@@ -88,10 +88,15 @@ export const TotalSeasonalityCard: React.FC<{
                       onMouseEnter={() =>
                         setHover({ year: yr, monthIndex: idx, value })
                       }
-                      onFocus={() => setHover({ year: yr, monthIndex: idx, value })}
+                      onFocus={() =>
+                        setHover({ year: yr, monthIndex: idx, value })
+                      }
                       onClick={() => {
                         const yearValues = content?.matrix[yrIdx] ?? [];
-                        const yearTotal = yearValues.reduce((sum, v) => sum + v, 0);
+                        const yearTotal = yearValues.reduce(
+                          (sum, v) => sum + v,
+                          0,
+                        );
                         const monthAcrossYears = heatmaps.years.map(
                           (year, yearIdx) => ({
                             year,
@@ -99,13 +104,17 @@ export const TotalSeasonalityCard: React.FC<{
                           }),
                         );
                         const prevValue =
-                          yrIdx > 0 ? (content?.matrix[yrIdx - 1][idx] ?? 0) : null;
-                        const yoyDelta = prevValue === null ? null : value - prevValue;
+                          yrIdx > 0
+                            ? (content?.matrix[yrIdx - 1][idx] ?? 0)
+                            : null;
+                        const yoyDelta =
+                          prevValue === null ? null : value - prevValue;
                         const yoyDeltaPct =
                           prevValue === null || prevValue === 0
                             ? null
                             : ((value - prevValue) / prevValue) * 100;
-                        const monthRank = 1 + yearValues.filter((v) => v > value).length;
+                        const monthRank =
+                          1 + yearValues.filter((v) => v > value).length;
                         const monthSharePct =
                           yearTotal > 0 ? (value / yearTotal) * 100 : null;
                         onOpenHeatmapDialog({
@@ -144,4 +153,3 @@ export const TotalSeasonalityCard: React.FC<{
     </Card>
   );
 };
-

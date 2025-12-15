@@ -106,7 +106,11 @@ export const TotalSourcesCard: React.FC<{
                           <TableCell className="text-right font-semibold">
                             <span
                               className={
-                                (flow === "expense" ? row.delta <= 0 : row.delta >= 0)
+                                (
+                                  flow === "expense"
+                                    ? row.delta <= 0
+                                    : row.delta >= 0
+                                )
                                   ? "text-emerald-700"
                                   : "text-rose-700"
                               }
@@ -136,4 +140,3 @@ export const TotalSourcesCard: React.FC<{
     </Card>
   );
 };
-

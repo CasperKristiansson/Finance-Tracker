@@ -31,7 +31,12 @@ export const TotalDebtOverviewCard: React.FC<{
     debtToIncomeLatestYear: number | null;
   };
   series: Array<{ date: string; debt: number }>;
-  accounts: Array<{ id: string; name: string; current: number; delta: number | null }>;
+  accounts: Array<{
+    id: string;
+    name: string;
+    current: number;
+    delta: number | null;
+  }>;
   onOpenDrilldownDialog: (state: TotalDrilldownState) => void;
 }> = ({ hasOverview, debt, series, accounts, onOpenDrilldownDialog }) => {
   return (
@@ -41,8 +46,8 @@ export const TotalDebtOverviewCard: React.FC<{
           Debt overview
         </CardTitle>
         <p className="text-xs text-slate-500">
-          Total debt and debt accounts. Values are as-of now, with a year-over-year
-          anchor when available.
+          Total debt and debt accounts. Values are as-of now, with a
+          year-over-year anchor when available.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -64,13 +69,11 @@ export const TotalDebtOverviewCard: React.FC<{
                   Δ vs prev year end
                 </p>
                 <p className="font-semibold text-slate-900">
-                  {debt.changeSincePrevYearEnd === null ? (
-                    "—"
-                  ) : (
-                    `${debt.changeSincePrevYearEnd >= 0 ? "+" : "−"}${currency(
-                      Math.abs(debt.changeSincePrevYearEnd),
-                    )}`
-                  )}
+                  {debt.changeSincePrevYearEnd === null
+                    ? "—"
+                    : `${debt.changeSincePrevYearEnd >= 0 ? "+" : "−"}${currency(
+                        Math.abs(debt.changeSincePrevYearEnd),
+                      )}`}
                 </p>
               </div>
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
@@ -145,7 +148,9 @@ export const TotalDebtOverviewCard: React.FC<{
                           ) : (
                             <span
                               className={
-                                row.delta <= 0 ? "text-emerald-700" : "text-rose-700"
+                                row.delta <= 0
+                                  ? "text-emerald-700"
+                                  : "text-rose-700"
                               }
                             >
                               {row.delta >= 0 ? "+" : "−"}
@@ -169,4 +174,3 @@ export const TotalDebtOverviewCard: React.FC<{
     </Card>
   );
 };
-

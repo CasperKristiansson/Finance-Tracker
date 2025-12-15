@@ -85,9 +85,13 @@ export const TotalYearByYearPerformanceCard: React.FC<{
                       | null
                       | undefined,
                   ) => {
-                    const clickedYear = state?.activePayload?.[0]?.payload?.year;
+                    const clickedYear =
+                      state?.activePayload?.[0]?.payload?.year;
                     if (typeof clickedYear === "number") {
-                      onOpenDrilldownDialog({ kind: "year", year: clickedYear });
+                      onOpenDrilldownDialog({
+                        kind: "year",
+                        year: clickedYear,
+                      });
                     }
                   }}
                 >
@@ -122,9 +126,7 @@ export const TotalYearByYearPerformanceCard: React.FC<{
                           <p className="text-slate-600">
                             Expense: {currency(expense)}
                           </p>
-                          <p className="text-slate-600">
-                            Net: {currency(net)}
-                          </p>
+                          <p className="text-slate-600">Net: {currency(net)}</p>
                         </div>
                       );
                     }}
@@ -190,7 +192,9 @@ export const TotalYearByYearPerformanceCard: React.FC<{
                         </span>
                       </TableCell>
                       <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
-                        {row.savingsRate === null ? "—" : percent(row.savingsRate)}
+                        {row.savingsRate === null
+                          ? "—"
+                          : percent(row.savingsRate)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -233,4 +237,3 @@ export const TotalYearByYearPerformanceCard: React.FC<{
     </Card>
   );
 };
-

@@ -244,7 +244,10 @@ export const TotalNetWorthGrowthCard: React.FC<{
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <Progress value={Math.min(100, pct)} className="h-2" />
+                          <Progress
+                            value={Math.min(100, pct)}
+                            className="h-2"
+                          />
                           <span className="w-10 text-right text-[11px] text-slate-500">
                             {percent(pct)}
                           </span>

@@ -3,7 +3,10 @@ import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import type { TotalDrilldownState, TotalHeatmapDialogState } from "../reports-types";
+import type {
+  TotalDrilldownState,
+  TotalHeatmapDialogState,
+} from "../reports-types";
 import { currency, heatColor } from "../reports-utils";
 
 type CategoryYearHeatmap = {
@@ -54,7 +57,9 @@ export const TotalCategoryByYearCard: React.FC<{
     <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold text-slate-900">
-          {flow === "income" ? "Income categories by year" : "Expense categories by year"}
+          {flow === "income"
+            ? "Income categories by year"
+            : "Expense categories by year"}
         </CardTitle>
         <p className="text-xs text-slate-500">
           Top categories (lifetime) across all years.
@@ -120,7 +125,11 @@ export const TotalCategoryByYearCard: React.FC<{
                         aria-label={`${row.name} ${yr} ${flow} ${currency(value)}`}
                         className="h-5 rounded-sm border border-slate-100 transition hover:ring-1 hover:ring-slate-300 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:outline-none"
                         style={{
-                          backgroundColor: heatColor(baseColor, value, heatmap.max),
+                          backgroundColor: heatColor(
+                            baseColor,
+                            value,
+                            heatmap.max,
+                          ),
                         }}
                         onMouseEnter={() =>
                           setHover({ year: yr, categoryName: row.name, value })
@@ -129,8 +138,10 @@ export const TotalCategoryByYearCard: React.FC<{
                           setHover({ year: yr, categoryName: row.name, value })
                         }
                         onClick={() => {
-                          const prevValue = idx > 0 ? (row.totals[idx - 1] ?? 0) : null;
-                          const yoyDelta = prevValue === null ? null : value - prevValue;
+                          const prevValue =
+                            idx > 0 ? (row.totals[idx - 1] ?? 0) : null;
+                          const yoyDelta =
+                            prevValue === null ? null : value - prevValue;
                           const yoyDeltaPct =
                             prevValue === null || prevValue === 0
                               ? null
@@ -146,7 +157,8 @@ export const TotalCategoryByYearCard: React.FC<{
                             years: heatmap.years,
                             totals: row.totals,
                             max: heatmap.max,
-                            yearTotal: typeof yearTotal === "number" ? yearTotal : null,
+                            yearTotal:
+                              typeof yearTotal === "number" ? yearTotal : null,
                             sharePct:
                               typeof yearTotal === "number" && yearTotal > 0
                                 ? (value / yearTotal) * 100
@@ -175,4 +187,3 @@ export const TotalCategoryByYearCard: React.FC<{
     </Card>
   );
 };
-
