@@ -1,8 +1,22 @@
 import React from "react";
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 import type { TotalHeatmapDialogState } from "../reports-types";
 import { compactCurrency, currency, percent } from "../reports-utils";
@@ -46,7 +60,9 @@ export const TotalHeatmapDialog: React.FC<{
                 Share of year
               </p>
               <p className="font-semibold text-slate-900">
-                {state.monthSharePct === null ? "—" : percent(state.monthSharePct)}
+                {state.monthSharePct === null
+                  ? "—"
+                  : percent(state.monthSharePct)}
               </p>
             </div>
             <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
@@ -76,7 +92,9 @@ export const TotalHeatmapDialog: React.FC<{
                 )}
               </p>
               {state.yoyDeltaPct === null ? null : (
-                <p className="text-xs text-slate-600">{percent(state.yoyDeltaPct)}</p>
+                <p className="text-xs text-slate-600">
+                  {percent(state.yoyDeltaPct)}
+                </p>
               )}
             </div>
           </div>
@@ -203,7 +221,9 @@ export const TotalHeatmapDialog: React.FC<{
                 )}
               </p>
               {state.yoyDeltaPct === null ? null : (
-                <p className="text-xs text-slate-600">{percent(state.yoyDeltaPct)}</p>
+                <p className="text-xs text-slate-600">
+                  {percent(state.yoyDeltaPct)}
+                </p>
               )}
             </div>
             <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
@@ -264,7 +284,9 @@ export const TotalHeatmapDialog: React.FC<{
                   {state.years.map((year) => (
                     <Cell
                       key={year}
-                      fill={year === state.year ? state.color : `${state.color}99`}
+                      fill={
+                        year === state.year ? state.color : `${state.color}99`
+                      }
                     />
                   ))}
                 </Bar>
@@ -276,4 +298,3 @@ export const TotalHeatmapDialog: React.FC<{
     </DialogContent>
   </Dialog>
 );
-

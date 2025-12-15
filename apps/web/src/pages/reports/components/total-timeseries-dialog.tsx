@@ -13,7 +13,12 @@ import {
 } from "recharts";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 
 import type { TotalTimeseriesDialogState } from "../reports-types";
@@ -25,7 +30,13 @@ export const TotalTimeseriesDialog: React.FC<{
   state: TotalTimeseriesDialogState | null;
   savingsRateDomain: [number, number];
   onOpenNetWorthDetails: () => void;
-}> = ({ open, onOpenChange, state, savingsRateDomain, onOpenNetWorthDetails }) => (
+}> = ({
+  open,
+  onOpenChange,
+  state,
+  savingsRateDomain,
+  onOpenNetWorthDetails,
+}) => (
   <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="max-w-4xl">
       <DialogHeader>
@@ -59,7 +70,9 @@ export const TotalTimeseriesDialog: React.FC<{
               <p className="text-xs tracking-wide text-slate-500 uppercase">
                 Cash
               </p>
-              <p className="font-semibold text-slate-900">{currency(state.cash)}</p>
+              <p className="font-semibold text-slate-900">
+                {currency(state.cash)}
+              </p>
               <p className="text-xs text-slate-600">
                 {state.shareCashPct === null
                   ? "—"
@@ -83,7 +96,9 @@ export const TotalTimeseriesDialog: React.FC<{
               <p className="text-xs tracking-wide text-slate-500 uppercase">
                 Debt
               </p>
-              <p className="font-semibold text-slate-900">{currency(state.debt)}</p>
+              <p className="font-semibold text-slate-900">
+                {currency(state.debt)}
+              </p>
               <p className="text-xs text-slate-600">
                 {state.shareDebtPct === null
                   ? "—"
@@ -134,7 +149,9 @@ export const TotalTimeseriesDialog: React.FC<{
                     ) : (
                       <span
                         className={
-                          state.deltaMoM >= 0 ? "text-emerald-700" : "text-rose-700"
+                          state.deltaMoM >= 0
+                            ? "text-emerald-700"
+                            : "text-rose-700"
                         }
                       >
                         {state.deltaMoM >= 0 ? "+" : "−"}
@@ -153,7 +170,9 @@ export const TotalTimeseriesDialog: React.FC<{
                     ) : (
                       <span
                         className={
-                          state.deltaYoY >= 0 ? "text-emerald-700" : "text-rose-700"
+                          state.deltaYoY >= 0
+                            ? "text-emerald-700"
+                            : "text-rose-700"
                         }
                       >
                         {state.deltaYoY >= 0 ? "+" : "−"}
@@ -212,7 +231,9 @@ export const TotalTimeseriesDialog: React.FC<{
               <p className="font-semibold text-slate-900">
                 {currency(state.expense)}
               </p>
-              <p className="text-xs text-slate-600">Net: {currency(state.net)}</p>
+              <p className="text-xs text-slate-600">
+                Net: {currency(state.net)}
+              </p>
             </div>
           </div>
 
@@ -299,4 +320,3 @@ export const TotalTimeseriesDialog: React.FC<{
     </DialogContent>
   </Dialog>
 );
-
