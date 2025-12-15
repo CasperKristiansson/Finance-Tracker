@@ -46,6 +46,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -169,6 +170,19 @@ const loanEventBadgeClass = (type: LoanEventType) => {
   }
 };
 
+const interestCompoundLabel = (value: InterestCompound | null | undefined) => {
+  switch (value) {
+    case InterestCompound.DAILY:
+      return "Daily";
+    case InterestCompound.MONTHLY:
+      return "Monthly";
+    case InterestCompound.YEARLY:
+      return "Yearly";
+    default:
+      return "—";
+  }
+};
+
 const SummaryCard: React.FC<{
   label: string;
   value: React.ReactNode;
@@ -272,6 +286,18 @@ export const Loans: React.FC = () => {
           : Math.abs(Number(acc.balance ?? 0));
       return sum + (Number.isFinite(principal) ? principal : 0);
     }, 0);
+  }, [loanAccounts]);
+
+  const nextExpectedPayoff = useMemo(() => {
+    let best: { ts: number; value: string } | null = null;
+    for (const acc of loanAccounts) {
+      const date = acc.loan?.expected_maturity_date;
+      if (!date) continue;
+      const ts = Date.parse(date);
+      if (!Number.isFinite(ts)) continue;
+      if (!best || ts < best.ts) best = { ts, value: date };
+    }
+    return best?.value ?? null;
   }, [loanAccounts]);
 
   const scheduleChartData = useMemo(() => {
@@ -521,9 +547,13 @@ export const Loans: React.FC = () => {
           hint="Loans are created as debt accounts"
         />
         <SummaryCard
-          label="Next step"
-          value="Open a loan"
-          hint="View schedule and events per account"
+          label="Next expected payoff"
+          value={nextExpectedPayoff ? formatDate(nextExpectedPayoff) : "—"}
+          hint={
+            nextExpectedPayoff
+              ? "Earliest expected maturity date"
+              : "Set expected maturity per loan"
+          }
         />
       </motion.div>
 
@@ -538,8 +568,24 @@ export const Loans: React.FC = () => {
             const current = acc.loan?.current_principal
               ? Number(acc.loan.current_principal)
               : Math.abs(Number(acc.balance ?? 0));
+            const origin = acc.loan?.origin_principal
+              ? Number(acc.loan.origin_principal)
+              : null;
             const rate = acc.loan?.interest_rate_annual ?? null;
             const minPay = acc.loan?.minimum_payment ?? null;
+            const compound = acc.loan?.interest_compound ?? null;
+            const maturity = acc.loan?.expected_maturity_date ?? null;
+            const paidDown =
+              origin !== null &&
+              Number.isFinite(origin) &&
+              origin > 0 &&
+              Number.isFinite(current)
+                ? Math.max(0, origin - current)
+                : null;
+            const paidDownPct =
+              paidDown !== null && origin !== null && origin > 0
+                ? Math.min(100, Math.max(0, (paidDown / origin) * 100))
+                : null;
 
             return (
               <motion.div key={acc.id} variants={fadeInUp} {...subtleHover}>
@@ -552,7 +598,8 @@ export const Loans: React.FC = () => {
                         </CardTitle>
                         <p className="text-xs text-slate-500">
                           {acc.is_active ? "Active" : "Archived"} ·{" "}
-                          {formatPercent(rate)}
+                          {formatPercent(rate)} ·{" "}
+                          {interestCompoundLabel(compound)}
                         </p>
                       </div>
                       <Button asChild size="sm" className="gap-2">
@@ -563,27 +610,68 @@ export const Loans: React.FC = () => {
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent className="grid gap-2 sm:grid-cols-3">
-                    <div className="rounded-lg border border-slate-200 bg-white p-3">
-                      <div className="text-xs text-slate-500">Principal</div>
-                      <div className="text-lg font-semibold text-slate-900 tabular-nums">
-                        {formatCurrency(Number.isFinite(current) ? current : 0)}
+                  <CardContent className="space-y-2">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <div className="text-xs text-slate-500">
+                          Current principal
+                        </div>
+                        <div className="text-lg font-semibold text-slate-900 tabular-nums">
+                          {formatCurrency(
+                            Number.isFinite(current) ? current : 0,
+                          )}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <div className="text-xs text-slate-500">
+                          Origin principal
+                        </div>
+                        <div className="text-lg font-semibold text-slate-900 tabular-nums">
+                          {origin !== null && Number.isFinite(origin)
+                            ? formatCurrency(origin)
+                            : "—"}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <div className="text-xs text-slate-500">
+                          Minimum payment
+                        </div>
+                        <div className="text-lg font-semibold text-slate-900 tabular-nums">
+                          {minPay ? formatCurrency(Number(minPay)) : "—"}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-slate-200 bg-white p-3">
+                        <div className="text-xs text-slate-500">
+                          Expected payoff
+                        </div>
+                        <div className="text-lg font-semibold text-slate-900 tabular-nums">
+                          {maturity ? formatDate(maturity) : "—"}
+                        </div>
                       </div>
                     </div>
-                    <div className="rounded-lg border border-slate-200 bg-white p-3">
-                      <div className="text-xs text-slate-500">
-                        Minimum payment
+
+                    {paidDownPct !== null ? (
+                      <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                        <div className="flex items-center justify-between text-xs text-slate-600">
+                          <span>Paid down</span>
+                          <span className="font-medium tabular-nums">
+                            {Math.round(paidDownPct)}%
+                          </span>
+                        </div>
+                        <Progress value={paidDownPct} className="mt-2 h-2" />
+                        <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                          <span className="tabular-nums">
+                            {formatCurrency(paidDown ?? 0)} paid
+                          </span>
+                          <span className="tabular-nums">
+                            {formatCurrency(
+                              Number.isFinite(current) ? current : 0,
+                            )}{" "}
+                            remaining
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-lg font-semibold text-slate-900 tabular-nums">
-                        {minPay ? formatCurrency(Number(minPay)) : "—"}
-                      </div>
-                    </div>
-                    <div className="rounded-lg border border-slate-200 bg-white p-3">
-                      <div className="text-xs text-slate-500">Account id</div>
-                      <div className="truncate font-mono text-xs text-slate-700">
-                        {acc.id}
-                      </div>
-                    </div>
+                    ) : null}
                   </CardContent>
                 </Card>
               </motion.div>
