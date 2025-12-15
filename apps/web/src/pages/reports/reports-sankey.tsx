@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { ResponsiveContainer, Sankey, Tooltip } from "recharts";
+import { ResponsiveContainer, Sankey } from "recharts";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -219,84 +219,6 @@ const buildMoneyFlowSankey = ({
     expense: expenseTotal,
     net,
   };
-};
-
-type SankeyTooltipItem = {
-  name?: unknown;
-  value?: unknown;
-  payload?: unknown;
-};
-
-const formatPercent = (value: number) => {
-  if (!Number.isFinite(value)) return null;
-  return new Intl.NumberFormat("sv-SE", {
-    style: "percent",
-    maximumFractionDigits: value < 0.1 ? 1 : 0,
-  }).format(value);
-};
-
-const SankeyTooltip: React.FC<{
-  incomeTotal: number;
-  expenseTotal: number;
-  active?: boolean;
-  payload?: SankeyTooltipItem[];
-}> = ({ active, payload, incomeTotal, expenseTotal }) => {
-  if (!active || !payload?.length) return null;
-  const item = payload[0] ?? {};
-  const name = typeof item?.name === "string" ? item.name : "Flow";
-  const value = clampPositive(Number(item?.value ?? 0));
-  const element = item.payload as
-    | { payload?: unknown; sourceX?: unknown; targetX?: unknown }
-    | undefined;
-  const elementPayload =
-    element && "payload" in element ? element.payload : null;
-
-  const isLink =
-    !!element &&
-    Number.isFinite(Number((element as { sourceX?: unknown }).sourceX)) &&
-    Number.isFinite(Number((element as { targetX?: unknown }).targetX));
-
-  const node =
-    !isLink && elementPayload && typeof elementPayload === "object"
-      ? (elementPayload as SankeyNodePayload & { value?: unknown })
-      : null;
-
-  const link =
-    isLink && elementPayload && typeof elementPayload === "object"
-      ? (elementPayload as {
-          source?: unknown;
-          target?: unknown;
-          value?: unknown;
-        })
-      : null;
-
-  const shareText = (() => {
-    if (link?.source && typeof link.source === "object") {
-      const sourceValue = clampPositive(
-        Number((link.source as { value?: unknown }).value),
-      );
-      return sourceValue > 0 ? formatPercent(value / sourceValue) : null;
-    }
-
-    const kind = node?.kind;
-    if (!kind) return null;
-    if (kind === "expenseCategory" || kind === "expenses") {
-      return expenseTotal > 0 ? formatPercent(value / expenseTotal) : null;
-    }
-    return incomeTotal > 0 ? formatPercent(value / incomeTotal) : null;
-  })();
-
-  return (
-    <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
-      <p className="font-semibold text-slate-900">{name}</p>
-      <p className="text-slate-600">
-        {formatCurrency(node?.value ?? link?.value ?? value)}
-      </p>
-      {shareText ? (
-        <p className="text-[11px] text-slate-500">{shareText}</p>
-      ) : null}
-    </div>
-  );
 };
 
 export const MoneyFlowSankeyCard: React.FC<{
@@ -555,17 +477,7 @@ export const MoneyFlowSankeyCard: React.FC<{
                       />
                     );
                   }}
-                >
-                  <Tooltip
-                    cursor={false}
-                    content={
-                      <SankeyTooltip
-                        incomeTotal={result.income}
-                        expenseTotal={result.expense}
-                      />
-                    }
-                  />
-                </Sankey>
+                ></Sankey>
               </ResponsiveContainer>
             </div>
           </>
