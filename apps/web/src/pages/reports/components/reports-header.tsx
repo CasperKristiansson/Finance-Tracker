@@ -24,7 +24,9 @@ export const ReportsHeader: React.FC<{
   return (
     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
       <div>
-        <p className="text-xs tracking-wide text-slate-500 uppercase">Reports</p>
+        <p className="text-xs tracking-wide text-slate-500 uppercase">
+          Reports
+        </p>
         <h1 className="text-2xl font-semibold text-slate-900">
           Income, expense, and net
         </h1>
@@ -58,7 +60,9 @@ export const ReportsHeader: React.FC<{
               className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900"
               value={totalWindowPreset}
               onChange={(e) =>
-                onTotalWindowPresetChange(e.target.value as "all" | "10" | "5" | "3")
+                onTotalWindowPresetChange(
+                  e.target.value as "all" | "10" | "5" | "3",
+                )
               }
             >
               <option value="all">All time</option>
@@ -88,4 +92,3 @@ export const ReportsHeader: React.FC<{
     </div>
   );
 };
-

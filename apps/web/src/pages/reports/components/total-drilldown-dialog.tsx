@@ -33,10 +33,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageRoutes } from "@/data/routes";
-import type { TotalOverviewResponse, YearlyOverviewResponse } from "@/types/api";
+import type {
+  TotalOverviewResponse,
+  YearlyOverviewResponse,
+} from "@/types/api";
 
 import type { TotalDrilldownState } from "../reports-types";
-import { compactCurrency, currency, monthLabel, percent } from "../reports-utils";
+import {
+  compactCurrency,
+  currency,
+  monthLabel,
+  percent,
+} from "../reports-utils";
 
 type TotalDrilldownPoint = {
   period: string;
@@ -578,7 +586,9 @@ export const TotalDrilldownDialog: React.FC<{
                         {[
                           {
                             label: "Income",
-                            value: Number(totalYearDrilldown.stats.total_income),
+                            value: Number(
+                              totalYearDrilldown.stats.total_income,
+                            ),
                             className: "text-emerald-700",
                           },
                           {
@@ -596,7 +606,9 @@ export const TotalDrilldownDialog: React.FC<{
                           {
                             label: "Savings rate",
                             value: totalYearDrilldown.stats.savings_rate_pct
-                              ? Number(totalYearDrilldown.stats.savings_rate_pct)
+                              ? Number(
+                                  totalYearDrilldown.stats.savings_rate_pct,
+                                )
                               : null,
                             className: "text-slate-900",
                             format: "percent" as const,
@@ -623,7 +635,10 @@ export const TotalDrilldownDialog: React.FC<{
                       <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
                         <ResponsiveContainer width="100%" height="100%">
                           <BarChart data={monthly}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                            <CartesianGrid
+                              strokeDasharray="3 3"
+                              vertical={false}
+                            />
                             <XAxis
                               dataKey="month"
                               tickLine={false}
@@ -685,7 +700,9 @@ export const TotalDrilldownDialog: React.FC<{
                             <TableHeader>
                               <TableRow>
                                 <TableHead>Category</TableHead>
-                                <TableHead className="text-right">Total</TableHead>
+                                <TableHead className="text-right">
+                                  Total
+                                </TableHead>
                                 <TableHead className="hidden text-right md:table-cell">
                                   Tx
                                 </TableHead>
@@ -719,7 +736,9 @@ export const TotalDrilldownDialog: React.FC<{
                             <TableHeader>
                               <TableRow>
                                 <TableHead>Category</TableHead>
-                                <TableHead className="text-right">Total</TableHead>
+                                <TableHead className="text-right">
+                                  Total
+                                </TableHead>
                                 <TableHead className="hidden text-right md:table-cell">
                                   Tx
                                 </TableHead>
@@ -967,7 +986,9 @@ export const TotalDrilldownDialog: React.FC<{
                   </p>
                   <p className="font-semibold text-slate-900">
                     {totalOverview
-                      ? new Date(totalOverview.as_of).toLocaleDateString("sv-SE")
+                      ? new Date(totalOverview.as_of).toLocaleDateString(
+                          "sv-SE",
+                        )
                       : "—"}
                   </p>
                   <p className="text-xs text-slate-600">
@@ -1025,9 +1046,12 @@ export const TotalDrilldownDialog: React.FC<{
                           }
                         >
                           {totalNetWorthStats.deltaSinceStart >= 0 ? "+" : "−"}
-                          {currency(Math.abs(totalNetWorthStats.deltaSinceStart))}
+                          {currency(
+                            Math.abs(totalNetWorthStats.deltaSinceStart),
+                          )}
                         </span>
-                        {totalNetWorthStats.deltaSinceStartPct === null ? null : (
+                        {totalNetWorthStats.deltaSinceStartPct ===
+                        null ? null : (
                           <span className="ml-2 text-xs text-slate-600">
                             ({percent(totalNetWorthStats.deltaSinceStartPct)})
                           </span>
@@ -1044,9 +1068,9 @@ export const TotalDrilldownDialog: React.FC<{
                       </p>
                       <p className="text-xs text-slate-600">
                         High:{" "}
-                        {new Date(totalNetWorthStats.allTimeHighDate).toLocaleDateString(
-                          "sv-SE",
-                        )}
+                        {new Date(
+                          totalNetWorthStats.allTimeHighDate,
+                        ).toLocaleDateString("sv-SE")}
                       </p>
                     </div>
                   </div>
@@ -1060,13 +1084,22 @@ export const TotalDrilldownDialog: React.FC<{
                           Change Attribution
                         </p>
                         <p className="text-xs text-slate-500">
-                          {new Date(totalNetWorthAttribution.windowStart).getFullYear()}
-                          –{new Date(totalNetWorthAttribution.windowEnd).getFullYear()}
+                          {new Date(
+                            totalNetWorthAttribution.windowStart,
+                          ).getFullYear()}
+                          –
+                          {new Date(
+                            totalNetWorthAttribution.windowEnd,
+                          ).getFullYear()}
                         </p>
                       </div>
                       <p className="text-sm font-semibold text-slate-900">
-                        {totalNetWorthAttribution.netWorthDelta >= 0 ? "+" : "−"}
-                        {currency(Math.abs(totalNetWorthAttribution.netWorthDelta))}
+                        {totalNetWorthAttribution.netWorthDelta >= 0
+                          ? "+"
+                          : "−"}
+                        {currency(
+                          Math.abs(totalNetWorthAttribution.netWorthDelta),
+                        )}
                       </p>
                     </div>
                     <div className="mt-3 space-y-2">
@@ -1076,11 +1109,13 @@ export const TotalDrilldownDialog: React.FC<{
                             label: "Savings (income − expense)",
                             value: totalNetWorthAttribution.savings,
                           },
-                          totalNetWorthAttribution.investmentsContribution === null
+                          totalNetWorthAttribution.investmentsContribution ===
+                          null
                             ? null
                             : {
                                 label: "Investments change",
-                                value: totalNetWorthAttribution.investmentsContribution,
+                                value:
+                                  totalNetWorthAttribution.investmentsContribution,
                               },
                           {
                             label: "Debt change",
@@ -1118,7 +1153,10 @@ export const TotalDrilldownDialog: React.FC<{
                                 </span>
                               </div>
                               <div className="flex items-center gap-2">
-                                <Progress value={Math.min(100, pct)} className="h-2" />
+                                <Progress
+                                  value={Math.min(100, pct)}
+                                  className="h-2"
+                                />
                                 <span className="w-10 text-right text-[11px] text-slate-500">
                                   {percent(pct)}
                                 </span>
@@ -1193,4 +1231,3 @@ export const TotalDrilldownDialog: React.FC<{
     </Dialog>
   );
 };
-
