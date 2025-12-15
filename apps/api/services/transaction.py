@@ -296,10 +296,10 @@ class TransactionService:
                     LoanEventType.PAYMENT_INTEREST if amount < 0 else LoanEventType.INTEREST_ACCRUAL
                 )
             if category.category_type == CategoryType.LOAN:
-                return LoanEventType.DISBURSEMENT if amount < 0 else LoanEventType.PAYMENT_PRINCIPAL
+                return LoanEventType.DISBURSEMENT if amount > 0 else LoanEventType.PAYMENT_PRINCIPAL
 
         if transaction_type == TransactionType.TRANSFER:
-            return LoanEventType.DISBURSEMENT if amount < 0 else LoanEventType.PAYMENT_PRINCIPAL
+            return LoanEventType.DISBURSEMENT if amount > 0 else LoanEventType.PAYMENT_PRINCIPAL
 
         return None
 

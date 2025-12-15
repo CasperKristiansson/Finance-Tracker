@@ -1,6 +1,6 @@
 """Service layer for investment snapshots (Nordnet exports)."""
 
-# pylint: disable=broad-exception-caught
+# pylint: disable=broad-exception-caught,too-many-lines
 
 from __future__ import annotations
 
@@ -147,6 +147,7 @@ class InvestmentSnapshotService:
                     "as_of": None,
                     "current_value": zero,
                     "series": [],
+                    "cashflow_series": [],
                     "cashflow": {
                         "added_30d": zero,
                         "withdrawn_30d": zero,
@@ -157,6 +158,9 @@ class InvestmentSnapshotService:
                         "added_12m": zero,
                         "withdrawn_12m": zero,
                         "net_12m": zero,
+                        "added_since_start": zero,
+                        "withdrawn_since_start": zero,
+                        "net_since_start": zero,
                     },
                     "growth_12m_ex_transfers": {"amount": zero, "pct": None},
                     "growth_since_start_ex_transfers": {"amount": zero, "pct": None},
@@ -277,7 +281,9 @@ class InvestmentSnapshotService:
                 extended.append((today, extended[-1][1]))
             account_series[account_id] = extended
 
-        portfolio_start_date = portfolio_series_base[0][0] if portfolio_series_base else None
+        portfolio_snapshot_start_date = (
+            portfolio_series_base[0][0] if portfolio_series_base else None
+        )
         portfolio_as_of = portfolio_series_base[-1][0] if portfolio_series_base else None
         portfolio_current_value = (
             portfolio_series_base[-1][1] if portfolio_series_base else Decimal(0)
@@ -356,13 +362,130 @@ class InvestmentSnapshotService:
             return out
 
         now = datetime.now(timezone.utc)
+
+        cashflow_start_dt: Optional[datetime] = None
+        cashflow_start_by_account: dict[UUID, datetime] = {}
+        if account_ids:
+            cashflow_start_stmt: Any = (
+                select(func.min(cast(Any, Transaction.occurred_at)))
+                .select_from(TransactionLeg)
+                .join(
+                    Transaction,
+                    cast(Any, TransactionLeg.transaction_id) == cast(Any, Transaction.id),
+                )
+                .where(
+                    cast(Any, TransactionLeg.account_id).in_(account_ids),
+                    cast(Any, Transaction.transaction_type) != TransactionType.ADJUSTMENT,
+                    cast(Any, TransactionLeg.transaction_id).in_(
+                        select(cast(Any, noninv_tx_ids.c.transaction_id))
+                    ),
+                )
+            )
+            cashflow_start_dt = self.session.exec(cashflow_start_stmt).one()
+
+            cashflow_start_by_account_stmt: Any = (
+                select(
+                    cast(Any, TransactionLeg.account_id),
+                    func.min(cast(Any, Transaction.occurred_at)),
+                )
+                .select_from(TransactionLeg)
+                .join(
+                    Transaction,
+                    cast(Any, TransactionLeg.transaction_id) == cast(Any, Transaction.id),
+                )
+                .where(
+                    cast(Any, TransactionLeg.account_id).in_(account_ids),
+                    cast(Any, Transaction.transaction_type) != TransactionType.ADJUSTMENT,
+                    cast(Any, TransactionLeg.transaction_id).in_(
+                        select(cast(Any, noninv_tx_ids.c.transaction_id))
+                    ),
+                )
+                .group_by(cast(Any, TransactionLeg.account_id))
+            )
+            for account_id, min_dt in self.session.exec(cashflow_start_by_account_stmt).all():
+                if account_id is None or min_dt is None:
+                    continue
+                cashflow_start_by_account[account_id] = min_dt
+
+        since_start_date: Optional[date] = None
+        cashflow_start_date = cashflow_start_dt.date() if cashflow_start_dt else None
+        if portfolio_snapshot_start_date and cashflow_start_date:
+            since_start_date = min(portfolio_snapshot_start_date, cashflow_start_date)
+        else:
+            since_start_date = portfolio_snapshot_start_date or cashflow_start_date
+
         start_30d = now - timedelta(days=30)
         start_12m = now - timedelta(days=365)
         start_ytd = datetime(now.year, 1, 1, tzinfo=timezone.utc)
         start_since = (
-            datetime.combine(portfolio_start_date, datetime.min.time(), tzinfo=timezone.utc)
-            if portfolio_start_date
+            datetime.combine(since_start_date, datetime.min.time(), tzinfo=timezone.utc)
+            if since_start_date
             else start_12m
+        )
+
+        def cashflow_monthly_series(start_dt: datetime, end_dt: datetime) -> list[dict[str, Any]]:
+            if not account_ids or start_dt > end_dt:
+                return []
+
+            stmt = (
+                select(
+                    cast(Any, Transaction.occurred_at),
+                    cast(Any, TransactionLeg.amount),
+                )
+                .select_from(TransactionLeg)
+                .join(
+                    Transaction,
+                    cast(Any, TransactionLeg.transaction_id) == cast(Any, Transaction.id),
+                )
+                .where(
+                    cast(Any, TransactionLeg.account_id).in_(account_ids),
+                    cast(Any, Transaction.occurred_at) >= start_dt,
+                    cast(Any, Transaction.occurred_at) <= end_dt,
+                    cast(Any, Transaction.transaction_type) != TransactionType.ADJUSTMENT,
+                    cast(Any, TransactionLeg.transaction_id).in_(
+                        select(cast(Any, noninv_tx_ids.c.transaction_id))
+                    ),
+                )
+            )
+            rows = self.session.exec(stmt).all()
+            by_month: dict[date, tuple[Decimal, Decimal]] = {}
+            for occurred_at, amount in rows:
+                if occurred_at is None:
+                    continue
+                dt = cast(datetime, occurred_at)
+                month = date(dt.year, dt.month, 1)
+                deposits, withdrawals = by_month.get(month, (Decimal(0), Decimal(0)))
+                amt = Decimal(amount or 0)
+                if amt > 0:
+                    deposits += amt
+                elif amt < 0:
+                    withdrawals += -amt
+                by_month[month] = (deposits, withdrawals)
+
+            cursor = date(start_dt.year, start_dt.month, 1)
+            end_month = date(end_dt.year, end_dt.month, 1)
+            series: list[dict[str, Any]] = []
+            while cursor <= end_month:
+                deposits, withdrawals = by_month.get(cursor, (Decimal(0), Decimal(0)))
+                series.append(
+                    {
+                        "period": cursor,
+                        "added": deposits,
+                        "withdrawn": withdrawals,
+                        "net": deposits - withdrawals,
+                    }
+                )
+                next_month = cursor.month + 1
+                next_year = cursor.year
+                if next_month == 13:
+                    next_month = 1
+                    next_year += 1
+                cursor = date(next_year, next_month, 1)
+
+            return series
+
+        portfolio_cashflow_series = (
+            cashflow_monthly_series(start_since, now) if since_start_date else []
         )
 
         sums_30d = cashflow_sums(start_30d, now)
@@ -386,22 +509,36 @@ class InvestmentSnapshotService:
         start_value_12m = value_at(portfolio_series_base, (now - timedelta(days=365)).date())
         start_value_12m = start_value_12m if start_value_12m is not None else Decimal(0)
 
-        portfolio_start_value = portfolio_series_base[0][1] if portfolio_series_base else Decimal(0)
+        has_portfolio_values = bool(portfolio_series_base)
         portfolio_end_value = portfolio_current_value
 
-        growth_12m_amount = portfolio_end_value - start_value_12m - net_12m
-        growth_12m_base = start_value_12m + net_12m
-        growth_12m_pct = (
-            float((growth_12m_amount / growth_12m_base) * 100) if growth_12m_base > 0 else None
-        )
+        growth_12m_amount = Decimal(0)
+        growth_12m_pct = None
+        growth_since_amount = Decimal(0)
+        growth_since_pct = None
 
-        growth_since_amount = portfolio_end_value - portfolio_start_value - net_since
-        growth_since_base = portfolio_start_value + net_since
-        growth_since_pct = (
-            float((growth_since_amount / growth_since_base) * 100)
-            if growth_since_base > 0
-            else None
-        )
+        if has_portfolio_values:
+            growth_12m_amount = portfolio_end_value - start_value_12m - net_12m
+            growth_12m_base = start_value_12m + net_12m
+            growth_12m_pct = (
+                float((growth_12m_amount / growth_12m_base) * 100) if growth_12m_base > 0 else None
+            )
+
+            since_start_value = Decimal(0)
+            if (
+                since_start_date
+                and portfolio_snapshot_start_date
+                and since_start_date >= portfolio_snapshot_start_date
+            ):
+                since_start_value = value_at(portfolio_series_base, since_start_date) or Decimal(0)
+
+            growth_since_amount = portfolio_end_value - since_start_value - net_since
+            growth_since_base = since_start_value + net_since
+            growth_since_pct = (
+                float((growth_since_amount / growth_since_base) * 100)
+                if growth_since_base > 0
+                else None
+            )
 
         recent_stmt = (
             cast(
@@ -457,6 +594,17 @@ class InvestmentSnapshotService:
                 continue
             series_base = account_series_base.get(account.id) or []
             series_points = account_series.get(account.id) or []
+            account_snapshot_start_date = series_base[0][0] if series_base else None
+            cashflow_start_dt_for_account = cashflow_start_by_account.get(account.id)
+            account_cashflow_start_date = (
+                cashflow_start_dt_for_account.date() if cashflow_start_dt_for_account else None
+            )
+            account_start_date: Optional[date] = None
+            if account_snapshot_start_date and account_cashflow_start_date:
+                account_start_date = min(account_snapshot_start_date, account_cashflow_start_date)
+            else:
+                account_start_date = account_snapshot_start_date or account_cashflow_start_date
+
             as_of = series_base[-1][0] if series_base else None
             current_value = series_base[-1][1] if series_base else Decimal(0)
 
@@ -471,17 +619,44 @@ class InvestmentSnapshotService:
                 base_acc = start_acc_12m + net_acc_12m
                 growth_acc_pct = float((growth_acc / base_acc) * 100) if base_acc > 0 else None
 
+            dep_acc_since, wdr_acc_since = sums_since.get(account.id, (Decimal(0), Decimal(0)))
+            net_acc_since = dep_acc_since - wdr_acc_since
+
+            growth_since_acc = Decimal(0)
+            growth_since_acc_pct = None
+            if series_base:
+                start_value_since = Decimal(0)
+                if (
+                    account_start_date
+                    and account_snapshot_start_date
+                    and account_start_date >= account_snapshot_start_date
+                ):
+                    start_value_since = value_at(series_base, account_start_date) or Decimal(0)
+                growth_since_acc = current_value - start_value_since - net_acc_since
+                base_since = start_value_since + net_acc_since
+                growth_since_acc_pct = (
+                    float((growth_since_acc / base_since) * 100) if base_since > 0 else None
+                )
+
             accounts_payload.append(
                 {
                     "account_id": account.id,
                     "name": account.name,
                     "icon": account.icon,
+                    "start_date": account_start_date,
                     "as_of": as_of,
                     "current_value": current_value,
                     "series": [{"date": d, "value": v} for d, v in series_points],
                     "cashflow_12m_added": dep_acc_12m,
                     "cashflow_12m_withdrawn": wdr_acc_12m,
+                    "cashflow_since_start_added": dep_acc_since,
+                    "cashflow_since_start_withdrawn": wdr_acc_since,
+                    "cashflow_since_start_net": net_acc_since,
                     "growth_12m_ex_transfers": {"amount": growth_acc, "pct": growth_acc_pct},
+                    "growth_since_start_ex_transfers": {
+                        "amount": growth_since_acc,
+                        "pct": growth_since_acc_pct,
+                    },
                 }
             )
 
@@ -489,10 +664,11 @@ class InvestmentSnapshotService:
 
         return {
             "portfolio": {
-                "start_date": portfolio_start_date,
+                "start_date": since_start_date,
                 "as_of": portfolio_as_of,
                 "current_value": portfolio_current_value,
                 "series": [{"date": d, "value": v} for d, v in portfolio_series],
+                "cashflow_series": portfolio_cashflow_series,
                 "cashflow": {
                     "added_30d": dep_30d,
                     "withdrawn_30d": wdr_30d,
@@ -503,6 +679,9 @@ class InvestmentSnapshotService:
                     "added_12m": dep_12m,
                     "withdrawn_12m": wdr_12m,
                     "net_12m": net_12m,
+                    "added_since_start": dep_since,
+                    "withdrawn_since_start": wdr_since,
+                    "net_since_start": net_since,
                 },
                 "growth_12m_ex_transfers": {"amount": growth_12m_amount, "pct": growth_12m_pct},
                 "growth_since_start_ex_transfers": {

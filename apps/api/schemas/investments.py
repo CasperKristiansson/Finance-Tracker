@@ -167,6 +167,15 @@ class InvestmentValuePointRead(BaseModel):
     value: Decimal
 
 
+class InvestmentCashflowPointRead(BaseModel):
+    """Cashflow bucket (typically monthly) for contributions charting."""
+
+    period: date
+    added: Decimal
+    withdrawn: Decimal
+    net: Decimal
+
+
 class InvestmentCashflowSummaryRead(BaseModel):
     """Aggregated deposits and withdrawals."""
 
@@ -179,6 +188,9 @@ class InvestmentCashflowSummaryRead(BaseModel):
     added_12m: Decimal
     withdrawn_12m: Decimal
     net_12m: Decimal
+    added_since_start: Decimal
+    withdrawn_since_start: Decimal
+    net_since_start: Decimal
 
 
 class InvestmentGrowthRead(BaseModel):
@@ -195,6 +207,7 @@ class InvestmentPortfolioOverviewRead(BaseModel):
     as_of: Optional[date] = None
     current_value: Decimal
     series: list[InvestmentValuePointRead] = Field(default_factory=list)
+    cashflow_series: list[InvestmentCashflowPointRead] = Field(default_factory=list)
     cashflow: InvestmentCashflowSummaryRead
     growth_12m_ex_transfers: InvestmentGrowthRead
     growth_since_start_ex_transfers: InvestmentGrowthRead
@@ -206,12 +219,17 @@ class InvestmentAccountOverviewRead(BaseModel):
     account_id: UUID
     name: str
     icon: Optional[str] = None
+    start_date: Optional[date] = None
     as_of: Optional[date] = None
     current_value: Decimal
     series: list[InvestmentValuePointRead] = Field(default_factory=list)
     cashflow_12m_added: Decimal
     cashflow_12m_withdrawn: Decimal
+    cashflow_since_start_added: Decimal
+    cashflow_since_start_withdrawn: Decimal
+    cashflow_since_start_net: Decimal
     growth_12m_ex_transfers: InvestmentGrowthRead
+    growth_since_start_ex_transfers: InvestmentGrowthRead
 
 
 class InvestmentCashflowEventRead(BaseModel):

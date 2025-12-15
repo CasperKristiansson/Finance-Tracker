@@ -1040,6 +1040,9 @@ export const investmentCashflowSummarySchema = z.object({
   added_12m: money,
   withdrawn_12m: money,
   net_12m: money,
+  added_since_start: money,
+  withdrawn_since_start: money,
+  net_since_start: money,
 });
 
 export const investmentGrowthSchema = z.object({
@@ -1047,11 +1050,19 @@ export const investmentGrowthSchema = z.object({
   pct: nullableNumeric,
 });
 
+export const investmentCashflowPointSchema = z.object({
+  period: dateString,
+  added: money,
+  withdrawn: money,
+  net: money,
+});
+
 export const investmentPortfolioOverviewSchema = z.object({
   start_date: nullableString,
   as_of: nullableString,
   current_value: money,
   series: z.array(investmentValuePointSchema).default([]),
+  cashflow_series: z.array(investmentCashflowPointSchema).default([]),
   cashflow: investmentCashflowSummarySchema,
   growth_12m_ex_transfers: investmentGrowthSchema,
   growth_since_start_ex_transfers: investmentGrowthSchema,
@@ -1061,12 +1072,17 @@ export const investmentAccountOverviewSchema = z.object({
   account_id: z.string(),
   name: z.string(),
   icon: nullableString,
+  start_date: nullableString,
   as_of: nullableString,
   current_value: money,
   series: z.array(investmentValuePointSchema).default([]),
   cashflow_12m_added: money,
   cashflow_12m_withdrawn: money,
+  cashflow_since_start_added: money,
+  cashflow_since_start_withdrawn: money,
+  cashflow_since_start_net: money,
   growth_12m_ex_transfers: investmentGrowthSchema,
+  growth_since_start_ex_transfers: investmentGrowthSchema,
 });
 
 export const investmentCashflowEventSchema = z.object({
