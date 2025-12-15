@@ -307,41 +307,6 @@ class InvestmentSnapshotService:
             .distinct()
         ).subquery()
 
-        def _normalize_dt(value: datetime) -> datetime:
-            """SQLite stores naive datetimes; Postgres uses tz-aware timestamps."""
-
-            bind = self.session.get_bind()
-            dialect = getattr(bind, "dialect", None)
-            if dialect is not None and getattr(dialect, "name", "") == "sqlite":
-                return value.replace(tzinfo=None)
-            return value
-
-        def _normalize_sv(value: str) -> str:
-            lowered = (value or "").strip().lower()
-            return (
-                lowered.replace("å", "a").replace("ä", "a").replace("ö", "o").replace("\u2212", "-")
-            )
-
-        def _invtx_direction(tx_type: str | None) -> str | None:
-            t = _normalize_sv(tx_type or "")
-            if not t:
-                return None
-            if "insatt" in t or "deposit" in t:
-                return "deposit"
-            if "uttag" in t or "withdraw" in t:
-                return "withdrawal"
-            return None
-
-        def _invtx_contribution_filters() -> Any:
-            tx_type = func.lower(cast(Any, InvestmentTransaction.transaction_type))
-            return (
-                tx_type.like("%insätt%")
-                | tx_type.like("%insatt%")
-                | tx_type.like("%deposit%")
-                | tx_type.like("%uttag%")
-                | tx_type.like("%withdraw%")
-            )
-
         def cashflow_sums(
             start_dt: datetime, end_dt: datetime
         ) -> dict[UUID, tuple[Decimal, Decimal]]:
@@ -442,161 +407,13 @@ class InvestmentSnapshotService:
                     continue
                 cashflow_start_by_account_ledger[account_id] = min_dt
 
-        cashflow_start_dt_invtx: Optional[datetime] = None
-        if account_ids:
-            cashflow_start_stmt_invtx: Any = select(
-                func.min(cast(Any, InvestmentTransaction.occurred_at))
-            ).where(_invtx_contribution_filters())
-            cashflow_start_dt_invtx = self.session.exec(cashflow_start_stmt_invtx).one()
-
-        cashflow_start_by_account_invtx: dict[UUID, datetime] = {}
-        if account_ids:
-            account_label = func.coalesce(
-                cast(Any, InvestmentSnapshot.account_name),
-                cast(Any, InvestmentTransaction.account_name),
-            )
-            invtx_account_min_stmt: Any = (
-                select(
-                    account_label,
-                    func.min(cast(Any, InvestmentTransaction.occurred_at)),
-                )
-                .select_from(InvestmentTransaction)
-                .join(
-                    InvestmentSnapshot,
-                    cast(Any, InvestmentTransaction.snapshot_id)
-                    == cast(Any, InvestmentSnapshot.id),
-                    isouter=True,
-                )
-                .where(_invtx_contribution_filters())
-                .group_by(account_label)
-            )
-            for account_name, min_dt in self.session.exec(invtx_account_min_stmt).all():
-                if not account_name or min_dt is None:
-                    continue
-                matched = self._match_account(
-                    str(account_name), investment_accounts, account_by_key
-                )
-                if matched is None or matched.id is None:
-                    continue
-                existing_start = cashflow_start_by_account_invtx.get(matched.id)
-                if existing_start is None or min_dt < existing_start:
-                    cashflow_start_by_account_invtx[matched.id] = min_dt
-
-        def invtx_cashflow_totals(start_dt: datetime, end_dt: datetime) -> tuple[Decimal, Decimal]:
-            if not account_ids or start_dt > end_dt:
-                return Decimal(0), Decimal(0)
-            start_dt = _normalize_dt(start_dt)
-            end_dt = _normalize_dt(end_dt)
-            stmt: Any = (
-                select(
-                    cast(Any, InvestmentTransaction.transaction_type),
-                    cast(Any, InvestmentTransaction.amount_sek),
-                )
-                .where(
-                    cast(Any, InvestmentTransaction.occurred_at) >= start_dt,
-                    cast(Any, InvestmentTransaction.occurred_at) <= end_dt,
-                    _invtx_contribution_filters(),
-                )
-                .order_by(cast(Any, InvestmentTransaction.occurred_at).asc())
-            )
-            rows = self.session.exec(stmt).all()
-            deposits = Decimal(0)
-            withdrawals = Decimal(0)
-            for tx_type, amount_sek in rows:
-                direction = _invtx_direction(str(tx_type) if tx_type else None)
-                if direction is None:
-                    continue
-                amt = Decimal(amount_sek or 0).copy_abs()
-                if amt == 0:
-                    continue
-                if direction == "deposit":
-                    deposits += amt
-                else:
-                    withdrawals += amt
-            return deposits, withdrawals
-
-        def invtx_cashflow_sums(
-            start_dt: datetime, end_dt: datetime
-        ) -> dict[UUID, tuple[Decimal, Decimal]]:
-            if not account_ids:
-                return {}
-            start_dt = _normalize_dt(start_dt)
-            end_dt = _normalize_dt(end_dt)
-            account_label = func.coalesce(
-                cast(Any, InvestmentSnapshot.account_name),
-                cast(Any, InvestmentTransaction.account_name),
-            ).label("account_label")
-            stmt: Any = (
-                select(
-                    cast(Any, InvestmentTransaction.occurred_at),
-                    account_label,
-                    cast(Any, InvestmentTransaction.transaction_type),
-                    cast(Any, InvestmentTransaction.amount_sek),
-                )
-                .select_from(InvestmentTransaction)
-                .join(
-                    InvestmentSnapshot,
-                    cast(Any, InvestmentTransaction.snapshot_id)
-                    == cast(Any, InvestmentSnapshot.id),
-                    isouter=True,
-                )
-                .where(
-                    cast(Any, InvestmentTransaction.occurred_at) >= start_dt,
-                    cast(Any, InvestmentTransaction.occurred_at) <= end_dt,
-                    _invtx_contribution_filters(),
-                )
-                .order_by(cast(Any, InvestmentTransaction.occurred_at).asc())
-            )
-            rows = self.session.exec(stmt).all()
-            out: dict[UUID, tuple[Decimal, Decimal]] = {}
-            for occurred_at, account_name, tx_type, amount_sek in rows:
-                _ = occurred_at
-                direction = _invtx_direction(str(tx_type) if tx_type else None)
-                if direction is None:
-                    continue
-                if not account_name:
-                    continue
-                account = self._match_account(
-                    str(account_name), investment_accounts, account_by_key
-                )
-                if account is None or account.id is None:
-                    continue
-                deposits, withdrawals = out.get(account.id, (Decimal(0), Decimal(0)))
-                amt = Decimal(amount_sek or 0).copy_abs()
-                if amt == 0:
-                    continue
-                if direction == "deposit":
-                    deposits += amt
-                else:
-                    withdrawals += amt
-                out[account.id] = (deposits, withdrawals)
-            return out
-
-        ledger_cashflow_start_date = (
-            cashflow_start_dt_ledger.date() if cashflow_start_dt_ledger else None
-        )
-        invtx_cashflow_start_date = (
-            cashflow_start_dt_invtx.date() if cashflow_start_dt_invtx else None
-        )
-        cashflow_start_date = ledger_cashflow_start_date
+        cashflow_start_date = cashflow_start_dt_ledger.date() if cashflow_start_dt_ledger else None
         cashflow_start_by_account = cashflow_start_by_account_ledger
 
         def totals(sums: dict[UUID, tuple[Decimal, Decimal]]) -> tuple[Decimal, Decimal]:
             dep = sum((v[0] for v in sums.values()), Decimal(0))
             wdr = sum((v[1] for v in sums.values()), Decimal(0))
             return dep, wdr
-
-        start_probe = now - timedelta(days=365)
-        ledger_probe = cashflow_sums(start_probe, now)
-
-        ledger_dep_probe, ledger_wdr_probe = totals(ledger_probe)
-        invtx_dep_probe, invtx_wdr_probe = invtx_cashflow_totals(start_probe, now)
-        use_invtx = (ledger_dep_probe + ledger_wdr_probe) == 0 and (
-            invtx_dep_probe + invtx_wdr_probe
-        ) > 0
-        if use_invtx:
-            cashflow_start_date = invtx_cashflow_start_date
-            cashflow_start_by_account = cashflow_start_by_account_invtx
 
         since_start_date: Optional[date] = None
         if portfolio_snapshot_start_date and cashflow_start_date:
@@ -674,92 +491,19 @@ class InvestmentSnapshotService:
 
             return series
 
-        def invtx_monthly_series(start_dt: datetime, end_dt: datetime) -> list[dict[str, Any]]:
-            if not account_ids or start_dt > end_dt:
-                return []
-            start_dt_norm = _normalize_dt(start_dt)
-            end_dt_norm = _normalize_dt(end_dt)
-            stmt: Any = (
-                select(
-                    cast(Any, InvestmentTransaction.occurred_at),
-                    cast(Any, InvestmentTransaction.transaction_type),
-                    cast(Any, InvestmentTransaction.amount_sek),
-                )
-                .where(
-                    cast(Any, InvestmentTransaction.occurred_at) >= start_dt_norm,
-                    cast(Any, InvestmentTransaction.occurred_at) <= end_dt_norm,
-                    _invtx_contribution_filters(),
-                )
-                .order_by(cast(Any, InvestmentTransaction.occurred_at).asc())
-            )
-            rows = self.session.exec(stmt).all()
-            by_month: dict[date, tuple[Decimal, Decimal]] = {}
-            for occurred_at, tx_type, amount_sek in rows:
-                direction = _invtx_direction(str(tx_type) if tx_type else None)
-                if direction is None:
-                    continue
-                dt = cast(datetime, occurred_at)
-                month = date(dt.year, dt.month, 1)
-                deposits, withdrawals = by_month.get(month, (Decimal(0), Decimal(0)))
-                amt = Decimal(amount_sek or 0).copy_abs()
-                if amt == 0:
-                    continue
-                if direction == "deposit":
-                    deposits += amt
-                else:
-                    withdrawals += amt
-                by_month[month] = (deposits, withdrawals)
-
-            cursor = date(start_dt.year, start_dt.month, 1)
-            end_month = date(end_dt.year, end_dt.month, 1)
-            series: list[dict[str, Any]] = []
-            while cursor <= end_month:
-                deposits, withdrawals = by_month.get(cursor, (Decimal(0), Decimal(0)))
-                series.append(
-                    {
-                        "period": cursor,
-                        "added": deposits,
-                        "withdrawn": withdrawals,
-                        "net": deposits - withdrawals,
-                    }
-                )
-                next_month = cursor.month + 1
-                next_year = cursor.year
-                if next_month == 13:
-                    next_month = 1
-                    next_year += 1
-                cursor = date(next_year, next_month, 1)
-            return series
-
-        sums_30d = (
-            invtx_cashflow_sums(start_30d, now) if use_invtx else cashflow_sums(start_30d, now)
-        )
-        sums_12m = (
-            invtx_cashflow_sums(start_12m, now) if use_invtx else cashflow_sums(start_12m, now)
-        )
-        sums_ytd = (
-            invtx_cashflow_sums(start_ytd, now) if use_invtx else cashflow_sums(start_ytd, now)
-        )
-        sums_since = (
-            invtx_cashflow_sums(start_since, now) if use_invtx else cashflow_sums(start_since, now)
-        )
+        sums_30d = cashflow_sums(start_30d, now)
+        sums_12m = cashflow_sums(start_12m, now)
+        sums_ytd = cashflow_sums(start_ytd, now)
+        sums_since = cashflow_sums(start_since, now)
 
         portfolio_cashflow_series = (
-            invtx_monthly_series(start_since, now)
-            if (since_start_date and use_invtx)
-            else (cashflow_monthly_series(start_since, now) if since_start_date else [])
+            cashflow_monthly_series(start_since, now) if since_start_date else []
         )
 
-        if use_invtx:
-            dep_30d, wdr_30d = invtx_cashflow_totals(start_30d, now)
-            dep_12m, wdr_12m = invtx_cashflow_totals(start_12m, now)
-            dep_ytd, wdr_ytd = invtx_cashflow_totals(start_ytd, now)
-            dep_since, wdr_since = invtx_cashflow_totals(start_since, now)
-        else:
-            dep_30d, wdr_30d = totals(sums_30d)
-            dep_12m, wdr_12m = totals(sums_12m)
-            dep_ytd, wdr_ytd = totals(sums_ytd)
-            dep_since, wdr_since = totals(sums_since)
+        dep_30d, wdr_30d = totals(sums_30d)
+        dep_12m, wdr_12m = totals(sums_12m)
+        dep_ytd, wdr_ytd = totals(sums_ytd)
+        dep_since, wdr_since = totals(sums_since)
 
         net_12m = dep_12m - wdr_12m
         net_since = dep_since - wdr_since
