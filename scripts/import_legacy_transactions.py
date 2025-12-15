@@ -533,7 +533,7 @@ def import_transactions(
     df = tx_df.copy() if tx_df is not None else pd.read_excel(TX_PATH)
     total = len(df)
     inserted = skipped = zero_skipped = dup_skipped = 0
-    investment_skipped = investment_transfer_redirected = 0
+    investment_skipped = 0
     offset_id = account_ids["_offset"]
     quantize = Decimal("0.01")
     user_id = session.info.get("user_id")
@@ -688,49 +688,22 @@ def import_transactions(
                     f"Transfer-Out missing destination account mapping for category '{category_name}'"
                 )
             amt = abs(amount).quantize(quantize)
-            src_is_invest = account_id in investment_account_ids
-            dest_is_invest = dest_id in investment_account_ids
-            if src_is_invest and dest_is_invest:
-                investment_skipped += 1
-                progress("Transactions", idx, total)
-                continue
-            if src_is_invest and not dest_is_invest:
-                legs = [
-                    TransactionLeg(account_id=dest_id, amount=amt),
-                    TransactionLeg(account_id=offset_id, amount=-amt),
-                ]
-                tx_type = TransactionType.TRANSFER
-                category_id = None
-                category_type = None
-                description = note_str or f"Transfer from investments to {dest_name}"
-                investment_transfer_redirected += 1
-            elif dest_is_invest and not src_is_invest:
+            if dest_id == account_id:
+                tx_type = TransactionType.ADJUSTMENT
                 legs = [
                     TransactionLeg(account_id=account_id, amount=-amt),
                     TransactionLeg(account_id=offset_id, amount=amt),
                 ]
-                tx_type = TransactionType.TRANSFER
-                category_id = None
-                category_type = None
-                description = note_str or f"Transfer to investments ({dest_name})"
-                investment_transfer_redirected += 1
+                description = note_str or "Adjustment (self transfer)"
             else:
-                if dest_id == account_id:
-                    tx_type = TransactionType.ADJUSTMENT
-                    legs = [
-                        TransactionLeg(account_id=account_id, amount=-amt),
-                        TransactionLeg(account_id=offset_id, amount=amt),
-                    ]
-                    description = note_str or "Adjustment (self transfer)"
-                else:
-                    legs = [
-                        TransactionLeg(account_id=account_id, amount=-amt),
-                        TransactionLeg(account_id=dest_id, amount=amt),
-                    ]
-                    tx_type = TransactionType.TRANSFER
-                category_id = None
-                category_type = None
+                legs = [
+                    TransactionLeg(account_id=account_id, amount=-amt),
+                    TransactionLeg(account_id=dest_id, amount=amt),
+                ]
+                tx_type = TransactionType.TRANSFER
                 description = note_str or f"Transfer to {dest_name}"
+            category_id = None
+            category_type = None
         elif ttype == "Income":
             if amount < 0:
                 tx_type = TransactionType.ADJUSTMENT
@@ -819,7 +792,7 @@ def import_transactions(
             session.commit()
 
     print(
-        f"Transactions inserted: {inserted}/{total} (zero skipped: {zero_skipped}, dupes skipped: {dup_skipped}, investment skipped: {investment_skipped}, investment transfers redirected: {investment_transfer_redirected}, other skipped: {skipped})"
+        f"Transactions inserted: {inserted}/{total} (zero skipped: {zero_skipped}, dupes skipped: {dup_skipped}, investment skipped: {investment_skipped}, other skipped: {skipped})"
     )
 
 
