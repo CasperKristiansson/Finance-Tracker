@@ -421,7 +421,7 @@ export const Taxes: React.FC = () => {
         ))}
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-3">
         <Card className="border-slate-200 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
           <CardHeader className="pb-2">
             <CardTitle className="text-base text-slate-800">
@@ -500,116 +500,6 @@ export const Taxes: React.FC = () => {
                       />
                     ))}
                   </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base text-slate-800">
-              Payments vs refunds
-            </CardTitle>
-            <p className="text-xs text-slate-500">
-              Hover a month to see the breakdown.
-            </p>
-          </CardHeader>
-          <CardContent className="h-[320px]">
-            {summaryLoading || eventsLoading ? (
-              <Skeleton className="h-full w-full" />
-            ) : !hasEvents ? (
-              <div className="flex h-full items-center justify-center text-sm text-slate-600">
-                No tax events yet.
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyBreakdown}>
-                  <defs>
-                    <linearGradient
-                      id={`${gradientId}-payment`}
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop
-                        offset="0%"
-                        stopColor="#fb7185"
-                        stopOpacity={0.95}
-                      />
-                      <stop
-                        offset="100%"
-                        stopColor="#ef4444"
-                        stopOpacity={0.6}
-                      />
-                    </linearGradient>
-                    <linearGradient
-                      id={`${gradientId}-refund`}
-                      x1="0"
-                      y1="0"
-                      x2="0"
-                      y2="1"
-                    >
-                      <stop
-                        offset="0%"
-                        stopColor="#34d399"
-                        stopOpacity={0.95}
-                      />
-                      <stop
-                        offset="100%"
-                        stopColor="#10b981"
-                        stopOpacity={0.6}
-                      />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="label" stroke="#64748b" fontSize={12} />
-                  <YAxis
-                    stroke="#64748b"
-                    fontSize={12}
-                    tickFormatter={(value) => `${Math.round(value / 1000)}k`}
-                  />
-                  <Tooltip
-                    labelStyle={{ color: "#0f172a" }}
-                    content={({ active, label, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const row = payload[0]?.payload as
-                        | { payments?: number; refunds?: number; net?: number }
-                        | undefined;
-                      const payments = row?.payments ?? 0;
-                      const refunds = row?.refunds ?? 0;
-                      const net = row?.net ?? 0;
-                      return (
-                        <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-xs shadow-sm">
-                          <p className="font-semibold text-slate-900">
-                            {label}
-                          </p>
-                          <p className="text-slate-600">
-                            Payments: {currency(payments)}
-                          </p>
-                          <p className="text-slate-600">
-                            Refunds: {currency(refunds)}
-                          </p>
-                          <p className="text-slate-600">Net: {currency(net)}</p>
-                        </div>
-                      );
-                    }}
-                  />
-                  <Bar
-                    dataKey="payments"
-                    name="Payments"
-                    fill={`url(#${gradientId}-payment)`}
-                    radius={[6, 6, 6, 6]}
-                    barSize={12}
-                  />
-                  <Bar
-                    dataKey="refunds"
-                    name="Refunds"
-                    fill={`url(#${gradientId}-refund)`}
-                    radius={[6, 6, 6, 6]}
-                    barSize={12}
-                  />
                 </BarChart>
               </ResponsiveContainer>
             )}
