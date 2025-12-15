@@ -14,9 +14,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
-from decimal import Decimal
 import sys
 from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from typing import Dict, Iterable, Optional, Sequence, Tuple
 from uuid import UUID
@@ -28,6 +28,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import delete, select
 
@@ -49,10 +50,9 @@ from apps.api.shared import (
     CreatedSource,
     InterestCompound,
     TaxEventType,
-    TransactionStatus,
     TransactionType,
-    ensure_balanced_legs,
     configure_engine,
+    ensure_balanced_legs,
     scope_session_to_user,
 )
 from apps.api.shared.session import get_session
@@ -249,6 +249,49 @@ def purge_all_transactional_data(session) -> int:
     return total_deleted
 
 
+def ensure_loans_for_debt_accounts(session, *, user_id: str) -> None:
+    """Ensure every debt account has a linked Loan row.
+
+    Legacy imports can create `DEBT` accounts without a corresponding `Loan`
+    record. That makes the `/loans/:id` UI fail with "Loan not found".
+    """
+
+    debt_accounts = session.exec(
+        select(Account).where(Account.user_id == user_id, Account.account_type == AccountType.DEBT)
+    ).all()
+    if not debt_accounts:
+        return
+
+    created = 0
+    for account in debt_accounts:
+        existing = session.exec(select(Loan).where(Loan.account_id == account.id)).one_or_none()
+        if existing is not None:
+            continue
+
+        balance = session.exec(
+            select(func.sum(TransactionLeg.amount)).where(
+                TransactionLeg.user_id == user_id,
+                TransactionLeg.account_id == account.id,
+            )
+        ).one() or Decimal("0")
+        principal = abs(balance)
+
+        session.add(
+            Loan(
+                account_id=account.id,
+                origin_principal=principal,
+                current_principal=principal,
+                interest_rate_annual=Decimal("0"),
+                interest_compound=InterestCompound.MONTHLY,
+            )
+        )
+        created += 1
+
+    if created:
+        session.commit()
+        print(f"Ensured loan metadata for {created} debt accounts.")
+
+
 def import_investment_snapshots_from_legacy(
     session,
     *,
@@ -410,7 +453,6 @@ def import_loans(
             description="CSN payout",
             occurred_at=occurred_at,
             posted_at=occurred_at,
-            status=TransactionStatus.IMPORTED,
             created_source=CreatedSource.IMPORT,
             external_id=make_external_id(occurred_at, "CSN", amount, "CSN Loan", "", "Loan"),
         )
@@ -625,7 +667,6 @@ def import_transactions(
                 description=description,
                 occurred_at=occurred_at,
                 posted_at=occurred_at,
-                status=TransactionStatus.IMPORTED,
                 created_source=CreatedSource.IMPORT,
                 external_id=external_id,
             )
@@ -726,7 +767,6 @@ def import_transactions(
             description=description,
             occurred_at=occurred_at,
             posted_at=occurred_at,
-            status=TransactionStatus.IMPORTED,
             created_source=CreatedSource.IMPORT,
             external_id=external_id,
         )
@@ -851,6 +891,7 @@ def main() -> None:
         cat_types,
         tx_df=tx_df,
     )
+    ensure_loans_for_debt_accounts(session, user_id=args.user)
 
 
 if __name__ == "__main__":
