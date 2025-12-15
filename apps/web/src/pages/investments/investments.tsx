@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Loader2, RefreshCw } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Area,
   AreaChart,
@@ -38,6 +39,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageRoutes } from "@/data/routes";
 import { useInvestmentsApi } from "@/hooks/use-api";
 import { cn } from "@/lib/utils";
 
@@ -65,6 +67,41 @@ const coerceMoney = (value: unknown): number => {
 const toIsoDate = (value: unknown) => {
   if (!value) return null;
   return String(value).slice(0, 10);
+};
+
+const daysSinceIsoDate = (isoDate: string | null): number | null => {
+  if (!isoDate) return null;
+  const dt = new Date(`${isoDate}T00:00:00Z`);
+  if (Number.isNaN(dt.getTime())) return null;
+  const now = new Date();
+  const diffDays = Math.floor((now.getTime() - dt.getTime()) / 86400000);
+  return Number.isFinite(diffDays) ? diffDays : null;
+};
+
+const freshnessBadge = (isoDate: string | null) => {
+  const days = daysSinceIsoDate(isoDate);
+  if (!isoDate || days === null) {
+    return {
+      label: "No snapshots",
+      className: "bg-rose-50 text-rose-700",
+    };
+  }
+  if (days <= 7) {
+    return {
+      label: `As of ${isoDate}`,
+      className: "bg-emerald-50 text-emerald-700",
+    };
+  }
+  if (days <= 35) {
+    return {
+      label: `As of ${isoDate}`,
+      className: "bg-slate-100 text-slate-700",
+    };
+  }
+  return {
+    label: `Stale (${days}d) · ${isoDate}`,
+    className: "bg-amber-50 text-amber-800",
+  };
 };
 
 const MetricRow: React.FC<{
@@ -107,7 +144,14 @@ const endOfMonthIso = (monthIso: string) => {
 };
 
 export const Investments: React.FC = () => {
-  const { overview, loading, error, fetchOverview } = useInvestmentsApi();
+  const {
+    overview,
+    transactions,
+    loading,
+    error,
+    fetchOverview,
+    fetchTransactions: fetchInvestmentTransactions,
+  } = useInvestmentsApi();
 
   const [portfolioWindow, setPortfolioWindow] = useState<"since" | "12m">(
     "since",
@@ -138,6 +182,8 @@ export const Investments: React.FC = () => {
 
   const portfolioCurrentValue = coerceMoney(overview?.portfolio.current_value);
   const sinceStartDate = toIsoDate(overview?.portfolio.start_date);
+  const portfolioAsOf = toIsoDate(overview?.portfolio.as_of);
+  const portfolioFreshness = freshnessBadge(portfolioAsOf);
 
   const portfolioDomain = useMemo<[number, number]>(() => {
     if (!portfolioSeries.length) return [0, 0];
@@ -253,6 +299,43 @@ export const Investments: React.FC = () => {
     );
   }, [accountSummaries, detailsAccountId]);
 
+  const selectedAccountInvestmentTxs = useMemo(() => {
+    if (!selectedAccount) return [];
+    const norm = (value: string | null | undefined) =>
+      String(value ?? "")
+        .trim()
+        .toLowerCase();
+    const selectedKey = norm(selectedAccount.accountName);
+    if (!selectedKey) return [];
+    return transactions
+      .filter((tx) => {
+        const key = norm(tx.account_name);
+        if (!key) return false;
+        return (
+          key === selectedKey ||
+          key.includes(selectedKey) ||
+          selectedKey.includes(key)
+        );
+      })
+      .slice(0, 50);
+  }, [selectedAccount, transactions]);
+
+  const selectedAccountRecentCashflows = useMemo(() => {
+    if (!selectedAccount) return [];
+    const accountId = selectedAccount.accountId;
+    return (overview?.recent_cashflows ?? []).filter(
+      (row) => row.account_id === accountId,
+    );
+  }, [overview?.recent_cashflows, selectedAccount]);
+
+  const recentCashflows = overview?.recent_cashflows ?? [];
+
+  useEffect(() => {
+    if (!detailsAccountId) return;
+    if (transactions.length) return;
+    fetchInvestmentTransactions();
+  }, [detailsAccountId, fetchInvestmentTransactions, transactions.length]);
+
   return (
     <MotionPage className="space-y-6">
       <StaggerWrap className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -315,11 +398,21 @@ export const Investments: React.FC = () => {
                 <p className="text-sm font-semibold text-slate-900">
                   {formatSek(portfolioCurrentValue)}
                 </p>
-                {sinceStartDate ? (
-                  <p className="text-xs text-slate-500">
-                    Since {sinceStartDate}
-                  </p>
-                ) : null}
+                <div className="mt-2 flex flex-col items-end gap-1">
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium",
+                      portfolioFreshness.className,
+                    )}
+                  >
+                    {portfolioFreshness.label}
+                  </span>
+                  {sinceStartDate ? (
+                    <p className="text-xs text-slate-500">
+                      Since {sinceStartDate}
+                    </p>
+                  ) : null}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="h-80 md:h-96">
@@ -439,7 +532,7 @@ export const Investments: React.FC = () => {
                 End value = start value + contributions + market growth.
               </p>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="flex flex-col gap-3">
               <Tabs
                 value={portfolioWindow}
                 onValueChange={(v) => setPortfolioWindow(v as "since" | "12m")}
@@ -527,6 +620,68 @@ export const Investments: React.FC = () => {
                   </div>
                 </TabsContent>
               </Tabs>
+
+              <div className="rounded-lg border border-slate-100 bg-white p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-medium text-slate-500 uppercase">
+                    Recent deposits & withdrawals
+                  </div>
+                  <Link
+                    to={PageRoutes.transactions}
+                    className="text-xs font-medium text-slate-700 underline underline-offset-4 hover:text-slate-900"
+                  >
+                    View all
+                  </Link>
+                </div>
+                {recentCashflows.length ? (
+                  <div className="mt-3 max-h-40 space-y-2 overflow-auto pr-1">
+                    {recentCashflows.map((row) => {
+                      const occurredAt = String(row.occurred_at);
+                      const dateLabel = occurredAt.slice(0, 10);
+                      const amount = coerceMoney(row.amount_sek);
+                      const isDeposit = row.direction === "deposit";
+                      return (
+                        <div
+                          key={row.transaction_id}
+                          className="flex items-center justify-between gap-3 rounded-md border border-slate-100 px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium text-slate-900">
+                              {row.account_name}
+                            </div>
+                            <div className="truncate text-xs text-slate-500">
+                              {dateLabel}
+                              {row.description ? ` · ${row.description}` : ""}
+                            </div>
+                            <Link
+                              to={`${PageRoutes.transactions}?search=${encodeURIComponent(
+                                row.transaction_id,
+                              )}`}
+                              className="mt-1 inline-block truncate font-mono text-[11px] text-slate-500 hover:text-slate-700"
+                              title={row.transaction_id}
+                            >
+                              {row.transaction_id}
+                            </Link>
+                          </div>
+                          <div
+                            className={cn(
+                              "shrink-0 text-sm font-semibold tabular-nums",
+                              isDeposit ? "text-emerald-700" : "text-rose-700",
+                            )}
+                          >
+                            {isDeposit ? "+" : "-"}
+                            {formatSek(amount)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-md border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
+                    No recent cashflows yet.
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </motion.div>
@@ -668,6 +823,7 @@ export const Investments: React.FC = () => {
                                 cashflow: acct.cashflow12m,
                                 growth: acct.growth12m,
                               };
+                        const asOfBadge = freshnessBadge(acct.asOf);
                         return (
                           <TableRow
                             key={acct.accountId}
@@ -686,10 +842,20 @@ export const Investments: React.FC = () => {
                               <div className="text-slate-900">
                                 {acct.accountName}
                               </div>
-                              <div className="text-xs text-slate-500">
-                                {acct.asOf
-                                  ? `As of ${acct.asOf}`
-                                  : "No snapshots yet"}
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium",
+                                    asOfBadge.className,
+                                  )}
+                                >
+                                  {asOfBadge.label}
+                                </span>
+                                {acct.startDate ? (
+                                  <span className="text-xs text-slate-500">
+                                    Since {acct.startDate}
+                                  </span>
+                                ) : null}
                               </div>
                             </TableCell>
                             <TableCell className="text-right font-medium text-slate-900">
@@ -746,9 +912,14 @@ export const Investments: React.FC = () => {
                   {selectedAccount.accountName}
                 </SheetTitle>
                 <SheetDescription className="mt-1 text-slate-600">
-                  {selectedAccount.asOf
-                    ? `As of ${selectedAccount.asOf}`
-                    : "No snapshots yet"}
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium",
+                      freshnessBadge(selectedAccount.asOf).className,
+                    )}
+                  >
+                    {freshnessBadge(selectedAccount.asOf).label}
+                  </span>
                 </SheetDescription>
               </SheetHeader>
               <div className="flex-1 space-y-4 overflow-y-auto p-4">
@@ -765,6 +936,69 @@ export const Investments: React.FC = () => {
                       {selectedAccount.startDate ?? "—"}
                     </div>
                   </div>
+                </div>
+
+                <div className="rounded-lg border border-slate-100 bg-white p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-xs font-medium text-slate-500 uppercase">
+                      Recent deposits & withdrawals
+                    </div>
+                    <Link
+                      to={PageRoutes.transactions}
+                      className="text-xs font-medium text-slate-700 underline underline-offset-4 hover:text-slate-900"
+                    >
+                      View all
+                    </Link>
+                  </div>
+                  {selectedAccountRecentCashflows.length ? (
+                    <div className="mt-3 space-y-2">
+                      {selectedAccountRecentCashflows.map((row) => {
+                        const occurredAt = String(row.occurred_at);
+                        const dateLabel = occurredAt.slice(0, 10);
+                        const amount = coerceMoney(row.amount_sek);
+                        const isDeposit = row.direction === "deposit";
+                        return (
+                          <div
+                            key={row.transaction_id}
+                            className="flex items-center justify-between gap-3 rounded-md border border-slate-100 px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-medium text-slate-900">
+                                {dateLabel}
+                              </div>
+                              <div className="truncate text-xs text-slate-500">
+                                {row.description ?? "—"}
+                              </div>
+                              <Link
+                                to={`${PageRoutes.transactions}?search=${encodeURIComponent(
+                                  row.transaction_id,
+                                )}`}
+                                className="mt-1 inline-block truncate font-mono text-[11px] text-slate-500 hover:text-slate-700"
+                                title={row.transaction_id}
+                              >
+                                {row.transaction_id}
+                              </Link>
+                            </div>
+                            <div
+                              className={cn(
+                                "shrink-0 text-sm font-semibold tabular-nums",
+                                isDeposit
+                                  ? "text-emerald-700"
+                                  : "text-rose-700",
+                              )}
+                            >
+                              {isDeposit ? "+" : "-"}
+                              {formatSek(amount)}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="mt-3 rounded-md border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
+                      No recent cashflows for this account.
+                    </div>
+                  )}
                 </div>
 
                 <div className="rounded-lg border border-slate-100 bg-white p-3">
@@ -934,6 +1168,74 @@ export const Investments: React.FC = () => {
                     ) : (
                       <div className="flex h-full items-center justify-center rounded-md border border-slate-100 bg-slate-50 text-sm text-slate-600">
                         No snapshots yet.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-slate-100 bg-white p-3">
+                  <div className="text-xs font-medium text-slate-500 uppercase">
+                    Investment transactions (latest)
+                  </div>
+                  <div className="mt-3">
+                    {selectedAccountInvestmentTxs.length ? (
+                      <div className="overflow-hidden rounded-md border border-slate-100">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Date</TableHead>
+                              <TableHead>Type</TableHead>
+                              <TableHead>Description</TableHead>
+                              <TableHead className="text-right">
+                                Amount
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {selectedAccountInvestmentTxs.map((tx) => {
+                              const dateLabel = String(tx.occurred_at).slice(
+                                0,
+                                10,
+                              );
+                              const amount = coerceMoney(tx.amount_sek);
+                              const tone =
+                                amount > 0
+                                  ? "text-emerald-700"
+                                  : amount < 0
+                                    ? "text-rose-700"
+                                    : "text-slate-700";
+                              return (
+                                <TableRow key={tx.id}>
+                                  <TableCell className="whitespace-nowrap">
+                                    {dateLabel}
+                                  </TableCell>
+                                  <TableCell className="whitespace-nowrap">
+                                    {tx.transaction_type}
+                                  </TableCell>
+                                  <TableCell className="min-w-0">
+                                    <div className="truncate">
+                                      {tx.description ?? tx.holding_name ?? "—"}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell
+                                    className={cn(
+                                      "text-right font-medium tabular-nums",
+                                      tone,
+                                    )}
+                                  >
+                                    {formatSignedSek(amount)}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
+                        {loading && !transactions.length
+                          ? "Loading transactions…"
+                          : "No investment transactions found for this account."}
                       </div>
                     )}
                   </div>

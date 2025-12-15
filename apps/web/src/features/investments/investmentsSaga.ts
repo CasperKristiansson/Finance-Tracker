@@ -88,6 +88,7 @@ function* handleFetchTransactions(): Generator {
       callApiWithAuth,
       {
         path: "/investments/transactions",
+        query: { limit: 500 },
         schema: investmentTransactionListSchema,
       },
       { loadingKey: "investments", silent: true },
