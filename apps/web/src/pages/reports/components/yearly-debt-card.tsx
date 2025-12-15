@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 
 import {
   CartesianGrid,
@@ -20,8 +20,10 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
+import type { YearlyOverviewResponse } from "@/types/api";
+
 import type { DetailDialogState } from "../reports-types";
-import { currency } from "../reports-utils";
+import { currency, monthLabel } from "../reports-utils";
 import { ChartCard } from "./chart-card";
 
 type DebtChartPoint = { month: string; debt: number };
@@ -38,10 +40,36 @@ export type DebtOverviewRow = {
 export const YearlyDebtCard: React.FC<{
   year: number;
   loading: boolean;
-  debtChart: DebtChartPoint[];
-  debtOverviewRows: DebtOverviewRow[];
+  debtSeries: YearlyOverviewResponse["debt"] | null;
+  debtOverview: YearlyOverviewResponse["debt_overview"] | null;
   onOpenDetailDialog: (state: DetailDialogState) => void;
-}> = ({ year, loading, debtChart, debtOverviewRows, onOpenDetailDialog }) => {
+}> = ({ year, loading, debtSeries, debtOverview, onOpenDetailDialog }) => {
+  const debtChart = useMemo<DebtChartPoint[]>(
+    () =>
+      (debtSeries || []).map((row) => ({
+        month: monthLabel(row.date),
+        debt: Number(row.debt),
+      })),
+    [debtSeries],
+  );
+
+  const debtOverviewRows = useMemo<DebtOverviewRow[]>(() => {
+    if (!debtOverview) return [];
+    return debtOverview
+      .map((row) => ({
+        id: row.account_id,
+        name: row.name || "Debt account",
+        startDebt: Number(row.start_debt),
+        endDebt: Number(row.end_debt),
+        delta: Number(row.delta),
+        monthly: row.monthly_debt.map((v, idx) => ({
+          month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
+          value: Number(v),
+        })),
+      }))
+      .sort((a, b) => b.endDebt - a.endDebt);
+  }, [debtOverview, year]);
+
   return (
     <ChartCard
       title="Debt"

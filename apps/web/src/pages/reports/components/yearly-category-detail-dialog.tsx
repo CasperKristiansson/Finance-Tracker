@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 
 import {
   Bar,
@@ -26,26 +26,43 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-import type { YearlyCategoryDetailResponse } from "@/types/api";
+import type {
+  YearlyCategoryDetailResponse,
+  YearlyOverviewResponse,
+} from "@/types/api";
 import { currency, monthLabel } from "../reports-utils";
 
 export const YearlyCategoryDetailDialog: React.FC<{
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedCategoryFlow: "expense" | "income";
+  selectedCategoryId: string | null;
   year: number;
+  prevOverview: YearlyOverviewResponse | null;
   categoryDetailLoading: boolean;
   categoryDetail: YearlyCategoryDetailResponse | null;
-  categoryDetailPrevMonthly: number[] | null;
 }> = ({
   open,
   onOpenChange,
   selectedCategoryFlow,
+  selectedCategoryId,
   year,
+  prevOverview,
   categoryDetailLoading,
   categoryDetail,
-  categoryDetailPrevMonthly,
 }) => {
+  const prevMonthly = useMemo(() => {
+    if (!prevOverview) return null;
+    if (!selectedCategoryId) return null;
+    const rows =
+      selectedCategoryFlow === "income"
+        ? prevOverview.income_category_breakdown
+        : prevOverview.category_breakdown;
+    const match = rows.find((row) => row.category_id === selectedCategoryId);
+    if (!match) return null;
+    return match.monthly.map((value) => Number(value));
+  }, [prevOverview, selectedCategoryFlow, selectedCategoryId]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
@@ -64,7 +81,7 @@ export const YearlyCategoryDetailDialog: React.FC<{
                   data={categoryDetail.monthly.map((m, idx) => ({
                     month: monthLabel(m.date),
                     amount: Number(m.amount),
-                    prevAmount: categoryDetailPrevMonthly?.[idx] ?? undefined,
+                    prevAmount: prevMonthly?.[idx] ?? undefined,
                   }))}
                 >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -90,7 +107,7 @@ export const YearlyCategoryDetailDialog: React.FC<{
                     }
                     radius={[6, 6, 6, 6]}
                   />
-                  {categoryDetailPrevMonthly ? (
+                  {prevMonthly ? (
                     <Bar
                       dataKey="prevAmount"
                       name={String(year - 1)}

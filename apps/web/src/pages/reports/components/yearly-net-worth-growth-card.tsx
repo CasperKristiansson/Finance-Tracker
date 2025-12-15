@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Area,
   AreaChart,
@@ -10,6 +10,7 @@ import {
 } from "recharts";
 
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
+import type { YearlyOverviewResponse } from "@/types/api";
 
 import { compactCurrency } from "../reports-utils";
 import { ChartCard } from "./chart-card";
@@ -17,10 +18,42 @@ import { ChartCard } from "./chart-card";
 export const YearlyNetWorthGrowthCard: React.FC<{
   year: number;
   loading: boolean;
-  data: Array<{ date: string; net: number; year: number }>;
-  domain: [number, number];
-  quarterMarkers: Array<{ date: string; label: string }>;
-}> = ({ year, loading, data, domain, quarterMarkers }) => {
+  series: YearlyOverviewResponse["net_worth"] | null;
+}> = ({ year, loading, series }) => {
+  const data = useMemo(
+    () =>
+      (series || []).map((row) => ({
+        date: row.date,
+        net: Number(row.net_worth),
+        year: new Date(row.date).getFullYear(),
+      })),
+    [series],
+  );
+
+  const domain = useMemo<[number, number]>(() => {
+    if (!data.length) return [0, 0];
+    const values = data.map((d) => d.net);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const upperPad = Math.abs(max) * 0.05 || 1;
+    const lower = min;
+    const upper = max + upperPad;
+    return [lower, upper];
+  }, [data]);
+
+  const quarterMarkers = useMemo(() => {
+    const quarterStartMonths = new Set([1, 4, 7, 10]);
+    return data
+      .map((point) => {
+        const date = new Date(point.date);
+        const month = date.getMonth() + 1;
+        const quarter = Math.floor((month - 1) / 3) + 1;
+        return { date: point.date, month, quarter };
+      })
+      .filter((point) => quarterStartMonths.has(point.month))
+      .map((point) => ({ date: point.date, label: `Q${point.quarter}` }));
+  }, [data]);
+
   return (
     <ChartCard
       title="Net worth growth"
@@ -73,7 +106,7 @@ export const YearlyNetWorthGrowthCard: React.FC<{
           <Tooltip content={<ChartTooltipContent />} />
           {quarterMarkers.map((marker) => (
             <ReferenceLine
-              key={marker.label}
+              key={`${marker.label}-${marker.date}`}
               x={marker.date}
               stroke="#cbd5e1"
               strokeDasharray="4 4"

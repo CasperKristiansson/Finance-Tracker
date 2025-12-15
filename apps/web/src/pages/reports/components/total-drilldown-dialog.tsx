@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Area,
@@ -42,6 +42,8 @@ import type { TotalDrilldownState } from "../reports-types";
 import {
   compactCurrency,
   currency,
+  median,
+  medianAbsoluteDeviation,
   monthLabel,
   percent,
 } from "../reports-utils";
@@ -120,7 +122,6 @@ export const TotalDrilldownDialog: React.FC<{
   totalDrilldownLoading: boolean;
   totalDrilldownError: string | null;
   totalDrilldownSeries: TotalDrilldownPoint[];
-  totalDrilldownAnomalies: TotalDrilldownAnomaly[];
   totalYearDrilldown: YearlyOverviewResponse | null;
   totalYearDrilldownLoading: boolean;
   totalYearDrilldownError: string | null;
@@ -139,7 +140,6 @@ export const TotalDrilldownDialog: React.FC<{
   totalDrilldownLoading,
   totalDrilldownError,
   totalDrilldownSeries,
-  totalDrilldownAnomalies,
   totalYearDrilldown,
   totalYearDrilldownLoading,
   totalYearDrilldownError,
@@ -152,6 +152,48 @@ export const TotalDrilldownDialog: React.FC<{
   totalOverview,
 }) => {
   const navigate = useNavigate();
+
+  const totalDrilldownAnomalies = useMemo<TotalDrilldownAnomaly[]>(() => {
+    if (!totalDrilldown) return [];
+    if (
+      totalDrilldown.kind !== "category" &&
+      totalDrilldown.kind !== "source" &&
+      totalDrilldown.kind !== "account"
+    ) {
+      return [];
+    }
+    if (!totalDrilldownSeries.length) return [];
+    const values = totalDrilldownSeries.map((row) => {
+      if (totalDrilldown.kind === "account") return row.net;
+      return totalDrilldown.flow === "expense" ? row.expense : row.income;
+    });
+    const med = median(values);
+    const mad = medianAbsoluteDeviation(values, med);
+    const scale = mad > 0 ? mad * 1.4826 : 0;
+    const mean =
+      values.reduce((sum, value) => sum + value, 0) /
+      Math.max(1, values.length);
+    const variance =
+      values.reduce((sum, value) => sum + (value - mean) ** 2, 0) /
+      Math.max(1, values.length);
+    const std = Math.sqrt(variance);
+    const denom = scale > 0 ? scale : std > 0 ? std : 1;
+
+    const labeled = totalDrilldownSeries.map((row, idx) => {
+      const value = values[idx] ?? 0;
+      const score = (value - med) / denom;
+      return {
+        period: row.period,
+        value,
+        score,
+      };
+    });
+
+    return labeled
+      .filter((row) => row.score >= 2.8 && row.value !== 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6);
+  }, [totalDrilldown, totalDrilldownSeries]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

@@ -1,8 +1,10 @@
-import React from "react";
+import React, { useMemo } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+
+import type { YearlyOverviewResponse } from "@/types/api";
 
 import { currency } from "../reports-utils";
 
@@ -14,8 +16,20 @@ export type YearlySavings = {
 };
 
 export const YearlySavingsRateCard: React.FC<{
-  savings: YearlySavings | null;
-}> = ({ savings }) => {
+  savings: YearlyOverviewResponse["savings"] | null | undefined;
+}> = ({ savings: rawSavings }) => {
+  const savings = useMemo<YearlySavings | null>(() => {
+    if (!rawSavings) return null;
+    return {
+      income: Number(rawSavings.income),
+      expense: Number(rawSavings.expense),
+      saved: Number(rawSavings.saved),
+      rate: rawSavings.savings_rate_pct
+        ? Number(rawSavings.savings_rate_pct)
+        : null,
+    };
+  }, [rawSavings]);
+
   return (
     <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
       <CardHeader className="pb-2">

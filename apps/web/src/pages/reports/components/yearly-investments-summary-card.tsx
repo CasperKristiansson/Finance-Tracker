@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 
 import {
   Area,
@@ -22,8 +22,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+import type { YearlyOverviewResponse } from "@/types/api";
+
 import type { DetailDialogState } from "../reports-types";
-import { compactCurrency, currency, percent } from "../reports-utils";
+
+import {
+  compactCurrency,
+  currency,
+  monthLabel,
+  percent,
+} from "../reports-utils";
 
 type InvestmentsSummary = {
   asOf: string;
@@ -44,10 +52,41 @@ type InvestmentsSummary = {
 
 export const YearlyInvestmentsSummaryCard: React.FC<{
   year: number;
-  hasOverview: boolean;
-  investmentsSummary: InvestmentsSummary | null;
+  overview: YearlyOverviewResponse | null;
   onOpenDetailDialog: (state: DetailDialogState) => void;
-}> = ({ year, hasOverview, investmentsSummary, onOpenDetailDialog }) => {
+}> = ({ year, overview, onOpenDetailDialog }) => {
+  const investmentsSummary = useMemo<InvestmentsSummary | null>(() => {
+    if (!overview?.investments_summary) return null;
+    const monthly = overview.investments_summary.monthly_values.map(
+      (value, idx) => ({
+        month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
+        value: Number(value),
+      }),
+    );
+    const accounts = overview.investments_summary.accounts
+      .map((row) => ({
+        name: row.account_name,
+        start: Number(row.start_value),
+        end: Number(row.end_value),
+        change: Number(row.change),
+      }))
+      .sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+    return {
+      asOf: overview.investments_summary.as_of,
+      start: Number(overview.investments_summary.start_value),
+      end: Number(overview.investments_summary.end_value),
+      change: Number(overview.investments_summary.change),
+      changePct: overview.investments_summary.change_pct
+        ? Number(overview.investments_summary.change_pct)
+        : null,
+      contributions: Number(overview.investments_summary.contributions),
+      withdrawals: Number(overview.investments_summary.withdrawals),
+      monthly,
+      accounts,
+    };
+  }, [overview?.investments_summary, year]);
+
+  const hasOverview = Boolean(overview);
   return (
     <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
       <CardHeader className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">

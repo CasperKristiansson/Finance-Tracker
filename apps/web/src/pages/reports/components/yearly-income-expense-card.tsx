@@ -1,5 +1,5 @@
 import { Sparkles } from "lucide-react";
-import React from "react";
+import React, { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Bar,
@@ -17,7 +17,12 @@ import { Button } from "@/components/ui/button";
 import { PageRoutes } from "@/data/routes";
 import type { YearlyOverviewResponse } from "@/types/api";
 
-import { compactCurrency, currency, isRecord } from "../reports-utils";
+import {
+  compactCurrency,
+  currency,
+  isRecord,
+  monthLabel,
+} from "../reports-utils";
 import { ChartCard } from "./chart-card";
 
 type MonthPoint = {
@@ -32,8 +37,26 @@ export const YearlyIncomeExpenseCard: React.FC<{
   year: number;
   overview: YearlyOverviewResponse | null;
   overviewLoading: boolean;
-  chartData: MonthPoint[];
-}> = ({ year, overview, overviewLoading, chartData }) => {
+}> = ({ year, overview, overviewLoading }) => {
+  const monthly = useMemo(() => {
+    const rows: MonthPoint[] = (overview?.monthly || []).map(
+      (row, monthIndex) => ({
+        month: monthLabel(row.date),
+        monthIndex,
+        income: Number(row.income),
+        expense: Number(row.expense),
+        net: Number(row.net),
+      }),
+    );
+    return rows.map((row) => ({
+      ...row,
+      expense:
+        typeof row.expense === "number" && Number.isFinite(row.expense)
+          ? Math.abs(row.expense)
+          : null,
+    }));
+  }, [overview?.monthly]);
+
   return (
     <ChartCard
       title={`Income vs expense (${year})`}
@@ -57,7 +80,7 @@ export const YearlyIncomeExpenseCard: React.FC<{
         </div>
       ) : (
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData}>
+          <BarChart data={monthly}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="month"

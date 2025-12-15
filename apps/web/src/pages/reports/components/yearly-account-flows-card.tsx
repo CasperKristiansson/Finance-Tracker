@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,8 +11,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+import type { YearlyOverviewResponse } from "@/types/api";
+
 import type { DetailDialogState } from "../reports-types";
-import { currency } from "../reports-utils";
+import { currency, monthLabel } from "../reports-utils";
 
 export type AccountFlowRow = {
   id: string;
@@ -35,10 +37,37 @@ export type AccountFlowRow = {
 
 export const YearlyAccountFlowsCard: React.FC<{
   year: number;
-  hasOverview: boolean;
-  rows: AccountFlowRow[];
+  overview: YearlyOverviewResponse | null;
   onOpenDetailDialog: (state: DetailDialogState) => void;
-}> = ({ year, hasOverview, rows, onOpenDetailDialog }) => {
+}> = ({ year, overview, onOpenDetailDialog }) => {
+  const rows = useMemo<AccountFlowRow[]>(() => {
+    if (!overview?.account_flows) return [];
+    return overview.account_flows
+      .map((row) => {
+        const monthly = Array.from({ length: 12 }, (_, idx) => ({
+          month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
+          income: Number(row.monthly_income[idx] ?? 0),
+          expense: Number(row.monthly_expense[idx] ?? 0),
+          transfersIn: Number(row.monthly_transfers_in[idx] ?? 0),
+          transfersOut: Number(row.monthly_transfers_out[idx] ?? 0),
+          change: Number(row.monthly_change[idx] ?? 0),
+        }));
+        return {
+          id: row.account_id,
+          name: row.name || "Account",
+          accountType: row.account_type,
+          startBalance: Number(row.start_balance),
+          endBalance: Number(row.end_balance),
+          change: Number(row.change),
+          netOperating: Number(row.net_operating),
+          netTransfers: Number(row.net_transfers),
+          monthly,
+        };
+      })
+      .sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
+  }, [overview?.account_flows, year]);
+
+  const hasOverview = Boolean(overview);
   return (
     <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
       <CardHeader className="pb-2">
