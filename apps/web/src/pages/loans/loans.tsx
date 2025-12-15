@@ -1002,69 +1002,6 @@ export const Loans: React.FC = () => {
               </div>
             )}
 
-            <Card className="border-slate-200">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-semibold text-slate-900">
-                  Schedule settings
-                </CardTitle>
-                <p className="text-xs text-slate-500">
-                  Generated at {formatDateTime(schedule?.generated_at)} · As of{" "}
-                  {formatDate(schedule?.as_of_date)}
-                </p>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <label
-                      className="text-sm text-slate-700"
-                      htmlFor="asOfDate"
-                    >
-                      As of date (optional)
-                    </label>
-                    <div className="relative">
-                      <Calendar className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      <Input
-                        id="asOfDate"
-                        type="date"
-                        value={asOfDate}
-                        onChange={(e) => setAsOfDate(e.target.value)}
-                        className="pl-9"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm text-slate-700" htmlFor="periods">
-                      Periods
-                    </label>
-                    <Input
-                      id="periods"
-                      type="number"
-                      min={1}
-                      max={360}
-                      value={periods}
-                      onChange={(e) => {
-                        const value = Number(e.target.value);
-                        if (!Number.isFinite(value)) {
-                          setPeriods(60);
-                          return;
-                        }
-                        setPeriods(Math.min(360, Math.max(1, value)));
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <Button className="gap-2" onClick={refreshLoanData}>
-                  {scheduleLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                  Generate schedule
-                </Button>
-              </CardContent>
-            </Card>
-
             <Tabs
               value={activeTab}
               onValueChange={(value) =>
@@ -1080,58 +1017,122 @@ export const Loans: React.FC = () => {
                 <div className="grid gap-3 lg:grid-cols-5">
                   <Card className="border-slate-200 lg:col-span-2">
                     <CardHeader className="pb-2">
-                      <CardTitle className="text-base font-semibold text-slate-900">
-                        Remaining principal
-                      </CardTitle>
-                      <p className="text-xs text-slate-500">
-                        Projection from amortization schedule.
-                      </p>
-                    </CardHeader>
-                    <CardContent className="h-64">
-                      {scheduleLoading ? (
-                        <Skeleton className="h-full w-full" />
-                      ) : scheduleChartData.length ? (
-                        <ChartContainer
-                          config={{
-                            remaining: {
-                              label: "Remaining",
-                              color: "hsl(0 72% 51%)",
-                            },
-                          }}
-                          className="h-full w-full"
-                        >
-                          <LineChart data={scheduleChartData}>
-                            <CartesianGrid vertical={false} />
-                            <XAxis
-                              dataKey="period"
-                              tickLine={false}
-                              axisLine={false}
-                            />
-                            <YAxis
-                              tickLine={false}
-                              axisLine={false}
-                              tickFormatter={(value) =>
-                                new Intl.NumberFormat("sv-SE", {
-                                  notation: "compact",
-                                  maximumFractionDigits: 1,
-                                }).format(value)
-                              }
-                            />
-                            <Tooltip content={<ChartTooltipContent />} />
-                            <Line
-                              type="monotone"
-                              dataKey="remaining"
-                              stroke="var(--color-remaining)"
-                              strokeWidth={2}
-                              dot={false}
-                            />
-                          </LineChart>
-                        </ChartContainer>
-                      ) : (
-                        <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-600">
-                          No schedule generated yet.
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <CardTitle className="text-base font-semibold text-slate-900">
+                            Remaining principal
+                          </CardTitle>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Projection from amortization schedule. Generated at{" "}
+                            {formatDateTime(schedule?.generated_at)} · As of{" "}
+                            {formatDate(schedule?.as_of_date)}
+                          </p>
                         </div>
-                      )}
+                        <Button
+                          size="sm"
+                          className="gap-2"
+                          onClick={refreshLoanData}
+                        >
+                          {scheduleLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-4 w-4" />
+                          )}
+                          Generate
+                        </Button>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <label
+                            className="text-sm text-slate-700"
+                            htmlFor="asOfDate"
+                          >
+                            As of date (optional)
+                          </label>
+                          <div className="relative">
+                            <Calendar className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                            <Input
+                              id="asOfDate"
+                              type="date"
+                              value={asOfDate}
+                              onChange={(e) => setAsOfDate(e.target.value)}
+                              className="pl-9"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label
+                            className="text-sm text-slate-700"
+                            htmlFor="periods"
+                          >
+                            Periods
+                          </label>
+                          <Input
+                            id="periods"
+                            type="number"
+                            min={1}
+                            max={360}
+                            value={periods}
+                            onChange={(e) => {
+                              const value = Number(e.target.value);
+                              if (!Number.isFinite(value)) {
+                                setPeriods(60);
+                                return;
+                              }
+                              setPeriods(Math.min(360, Math.max(1, value)));
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="h-56">
+                        {scheduleLoading ? (
+                          <Skeleton className="h-full w-full" />
+                        ) : scheduleChartData.length ? (
+                          <ChartContainer
+                            config={{
+                              remaining: {
+                                label: "Remaining",
+                                color: "hsl(0 72% 51%)",
+                              },
+                            }}
+                            className="h-full w-full"
+                          >
+                            <LineChart data={scheduleChartData}>
+                              <CartesianGrid vertical={false} />
+                              <XAxis
+                                dataKey="period"
+                                tickLine={false}
+                                axisLine={false}
+                              />
+                              <YAxis
+                                tickLine={false}
+                                axisLine={false}
+                                tickFormatter={(value) =>
+                                  new Intl.NumberFormat("sv-SE", {
+                                    notation: "compact",
+                                    maximumFractionDigits: 1,
+                                  }).format(value)
+                                }
+                              />
+                              <Tooltip content={<ChartTooltipContent />} />
+                              <Line
+                                type="monotone"
+                                dataKey="remaining"
+                                stroke="var(--color-remaining)"
+                                strokeWidth={2}
+                                dot={false}
+                              />
+                            </LineChart>
+                          </ChartContainer>
+                        ) : (
+                          <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-600">
+                            No schedule generated yet.
+                          </div>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
 
