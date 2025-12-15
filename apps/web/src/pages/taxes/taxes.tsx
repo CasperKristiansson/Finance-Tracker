@@ -373,6 +373,56 @@ export const Taxes: React.FC = () => {
     [totals.payments, totals.refunds],
   );
 
+  const highlights = useMemo(() => {
+    const list = events?.events ?? [];
+    let lastEventAt: string | null = null;
+    let lastEventTimestamp = -Infinity;
+    for (const item of list) {
+      const ts = Date.parse(item.occurred_at);
+      if (!Number.isFinite(ts)) continue;
+      if (ts > lastEventTimestamp) {
+        lastEventTimestamp = ts;
+        lastEventAt = item.occurred_at;
+      }
+    }
+
+    if (viewMode === "year") {
+      const activeMonths = monthlyBreakdown.filter(
+        (row) => row.payments !== 0 || row.refunds !== 0,
+      ).length;
+      const refundMonths = monthlyBreakdown.filter((row) => row.net < 0).length;
+
+      return {
+        avgNet: totals.net / 12,
+        activePeriods: activeMonths,
+        periodLabel: "Months with activity",
+        refundPeriods: refundMonths,
+        refundLabel: "Refund months",
+        eventCount: list.length,
+        lastEventAt,
+        averageLabel: "Avg net / month",
+      };
+    }
+
+    const activeYears = yearlyBreakdown.length;
+    const yearRange =
+      activeYears > 0
+        ? `${Math.min(...yearlyBreakdown.map((row) => row.year))}–${Math.max(...yearlyBreakdown.map((row) => row.year))}`
+        : "—";
+
+    return {
+      avgNet: activeYears > 0 ? totals.net / activeYears : 0,
+      activePeriods: activeYears,
+      periodLabel: "Years tracked",
+      refundPeriods: yearlyBreakdown.filter((row) => row.net < 0).length,
+      refundLabel: "Refund years",
+      eventCount: list.length,
+      lastEventAt,
+      averageLabel: "Avg net / year",
+      yearRange,
+    };
+  }, [events?.events, monthlyBreakdown, totals.net, viewMode, yearlyBreakdown]);
+
   const kpis = useMemo(() => {
     if (viewMode !== "year") {
       return {
@@ -466,6 +516,19 @@ export const Taxes: React.FC = () => {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {viewMode === "year" ? (
+            <select
+              className="h-10 rounded border border-slate-200 bg-white px-3 text-sm"
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+            >
+              {yearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
             <Button
               size="sm"
@@ -484,19 +547,6 @@ export const Taxes: React.FC = () => {
               Total
             </Button>
           </div>
-          {viewMode === "year" ? (
-            <select
-              className="rounded border border-slate-200 bg-white px-3 py-2 text-sm"
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-            >
-              {yearOptions.map((y) => (
-                <option key={y} value={y}>
-                  {y}
-                </option>
-              ))}
-            </select>
-          ) : null}
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="h-4 w-4" /> Add tax
           </Button>
@@ -558,7 +608,7 @@ export const Taxes: React.FC = () => {
         ))}
       </div>
 
-      <div className="grid gap-3">
+      <div className="grid gap-3 lg:grid-cols-2">
         <Card className="border-slate-200 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
           <CardHeader className="pb-2">
             <CardTitle className="text-base text-slate-800">
@@ -669,6 +719,75 @@ export const Taxes: React.FC = () => {
                   )}
                 </BarChart>
               </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base text-slate-800">
+              Highlights
+            </CardTitle>
+            <p className="text-xs text-slate-500">
+              {viewMode === "year"
+                ? `Quick snapshot for ${year}.`
+                : "Quick snapshot across all years."}
+            </p>
+          </CardHeader>
+          <CardContent className="h-[320px]">
+            {isLoading ? (
+              <Skeleton className="h-full w-full" />
+            ) : !hasEvents ? (
+              <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-slate-600">
+                <p>Record tax events to see highlights.</p>
+                <Button size="sm" onClick={() => setDialogOpen(true)}>
+                  Add tax event
+                </Button>
+              </div>
+            ) : (
+              <div className="grid h-full grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="rounded-lg border border-slate-100 bg-white p-3">
+                  <div className="text-xs text-slate-500">
+                    {highlights.averageLabel}
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900 tabular-nums">
+                    {currency(highlights.avgNet)}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-slate-100 bg-white p-3">
+                  <div className="text-xs text-slate-500">
+                    {highlights.periodLabel}
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900 tabular-nums">
+                    {highlights.activePeriods}
+                  </div>
+                  {"yearRange" in highlights ? (
+                    <div className="mt-1 text-xs text-slate-500">
+                      {highlights.yearRange}
+                    </div>
+                  ) : null}
+                </div>
+                <div className="rounded-lg border border-slate-100 bg-white p-3">
+                  <div className="text-xs text-slate-500">
+                    {highlights.refundLabel}
+                  </div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900 tabular-nums">
+                    {highlights.refundPeriods}
+                  </div>
+                </div>
+                <div className="rounded-lg border border-slate-100 bg-white p-3">
+                  <div className="text-xs text-slate-500">Events</div>
+                  <div className="mt-1 text-lg font-semibold text-slate-900 tabular-nums">
+                    {highlights.eventCount}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Last event:{" "}
+                    {highlights.lastEventAt
+                      ? formatDisplayDate(highlights.lastEventAt)
+                      : "—"}
+                  </div>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
