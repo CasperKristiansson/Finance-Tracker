@@ -23,6 +23,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -158,6 +165,9 @@ export const Investments: React.FC = () => {
   );
   const [accountWindow, setAccountWindow] = useState<"since" | "12m">("since");
   const [detailsAccountId, setDetailsAccountId] = useState<string | null>(null);
+  const [cashflowDetailsMonth, setCashflowDetailsMonth] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     fetchOverview();
@@ -329,6 +339,24 @@ export const Investments: React.FC = () => {
   }, [overview?.recent_cashflows, selectedAccount]);
 
   const recentCashflows = overview?.recent_cashflows ?? [];
+  const cashflowDetailsMonthKey = cashflowDetailsMonth?.slice(0, 7) ?? null;
+  const cashflowDetailsItems = useMemo(() => {
+    if (!cashflowDetailsMonthKey) return [];
+    return (overview?.recent_cashflows ?? [])
+      .filter(
+        (row) =>
+          String(row.occurred_at).slice(0, 7) === cashflowDetailsMonthKey,
+      )
+      .sort((a, b) =>
+        String(b.occurred_at).localeCompare(String(a.occurred_at)),
+      );
+  }, [cashflowDetailsMonthKey, overview?.recent_cashflows]);
+  const cashflowDetailsLabel = useMemo(() => {
+    if (!cashflowDetailsMonth) return null;
+    const dt = new Date(`${cashflowDetailsMonth}T00:00:00Z`);
+    if (Number.isNaN(dt.getTime())) return cashflowDetailsMonthKey;
+    return dt.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  }, [cashflowDetailsMonth, cashflowDetailsMonthKey]);
 
   useEffect(() => {
     if (!detailsAccountId) return;
@@ -756,6 +784,11 @@ export const Investments: React.FC = () => {
                       fill="var(--color-contributions)"
                       radius={[4, 4, 0, 0]}
                       isAnimationActive={false}
+                      onClick={(data) => {
+                        const period = String(data?.payload?.period ?? "");
+                        if (!period) return;
+                        setCashflowDetailsMonth(period);
+                      }}
                     />
                     <Bar
                       dataKey="marketGrowth"
@@ -763,6 +796,11 @@ export const Investments: React.FC = () => {
                       fill="var(--color-marketGrowth)"
                       radius={[4, 4, 0, 0]}
                       isAnimationActive={false}
+                      onClick={(data) => {
+                        const period = String(data?.payload?.period ?? "");
+                        if (!period) return;
+                        setCashflowDetailsMonth(period);
+                      }}
                     />
                   </BarChart>
                 </ChartContainer>
@@ -1247,6 +1285,85 @@ export const Investments: React.FC = () => {
           )}
         </SheetContent>
       </Sheet>
+
+      <Dialog
+        open={Boolean(cashflowDetailsMonth)}
+        onOpenChange={(open) => {
+          if (!open) setCashflowDetailsMonth(null);
+        }}
+      >
+        <DialogContent className="bg-white sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Cashflow drilldown</DialogTitle>
+            <DialogDescription className="text-slate-600">
+              {cashflowDetailsLabel
+                ? `Showing recent deposits/withdrawals for ${cashflowDetailsLabel}.`
+                : "Showing recent deposits/withdrawals for the selected month."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs text-slate-500">
+                Based on the most recent deposits/withdrawals.
+              </div>
+              <Link
+                to={PageRoutes.transactions}
+                className="text-xs font-medium text-slate-700 underline underline-offset-4 hover:text-slate-900"
+              >
+                View all transactions
+              </Link>
+            </div>
+            {cashflowDetailsItems.length ? (
+              <div className="max-h-80 space-y-2 overflow-auto pr-1">
+                {cashflowDetailsItems.map((row) => {
+                  const occurredAt = String(row.occurred_at);
+                  const dateLabel = occurredAt.slice(0, 10);
+                  const amount = coerceMoney(row.amount_sek);
+                  const isDeposit = row.direction === "deposit";
+                  return (
+                    <div
+                      key={row.transaction_id}
+                      className="flex items-center justify-between gap-3 rounded-md border border-slate-100 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium text-slate-900">
+                          {row.account_name}
+                        </div>
+                        <div className="truncate text-xs text-slate-500">
+                          {dateLabel}
+                          {row.description ? ` · ${row.description}` : ""}
+                        </div>
+                        <Link
+                          to={`${PageRoutes.transactions}?search=${encodeURIComponent(
+                            row.transaction_id,
+                          )}`}
+                          className="mt-1 inline-block truncate font-mono text-[11px] text-slate-500 hover:text-slate-700"
+                          title={row.transaction_id}
+                        >
+                          {row.transaction_id}
+                        </Link>
+                      </div>
+                      <div
+                        className={cn(
+                          "shrink-0 text-sm font-semibold tabular-nums",
+                          isDeposit ? "text-emerald-700" : "text-rose-700",
+                        )}
+                      >
+                        {isDeposit ? "+" : "-"}
+                        {formatSek(amount)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
+                No recent cashflows found for this month.
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </MotionPage>
   );
 };

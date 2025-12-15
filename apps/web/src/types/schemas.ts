@@ -1158,7 +1158,6 @@ export const goalCreateRequestSchema = z.object({
 export const goalUpdateRequestSchema = goalCreateRequestSchema.partial();
 
 export const settingsPayloadSchema = z.object({
-  theme: z.enum(["light", "dark", "system"]).optional(),
   first_name: nullableString,
   last_name: nullableString,
 });

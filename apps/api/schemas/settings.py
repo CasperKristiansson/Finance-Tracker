@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from ..shared import ThemePreference
-
 
 class SettingsPayload(BaseModel):
-    """User-configurable settings payload."""
+    """User-configurable settings payload.
 
-    theme: ThemePreference | None = Field(default=None)
+    Only profile details are persisted.
+    """
+
     first_name: str | None = Field(default=None, min_length=1, max_length=120)
     last_name: str | None = Field(default=None, min_length=1, max_length=120)
 

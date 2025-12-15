@@ -12,8 +12,7 @@ from ..shared import ThemePreference
 class SettingsService:
     """Coordinate persistence and defaults for user settings."""
 
-    def __init__(self, session: Session):
-        self.session = session
+    def __init__(self, session: Session) -> None:
         self.repository = SettingsRepository(session)
 
     def get_settings(self, user_id: str) -> UserSettings:
@@ -23,26 +22,24 @@ class SettingsService:
             return self.repository.create(settings)
         return settings
 
-    def update_settings(
+    def update_profile(
         self,
-        user_id: str,
         *,
-        theme: ThemePreference | None = None,
-        first_name: str | None = None,
-        last_name: str | None = None,
+        user_id: str,
+        first_name: str | None,
+        last_name: str | None,
     ) -> UserSettings:
         settings = self.repository.get_for_user(user_id)
         if settings is None:
             settings = UserSettings(
                 user_id=user_id,
-                theme=theme or ThemePreference.SYSTEM,
+                theme=ThemePreference.SYSTEM,
                 first_name=first_name,
                 last_name=last_name,
             )
             return self.repository.create(settings)
-        return self.repository.update(
+        return self.repository.update_profile(
             settings,
-            theme=theme,
             first_name=first_name,
             last_name=last_name,
         )

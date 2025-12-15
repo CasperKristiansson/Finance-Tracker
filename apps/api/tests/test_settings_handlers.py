@@ -47,46 +47,14 @@ def test_get_settings_creates_default_record():
     response = get_settings(_event_with_user(), None)
     assert response["statusCode"] == 200
     body = _json_body(response)
-    assert body["settings"]["theme"] == "system"
-    assert body["settings"].get("first_name") is None
-    assert body["settings"].get("last_name") is None
+    assert set(body["settings"].keys()) == {"first_name", "last_name"}
+    assert body["settings"]["first_name"] is None
+    assert body["settings"]["last_name"] is None
 
     with session_scope(user_id="user-123") as session:
         stored = session.exec(select(UserSettings)).one()
-        assert str(stored.theme) == "system"
-
-
-def test_save_settings_updates_theme():
-    save_resp = save_settings(
-        _event_with_user(body={"settings": {"theme": "dark", "first_name": "Ada"}}),
-        None,
-    )
-    assert save_resp["statusCode"] == 200
-    assert _json_body(save_resp)["settings"]["theme"] == "dark"
-    assert _json_body(save_resp)["settings"].get("first_name") == "Ada"
-
-    fetch_resp = get_settings(_event_with_user(), None)
-    assert fetch_resp["statusCode"] == 200
-    assert _json_body(fetch_resp)["settings"]["theme"] == "dark"
-
-
-def test_settings_are_scoped_per_user():
-    save_settings(_event_with_user("user-a", {"settings": {"theme": "light"}}), None)
-    save_settings(_event_with_user("user-b", {"settings": {"theme": "dark"}}), None)
-
-    resp_a = get_settings(_event_with_user("user-a"), None)
-    resp_b = get_settings(_event_with_user("user-b"), None)
-
-    assert _json_body(resp_a)["settings"]["theme"] == "light"
-    assert _json_body(resp_b)["settings"]["theme"] == "dark"
-
-
-def test_invalid_theme_returns_400():
-    response = save_settings(
-        _event_with_user(body={"settings": {"theme": "invalid"}}),
-        None,
-    )
-    assert response["statusCode"] == 400
+        assert stored.first_name is None
+        assert stored.last_name is None
 
 
 def test_save_names_and_fetch():
@@ -103,3 +71,14 @@ def test_save_names_and_fetch():
     fetched = _json_body(fetch_response)["settings"]
     assert fetched["first_name"] == "Ada"
     assert fetched["last_name"] == "Lovelace"
+
+
+def test_settings_are_scoped_per_user():
+    save_settings(_event_with_user("user-a", {"settings": {"first_name": "Ada"}}), None)
+    save_settings(_event_with_user("user-b", {"settings": {"first_name": "Grace"}}), None)
+
+    resp_a = get_settings(_event_with_user("user-a"), None)
+    resp_b = get_settings(_event_with_user("user-b"), None)
+
+    assert _json_body(resp_a)["settings"]["first_name"] == "Ada"
+    assert _json_body(resp_b)["settings"]["first_name"] == "Grace"

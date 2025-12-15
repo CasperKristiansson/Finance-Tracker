@@ -97,8 +97,6 @@ import {
 } from "@/features/reports/reportsSlice";
 import { LoadSettings, SaveSettings } from "@/features/settings/settingsSaga";
 import {
-  selectApiBaseUrl,
-  selectEnvInfo,
   selectFirstName,
   selectLastName,
   selectSettingsError,
@@ -106,10 +104,8 @@ import {
   selectSettingsLoading,
   selectSettingsSaving,
   selectSettingsState,
-  selectThemePreference,
   setFirstName,
   setLastName,
-  setThemePreference,
 } from "@/features/settings/settingsSlice";
 import {
   FetchRecentTransactions,
@@ -137,7 +133,6 @@ import type {
   ImportCommitRow,
   TransactionCreate,
   TransactionUpdateRequest,
-  ThemePreference,
   NordnetSnapshotCreateRequest,
 } from "@/types/api";
 
@@ -566,11 +561,8 @@ export const useBudgetsApi = () => {
 export const useSettings = () => {
   const dispatch = useAppDispatch();
   const state = useAppSelector(selectSettingsState);
-  const theme = useAppSelector(selectThemePreference);
   const firstName = useAppSelector(selectFirstName);
   const lastName = useAppSelector(selectLastName);
-  const envInfo = useAppSelector(selectEnvInfo);
-  const apiBaseUrl = useAppSelector(selectApiBaseUrl);
   const loading = useAppSelector(selectSettingsLoading);
   const saving = useAppSelector(selectSettingsSaving);
   const error = useAppSelector(selectSettingsError);
@@ -584,11 +576,6 @@ export const useSettings = () => {
     dispatch(SaveSettings());
   }, [dispatch]);
 
-  const changeTheme = useCallback(
-    (nextTheme: ThemePreference) => dispatch(setThemePreference(nextTheme)),
-    [dispatch],
-  );
-
   const changeFirstName = useCallback(
     (value: string) => dispatch(setFirstName(value)),
     [dispatch],
@@ -601,18 +588,14 @@ export const useSettings = () => {
 
   return {
     ...state,
-    theme,
     firstName,
     lastName,
-    envInfo,
-    apiBaseUrl,
     loading,
     saving,
     error,
     lastSavedAt,
     loadSettings,
     saveSettings,
-    changeTheme,
     changeFirstName,
     changeLastName,
   };

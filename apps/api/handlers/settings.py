@@ -13,18 +13,18 @@ from .utils import ensure_engine, get_user_id, json_response, parse_body, reset_
 
 
 def reset_handler_state() -> None:
-    """Reset cached engine state for tests."""
+    """Reset internal flags to allow clean reconfiguration in tests."""
 
     reset_engine_state()
 
 
 def _to_response_payload(payload: SettingsPayload) -> Dict[str, Any]:
     response = SettingsResponse(settings=payload)
-    return response.model_dump(mode="json")
+    return response.model_dump(mode="python")
 
 
 def get_settings(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
-    """Return stored settings for the requesting user."""
+    """HTTP GET /settings."""
 
     ensure_engine()
     user_id = get_user_id(event)
@@ -32,16 +32,16 @@ def get_settings(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     with session_scope(user_id=user_id) as session:
         service = SettingsService(session)
         settings = service.get_settings(user_id)
-        theme = settings.theme
-        first_name = settings.first_name
-        last_name = settings.last_name
+        payload = SettingsPayload(
+            first_name=settings.first_name,
+            last_name=settings.last_name,
+        )
 
-    payload = SettingsPayload(theme=theme, first_name=first_name, last_name=last_name)
     return json_response(200, _to_response_payload(payload))
 
 
 def save_settings(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
-    """Persist incoming settings for the requesting user."""
+    """HTTP PUT /settings."""
 
     ensure_engine()
     user_id = get_user_id(event)
@@ -53,18 +53,19 @@ def save_settings(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         return json_response(400, {"error": exc.errors()})
 
     payload = request.settings
-
     with session_scope(user_id=user_id) as session:
         service = SettingsService(session)
-        updated = service.update_settings(
-            user_id,
-            theme=payload.theme,
+        updated = service.update_profile(
+            user_id=user_id,
             first_name=payload.first_name,
             last_name=payload.last_name,
         )
-        theme = updated.theme
-        first_name = updated.first_name
-        last_name = updated.last_name
+        response_payload = SettingsPayload(
+            first_name=updated.first_name,
+            last_name=updated.last_name,
+        )
 
-    response_payload = SettingsPayload(theme=theme, first_name=first_name, last_name=last_name)
     return json_response(200, _to_response_payload(response_payload))
+
+
+__all__ = ["get_settings", "save_settings", "reset_handler_state"]

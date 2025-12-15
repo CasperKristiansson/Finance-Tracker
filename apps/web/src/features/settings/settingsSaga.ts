@@ -4,23 +4,17 @@ import { toast } from "sonner";
 import { TypedSelect } from "@/app/rootSaga";
 import { callApiWithAuth } from "@/features/api/apiSaga";
 import { ApiError } from "@/lib/apiClient";
-import type {
-  SettingsPayload,
-  SettingsResponse,
-  ThemePreference,
-} from "@/types/api";
+import type { SettingsPayload, SettingsResponse } from "@/types/api";
 import { settingsPayloadSchema, settingsResponseSchema } from "@/types/schemas";
 import { selectIsDemo, selectToken } from "../auth/authSlice";
 import {
   SETTINGS_STORAGE_KEY,
-  THEME_STORAGE_KEY,
   hydrateSettings,
   selectSettingsState,
   setLastSavedAt,
   setSettingsError,
   setSettingsLoading,
   setSettingsSaving,
-  setThemePreference,
   type SettingsState,
 } from "./settingsSlice";
 
@@ -45,19 +39,11 @@ const persistLocalSettings = (
 ): void => {
   if (typeof window === "undefined") return;
   const payload: Partial<SettingsState> = {
-    theme: state.theme,
     firstName: state.firstName,
     lastName: state.lastName,
-    envInfo: state.envInfo,
     lastSavedAt: overrideTimestamp ?? state.lastSavedAt,
   };
   localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
-};
-
-const persistThemeSelection = (theme: ThemePreference) => {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(THEME_STORAGE_KEY, theme);
-  localStorage.setItem("theme", theme);
 };
 
 function* handleLoadSettings() {
@@ -87,7 +73,6 @@ function* handleLoadSettings() {
       );
       if (response?.settings) {
         const payload: Partial<SettingsState> = {
-          theme: response.settings.theme,
           firstName: response.settings.first_name || undefined,
           lastName: response.settings.last_name || undefined,
         };
@@ -97,10 +82,6 @@ function* handleLoadSettings() {
         persistLocalSettings(currentState);
       }
     } catch (error) {
-      if (error instanceof ApiError && error.status === 404) {
-        // Backend settings endpoint not available; rely on cached defaults.
-        return;
-      }
       const message = error instanceof Error ? error.message : "Unknown error";
       yield put(setSettingsError(message));
     }
@@ -115,12 +96,20 @@ function* handleSaveSettings() {
   const timestamp = new Date().toISOString();
   try {
     const state: SettingsState = yield* TypedSelect(selectSettingsState);
-    persistLocalSettings(state, timestamp);
-    yield put(setLastSavedAt(timestamp));
+    const token: string | undefined = yield* TypedSelect(selectToken);
+    const isDemo: boolean = yield* TypedSelect(selectIsDemo);
+
+    if (!token || isDemo) {
+      persistLocalSettings(state, timestamp);
+      yield put(setLastSavedAt(timestamp));
+      toast.success("Profile saved", {
+        description: "Cached locally on this device.",
+      });
+      return;
+    }
 
     try {
       const payload: SettingsPayload = settingsPayloadSchema.parse({
-        theme: state.theme,
         first_name: state.firstName,
         last_name: state.lastName,
       });
@@ -133,18 +122,19 @@ function* handleSaveSettings() {
         },
         { loadingKey: "settings", silent: true },
       );
-      toast.success("Settings saved", {
-        description: "Synced with the API and cached locally.",
+      persistLocalSettings(state, timestamp);
+      yield put(setLastSavedAt(timestamp));
+      toast.success("Profile saved", {
+        description: "Synced with the database.",
       });
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) {
-        toast.message("Saved locally", {
-          description:
-            "API settings endpoint is unavailable; using local copy.",
+        toast.error("Could not sync profile", {
+          description: "The profile endpoint is not available.",
         });
       } else {
         const message = error instanceof Error ? error.message : undefined;
-        toast.error("Could not sync settings", { description: message });
+        toast.error("Could not sync profile", { description: message });
         yield put(setSettingsError(message));
       }
     }
@@ -153,18 +143,7 @@ function* handleSaveSettings() {
   }
 }
 
-function* handleThemeChange(action: ReturnType<typeof setThemePreference>) {
-  try {
-    persistThemeSelection(action.payload);
-    const state: SettingsState = yield* TypedSelect(selectSettingsState);
-    persistLocalSettings({ ...state, theme: action.payload });
-  } catch (error) {
-    console.warn("Unable to persist theme preference", error);
-  }
-}
-
 export function* SettingsSaga() {
   yield takeLatest(LoadSettings.type, handleLoadSettings);
   yield takeLatest(SaveSettings.type, handleSaveSettings);
-  yield takeLatest(setThemePreference.type, handleThemeChange);
 }

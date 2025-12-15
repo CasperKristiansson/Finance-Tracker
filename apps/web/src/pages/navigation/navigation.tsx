@@ -68,15 +68,14 @@ const ProfileGate: React.FC = () => {
     changeFirstName(trimmedFirst);
     changeLastName(trimmedLast);
     setFormError(null);
-    setSubmitted(true);
     saveSettings();
   };
 
   React.useEffect(() => {
-    if (!missingProfile && lastSavedAt) {
+    if (!missingProfile && lastSavedAt && !error) {
       setSubmitted(true);
     }
-  }, [lastSavedAt, missingProfile]);
+  }, [error, lastSavedAt, missingProfile]);
 
   if (!shouldBlock) return null;
 
