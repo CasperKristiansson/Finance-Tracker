@@ -582,14 +582,39 @@ export const Reports: React.FC = () => {
     [overview?.monthly],
   );
 
-  const yearSeasonalityChart = useMemo(
+  const prevYearOverviewMonthChart = useMemo(
     () =>
-      yearOverviewMonthChart.map((row) => ({
-        ...row,
-        expenseNeg: -row.expense,
+      (prevOverview?.monthly || []).map((row) => ({
+        month: monthLabel(row.date),
+        income: Number(row.income),
+        expense: Number(row.expense),
+        net: Number(row.net),
       })),
-    [yearOverviewMonthChart],
+    [prevOverview?.monthly],
   );
+
+  const yearSeasonalityChart = useMemo(() => {
+    const months = Math.max(
+      yearOverviewMonthChart.length,
+      prevYearOverviewMonthChart.length,
+    );
+    return Array.from({ length: months }, (_, idx) => {
+      const current = yearOverviewMonthChart[idx];
+      const prev = prevYearOverviewMonthChart[idx];
+      const month = current?.month ?? prev?.month ?? `Month ${String(idx + 1)}`;
+      return {
+        month,
+        income: current?.income ?? null,
+        expenseNeg:
+          typeof current?.expense === "number" ? -current.expense : null,
+        net: current?.net ?? null,
+        incomePrev: prev?.income ?? null,
+        expenseNegPrev:
+          typeof prev?.expense === "number" ? -prev.expense : null,
+        netPrev: prev?.net ?? null,
+      };
+    });
+  }, [prevYearOverviewMonthChart, yearOverviewMonthChart]);
 
   const netWorthChart = useMemo(
     () =>
@@ -2098,55 +2123,139 @@ export const Reports: React.FC = () => {
                       tickFormatter={(v) => compactCurrency(Number(v))}
                     />
                     <Tooltip
+                      shared
                       content={({ active, payload }) => {
                         if (!active || !payload?.length) return null;
-                        const label = payload[0]?.payload?.month;
+
                         const record = payload[0]?.payload;
-                        const net =
-                          isRecord(record) && typeof record.net === "number"
-                            ? record.net
+                        if (!isRecord(record)) return null;
+
+                        const label =
+                          typeof record.month === "string" ? record.month : "";
+
+                        const incomeCurrent =
+                          typeof record.income === "number"
+                            ? record.income
                             : null;
+                        const expenseCurrent =
+                          typeof record.expenseNeg === "number"
+                            ? Math.abs(record.expenseNeg)
+                            : null;
+                        const netCurrent =
+                          typeof record.net === "number" ? record.net : null;
+
+                        const incomePrev =
+                          typeof record.incomePrev === "number"
+                            ? record.incomePrev
+                            : null;
+                        const expensePrev =
+                          typeof record.expenseNegPrev === "number"
+                            ? Math.abs(record.expenseNegPrev)
+                            : null;
+                        const netPrev =
+                          typeof record.netPrev === "number"
+                            ? record.netPrev
+                            : null;
+
                         return (
                           <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
                             <p className="font-semibold text-slate-800">
                               {label}
                             </p>
-                            {payload.map((item) => (
-                              <p
-                                key={String(item.dataKey)}
-                                className="text-slate-600"
-                              >
-                                {item.name}:{" "}
-                                {item.dataKey === "expenseNeg"
-                                  ? currency(Math.abs(Number(item.value)))
-                                  : currency(Number(item.value))}
-                              </p>
-                            ))}
-                            {net !== null ? (
-                              <p className="pt-1 font-semibold text-slate-900">
-                                Net: {currency(net)}
-                              </p>
-                            ) : null}
+                            <div className="mt-2 grid grid-cols-2 gap-3">
+                              <div className="space-y-1">
+                                <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+                                  {year}
+                                </p>
+                                <p className="text-slate-600">
+                                  Income:{" "}
+                                  <span className="font-medium text-slate-800 tabular-nums">
+                                    {incomeCurrent !== null
+                                      ? currency(incomeCurrent)
+                                      : "—"}
+                                  </span>
+                                </p>
+                                <p className="text-slate-600">
+                                  Expense:{" "}
+                                  <span className="font-medium text-slate-800 tabular-nums">
+                                    {expenseCurrent !== null
+                                      ? currency(expenseCurrent)
+                                      : "—"}
+                                  </span>
+                                </p>
+                                <p className="pt-1 font-semibold text-slate-900 tabular-nums">
+                                  Net:{" "}
+                                  {netCurrent !== null
+                                    ? currency(netCurrent)
+                                    : "—"}
+                                </p>
+                              </div>
+                              <div className="space-y-1 border-l border-slate-200 pl-3">
+                                <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+                                  {year - 1}
+                                </p>
+                                <p className="text-slate-600">
+                                  Income:{" "}
+                                  <span className="font-medium text-slate-800 tabular-nums">
+                                    {incomePrev !== null
+                                      ? currency(incomePrev)
+                                      : "—"}
+                                  </span>
+                                </p>
+                                <p className="text-slate-600">
+                                  Expense:{" "}
+                                  <span className="font-medium text-slate-800 tabular-nums">
+                                    {expensePrev !== null
+                                      ? currency(expensePrev)
+                                      : "—"}
+                                  </span>
+                                </p>
+                                <p className="pt-1 font-semibold text-slate-900 tabular-nums">
+                                  Net:{" "}
+                                  {netPrev !== null ? currency(netPrev) : "—"}
+                                </p>
+                              </div>
+                            </div>
                           </div>
                         );
                       }}
                     />
                     <ReferenceLine y={0} stroke="#cbd5e1" />
                     <Bar
+                      dataKey="incomePrev"
+                      name={`Income (${year - 1})`}
+                      stackId="prev"
+                      fill="rgba(16, 185, 129, 0.35)"
+                      stroke="#10b981"
+                      strokeOpacity={0.35}
+                      radius={[6, 6, 4, 4]}
+                      barSize={10}
+                    />
+                    <Bar
+                      dataKey="expenseNegPrev"
+                      name={`Expense (${year - 1})`}
+                      stackId="prev"
+                      fill="rgba(239, 68, 68, 0.35)"
+                      stroke="#ef4444"
+                      strokeOpacity={0.35}
+                      radius={[6, 6, 4, 4]}
+                      barSize={10}
+                    />
+                    <Bar
                       dataKey="income"
-                      name="Income"
-                      stackId="cash"
+                      name={`Income (${year})`}
+                      stackId="current"
                       fill="#10b981"
                       radius={[6, 6, 4, 4]}
-                      barSize={12}
+                      barSize={10}
                     />
                     <Bar
                       dataKey="expenseNeg"
-                      name="Expense"
-                      stackId="cash"
+                      name={`Expense (${year})`}
+                      stackId="current"
                       fill="#ef4444"
                       radius={[6, 6, 4, 4]}
-                      barSize={12}
+                      barSize={10}
                     />
                     <Line
                       type="monotone"

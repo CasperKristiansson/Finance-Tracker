@@ -149,7 +149,7 @@ const typeLabel: Record<TransactionType, string> = {
 const typeBadge = (type: TransactionType) => (
   <span
     className={cn(
-      "inline-flex items-center rounded-full px-2 py-0.5 text-xs leading-none font-medium",
+      "inline-flex items-center rounded-full px-2 py-1 text-xs leading-none font-medium",
       typeTone[type],
     )}
   >
@@ -464,8 +464,8 @@ export const Transactions: React.FC = () => {
         }
       />
 
-      <Card className="flex min-h-0 flex-1 flex-col gap-0 border-slate-200 py-2 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
-        <CardHeader className="flex shrink-0 flex-col gap-2 pb-2">
+      <Card className="flex min-h-0 flex-1 flex-col gap-0 border-slate-200 py-0 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
+        <CardHeader className="flex shrink-0 flex-col gap-2 pt-2 pb-2">
           <div className="flex flex-col gap-2">
             <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-2 text-[13px] shadow-[0_6px_16px_-12px_rgba(15,23,42,0.3)]">
               <Filter className="h-4 w-4 text-slate-500" />
