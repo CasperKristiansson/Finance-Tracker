@@ -3,6 +3,7 @@ import {
   Archive,
   ArrowLeft,
   Calendar,
+  Copy,
   CreditCard,
   Plus,
   Loader2,
@@ -48,6 +49,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -263,6 +271,11 @@ export const Loans: React.FC = () => {
     useState<InterestCompound>(InterestCompound.MONTHLY);
   const [editMinimumPayment, setEditMinimumPayment] = useState("");
   const [editExpectedMaturityDate, setEditExpectedMaturityDate] = useState("");
+  const [loanEventDetailsId, setLoanEventDetailsId] = useState<string | null>(
+    null,
+  );
+
+  const closeLoanEventDetails = () => setLoanEventDetailsId(null);
 
   useEffect(() => {
     fetchAccounts();
@@ -274,6 +287,10 @@ export const Loans: React.FC = () => {
     fetchLoanSchedule({ accountId, asOfDate: asOfDate || undefined, periods });
     fetchLoanEvents({ accountId, limit: 50, offset: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId]);
+
+  useEffect(() => {
+    setLoanEventDetailsId(null);
   }, [accountId]);
 
   const loanAccounts = useMemo(
@@ -335,6 +352,26 @@ export const Loans: React.FC = () => {
     if (!accountId) return;
     fetchLoanSchedule({ accountId, asOfDate: asOfDate || undefined, periods });
     fetchLoanEvents({ accountId, limit: 50, offset: 0 });
+  };
+
+  const selectedLoanEvent = useMemo(() => {
+    if (!loanEventDetailsId) return null;
+    return (
+      accountEvents?.find((event) => event.id === loanEventDetailsId) ?? null
+    );
+  }, [accountEvents, loanEventDetailsId]);
+
+  const copyValue = async (label: string, value?: string | null) => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      toast.success("Copied", { description: `${label} copied to clipboard.` });
+    } catch (error) {
+      toast.error("Unable to copy", {
+        description:
+          error instanceof Error ? error.message : "Please copy manually.",
+      });
+    }
   };
 
   const openEditLoan = () => {
@@ -1264,7 +1301,26 @@ export const Loans: React.FC = () => {
                             </TableHeader>
                             <TableBody>
                               {accountEvents.map((row) => (
-                                <TableRow key={row.id}>
+                                <TableRow
+                                  key={row.id}
+                                  className={cn(
+                                    "cursor-pointer transition-colors hover:bg-slate-50 focus-visible:bg-slate-50",
+                                    loanEventDetailsId === row.id
+                                      ? "bg-slate-50"
+                                      : undefined,
+                                  )}
+                                  onClick={() => setLoanEventDetailsId(row.id)}
+                                  onKeyDown={(event) => {
+                                    if (
+                                      event.key === "Enter" ||
+                                      event.key === " "
+                                    ) {
+                                      event.preventDefault();
+                                      setLoanEventDetailsId(row.id);
+                                    }
+                                  }}
+                                  tabIndex={0}
+                                >
                                   <TableCell className="px-3 text-slate-700">
                                     {formatDateTime(row.occurred_at)}
                                   </TableCell>
@@ -1293,6 +1349,9 @@ export const Loans: React.FC = () => {
                                         className="h-8 border-slate-300 text-slate-800"
                                       >
                                         <Link
+                                          onClick={(event) =>
+                                            event.stopPropagation()
+                                          }
                                           to={`${PageRoutes.transactions}?search=${encodeURIComponent(
                                             row.transaction_id,
                                           )}`}
@@ -1340,6 +1399,140 @@ export const Loans: React.FC = () => {
           </>
         )}
       </MotionPage>
+      <Sheet
+        open={Boolean(loanEventDetailsId)}
+        onOpenChange={(open) => {
+          if (!open) closeLoanEventDetails();
+        }}
+      >
+        <SheetContent side="right" className="bg-white sm:max-w-lg">
+          {selectedLoanEvent ? (
+            <>
+              <SheetHeader className="border-b border-slate-100">
+                <SheetTitle className="truncate text-lg">
+                  {loanEventLabel(selectedLoanEvent.event_type)}
+                </SheetTitle>
+                <SheetDescription className="mt-1 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {formatDateTime(selectedLoanEvent.occurred_at)}
+                  </span>
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold",
+                      loanEventBadgeClass(selectedLoanEvent.event_type),
+                    )}
+                  >
+                    {loanEventLabel(selectedLoanEvent.event_type)}
+                  </span>
+                </SheetDescription>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => {
+                      closeLoanEventDetails();
+                      navigate(
+                        `${PageRoutes.transactions}?search=${encodeURIComponent(
+                          selectedLoanEvent.transaction_id,
+                        )}`,
+                      );
+                    }}
+                  >
+                    <CreditCard className="h-4 w-4" />
+                    View transaction
+                  </Button>
+                </div>
+              </SheetHeader>
+
+              <div className="flex-1 space-y-4 overflow-y-auto p-4">
+                <div className="rounded-lg border border-slate-100 bg-white p-4">
+                  <div className="text-xs text-slate-600">Amount</div>
+                  <div className="mt-2 text-2xl font-semibold text-slate-900 tabular-nums">
+                    {formatCurrency(Number(selectedLoanEvent.amount))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg border border-slate-100 bg-white p-3">
+                    <div className="text-xs text-slate-500">Event id</div>
+                    <div className="mt-1 truncate font-mono text-xs text-slate-900">
+                      {selectedLoanEvent.id}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-slate-100 bg-white p-3 text-right">
+                    <div className="text-xs text-slate-500">Loan id</div>
+                    <div className="mt-1 truncate font-mono text-xs text-slate-900">
+                      {selectedLoanEvent.loan_id}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-slate-100 bg-white p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-xs text-slate-500">
+                        Transaction id
+                      </div>
+                      <div className="mt-1 truncate font-mono text-xs text-slate-900">
+                        {selectedLoanEvent.transaction_id}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() =>
+                        void copyValue(
+                          "Transaction id",
+                          selectedLoanEvent.transaction_id,
+                        )
+                      }
+                    >
+                      <Copy className="h-4 w-4" />
+                      Copy
+                    </Button>
+                  </div>
+
+                  {selectedLoanEvent.transaction_leg_id ? (
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-xs text-slate-500">
+                          Transaction leg id
+                        </div>
+                        <div className="mt-1 truncate font-mono text-xs text-slate-900">
+                          {selectedLoanEvent.transaction_leg_id}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="gap-2"
+                        onClick={() =>
+                          void copyValue(
+                            "Transaction leg id",
+                            selectedLoanEvent.transaction_leg_id,
+                          )
+                        }
+                      >
+                        <Copy className="h-4 w-4" />
+                        Copy
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="p-4 text-sm text-slate-600">
+              Select a loan event to see details.
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
       <LoansDialogs
         createLoanOpen={createLoanOpen}
         setCreateLoanOpen={setCreateLoanOpen}
