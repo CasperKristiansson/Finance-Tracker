@@ -195,6 +195,38 @@ type TotalHeatmapDialogState =
       yoyDeltaPct: number | null;
     };
 
+type TotalTimeseriesDialogState =
+  | {
+      kind: "netWorthBreakdown";
+      date: string;
+      cash: number;
+      investments: number;
+      debt: number;
+      netWorth: number;
+      deltaMoM: number | null;
+      deltaYoY: number | null;
+      shareCashPct: number | null;
+      shareInvestmentsPct: number | null;
+      shareDebtPct: number | null;
+    }
+  | {
+      kind: "savingsRate";
+      date: string;
+      income: number;
+      expense: number;
+      net: number;
+      ratePct: number | null;
+      rolling12mPct: number | null;
+      window: Array<{
+        date: string;
+        label: string;
+        income: number;
+        expense: number;
+        net: number;
+        ratePct: number | null;
+      }>;
+    };
+
 const currency = (value: number) =>
   value.toLocaleString("sv-SE", {
     style: "currency",
@@ -371,6 +403,10 @@ export const Reports: React.FC = () => {
     categoryName: string;
     value: number;
   } | null>(null);
+  const [totalTimeseriesDialog, setTotalTimeseriesDialog] =
+    useState<TotalTimeseriesDialogState | null>(null);
+  const [totalTimeseriesDialogOpen, setTotalTimeseriesDialogOpen] =
+    useState(false);
 
   const yearOptions = useMemo(() => {
     const current = new Date().getFullYear();
@@ -1388,6 +1424,205 @@ export const Reports: React.FC = () => {
     return [min, max + upperPad];
   }, [totalNetWorthTrajectoryData]);
 
+  const totalNetWorthBreakdownSeries = useMemo(() => {
+    if (!totalOverview) return [];
+    const invMap = new Map<string, number>();
+    (totalOverview.investments?.series ?? []).forEach((row) => {
+      invMap.set(row.date, Number(row.value));
+    });
+    const debtMap = new Map<string, number>();
+    totalOverview.debt.series.forEach((row) => {
+      debtMap.set(row.date, Number(row.debt));
+    });
+    const start = totalWindowRange?.start ?? null;
+    return totalOverview.net_worth_series
+      .filter((row) => (start ? row.date >= start : true))
+      .map((row) => {
+        const investments = invMap.get(row.date) ?? 0;
+        const debt = debtMap.get(row.date) ?? 0;
+        const netWorth = Number(row.net_worth);
+        const cash = netWorth - investments + debt;
+        return {
+          date: row.date,
+          label: new Date(row.date).toLocaleDateString("sv-SE", {
+            month: "short",
+            year: "2-digit",
+          }),
+          cash,
+          investments,
+          debtNeg: -debt,
+          debt,
+          netWorth,
+        };
+      });
+  }, [totalOverview, totalWindowRange]);
+
+  const totalNetWorthBreakdownDomain = useMemo<[number, number]>(() => {
+    if (!totalNetWorthBreakdownSeries.length) return [0, 0];
+    const values = totalNetWorthBreakdownSeries.flatMap((row) => [
+      row.cash,
+      row.investments,
+      row.debtNeg,
+      row.netWorth,
+    ]);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const pad = Math.max(1, Math.abs(max) * 0.08);
+    return [min - pad * 0.2, max + pad];
+  }, [totalNetWorthBreakdownSeries]);
+
+  const totalSavingsRateSeriesAll = useMemo(() => {
+    const sorted = [...totalMonthlyIncomeExpense].sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+    return sorted.map((row, idx) => {
+      const net = row.income - row.expense;
+      const ratePct = row.income > 0 ? (net / row.income) * 100 : null;
+      const window = sorted.slice(Math.max(0, idx - 11), idx + 1);
+      const windowIncome = window.reduce((sum, w) => sum + w.income, 0);
+      const windowNet = window.reduce(
+        (sum, w) => sum + (w.income - w.expense),
+        0,
+      );
+      const rolling12mPct =
+        windowIncome > 0 ? (windowNet / windowIncome) * 100 : null;
+      return {
+        date: row.date,
+        label: new Date(row.date).toLocaleDateString("sv-SE", {
+          month: "short",
+          year: "2-digit",
+        }),
+        income: row.income,
+        expense: row.expense,
+        net,
+        ratePct,
+        rolling12mPct,
+        index: idx,
+      };
+    });
+  }, [totalMonthlyIncomeExpense]);
+
+  const totalSavingsRateSeries = useMemo(() => {
+    const start = totalWindowRange?.start ?? null;
+    return totalSavingsRateSeriesAll.filter((row) =>
+      start ? row.date >= start : true,
+    );
+  }, [totalSavingsRateSeriesAll, totalWindowRange]);
+
+  const totalSavingsRateDomain = useMemo<[number, number]>(() => {
+    const values = totalSavingsRateSeries.flatMap((row) =>
+      [row.ratePct, row.rolling12mPct].filter(
+        (value): value is number => typeof value === "number",
+      ),
+    );
+    if (!values.length) return [0, 100];
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const pad = Math.max(5, (max - min) * 0.12);
+    return [
+      Math.floor((min - pad) / 10) * 10,
+      Math.ceil((max + pad) / 10) * 10,
+    ];
+  }, [totalSavingsRateSeries]);
+
+  const totalExpenseComposition = useMemo(() => {
+    if (!totalOverview) return null;
+    const windowStartYear = totalWindowRange
+      ? Number(totalWindowRange.start.slice(0, 4))
+      : null;
+    const rows = totalOverview.expense_category_mix_by_year
+      .filter((row) => (windowStartYear ? row.year >= windowStartYear : true))
+      .sort((a, b) => a.year - b.year);
+    if (!rows.length) return null;
+    const latest = rows[rows.length - 1];
+    const sortedCats = [...latest.categories].sort(
+      (a, b) => Number(b.total) - Number(a.total),
+    );
+    const top = sortedCats.filter((c) => c.name !== "Other").slice(0, 7);
+    const includesOther = latest.categories.some((c) => c.name === "Other");
+    const keys = [
+      ...top.map((c) => c.name),
+      ...(includesOther ? ["Other"] : []),
+    ];
+    const years = rows.map((row) => row.year);
+    const colors: Record<string, string> = {};
+    const ids: Record<string, string | null> = {};
+    latest.categories.forEach((c) => {
+      colors[c.name] = c.color_hex ?? "#ef4444";
+      ids[c.name] = c.category_id ?? null;
+    });
+    colors.Other ??= "#94a3b8";
+    ids.Other ??= null;
+
+    const totalsByYear: Record<number, number> = {};
+    const amountByYear: Record<number, Record<string, number>> = {};
+    const data = rows.map((row) => {
+      const total = row.categories.reduce((sum, c) => sum + Number(c.total), 0);
+      totalsByYear[row.year] = total;
+      const entry: Record<string, number | string> = { year: String(row.year) };
+      const amounts: Record<string, number> = {};
+      keys.forEach((key) => {
+        const cat = row.categories.find((c) => c.name === key);
+        const amount = cat ? Number(cat.total) : 0;
+        amounts[key] = amount;
+        entry[key] = total > 0 ? (amount / total) * 100 : 0;
+      });
+      amountByYear[row.year] = amounts;
+      return entry;
+    });
+
+    return { years, keys, colors, ids, totalsByYear, amountByYear, data };
+  }, [totalOverview, totalWindowRange]);
+
+  const totalIncomeComposition = useMemo(() => {
+    if (!totalOverview) return null;
+    const windowStartYear = totalWindowRange
+      ? Number(totalWindowRange.start.slice(0, 4))
+      : null;
+    const rows = totalOverview.income_category_mix_by_year
+      .filter((row) => (windowStartYear ? row.year >= windowStartYear : true))
+      .sort((a, b) => a.year - b.year);
+    if (!rows.length) return null;
+    const latest = rows[rows.length - 1];
+    const sortedCats = [...latest.categories].sort(
+      (a, b) => Number(b.total) - Number(a.total),
+    );
+    const top = sortedCats.filter((c) => c.name !== "Other").slice(0, 7);
+    const includesOther = latest.categories.some((c) => c.name === "Other");
+    const keys = [
+      ...top.map((c) => c.name),
+      ...(includesOther ? ["Other"] : []),
+    ];
+    const years = rows.map((row) => row.year);
+    const colors: Record<string, string> = {};
+    const ids: Record<string, string | null> = {};
+    latest.categories.forEach((c) => {
+      colors[c.name] = c.color_hex ?? "#10b981";
+      ids[c.name] = c.category_id ?? null;
+    });
+    colors.Other ??= "#94a3b8";
+    ids.Other ??= null;
+
+    const totalsByYear: Record<number, number> = {};
+    const amountByYear: Record<number, Record<string, number>> = {};
+    const data = rows.map((row) => {
+      const total = row.categories.reduce((sum, c) => sum + Number(c.total), 0);
+      totalsByYear[row.year] = total;
+      const entry: Record<string, number | string> = { year: String(row.year) };
+      const amounts: Record<string, number> = {};
+      keys.forEach((key) => {
+        const cat = row.categories.find((c) => c.name === key);
+        const amount = cat ? Number(cat.total) : 0;
+        amounts[key] = amount;
+        entry[key] = total > 0 ? (amount / total) * 100 : 0;
+      });
+      amountByYear[row.year] = amounts;
+      return entry;
+    });
+
+    return { years, keys, colors, ids, totalsByYear, amountByYear, data };
+  }, [totalOverview, totalWindowRange]);
+
   const totalYearly = useMemo(() => {
     if (!totalOverview) return [];
     const windowStartYear = totalWindowRange
@@ -1783,61 +2018,6 @@ export const Reports: React.FC = () => {
       .slice(0, 6);
   }, [totalDrilldown, totalDrilldownSeries]);
 
-  const totalDataQuality = useMemo(() => {
-    if (!totalOverview) return null;
-    if (!totalWindowRange) return null;
-    const asOf = totalOverview.as_of.slice(0, 10);
-    const windowMonths = totalMonthlyIncomeExpense.filter(
-      (row) =>
-        row.date >= totalWindowRange.start && row.date <= totalWindowRange.end,
-    );
-    const emptyMonths = windowMonths.filter(
-      (row) => row.income === 0 && row.expense === 0,
-    );
-    const emptyMonthLabels = emptyMonths.slice(-6).map((row) =>
-      new Date(row.date).toLocaleDateString("sv-SE", {
-        year: "numeric",
-        month: "short",
-      }),
-    );
-
-    const accountsWithoutTransactions = totalAccountsOverview.filter(
-      (row) => !row.firstDate,
-    );
-
-    const lastSnapshot = totalOverview.investments?.series?.length
-      ? totalOverview.investments.series[
-          totalOverview.investments.series.length - 1
-        ].date
-      : null;
-    const snapshotAgeDays =
-      lastSnapshot && asOf
-        ? Math.round(
-            (new Date(asOf).getTime() - new Date(lastSnapshot).getTime()) /
-              (1000 * 60 * 60 * 24),
-          )
-        : null;
-
-    return {
-      asOf,
-      windowStart: totalWindowRange.start,
-      windowEnd: totalWindowRange.end,
-      monthsCovered: windowMonths.length,
-      emptyMonthsCount: emptyMonths.length,
-      emptyMonthLabels,
-      accountsWithoutTransactions: accountsWithoutTransactions.map(
-        (row) => row.name,
-      ),
-      lastSnapshot,
-      snapshotAgeDays,
-    };
-  }, [
-    totalAccountsOverview,
-    totalMonthlyIncomeExpense,
-    totalOverview,
-    totalWindowRange,
-  ]);
-
   const openDetailDialog = (state: DetailDialogState) => {
     setDetailDialog(state);
     setDetailDialogOpen(true);
@@ -1851,6 +2031,11 @@ export const Reports: React.FC = () => {
   const openTotalHeatmapDialog = (state: TotalHeatmapDialogState) => {
     setTotalHeatmapDialog(state);
     setTotalHeatmapDialogOpen(true);
+  };
+
+  const openTotalTimeseriesDialog = (state: TotalTimeseriesDialogState) => {
+    setTotalTimeseriesDialog(state);
+    setTotalTimeseriesDialogOpen(true);
   };
 
   // Exports removed for the total report view.
@@ -4977,6 +5162,747 @@ export const Reports: React.FC = () => {
               </CardContent>
             </Card>
 
+            <div className="grid gap-3 lg:grid-cols-2">
+              <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+                  <div>
+                    <CardTitle className="text-base font-semibold text-slate-900">
+                      Net worth breakdown
+                    </CardTitle>
+                    <p className="text-xs text-slate-500">
+                      Cash + investments − debt (monthly).
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      openTotalDrilldownDialog({ kind: "netWorth" })
+                    }
+                  >
+                    Details
+                  </Button>
+                </CardHeader>
+                <CardContent className="h-80">
+                  {totalOverviewLoading ? (
+                    <Skeleton className="h-full w-full" />
+                  ) : !totalNetWorthBreakdownSeries.length ? (
+                    <div className="flex h-full items-center justify-center text-sm text-slate-600">
+                      No net worth components yet.
+                    </div>
+                  ) : (
+                    <ChartContainer
+                      className="h-full w-full"
+                      config={{
+                        cash: { label: "Cash", color: "#0f172a" },
+                        investments: { label: "Investments", color: "#4f46e5" },
+                        debtNeg: { label: "Debt", color: "#f97316" },
+                      }}
+                    >
+                      <AreaChart
+                        data={totalNetWorthBreakdownSeries}
+                        margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
+                        onClick={(
+                          state:
+                            | {
+                                activePayload?: Array<{ payload?: unknown }>;
+                              }
+                            | null
+                            | undefined,
+                        ) => {
+                          const payload =
+                            state?.activePayload?.[0]?.payload ?? null;
+                          if (!isRecord(payload)) return;
+                          const date =
+                            typeof payload.date === "string"
+                              ? payload.date
+                              : null;
+                          if (!date) return;
+                          const idx = totalNetWorthBreakdownSeries.findIndex(
+                            (row) => row.date === date,
+                          );
+                          if (idx < 0) return;
+                          const row = totalNetWorthBreakdownSeries[idx];
+                          const prev =
+                            idx > 0
+                              ? totalNetWorthBreakdownSeries[idx - 1]
+                              : null;
+                          const deltaMoM = prev
+                            ? row.netWorth - prev.netWorth
+                            : null;
+                          const target = new Date(date);
+                          target.setUTCFullYear(target.getUTCFullYear() - 1);
+                          const targetIso = target.toISOString().slice(0, 10);
+                          let yearAgo:
+                            | (typeof totalNetWorthBreakdownSeries)[number]
+                            | null = null;
+                          for (let i = idx; i >= 0; i -= 1) {
+                            const candidate = totalNetWorthBreakdownSeries[i];
+                            if (candidate.date <= targetIso) {
+                              yearAgo = candidate;
+                              break;
+                            }
+                          }
+                          const deltaYoY = yearAgo
+                            ? row.netWorth - yearAgo.netWorth
+                            : null;
+                          const assets = row.cash + row.investments;
+                          openTotalTimeseriesDialog({
+                            kind: "netWorthBreakdown",
+                            date,
+                            cash: row.cash,
+                            investments: row.investments,
+                            debt: row.debt,
+                            netWorth: row.netWorth,
+                            deltaMoM,
+                            deltaYoY,
+                            shareCashPct:
+                              assets > 0 ? (row.cash / assets) * 100 : null,
+                            shareInvestmentsPct:
+                              assets > 0
+                                ? (row.investments / assets) * 100
+                                : null,
+                            shareDebtPct:
+                              assets > 0 ? (row.debt / assets) * 100 : null,
+                          });
+                        }}
+                      >
+                        <defs>
+                          <linearGradient
+                            id="cashFillTotalBreakdown"
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="5%"
+                              stopColor="#0f172a"
+                              stopOpacity={0.2}
+                            />
+                            <stop
+                              offset="95%"
+                              stopColor="#0f172a"
+                              stopOpacity={0}
+                            />
+                          </linearGradient>
+                          <linearGradient
+                            id="invFillTotalBreakdown"
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="5%"
+                              stopColor="#4f46e5"
+                              stopOpacity={0.25}
+                            />
+                            <stop
+                              offset="95%"
+                              stopColor="#4f46e5"
+                              stopOpacity={0}
+                            />
+                          </linearGradient>
+                          <linearGradient
+                            id="debtFillTotalBreakdown"
+                            x1="0"
+                            y1="0"
+                            x2="0"
+                            y2="1"
+                          >
+                            <stop
+                              offset="5%"
+                              stopColor="#f97316"
+                              stopOpacity={0.25}
+                            />
+                            <stop
+                              offset="95%"
+                              stopColor="#f97316"
+                              stopOpacity={0}
+                            />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="label"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          domain={totalNetWorthBreakdownDomain}
+                          allowDataOverflow
+                          tickMargin={12}
+                          width={90}
+                          tickFormatter={(v) => compactCurrency(Number(v))}
+                        />
+                        <ReferenceLine y={0} stroke="#cbd5e1" />
+                        <Tooltip
+                          content={({ active, payload }) => {
+                            if (!active || !payload?.length) return null;
+                            const row = payload[0]?.payload;
+                            if (!isRecord(row)) return null;
+                            const date = String(row.date ?? "");
+                            const label = date
+                              ? new Date(date).toLocaleDateString("sv-SE", {
+                                  year: "numeric",
+                                  month: "long",
+                                })
+                              : "Month";
+                            const cash = Number(row.cash ?? 0);
+                            const inv = Number(row.investments ?? 0);
+                            const debt = Number(row.debt ?? 0);
+                            const net = Number(row.netWorth ?? 0);
+                            return (
+                              <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                                <p className="font-semibold text-slate-800">
+                                  {label}
+                                </p>
+                                <div className="mt-1 space-y-0.5 text-slate-700">
+                                  <p>Net worth: {currency(net)}</p>
+                                  <p>Cash: {currency(cash)}</p>
+                                  <p>Investments: {currency(inv)}</p>
+                                  <p>Debt: {currency(debt)}</p>
+                                </div>
+                                <p className="mt-2 text-[11px] text-slate-500">
+                                  Click for details
+                                </p>
+                              </div>
+                            );
+                          }}
+                        />
+                        <Area
+                          type="monotoneX"
+                          dataKey="cash"
+                          stackId="assets"
+                          stroke="#0f172a"
+                          fill="url(#cashFillTotalBreakdown)"
+                          strokeWidth={2}
+                          name="Cash"
+                        />
+                        <Area
+                          type="monotoneX"
+                          dataKey="investments"
+                          stackId="assets"
+                          stroke="#4f46e5"
+                          fill="url(#invFillTotalBreakdown)"
+                          strokeWidth={2}
+                          name="Investments"
+                        />
+                        <Area
+                          type="monotoneX"
+                          dataKey="debtNeg"
+                          stackId="assets"
+                          stroke="#f97316"
+                          fill="url(#debtFillTotalBreakdown)"
+                          strokeWidth={2}
+                          name="Debt"
+                        />
+                      </AreaChart>
+                    </ChartContainer>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+                <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+                  <div>
+                    <CardTitle className="text-base font-semibold text-slate-900">
+                      Savings rate
+                    </CardTitle>
+                    <p className="text-xs text-slate-500">
+                      Monthly vs rolling 12m (income − expense / income).
+                    </p>
+                  </div>
+                </CardHeader>
+                <CardContent className="h-80">
+                  {totalOverviewLoading ? (
+                    <Skeleton className="h-full w-full" />
+                  ) : !totalSavingsRateSeries.length ? (
+                    <div className="flex h-full items-center justify-center text-sm text-slate-600">
+                      No savings history yet.
+                    </div>
+                  ) : (
+                    <div className="h-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={totalSavingsRateSeries}
+                          onClick={(
+                            state:
+                              | {
+                                  activePayload?: Array<{ payload?: unknown }>;
+                                }
+                              | null
+                              | undefined,
+                          ) => {
+                            const payload =
+                              state?.activePayload?.[0]?.payload ?? null;
+                            if (!isRecord(payload)) return;
+                            const date =
+                              typeof payload.date === "string"
+                                ? payload.date
+                                : null;
+                            if (!date) return;
+                            const income = Number(payload.income ?? 0);
+                            const expense = Number(payload.expense ?? 0);
+                            const net = Number(payload.net ?? income - expense);
+                            const ratePct =
+                              typeof payload.ratePct === "number"
+                                ? Number(payload.ratePct)
+                                : null;
+                            const rolling12mPct =
+                              typeof payload.rolling12mPct === "number"
+                                ? Number(payload.rolling12mPct)
+                                : null;
+                            const idx =
+                              typeof payload.index === "number"
+                                ? Number(payload.index)
+                                : null;
+                            if (idx === null) return;
+                            const window = totalSavingsRateSeriesAll
+                              .slice(Math.max(0, idx - 11), idx + 1)
+                              .map((row) => ({
+                                date: row.date,
+                                label: row.label,
+                                income: row.income,
+                                expense: row.expense,
+                                net: row.net,
+                                ratePct: row.ratePct,
+                              }));
+                            openTotalTimeseriesDialog({
+                              kind: "savingsRate",
+                              date,
+                              income,
+                              expense,
+                              net,
+                              ratePct,
+                              rolling12mPct,
+                              window,
+                            });
+                          }}
+                        >
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            vertical={false}
+                          />
+                          <XAxis
+                            dataKey="label"
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                          />
+                          <YAxis
+                            tickLine={false}
+                            axisLine={false}
+                            domain={totalSavingsRateDomain}
+                            tick={{ fill: "#475569", fontSize: 12 }}
+                            tickFormatter={(v) => `${Number(v)}%`}
+                          />
+                          <ReferenceLine y={0} stroke="#cbd5e1" />
+                          <Tooltip
+                            content={({ active, payload }) => {
+                              if (!active || !payload?.length) return null;
+                              const row = payload[0]?.payload;
+                              if (!isRecord(row)) return null;
+                              const date = String(row.date ?? "");
+                              const label = date
+                                ? new Date(date).toLocaleDateString("sv-SE", {
+                                    year: "numeric",
+                                    month: "long",
+                                  })
+                                : "Month";
+                              const income = Number(row.income ?? 0);
+                              const expense = Number(row.expense ?? 0);
+                              const net = Number(row.net ?? income - expense);
+                              const rate =
+                                typeof row.ratePct === "number"
+                                  ? Number(row.ratePct)
+                                  : null;
+                              const rolling =
+                                typeof row.rolling12mPct === "number"
+                                  ? Number(row.rolling12mPct)
+                                  : null;
+                              return (
+                                <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                                  <p className="font-semibold text-slate-800">
+                                    {label}
+                                  </p>
+                                  <div className="mt-1 space-y-0.5 text-slate-700">
+                                    <p>
+                                      Savings rate:{" "}
+                                      {rate === null
+                                        ? "—"
+                                        : `${rate.toFixed(1)}%`}
+                                    </p>
+                                    <p>
+                                      Rolling 12m:{" "}
+                                      {rolling === null
+                                        ? "—"
+                                        : `${rolling.toFixed(1)}%`}
+                                    </p>
+                                    <p>Income: {currency(income)}</p>
+                                    <p>Expense: {currency(expense)}</p>
+                                    <p>Net: {currency(net)}</p>
+                                  </div>
+                                  <p className="mt-2 text-[11px] text-slate-500">
+                                    Click for details
+                                  </p>
+                                </div>
+                              );
+                            }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="rolling12mPct"
+                            stroke="#4f46e5"
+                            strokeWidth={2}
+                            dot={false}
+                            name="Rolling 12m"
+                            connectNulls
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="ratePct"
+                            stroke="#0f172a"
+                            strokeWidth={2}
+                            dot={false}
+                            name="Monthly"
+                            connectNulls
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+              <CardHeader className="pb-2">
+                <div>
+                  <CardTitle className="text-base font-semibold text-slate-900">
+                    Composition over time
+                  </CardTitle>
+                  <p className="text-xs text-slate-500">
+                    100% stacked by year for the biggest categories.
+                  </p>
+                </div>
+              </CardHeader>
+              <CardContent className="h-80">
+                {totalOverviewLoading ? (
+                  <Skeleton className="h-full w-full" />
+                ) : !totalExpenseComposition && !totalIncomeComposition ? (
+                  <div className="flex h-full items-center justify-center text-sm text-slate-600">
+                    No composition data yet.
+                  </div>
+                ) : (
+                  <Tabs defaultValue="expense" className="flex h-full flex-col">
+                    <TabsList className="self-start">
+                      <TabsTrigger value="expense">Expenses</TabsTrigger>
+                      <TabsTrigger value="income">Income</TabsTrigger>
+                    </TabsList>
+                    <TabsContent
+                      value="expense"
+                      className="mt-2 min-h-0 flex-1"
+                    >
+                      {!totalExpenseComposition ? (
+                        <div className="flex h-full items-center justify-center text-sm text-slate-600">
+                          No expense mix yet.
+                        </div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={totalExpenseComposition.data}>
+                            <CartesianGrid
+                              strokeDasharray="3 3"
+                              vertical={false}
+                            />
+                            <XAxis
+                              dataKey="year"
+                              tickLine={false}
+                              axisLine={false}
+                              tick={{ fill: "#475569", fontSize: 12 }}
+                            />
+                            <YAxis
+                              domain={[0, 100]}
+                              tickLine={false}
+                              axisLine={false}
+                              tick={{ fill: "#475569", fontSize: 12 }}
+                              tickFormatter={(v) => `${Number(v)}%`}
+                            />
+                            <Tooltip
+                              content={({ active, payload, label }) => {
+                                if (!active || !payload?.length) return null;
+                                const year = Number(label);
+                                const total =
+                                  totalExpenseComposition.totalsByYear[year] ??
+                                  0;
+                                return (
+                                  <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                                    <p className="font-semibold text-slate-800">
+                                      {year}
+                                    </p>
+                                    <p className="text-slate-600">
+                                      Total: {currency(total)}
+                                    </p>
+                                    <div className="mt-2 space-y-1">
+                                      {payload
+                                        .slice()
+                                        .reverse()
+                                        .map((p) => {
+                                          const name = String(p.name ?? "");
+                                          const pct = Number(p.value ?? 0);
+                                          const amount =
+                                            totalExpenseComposition
+                                              .amountByYear[year]?.[name] ?? 0;
+                                          return (
+                                            <div
+                                              key={name}
+                                              className="flex items-center justify-between gap-3"
+                                            >
+                                              <span className="text-slate-700">
+                                                {name}
+                                              </span>
+                                              <span className="text-slate-600">
+                                                {pct.toFixed(0)}% •{" "}
+                                                {currency(amount)}
+                                              </span>
+                                            </div>
+                                          );
+                                        })}
+                                    </div>
+                                    <p className="mt-2 text-[11px] text-slate-500">
+                                      Click a segment for details
+                                    </p>
+                                  </div>
+                                );
+                              }}
+                            />
+                            {totalExpenseComposition.keys.map((key) => (
+                              <Bar
+                                key={key}
+                                dataKey={key}
+                                stackId="composition"
+                                fill={totalExpenseComposition.colors[key]}
+                                isAnimationActive={false}
+                                onClick={(data: unknown) => {
+                                  const payload = isRecord(data)
+                                    ? (data.payload as unknown)
+                                    : null;
+                                  if (!isRecord(payload)) return;
+                                  const year = Number(payload.year);
+                                  if (!Number.isFinite(year)) return;
+                                  const value =
+                                    totalExpenseComposition.amountByYear[
+                                      year
+                                    ]?.[key] ?? 0;
+                                  const totals =
+                                    totalExpenseComposition.years.map(
+                                      (yr) =>
+                                        totalExpenseComposition.amountByYear[
+                                          yr
+                                        ]?.[key] ?? 0,
+                                    );
+                                  const max = Math.max(0, ...totals);
+                                  const idx =
+                                    totalExpenseComposition.years.indexOf(year);
+                                  const prevValue =
+                                    idx > 0 ? (totals[idx - 1] ?? 0) : null;
+                                  const yoyDelta =
+                                    prevValue === null
+                                      ? null
+                                      : value - prevValue;
+                                  const yoyDeltaPct =
+                                    prevValue === null || prevValue === 0
+                                      ? null
+                                      : ((value - prevValue) / prevValue) * 100;
+                                  const yearTotal =
+                                    totalExpenseComposition.totalsByYear[
+                                      year
+                                    ] ?? null;
+                                  openTotalHeatmapDialog({
+                                    kind: "categoryByYear",
+                                    flow: "expense",
+                                    year,
+                                    categoryId:
+                                      totalExpenseComposition.ids[key] ?? null,
+                                    categoryName: key,
+                                    color:
+                                      totalExpenseComposition.colors[key] ??
+                                      "#ef4444",
+                                    value,
+                                    years: totalExpenseComposition.years,
+                                    totals,
+                                    max,
+                                    yearTotal,
+                                    sharePct:
+                                      typeof yearTotal === "number" &&
+                                      yearTotal > 0
+                                        ? (value / yearTotal) * 100
+                                        : null,
+                                    yoyDelta,
+                                    yoyDeltaPct,
+                                  });
+                                }}
+                              />
+                            ))}
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </TabsContent>
+                    <TabsContent value="income" className="mt-2 min-h-0 flex-1">
+                      {!totalIncomeComposition ? (
+                        <div className="flex h-full items-center justify-center text-sm text-slate-600">
+                          No income mix yet.
+                        </div>
+                      ) : (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={totalIncomeComposition.data}>
+                            <CartesianGrid
+                              strokeDasharray="3 3"
+                              vertical={false}
+                            />
+                            <XAxis
+                              dataKey="year"
+                              tickLine={false}
+                              axisLine={false}
+                              tick={{ fill: "#475569", fontSize: 12 }}
+                            />
+                            <YAxis
+                              domain={[0, 100]}
+                              tickLine={false}
+                              axisLine={false}
+                              tick={{ fill: "#475569", fontSize: 12 }}
+                              tickFormatter={(v) => `${Number(v)}%`}
+                            />
+                            <Tooltip
+                              content={({ active, payload, label }) => {
+                                if (!active || !payload?.length) return null;
+                                const year = Number(label);
+                                const total =
+                                  totalIncomeComposition.totalsByYear[year] ??
+                                  0;
+                                return (
+                                  <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                                    <p className="font-semibold text-slate-800">
+                                      {year}
+                                    </p>
+                                    <p className="text-slate-600">
+                                      Total: {currency(total)}
+                                    </p>
+                                    <div className="mt-2 space-y-1">
+                                      {payload
+                                        .slice()
+                                        .reverse()
+                                        .map((p) => {
+                                          const name = String(p.name ?? "");
+                                          const pct = Number(p.value ?? 0);
+                                          const amount =
+                                            totalIncomeComposition.amountByYear[
+                                              year
+                                            ]?.[name] ?? 0;
+                                          return (
+                                            <div
+                                              key={name}
+                                              className="flex items-center justify-between gap-3"
+                                            >
+                                              <span className="text-slate-700">
+                                                {name}
+                                              </span>
+                                              <span className="text-slate-600">
+                                                {pct.toFixed(0)}% •{" "}
+                                                {currency(amount)}
+                                              </span>
+                                            </div>
+                                          );
+                                        })}
+                                    </div>
+                                    <p className="mt-2 text-[11px] text-slate-500">
+                                      Click a segment for details
+                                    </p>
+                                  </div>
+                                );
+                              }}
+                            />
+                            {totalIncomeComposition.keys.map((key) => (
+                              <Bar
+                                key={key}
+                                dataKey={key}
+                                stackId="composition"
+                                fill={totalIncomeComposition.colors[key]}
+                                isAnimationActive={false}
+                                onClick={(data: unknown) => {
+                                  const payload = isRecord(data)
+                                    ? (data.payload as unknown)
+                                    : null;
+                                  if (!isRecord(payload)) return;
+                                  const year = Number(payload.year);
+                                  if (!Number.isFinite(year)) return;
+                                  const value =
+                                    totalIncomeComposition.amountByYear[year]?.[
+                                      key
+                                    ] ?? 0;
+                                  const totals =
+                                    totalIncomeComposition.years.map(
+                                      (yr) =>
+                                        totalIncomeComposition.amountByYear[
+                                          yr
+                                        ]?.[key] ?? 0,
+                                    );
+                                  const max = Math.max(0, ...totals);
+                                  const idx =
+                                    totalIncomeComposition.years.indexOf(year);
+                                  const prevValue =
+                                    idx > 0 ? (totals[idx - 1] ?? 0) : null;
+                                  const yoyDelta =
+                                    prevValue === null
+                                      ? null
+                                      : value - prevValue;
+                                  const yoyDeltaPct =
+                                    prevValue === null || prevValue === 0
+                                      ? null
+                                      : ((value - prevValue) / prevValue) * 100;
+                                  const yearTotal =
+                                    totalIncomeComposition.totalsByYear[year] ??
+                                    null;
+                                  openTotalHeatmapDialog({
+                                    kind: "categoryByYear",
+                                    flow: "income",
+                                    year,
+                                    categoryId:
+                                      totalIncomeComposition.ids[key] ?? null,
+                                    categoryName: key,
+                                    color:
+                                      totalIncomeComposition.colors[key] ??
+                                      "#10b981",
+                                    value,
+                                    years: totalIncomeComposition.years,
+                                    totals,
+                                    max,
+                                    yearTotal,
+                                    sharePct:
+                                      typeof yearTotal === "number" &&
+                                      yearTotal > 0
+                                        ? (value / yearTotal) * 100
+                                        : null,
+                                    yoyDelta,
+                                    yoyDeltaPct,
+                                  });
+                                }}
+                              />
+                            ))}
+                          </BarChart>
+                        </ResponsiveContainer>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                )}
+              </CardContent>
+            </Card>
+
             <ChartCard
               title="Net worth growth"
               description={
@@ -7110,135 +8036,6 @@ export const Reports: React.FC = () => {
               </CardContent>
             </Card>
           </div>
-
-          <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold text-slate-900">
-                Data quality
-              </CardTitle>
-              <p className="text-xs text-slate-500">
-                Coverage checks and quick warnings for the selected window.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {!totalDataQuality ? (
-                <Skeleton className="h-32 w-full" />
-              ) : (
-                <>
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                      <p className="text-xs tracking-wide text-slate-500 uppercase">
-                        Window
-                      </p>
-                      <p className="font-semibold text-slate-900">
-                        {totalDataQuality.windowStart} →{" "}
-                        {totalDataQuality.windowEnd}
-                      </p>
-                      <p className="text-xs text-slate-600">
-                        As of {totalDataQuality.asOf}
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                      <p className="text-xs tracking-wide text-slate-500 uppercase">
-                        Empty months
-                      </p>
-                      <p className="font-semibold text-slate-900">
-                        {totalDataQuality.emptyMonthsCount}
-                      </p>
-                      <p className="text-xs text-slate-600">
-                        Months with zero income and expense.
-                      </p>
-                    </div>
-                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
-                      <p className="text-xs tracking-wide text-slate-500 uppercase">
-                        Accounts without tx
-                      </p>
-                      <p className="font-semibold text-slate-900">
-                        {totalDataQuality.accountsWithoutTransactions.length}
-                      </p>
-                      <p className="text-xs text-slate-600">
-                        In the current account set.
-                      </p>
-                    </div>
-                  </div>
-
-                  {totalDataQuality.emptyMonthLabels.length ? (
-                    <div className="rounded-md border border-slate-100 bg-white p-3 text-sm">
-                      <p className="text-xs font-semibold tracking-wide text-slate-700 uppercase">
-                        Recent empty months
-                      </p>
-                      <p className="mt-1 text-sm text-slate-700">
-                        {totalDataQuality.emptyMonthLabels.join(", ")}
-                      </p>
-                    </div>
-                  ) : null}
-
-                  {totalDataQuality.accountsWithoutTransactions.length ? (
-                    <div className="rounded-md border border-slate-100 bg-white p-3 text-sm">
-                      <p className="text-xs font-semibold tracking-wide text-slate-700 uppercase">
-                        Accounts missing transactions
-                      </p>
-                      <p className="mt-1 text-sm text-slate-700">
-                        {totalDataQuality.accountsWithoutTransactions.join(
-                          ", ",
-                        )}
-                      </p>
-                    </div>
-                  ) : null}
-
-                  {totalDataQuality.lastSnapshot ? (
-                    <div
-                      className={
-                        totalDataQuality.snapshotAgeDays !== null &&
-                        totalDataQuality.snapshotAgeDays > 40
-                          ? "rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
-                          : "rounded-md border border-slate-100 bg-white p-3 text-sm text-slate-700"
-                      }
-                    >
-                      Latest investment snapshot:{" "}
-                      {new Date(
-                        totalDataQuality.lastSnapshot,
-                      ).toLocaleDateString("sv-SE")}
-                      {totalDataQuality.snapshotAgeDays !== null
-                        ? ` (${totalDataQuality.snapshotAgeDays} days ago)`
-                        : ""}
-                    </div>
-                  ) : (
-                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
-                      No investment snapshots found (net worth is ledger-only).
-                    </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold text-slate-900">
-                Insights
-              </CardTitle>
-              <p className="text-xs text-slate-500">
-                Small, high-signal notes derived from totals.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-slate-700">
-              {totalOverviewLoading ? (
-                <Skeleton className="h-32 w-full" />
-              ) : totalOverview?.insights?.length ? (
-                totalOverview.insights.map((text, idx) => (
-                  <div
-                    key={idx}
-                    className="rounded-md border border-slate-100 bg-slate-50 p-3 text-xs"
-                  >
-                    {text}
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-slate-500">No insights yet.</p>
-              )}
-            </CardContent>
-          </Card>
         </>
       )}
 
@@ -8645,9 +9442,317 @@ export const Reports: React.FC = () => {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={totalTimeseriesDialogOpen}
+        onOpenChange={(open) => {
+          setTotalTimeseriesDialogOpen(open);
+          if (!open) setTotalTimeseriesDialog(null);
+        }}
+      >
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>
+              {totalTimeseriesDialog?.kind === "netWorthBreakdown"
+                ? `Net worth breakdown • ${new Date(
+                    totalTimeseriesDialog.date,
+                  ).toLocaleDateString("sv-SE", {
+                    year: "numeric",
+                    month: "long",
+                  })}`
+                : totalTimeseriesDialog?.kind === "savingsRate"
+                  ? `Savings rate • ${new Date(
+                      totalTimeseriesDialog.date,
+                    ).toLocaleDateString("sv-SE", {
+                      year: "numeric",
+                      month: "long",
+                    })}`
+                  : "Details"}
+            </DialogTitle>
+          </DialogHeader>
+
+          {!totalTimeseriesDialog ? null : totalTimeseriesDialog.kind ===
+            "netWorthBreakdown" ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Net worth
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {currency(totalTimeseriesDialog.netWorth)}
+                  </p>
+                </div>
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Cash
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {currency(totalTimeseriesDialog.cash)}
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    {totalTimeseriesDialog.shareCashPct === null
+                      ? "—"
+                      : `${totalTimeseriesDialog.shareCashPct.toFixed(0)}% of assets`}
+                  </p>
+                </div>
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Investments
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {currency(totalTimeseriesDialog.investments)}
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    {totalTimeseriesDialog.shareInvestmentsPct === null
+                      ? "—"
+                      : `${totalTimeseriesDialog.shareInvestmentsPct.toFixed(0)}% of assets`}
+                  </p>
+                </div>
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Debt
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {currency(totalTimeseriesDialog.debt)}
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    {totalTimeseriesDialog.shareDebtPct === null
+                      ? "—"
+                      : `${totalTimeseriesDialog.shareDebtPct.toFixed(0)}% of assets`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3 rounded-md border border-slate-100 bg-white p-3">
+                  <p className="text-xs font-semibold tracking-wide text-slate-700 uppercase">
+                    Composition
+                  </p>
+                  {(
+                    [
+                      {
+                        label: "Cash",
+                        value: totalTimeseriesDialog.shareCashPct,
+                      },
+                      {
+                        label: "Investments",
+                        value: totalTimeseriesDialog.shareInvestmentsPct,
+                      },
+                      {
+                        label: "Debt",
+                        value: totalTimeseriesDialog.shareDebtPct,
+                      },
+                    ] as const
+                  ).map((row) => (
+                    <div key={row.label} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs text-slate-600">
+                        <span>{row.label}</span>
+                        <span className="font-medium text-slate-800">
+                          {row.value === null
+                            ? "—"
+                            : `${row.value.toFixed(0)}%`}
+                        </span>
+                      </div>
+                      <Progress
+                        value={row.value === null ? 0 : Math.max(0, row.value)}
+                        className="h-2"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-3 rounded-md border border-slate-100 bg-white p-3">
+                  <p className="text-xs font-semibold tracking-wide text-slate-700 uppercase">
+                    Deltas
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        MoM
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {totalTimeseriesDialog.deltaMoM === null ? (
+                          "—"
+                        ) : (
+                          <span
+                            className={
+                              totalTimeseriesDialog.deltaMoM >= 0
+                                ? "text-emerald-700"
+                                : "text-rose-700"
+                            }
+                          >
+                            {totalTimeseriesDialog.deltaMoM >= 0 ? "+" : "−"}
+                            {currency(Math.abs(totalTimeseriesDialog.deltaMoM))}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                      <p className="text-xs tracking-wide text-slate-500 uppercase">
+                        YoY
+                      </p>
+                      <p className="font-semibold text-slate-900">
+                        {totalTimeseriesDialog.deltaYoY === null ? (
+                          "—"
+                        ) : (
+                          <span
+                            className={
+                              totalTimeseriesDialog.deltaYoY >= 0
+                                ? "text-emerald-700"
+                                : "text-rose-700"
+                            }
+                          >
+                            {totalTimeseriesDialog.deltaYoY >= 0 ? "+" : "−"}
+                            {currency(Math.abs(totalTimeseriesDialog.deltaYoY))}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setTotalTimeseriesDialogOpen(false);
+                      setTotalTimeseriesDialog(null);
+                      openTotalDrilldownDialog({ kind: "netWorth" });
+                    }}
+                  >
+                    Open full net worth details
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : totalTimeseriesDialog.kind === "savingsRate" ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Savings rate
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {totalTimeseriesDialog.ratePct === null
+                      ? "—"
+                      : `${totalTimeseriesDialog.ratePct.toFixed(1)}%`}
+                  </p>
+                </div>
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Rolling 12m
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {totalTimeseriesDialog.rolling12mPct === null
+                      ? "—"
+                      : `${totalTimeseriesDialog.rolling12mPct.toFixed(1)}%`}
+                  </p>
+                </div>
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Income
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {currency(totalTimeseriesDialog.income)}
+                  </p>
+                </div>
+                <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
+                  <p className="text-xs tracking-wide text-slate-500 uppercase">
+                    Expense / Net
+                  </p>
+                  <p className="font-semibold text-slate-900">
+                    {currency(totalTimeseriesDialog.expense)}
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    Net: {currency(totalTimeseriesDialog.net)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={totalTimeseriesDialog.window.map((row) => ({
+                        label: row.label,
+                        income: row.income,
+                        expenseNeg: -row.expense,
+                      }))}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                        tickFormatter={(v) => compactCurrency(Number(v))}
+                      />
+                      <Tooltip
+                        formatter={(value) => currency(Math.abs(Number(value)))}
+                        contentStyle={{ fontSize: 12 }}
+                      />
+                      <ReferenceLine y={0} stroke="#cbd5e1" />
+                      <Bar
+                        dataKey="income"
+                        name="Income"
+                        fill="#10b981"
+                        radius={[6, 6, 4, 4]}
+                      />
+                      <Bar
+                        dataKey="expenseNeg"
+                        name="Expense"
+                        fill="#ef4444"
+                        radius={[6, 6, 4, 4]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={totalTimeseriesDialog.window}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis
+                        dataKey="label"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                      />
+                      <YAxis
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#475569", fontSize: 12 }}
+                        domain={totalSavingsRateDomain}
+                        tickFormatter={(v) => `${Number(v)}%`}
+                      />
+                      <ReferenceLine y={0} stroke="#cbd5e1" />
+                      <Tooltip
+                        formatter={(value) => `${Number(value).toFixed(1)}%`}
+                        contentStyle={{ fontSize: 12 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="ratePct"
+                        stroke="#0f172a"
+                        strokeWidth={2}
+                        dot={false}
+                        connectNulls
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
       {/* Legacy total detail dialog (no longer used after /reports/total rework).
-	      {routeMode === "total" ? (
-	        <Dialog
+		      {routeMode === "total" ? (
+		        <Dialog
           open={detailDialogOpen}
           onOpenChange={(open) => {
             setDetailDialogOpen(open);
