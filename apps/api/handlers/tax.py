@@ -12,7 +12,6 @@ from ..schemas import (
     TaxEventListQuery,
     TaxEventListResponse,
     TaxEventRead,
-    TaxTotalSummaryResponse,
     TaxSummaryQuery,
     TaxSummaryResponse,
 )

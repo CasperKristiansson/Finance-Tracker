@@ -114,9 +114,8 @@ export const Taxes: React.FC = () => {
   const [year, setYear] = useState(currentYear);
   const [summary, setSummary] = useState<TaxSummaryResponse | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [totalSummary, setTotalSummary] = useState<TaxTotalSummaryResponse | null>(
-    null,
-  );
+  const [totalSummary, setTotalSummary] =
+    useState<TaxTotalSummaryResponse | null>(null);
   const [totalSummaryLoading, setTotalSummaryLoading] = useState(false);
   const [events, setEvents] = useState<TaxEventListResponse | null>(null);
   const [eventsLoading, setEventsLoading] = useState(false);
@@ -433,7 +432,8 @@ export const Taxes: React.FC = () => {
   }, [totalSummary, viewMode]);
 
   const isLoading =
-    eventsLoading || (viewMode === "year" ? summaryLoading : totalSummaryLoading);
+    eventsLoading ||
+    (viewMode === "year" ? summaryLoading : totalSummaryLoading);
 
   const copyValue = async (label: string, value?: string | null) => {
     if (!value) return;
@@ -459,22 +459,44 @@ export const Taxes: React.FC = () => {
             Income tax (Skatteverket)
           </h1>
           <p className="text-sm text-slate-500">
-            Net tax paid by month (refunds are negative). Operating reports and
-            cash flow exclude tax.
+            {viewMode === "year"
+              ? "Net tax paid by month (refunds are negative)."
+              : "All-time overview by year (refunds are negative)."}{" "}
+            Operating reports and cash flow exclude tax.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            className="rounded border border-slate-200 bg-white px-3 py-2 text-sm"
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-          >
-            {yearOptions.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-1">
+            <Button
+              size="sm"
+              variant={viewMode === "year" ? "default" : "ghost"}
+              className="h-8 px-2.5 text-xs"
+              onClick={() => setViewMode("year")}
+            >
+              Year
+            </Button>
+            <Button
+              size="sm"
+              variant={viewMode === "total" ? "default" : "ghost"}
+              className="h-8 px-2.5 text-xs"
+              onClick={() => setViewMode("total")}
+            >
+              Total
+            </Button>
+          </div>
+          {viewMode === "year" ? (
+            <select
+              className="rounded border border-slate-200 bg-white px-3 py-2 text-sm"
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+            >
+              {yearOptions.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          ) : null}
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="h-4 w-4" /> Add tax
           </Button>
@@ -482,24 +504,44 @@ export const Taxes: React.FC = () => {
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-        {[
-          {
-            title: "Payments",
-            value: currency(totals.payments),
-          },
-          {
-            title: "Refunds",
-            value: currency(-totals.refunds),
-          },
-          {
-            title: "Net tax paid YTD",
-            value: currency(kpis.ytd),
-          },
-          {
-            title: "Net tax paid last 12 months",
-            value: currency(kpis.last12),
-          },
-        ].map((card) => (
+        {(viewMode === "year"
+          ? [
+              {
+                title: "Payments",
+                value: currency(totals.payments),
+              },
+              {
+                title: "Refunds",
+                value: currency(-totals.refunds),
+              },
+              {
+                title: "Net tax paid YTD",
+                value: currency(kpis.ytd),
+              },
+              {
+                title: "Net tax paid last 12 months",
+                value: currency(kpis.last12),
+              },
+            ]
+          : [
+              {
+                title: "Payments",
+                value: currency(totals.payments),
+              },
+              {
+                title: "Refunds",
+                value: currency(-totals.refunds),
+              },
+              {
+                title: "Net tax paid all time",
+                value: currency(totals.net),
+              },
+              {
+                title: "Net tax paid last 12 months",
+                value: currency(totalKpis.last12),
+              },
+            ]
+        ).map((card) => (
           <Card
             key={card.title}
             className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]"
@@ -510,11 +552,7 @@ export const Taxes: React.FC = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-2xl font-semibold text-slate-900">
-              {summaryLoading || eventsLoading ? (
-                <Skeleton className="h-7 w-32" />
-              ) : (
-                card.value
-              )}
+              {isLoading ? <Skeleton className="h-7 w-32" /> : card.value}
             </CardContent>
           </Card>
         ))}
@@ -524,16 +562,22 @@ export const Taxes: React.FC = () => {
         <Card className="border-slate-200 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
           <CardHeader className="pb-2">
             <CardTitle className="text-base text-slate-800">
-              Net tax paid per month
+              {viewMode === "year"
+                ? "Net tax paid per month"
+                : "Net tax paid per year"}
             </CardTitle>
             <p className="text-xs text-slate-500">
-              {kpis.largestMonth && kpis.largestValue !== null
-                ? `Largest: ${monthLabel(year, kpis.largestMonth)} · ${currency(kpis.largestValue)}`
-                : "Refunds are negative."}
+              {viewMode === "year"
+                ? kpis.largestMonth && kpis.largestValue !== null
+                  ? `Largest: ${monthLabel(year, kpis.largestMonth)} · ${currency(kpis.largestValue)}`
+                  : "Refunds are negative."
+                : totalKpis.largestYear && totalKpis.largestValue !== null
+                  ? `Largest: ${totalKpis.largestYear} · ${currency(totalKpis.largestValue)}`
+                  : "Refunds are negative."}
             </p>
           </CardHeader>
           <CardContent className="h-[320px]">
-            {summaryLoading || eventsLoading ? (
+            {isLoading ? (
               <Skeleton className="h-full w-full" />
             ) : !hasEvents ? (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-sm text-slate-600">
@@ -545,7 +589,11 @@ export const Taxes: React.FC = () => {
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={monthlyBreakdown}>
+                <BarChart
+                  data={
+                    viewMode === "year" ? monthlyBreakdown : yearlyBreakdown
+                  }
+                >
                   <defs>
                     <linearGradient
                       id={`${gradientId}-net-pos`}
@@ -577,7 +625,12 @@ export const Taxes: React.FC = () => {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis dataKey="label" stroke="#64748b" fontSize={12} />
+                  <XAxis
+                    dataKey="label"
+                    stroke="#64748b"
+                    fontSize={12}
+                    interval="preserveStartEnd"
+                  />
                   <YAxis
                     stroke="#64748b"
                     fontSize={12}
@@ -587,18 +640,33 @@ export const Taxes: React.FC = () => {
                     formatter={(value) => currency(Number(value))}
                     labelStyle={{ color: "#0f172a" }}
                   />
-                  <Bar dataKey="net" radius={[6, 6, 6, 6]} barSize={16}>
-                    {monthlyBreakdown.map((row) => (
-                      <Cell
-                        key={row.month}
-                        fill={
-                          row.net >= 0
-                            ? `url(#${gradientId}-net-pos)`
-                            : `url(#${gradientId}-net-neg)`
-                        }
-                      />
-                    ))}
-                  </Bar>
+                  {viewMode === "year" ? (
+                    <Bar dataKey="net" radius={[6, 6, 6, 6]} barSize={16}>
+                      {monthlyBreakdown.map((row) => (
+                        <Cell
+                          key={row.month}
+                          fill={
+                            row.net >= 0
+                              ? `url(#${gradientId}-net-pos)`
+                              : `url(#${gradientId}-net-neg)`
+                          }
+                        />
+                      ))}
+                    </Bar>
+                  ) : (
+                    <Bar dataKey="net" radius={[6, 6, 6, 6]} barSize={16}>
+                      {yearlyBreakdown.map((row) => (
+                        <Cell
+                          key={row.year}
+                          fill={
+                            row.net >= 0
+                              ? `url(#${gradientId}-net-pos)`
+                              : `url(#${gradientId}-net-neg)`
+                          }
+                        />
+                      ))}
+                    </Bar>
+                  )}
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -608,7 +676,9 @@ export const Taxes: React.FC = () => {
 
       <Card className="border-slate-200 shadow-[0_16px_40px_-30px_rgba(15,23,42,0.35)]">
         <CardHeader className="pb-2">
-          <CardTitle className="text-base text-slate-800">Events</CardTitle>
+          <CardTitle className="text-base text-slate-800">
+            {viewMode === "year" ? `Events (${year})` : "Events (all time)"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {eventsLoading && !events?.events?.length ? (
