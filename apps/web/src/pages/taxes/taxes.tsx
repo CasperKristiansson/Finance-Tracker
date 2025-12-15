@@ -49,12 +49,14 @@ import type {
   TaxEventListResponse,
   TaxSummaryResponse,
   TaxEventCreateResponse,
+  TaxTotalSummaryResponse,
 } from "@/types/api";
 import {
   taxEventCreateResponseSchema,
   taxEventTypeSchema,
   taxEventListResponseSchema,
   taxSummarySchema,
+  taxTotalSummarySchema,
 } from "@/types/schemas";
 
 const currency = (value: number) =>
@@ -108,9 +110,14 @@ export const Taxes: React.FC = () => {
   const { items: accounts, fetchAccounts } = useAccountsApi();
 
   const currentYear = new Date().getFullYear();
+  const [viewMode, setViewMode] = useState<"year" | "total">("year");
   const [year, setYear] = useState(currentYear);
   const [summary, setSummary] = useState<TaxSummaryResponse | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [totalSummary, setTotalSummary] = useState<TaxTotalSummaryResponse | null>(
+    null,
+  );
+  const [totalSummaryLoading, setTotalSummaryLoading] = useState(false);
   const [events, setEvents] = useState<TaxEventListResponse | null>(null);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -124,7 +131,7 @@ export const Taxes: React.FC = () => {
 
   useEffect(() => {
     setDetailsId(null);
-  }, [year]);
+  }, [year, viewMode]);
 
   const yearOptions = useMemo(
     () => Array.from({ length: 11 }, (_, idx) => currentYear - idx),
@@ -161,25 +168,46 @@ export const Taxes: React.FC = () => {
     }
   };
 
-  const loadEvents = async (targetYear: number) => {
+  const loadTotalSummary = async () => {
+    if (!token) return;
+    setTotalSummaryLoading(true);
+    try {
+      const { data } = await apiFetch<TaxTotalSummaryResponse>({
+        path: "/tax/summary/total",
+        schema: taxTotalSummarySchema,
+        token,
+      });
+      setTotalSummary(data);
+    } catch (error) {
+      setTotalSummary(null);
+      toast.error("Unable to load total tax summary", {
+        description:
+          error instanceof Error ? error.message : "Please try again shortly.",
+      });
+    } finally {
+      setTotalSummaryLoading(false);
+    }
+  };
+
+  const loadEvents = async (range?: { start?: string; end?: string }) => {
     if (!token) return;
     setEventsLoading(true);
     try {
-      const start = new Date(Date.UTC(targetYear, 0, 1)).toISOString();
-      const end = new Date(Date.UTC(targetYear + 1, 0, 1)).toISOString();
       const limit = 200;
       const maxPages = 50;
       const all: TaxEventListResponse["events"] = [];
 
       for (let page = 0; page < maxPages; page += 1) {
+        const query: Record<string, string | number> = {
+          limit,
+          offset: page * limit,
+        };
+        if (range?.start) query.start_date = range.start;
+        if (range?.end) query.end_date = range.end;
+
         const { data } = await apiFetch<TaxEventListResponse>({
           path: "/tax/events",
-          query: {
-            start_date: start,
-            end_date: end,
-            limit,
-            offset: page * limit,
-          },
+          query,
           schema: taxEventListResponseSchema,
           token,
         });
@@ -200,10 +228,19 @@ export const Taxes: React.FC = () => {
   };
 
   useEffect(() => {
-    void loadSummary(year);
-    void loadEvents(year);
+    if (viewMode === "year") {
+      setTotalSummary(null);
+      void loadSummary(year);
+      const start = new Date(Date.UTC(year, 0, 1)).toISOString();
+      const end = new Date(Date.UTC(year + 1, 0, 1)).toISOString();
+      void loadEvents({ start, end });
+    } else {
+      setSummary(null);
+      void loadTotalSummary();
+      void loadEvents();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, year]);
+  }, [token, year, viewMode]);
 
   const form = useForm<CreateTaxEventValues>({
     resolver: zodResolver(createTaxEventSchema),
@@ -247,7 +284,13 @@ export const Taxes: React.FC = () => {
         description: "Skatteverket",
         note: "",
       });
-      await Promise.all([loadSummary(year), loadEvents(year)]);
+      if (viewMode === "year") {
+        const start = new Date(Date.UTC(year, 0, 1)).toISOString();
+        const end = new Date(Date.UTC(year + 1, 0, 1)).toISOString();
+        await Promise.all([loadSummary(year), loadEvents({ start, end })]);
+      } else {
+        await Promise.all([loadTotalSummary(), loadEvents()]);
+      }
     } catch (error) {
       toast.error("Unable to create tax event", {
         description:
@@ -273,6 +316,7 @@ export const Taxes: React.FC = () => {
   }, [selectedEvent]);
 
   const monthlyBreakdown = useMemo(() => {
+    if (viewMode !== "year") return [];
     const base = Array.from({ length: 12 }, (_, idx) => ({
       month: idx + 1,
       label: monthLabel(year, idx + 1),
@@ -298,9 +342,24 @@ export const Taxes: React.FC = () => {
     }
 
     return base;
-  }, [events?.events, year]);
+  }, [events?.events, year, viewMode]);
+
+  const yearlyBreakdown = useMemo(() => {
+    if (viewMode !== "total") return [];
+    return (totalSummary?.yearly ?? []).map((row) => ({
+      year: row.year,
+      label: String(row.year),
+      net: toNumber(row.net_tax_paid),
+    }));
+  }, [totalSummary?.yearly, viewMode]);
 
   const totals = useMemo(() => {
+    if (viewMode === "total") {
+      const payments = toNumber(totalSummary?.totals.total_payments);
+      const refunds = toNumber(totalSummary?.totals.total_refunds);
+      const net = toNumber(totalSummary?.totals.net_tax_paid_all_time);
+      return { payments, refunds, net };
+    }
     let payments = 0;
     let refunds = 0;
     for (const row of monthlyBreakdown) {
@@ -308,7 +367,7 @@ export const Taxes: React.FC = () => {
       refunds += -row.refunds;
     }
     return { payments, refunds, net: payments - refunds };
-  }, [monthlyBreakdown]);
+  }, [monthlyBreakdown, totalSummary?.totals, viewMode]);
 
   const hasEvents = useMemo(
     () => totals.payments !== 0 || totals.refunds !== 0,
@@ -316,6 +375,14 @@ export const Taxes: React.FC = () => {
   );
 
   const kpis = useMemo(() => {
+    if (viewMode !== "year") {
+      return {
+        ytd: 0,
+        last12: 0,
+        largestMonth: null as number | null,
+        largestValue: null as number | null,
+      };
+    }
     if (!summary) {
       return {
         ytd: 0,
@@ -334,7 +401,39 @@ export const Taxes: React.FC = () => {
           ? toNumber(summary.totals.largest_month_value)
           : null,
     };
-  }, [summary]);
+  }, [summary, viewMode]);
+
+  const totalKpis = useMemo(() => {
+    if (viewMode !== "total") {
+      return {
+        ytd: 0,
+        last12: 0,
+        largestYear: null as number | null,
+        largestValue: null as number | null,
+      };
+    }
+    if (!totalSummary) {
+      return {
+        ytd: 0,
+        last12: 0,
+        largestYear: null,
+        largestValue: null,
+      };
+    }
+    return {
+      ytd: toNumber(totalSummary.totals.net_tax_paid_ytd),
+      last12: toNumber(totalSummary.totals.net_tax_paid_last_12m),
+      largestYear: totalSummary.totals.largest_year ?? null,
+      largestValue:
+        totalSummary.totals.largest_year_value !== null &&
+        totalSummary.totals.largest_year_value !== undefined
+          ? toNumber(totalSummary.totals.largest_year_value)
+          : null,
+    };
+  }, [totalSummary, viewMode]);
+
+  const isLoading =
+    eventsLoading || (viewMode === "year" ? summaryLoading : totalSummaryLoading);
 
   const copyValue = async (label: string, value?: string | null) => {
     if (!value) return;

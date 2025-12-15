@@ -9,10 +9,18 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, cast
 from uuid import UUID
 
+from sqlalchemy import case, extract, func
 from sqlmodel import Session, select
 
 from ..models import Account, TaxEvent, Transaction, TransactionLeg
-from ..schemas.tax import TaxEventListItem, TaxSummaryMonthlyEntry, TaxSummaryTotals
+from ..schemas.tax import (
+    TaxEventListItem,
+    TaxSummaryMonthlyEntry,
+    TaxSummaryTotals,
+    TaxTotalSummaryResponse,
+    TaxTotalSummaryTotals,
+    TaxTotalYearlyEntry,
+)
 from ..shared import (
     AccountType,
     CreatedSource,
@@ -191,6 +199,93 @@ class TaxService:
             ),
         )
 
+    def summary_all_time(self) -> TaxTotalSummaryResponse:
+        offset_account = self._get_or_create_offset_account()
+
+        amount_abs = func.abs(cast(Any, TransactionLeg.amount))
+        net_amount = case(
+            (TaxEvent.event_type == TaxEventType.PAYMENT, amount_abs),
+            else_=-amount_abs,
+        )
+        payment_amount = case(
+            (TaxEvent.event_type == TaxEventType.PAYMENT, amount_abs),
+            else_=Decimal("0"),
+        )
+        refund_amount = case(
+            (TaxEvent.event_type == TaxEventType.REFUND, amount_abs),
+            else_=Decimal("0"),
+        )
+
+        year_expr = cast(Any, extract("year", Transaction.occurred_at))
+        statement: Any = (
+            select(
+                year_expr.label("year"),
+                func.coalesce(func.sum(payment_amount), 0).label("payments"),
+                func.coalesce(func.sum(refund_amount), 0).label("refunds"),
+                func.coalesce(func.sum(net_amount), 0).label("net_tax_paid"),
+            )
+            .select_from(TaxEvent)
+            .join(Transaction, cast(Any, Transaction.id) == cast(Any, TaxEvent.transaction_id))
+            .join(
+                TransactionLeg,
+                cast(Any, TransactionLeg.transaction_id) == cast(Any, Transaction.id),
+            )
+            .where(TransactionLeg.account_id != offset_account.id)
+            .group_by(year_expr)
+            .order_by(year_expr)
+        )
+
+        rows = self.session.exec(statement).all()
+        yearly: List[TaxTotalYearlyEntry] = []
+        for year, payments, refunds, net_tax_paid in rows:
+            if year is None:
+                continue
+            yearly.append(
+                TaxTotalYearlyEntry(
+                    year=int(year),
+                    payments=cast(Decimal, payments),
+                    refunds=cast(Decimal, refunds),
+                    net_tax_paid=cast(Decimal, net_tax_paid),
+                )
+            )
+
+        total_payments = sum((entry.payments for entry in yearly), Decimal("0"))
+        total_refunds = sum((entry.refunds for entry in yearly), Decimal("0"))
+        net_tax_paid_all_time = sum((entry.net_tax_paid for entry in yearly), Decimal("0"))
+
+        today = datetime.now(timezone.utc).date()
+        ytd_start = datetime(today.year, 1, 1, tzinfo=timezone.utc)
+        ytd_end = datetime.combine(today + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+        net_tax_paid_ytd = self._net_tax_paid_between(
+            offset_account_id=offset_account.id, start_date=ytd_start, end_date=ytd_end
+        )
+
+        last_12m_end = ytd_end
+        last_12m_start = last_12m_end - timedelta(days=365)
+        net_tax_paid_last_12m = self._net_tax_paid_between(
+            offset_account_id=offset_account.id,
+            start_date=last_12m_start,
+            end_date=last_12m_end,
+        )
+
+        largest_year = None
+        largest_year_value = None
+        if yearly:
+            best = max(yearly, key=lambda entry: entry.net_tax_paid)
+            largest_year = best.year
+            largest_year_value = best.net_tax_paid
+
+        totals = TaxTotalSummaryTotals(
+            total_payments=total_payments,
+            total_refunds=total_refunds,
+            net_tax_paid_all_time=net_tax_paid_all_time,
+            net_tax_paid_ytd=net_tax_paid_ytd,
+            net_tax_paid_last_12m=net_tax_paid_last_12m,
+            largest_year=largest_year,
+            largest_year_value=largest_year_value,
+        )
+        return TaxTotalSummaryResponse(yearly=yearly, totals=totals)
+
     def _get_or_create_offset_account(self) -> Account:
         if hasattr(self, "_offset_account"):
             return getattr(self, "_offset_account")
@@ -213,6 +308,33 @@ class TaxService:
             account.name = account.name or "Offset"
         setattr(self, "_offset_account", account)
         return account
+
+    def _net_tax_paid_between(
+        self,
+        *,
+        offset_account_id: UUID,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> Decimal:
+        amount_abs = func.abs(cast(Any, TransactionLeg.amount))
+        net_amount = case(
+            (TaxEvent.event_type == TaxEventType.PAYMENT, amount_abs),
+            else_=-amount_abs,
+        )
+        statement: Any = (
+            select(func.coalesce(func.sum(net_amount), 0))
+            .select_from(TaxEvent)
+            .join(Transaction, cast(Any, Transaction.id) == cast(Any, TaxEvent.transaction_id))
+            .join(
+                TransactionLeg,
+                cast(Any, TransactionLeg.transaction_id) == cast(Any, Transaction.id),
+            )
+            .where(TransactionLeg.account_id != offset_account_id)
+            .where(Transaction.occurred_at >= start_date)
+            .where(Transaction.occurred_at < end_date)
+        )
+        value = self.session.exec(statement).one()
+        return cast(Decimal, value)
 
     def _fetch_tax_rows(
         self,

@@ -87,6 +87,28 @@ class TaxSummaryResponse(BaseModel):
     totals: TaxSummaryTotals
 
 
+class TaxTotalYearlyEntry(BaseModel):
+    year: int
+    payments: Decimal
+    refunds: Decimal
+    net_tax_paid: Decimal
+
+
+class TaxTotalSummaryTotals(BaseModel):
+    total_payments: Decimal
+    total_refunds: Decimal
+    net_tax_paid_all_time: Decimal
+    net_tax_paid_ytd: Decimal
+    net_tax_paid_last_12m: Decimal
+    largest_year: Optional[int] = Field(default=None, ge=1900, le=3000)
+    largest_year_value: Optional[Decimal] = None
+
+
+class TaxTotalSummaryResponse(BaseModel):
+    yearly: List[TaxTotalYearlyEntry]
+    totals: TaxTotalSummaryTotals
+
+
 class TaxSummaryQuery(BaseModel):
     """Query parameters for tax summary endpoint."""
 
@@ -102,5 +124,8 @@ __all__ = [
     "TaxSummaryMonthlyEntry",
     "TaxSummaryTotals",
     "TaxSummaryResponse",
+    "TaxTotalYearlyEntry",
+    "TaxTotalSummaryTotals",
+    "TaxTotalSummaryResponse",
     "TaxSummaryQuery",
 ]

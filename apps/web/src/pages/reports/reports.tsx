@@ -243,6 +243,68 @@ const heatColor = (rgb: string, value: number, max: number) => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const roundedRectPath = (
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  radius: number,
+  roundTop: boolean,
+  roundBottom: boolean,
+) => {
+  const safeWidth = Math.max(0, width);
+  const safeHeight = Math.max(0, height);
+  if (!safeWidth || !safeHeight) return "";
+  const r = Math.max(0, Math.min(radius, safeWidth / 2, safeHeight / 2));
+
+  const topLeft = roundTop ? r : 0;
+  const topRight = roundTop ? r : 0;
+  const bottomRight = roundBottom ? r : 0;
+  const bottomLeft = roundBottom ? r : 0;
+
+  return [
+    `M ${x + topLeft},${y}`,
+    `L ${x + safeWidth - topRight},${y}`,
+    topRight ? `Q ${x + safeWidth},${y} ${x + safeWidth},${y + topRight}` : "",
+    `L ${x + safeWidth},${y + safeHeight - bottomRight}`,
+    bottomRight
+      ? `Q ${x + safeWidth},${y + safeHeight} ${x + safeWidth - bottomRight},${y + safeHeight}`
+      : "",
+    `L ${x + bottomLeft},${y + safeHeight}`,
+    bottomLeft
+      ? `Q ${x},${y + safeHeight} ${x},${y + safeHeight - bottomLeft}`
+      : "",
+    `L ${x},${y + topLeft}`,
+    topLeft ? `Q ${x},${y} ${x + topLeft},${y}` : "",
+    "Z",
+  ]
+    .filter(Boolean)
+    .join(" ");
+};
+
+const NegativeAwareBarShape = (props: unknown) => {
+  const shapeProps = isRecord(props) ? props : {};
+  const x = typeof shapeProps.x === "number" ? shapeProps.x : 0;
+  const y = typeof shapeProps.y === "number" ? shapeProps.y : 0;
+  const width = typeof shapeProps.width === "number" ? shapeProps.width : 0;
+  const height = typeof shapeProps.height === "number" ? shapeProps.height : 0;
+  const fill =
+    typeof shapeProps.fill === "string" ? shapeProps.fill : "#ef4444";
+
+  const value =
+    typeof shapeProps.value === "number"
+      ? shapeProps.value
+      : isRecord(shapeProps.payload) &&
+          typeof shapeProps.payload.expenseNeg === "number"
+        ? shapeProps.payload.expenseNeg
+        : null;
+
+  const isNegative = typeof value === "number" ? value < 0 : false;
+  const d = roundedRectPath(x, y, width, height, 6, !isNegative, isNegative);
+  if (!d) return <path d="" fill="none" />;
+  return <path d={d} fill={fill} />;
+};
+
 const ChartCard: React.FC<{
   title: string;
   description?: string;
@@ -2314,7 +2376,7 @@ export const Reports: React.FC = () => {
                       dataKey="expenseNeg"
                       name="Expense"
                       fill="#ef4444"
-                      radius={[0, 0, 6, 6]}
+                      shape={NegativeAwareBarShape}
                       barSize={14}
                     />
                     <Line

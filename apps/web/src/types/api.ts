@@ -39,6 +39,7 @@ export type {
   TaxEventListItem,
   TaxEventListResponse,
   TaxSummaryResponse,
+  TaxTotalSummaryResponse,
   InvestmentHoldingRead,
   InvestmentOverviewResponse,
   InvestmentMetricsResponse,

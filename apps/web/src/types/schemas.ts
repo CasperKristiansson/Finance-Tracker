@@ -918,6 +918,26 @@ export const taxSummarySchema = z.object({
   }),
 });
 
+export const taxTotalYearlyEntrySchema = z.object({
+  year: numeric,
+  payments: z.string(),
+  refunds: z.string(),
+  net_tax_paid: z.string(),
+});
+
+export const taxTotalSummarySchema = z.object({
+  yearly: z.array(taxTotalYearlyEntrySchema),
+  totals: z.object({
+    total_payments: z.string(),
+    total_refunds: z.string(),
+    net_tax_paid_all_time: z.string(),
+    net_tax_paid_ytd: z.string(),
+    net_tax_paid_last_12m: z.string(),
+    largest_year: numeric.nullable().optional(),
+    largest_year_value: z.string().nullable().optional(),
+  }),
+});
+
 export const investmentHoldingSchema = z
   .object({
     id: z.string(),
@@ -1265,6 +1285,7 @@ export type TaxEventCreateResponse = z.infer<
 export type TaxEventListItem = z.infer<typeof taxEventListItemSchema>;
 export type TaxEventListResponse = z.infer<typeof taxEventListResponseSchema>;
 export type TaxSummaryResponse = z.infer<typeof taxSummarySchema>;
+export type TaxTotalSummaryResponse = z.infer<typeof taxTotalSummarySchema>;
 export type InvestmentHoldingRead = z.infer<typeof investmentHoldingSchema>;
 export type InvestmentSnapshot = z.infer<typeof investmentSnapshotSchema>;
 export type InvestmentSnapshotResponse = z.infer<

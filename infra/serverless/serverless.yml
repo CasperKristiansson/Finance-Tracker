@@ -421,6 +421,18 @@ functions:
           method: GET
           authorizer: cognitoJwt
 
+  taxTotalSummary:
+    handler: apps/api/handlers/tax.tax_total_summary
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /tax/summary/total
+          method: GET
+          authorizer: cognitoJwt
+
   listSubscriptions:
     handler: apps/api/handlers/subscriptions.list_subscriptions
     timeout: 29

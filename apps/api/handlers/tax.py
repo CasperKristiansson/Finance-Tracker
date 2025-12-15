@@ -12,6 +12,7 @@ from ..schemas import (
     TaxEventListQuery,
     TaxEventListResponse,
     TaxEventRead,
+    TaxTotalSummaryResponse,
     TaxSummaryQuery,
     TaxSummaryResponse,
 )
@@ -109,9 +110,21 @@ def tax_summary(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     return json_response(200, payload.model_dump(mode="json"))
 
 
+def tax_total_summary(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    user_id = get_user_id(event)
+
+    with session_scope(user_id=user_id) as session:
+        service = TaxService(session)
+        payload = service.summary_all_time()
+
+    return json_response(200, payload.model_dump(mode="json"))
+
+
 __all__ = [
     "create_tax_event",
     "list_tax_events",
     "tax_summary",
+    "tax_total_summary",
     "reset_handler_state",
 ]

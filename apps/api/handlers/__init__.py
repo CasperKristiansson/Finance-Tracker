@@ -74,7 +74,7 @@ from .subscriptions import (
 )
 from .tax import create_tax_event, list_tax_events
 from .tax import reset_handler_state as reset_tax_handler_state
-from .tax import tax_summary
+from .tax import tax_summary, tax_total_summary
 from .transactions import (
     create_transaction,
     delete_transaction,
@@ -119,6 +119,7 @@ __all__ = [
     "create_tax_event",
     "list_tax_events",
     "tax_summary",
+    "tax_total_summary",
     "create_import_batch",
     "list_import_batches",
     "get_import_session",

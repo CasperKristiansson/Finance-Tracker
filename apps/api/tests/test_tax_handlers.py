@@ -11,7 +11,12 @@ from sqlmodel import Session, SQLModel, select
 
 from apps.api.handlers.reporting import monthly_report
 from apps.api.handlers.reporting import reset_handler_state as reset_reporting_handler_state
-from apps.api.handlers.tax import create_tax_event, reset_handler_state, tax_summary
+from apps.api.handlers.tax import (
+    create_tax_event,
+    reset_handler_state,
+    tax_summary,
+    tax_total_summary,
+)
 from apps.api.models import Account, Category, TaxEvent, Transaction, TransactionLeg
 from apps.api.services import TransactionService
 from apps.api.shared import (
@@ -125,6 +130,62 @@ def test_tax_summary_refunds_are_negative_net_tax_paid():
     body = _json_body(summary)
     jan = next(item for item in body["monthly"] if item["month"] == 1)
     assert Decimal(jan["net_tax_paid"]) == Decimal("150.00")
+
+
+def test_tax_total_summary_aggregates_across_years():
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        account = Account(name="Bank", account_type=AccountType.NORMAL, is_active=True)
+        session.add(account)
+        session.commit()
+        session.refresh(account)
+        account_id = str(account.id)
+
+    create_tax_event(
+        {
+            "body": json.dumps(
+                {
+                    "account_id": account_id,
+                    "occurred_at": "2023-12-10T00:00:00Z",
+                    "amount": "100.00",
+                    "event_type": "payment",
+                    "description": "Skatteverket",
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+
+    for event_type, amount in [("payment", "200.00"), ("refund", "50.00")]:
+        create_tax_event(
+            {
+                "body": json.dumps(
+                    {
+                        "account_id": account_id,
+                        "occurred_at": "2024-01-15T00:00:00Z",
+                        "amount": amount,
+                        "event_type": event_type,
+                        "description": "Skatteverket",
+                    }
+                ),
+                "isBase64Encoded": False,
+            },
+            None,
+        )
+
+    response = tax_total_summary({}, None)
+    assert response["statusCode"] == 200
+    body = _json_body(response)
+
+    assert Decimal(body["totals"]["total_payments"]) == Decimal("300.00")
+    assert Decimal(body["totals"]["total_refunds"]) == Decimal("50.00")
+    assert Decimal(body["totals"]["net_tax_paid_all_time"]) == Decimal("250.00")
+
+    yearly = {row["year"]: row for row in body["yearly"]}
+    assert Decimal(yearly[2023]["net_tax_paid"]) == Decimal("100.00")
+    assert Decimal(yearly[2024]["net_tax_paid"]) == Decimal("150.00")
 
 
 def test_reports_exclude_tax_transactions_from_income_and_expense():

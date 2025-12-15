@@ -121,6 +121,7 @@ from .tax import (
     TaxEventListQuery,
     TaxEventListResponse,
     TaxEventRead,
+    TaxTotalSummaryResponse,
     TaxSummaryQuery,
     TaxSummaryResponse,
 )
@@ -251,6 +252,7 @@ __all__ = [
     "TaxEventRead",
     "TaxEventListQuery",
     "TaxEventListResponse",
+    "TaxTotalSummaryResponse",
     "TaxSummaryQuery",
     "TaxSummaryResponse",
 ]
