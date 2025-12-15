@@ -1338,27 +1338,8 @@ export const Loans: React.FC = () => {
                                     {formatCurrency(Number(row.amount))}
                                   </TableCell>
                                   <TableCell className="px-3">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div className="max-w-[14rem] truncate font-mono text-xs text-slate-700">
-                                        {row.transaction_id}
-                                      </div>
-                                      <Button
-                                        asChild
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-8 border-slate-300 text-slate-800"
-                                      >
-                                        <Link
-                                          onClick={(event) =>
-                                            event.stopPropagation()
-                                          }
-                                          to={`${PageRoutes.transactions}?search=${encodeURIComponent(
-                                            row.transaction_id,
-                                          )}`}
-                                        >
-                                          View
-                                        </Link>
-                                      </Button>
+                                    <div className="max-w-[16rem] truncate font-mono text-xs text-slate-700">
+                                      {row.transaction_id}
                                     </div>
                                   </TableCell>
                                 </TableRow>
