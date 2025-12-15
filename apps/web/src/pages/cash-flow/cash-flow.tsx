@@ -421,7 +421,7 @@ export const CashFlow: React.FC = () => {
           <Button
             size="sm"
             variant="outline"
-            className="h-8 px-2.5 text-xs"
+            className="h-10 px-3 text-xs"
             onClick={() => {
               loadCashflowForecast();
               loadNetWorthProjection();

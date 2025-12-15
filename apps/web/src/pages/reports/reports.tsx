@@ -573,8 +573,9 @@ export const Reports: React.FC = () => {
 
   const yearOverviewMonthChart = useMemo(
     () =>
-      (overview?.monthly || []).map((row) => ({
+      (overview?.monthly || []).map((row, monthIndex) => ({
         month: monthLabel(row.date),
+        monthIndex,
         income: Number(row.income),
         expense: Number(row.expense),
         net: Number(row.net),
@@ -582,39 +583,16 @@ export const Reports: React.FC = () => {
     [overview?.monthly],
   );
 
-  const prevYearOverviewMonthChart = useMemo(
+  const yearSeasonalityChart = useMemo(
     () =>
-      (prevOverview?.monthly || []).map((row) => ({
-        month: monthLabel(row.date),
-        income: Number(row.income),
-        expense: Number(row.expense),
-        net: Number(row.net),
+      yearOverviewMonthChart.map((row) => ({
+        ...row,
+        expenseNeg: Number.isFinite(row.expense)
+          ? -Math.abs(row.expense)
+          : null,
       })),
-    [prevOverview?.monthly],
+    [yearOverviewMonthChart],
   );
-
-  const yearSeasonalityChart = useMemo(() => {
-    const months = Math.max(
-      yearOverviewMonthChart.length,
-      prevYearOverviewMonthChart.length,
-    );
-    return Array.from({ length: months }, (_, idx) => {
-      const current = yearOverviewMonthChart[idx];
-      const prev = prevYearOverviewMonthChart[idx];
-      const month = current?.month ?? prev?.month ?? `Month ${String(idx + 1)}`;
-      return {
-        month,
-        income: current?.income ?? null,
-        expenseNeg:
-          typeof current?.expense === "number" ? -current.expense : null,
-        net: current?.net ?? null,
-        incomePrev: prev?.income ?? null,
-        expenseNegPrev:
-          typeof prev?.expense === "number" ? -prev.expense : null,
-        netPrev: prev?.net ?? null,
-      };
-    });
-  }, [prevYearOverviewMonthChart, yearOverviewMonthChart]);
 
   const netWorthChart = useMemo(
     () =>
@@ -2130,132 +2108,214 @@ export const Reports: React.FC = () => {
                         const record = payload[0]?.payload;
                         if (!isRecord(record)) return null;
 
-                        const label =
+                        const monthLabel =
                           typeof record.month === "string" ? record.month : "";
+                        const monthIndex =
+                          typeof record.monthIndex === "number"
+                            ? record.monthIndex
+                            : null;
 
-                        const incomeCurrent =
-                          typeof record.income === "number"
-                            ? record.income
+                        const incomeItem = payload.find(
+                          (p) => p.dataKey === "income",
+                        );
+                        const expenseItem = payload.find(
+                          (p) => p.dataKey === "expenseNeg",
+                        );
+
+                        const incomeTotal =
+                          incomeItem?.value !== undefined &&
+                          incomeItem.value !== null
+                            ? Math.abs(Number(incomeItem.value))
                             : null;
-                        const expenseCurrent =
-                          typeof record.expenseNeg === "number"
-                            ? Math.abs(record.expenseNeg)
+                        const expenseTotal =
+                          expenseItem?.value !== undefined &&
+                          expenseItem.value !== null
+                            ? Math.abs(Number(expenseItem.value))
                             : null;
-                        const netCurrent =
+
+                        const net =
                           typeof record.net === "number" ? record.net : null;
 
-                        const incomePrev =
-                          typeof record.incomePrev === "number"
-                            ? record.incomePrev
-                            : null;
-                        const expensePrev =
-                          typeof record.expenseNegPrev === "number"
-                            ? Math.abs(record.expenseNegPrev)
-                            : null;
-                        const netPrev =
-                          typeof record.netPrev === "number"
-                            ? record.netPrev
-                            : null;
+                        const buildBreakdown = (
+                          breakdown:
+                            | YearlyOverviewResponse["category_breakdown"]
+                            | YearlyOverviewResponse["income_category_breakdown"]
+                            | undefined,
+                          fallbackColor: string,
+                        ) => {
+                          const sorted =
+                            breakdown && monthIndex !== null
+                              ? breakdown
+                                  .map((row) => ({
+                                    name: row.name,
+                                    total: Math.abs(
+                                      Number(row.monthly[monthIndex] ?? 0),
+                                    ),
+                                    color: row.color_hex ?? undefined,
+                                  }))
+                                  .filter(
+                                    (row) =>
+                                      Number.isFinite(row.total) &&
+                                      row.total > 0,
+                                  )
+                                  .sort((a, b) => b.total - a.total)
+                              : [];
+                          const top = sorted.slice(0, 4);
+                          const otherTotal = sorted
+                            .slice(4)
+                            .reduce((sum, row) => sum + row.total, 0);
+
+                          return { top, otherTotal, fallbackColor };
+                        };
+
+                        const incomeBreakdown = buildBreakdown(
+                          overview?.income_category_breakdown,
+                          "#10b981",
+                        );
+                        const expenseBreakdown = buildBreakdown(
+                          overview?.category_breakdown,
+                          "#ef4444",
+                        );
 
                         return (
                           <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
                             <p className="font-semibold text-slate-800">
-                              {label}
+                              {monthLabel}
                             </p>
-                            <div className="mt-2 grid grid-cols-2 gap-3">
-                              <div className="space-y-1">
-                                <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
-                                  {year}
-                                </p>
-                                <p className="text-slate-600">
-                                  Income:{" "}
-                                  <span className="font-medium text-slate-800 tabular-nums">
-                                    {incomeCurrent !== null
-                                      ? currency(incomeCurrent)
-                                      : "—"}
-                                  </span>
-                                </p>
-                                <p className="text-slate-600">
-                                  Expense:{" "}
-                                  <span className="font-medium text-slate-800 tabular-nums">
-                                    {expenseCurrent !== null
-                                      ? currency(expenseCurrent)
-                                      : "—"}
-                                  </span>
-                                </p>
-                                <p className="pt-1 font-semibold text-slate-900 tabular-nums">
-                                  Net:{" "}
-                                  {netCurrent !== null
-                                    ? currency(netCurrent)
+
+                            <div className="mt-1 grid gap-1">
+                              <p className="text-slate-600">
+                                Income:{" "}
+                                <span className="font-medium text-slate-800 tabular-nums">
+                                  {incomeTotal !== null
+                                    ? currency(incomeTotal)
                                     : "—"}
-                                </p>
-                              </div>
-                              <div className="space-y-1 border-l border-slate-200 pl-3">
-                                <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
-                                  {year - 1}
-                                </p>
-                                <p className="text-slate-600">
-                                  Income:{" "}
-                                  <span className="font-medium text-slate-800 tabular-nums">
-                                    {incomePrev !== null
-                                      ? currency(incomePrev)
-                                      : "—"}
-                                  </span>
-                                </p>
-                                <p className="text-slate-600">
-                                  Expense:{" "}
-                                  <span className="font-medium text-slate-800 tabular-nums">
-                                    {expensePrev !== null
-                                      ? currency(expensePrev)
-                                      : "—"}
-                                  </span>
-                                </p>
-                                <p className="pt-1 font-semibold text-slate-900 tabular-nums">
-                                  Net:{" "}
-                                  {netPrev !== null ? currency(netPrev) : "—"}
-                                </p>
-                              </div>
+                                </span>
+                              </p>
+                              <p className="text-slate-600">
+                                Expense:{" "}
+                                <span className="font-medium text-slate-800 tabular-nums">
+                                  {expenseTotal !== null
+                                    ? currency(expenseTotal)
+                                    : "—"}
+                                </span>
+                              </p>
+                              <p className="pt-1 font-semibold text-slate-900 tabular-nums">
+                                Net: {net !== null ? currency(net) : "—"}
+                              </p>
                             </div>
+
+                            {overviewLoading ? (
+                              <p className="mt-2 text-slate-500">
+                                Loading breakdown…
+                              </p>
+                            ) : monthIndex !== null ? (
+                              <div className="mt-2 space-y-2">
+                                {incomeBreakdown.top.length ? (
+                                  <div>
+                                    <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+                                      Income categories
+                                    </p>
+                                    <div className="mt-1 space-y-1">
+                                      {incomeBreakdown.top.map((row) => (
+                                        <div
+                                          key={`${row.name}-${row.total}`}
+                                          className="flex items-center justify-between gap-4"
+                                        >
+                                          <span className="flex min-w-0 items-center gap-2 text-slate-700">
+                                            <span
+                                              className="h-2 w-2 shrink-0 rounded-full"
+                                              style={{
+                                                backgroundColor:
+                                                  row.color ??
+                                                  incomeBreakdown.fallbackColor,
+                                              }}
+                                            />
+                                            <span className="truncate">
+                                              {row.name}
+                                            </span>
+                                          </span>
+                                          <span className="font-medium text-slate-800 tabular-nums">
+                                            {currency(row.total)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                      {incomeBreakdown.otherTotal ? (
+                                        <div className="flex items-center justify-between gap-4 pt-1 text-slate-600">
+                                          <span>Other</span>
+                                          <span className="font-medium tabular-nums">
+                                            {currency(
+                                              incomeBreakdown.otherTotal,
+                                            )}
+                                          </span>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                ) : null}
+
+                                {expenseBreakdown.top.length ? (
+                                  <div>
+                                    <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+                                      Expense categories
+                                    </p>
+                                    <div className="mt-1 space-y-1">
+                                      {expenseBreakdown.top.map((row) => (
+                                        <div
+                                          key={`${row.name}-${row.total}`}
+                                          className="flex items-center justify-between gap-4"
+                                        >
+                                          <span className="flex min-w-0 items-center gap-2 text-slate-700">
+                                            <span
+                                              className="h-2 w-2 shrink-0 rounded-full"
+                                              style={{
+                                                backgroundColor:
+                                                  row.color ??
+                                                  expenseBreakdown.fallbackColor,
+                                              }}
+                                            />
+                                            <span className="truncate">
+                                              {row.name}
+                                            </span>
+                                          </span>
+                                          <span className="font-medium text-slate-800 tabular-nums">
+                                            {currency(row.total)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                      {expenseBreakdown.otherTotal ? (
+                                        <div className="flex items-center justify-between gap-4 pt-1 text-slate-600">
+                                          <span>Other</span>
+                                          <span className="font-medium tabular-nums">
+                                            {currency(
+                                              expenseBreakdown.otherTotal,
+                                            )}
+                                          </span>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : null}
                           </div>
                         );
                       }}
                     />
                     <ReferenceLine y={0} stroke="#cbd5e1" />
                     <Bar
-                      dataKey="incomePrev"
-                      name={`Income (${year - 1})`}
-                      stackId="prev"
-                      fill="rgba(16, 185, 129, 0.35)"
-                      stroke="#10b981"
-                      strokeOpacity={0.35}
-                      radius={[6, 6, 4, 4]}
-                      barSize={10}
-                    />
-                    <Bar
-                      dataKey="expenseNegPrev"
-                      name={`Expense (${year - 1})`}
-                      stackId="prev"
-                      fill="rgba(239, 68, 68, 0.35)"
-                      stroke="#ef4444"
-                      strokeOpacity={0.35}
-                      radius={[6, 6, 4, 4]}
-                      barSize={10}
-                    />
-                    <Bar
                       dataKey="income"
-                      name={`Income (${year})`}
-                      stackId="current"
+                      name="Income"
                       fill="#10b981"
-                      radius={[6, 6, 4, 4]}
-                      barSize={10}
+                      radius={[6, 6, 0, 0]}
+                      barSize={14}
                     />
                     <Bar
                       dataKey="expenseNeg"
-                      name={`Expense (${year})`}
-                      stackId="current"
+                      name="Expense"
                       fill="#ef4444"
-                      radius={[6, 6, 4, 4]}
-                      barSize={10}
+                      radius={[0, 0, 6, 6]}
+                      barSize={14}
                     />
                     <Line
                       type="monotone"
