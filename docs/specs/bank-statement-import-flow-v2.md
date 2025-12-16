@@ -6,43 +6,35 @@
   - Acceptance criteria: User can set/clear bank type for an account; `/accounts` responses include the configured value; existing account create/update flows still work.
   - Affected services/components (high level): API accounts model/schema/handlers; Web accounts modal and types.
   - Rollout/flagging: Always-on (safe additive field).
-  - Blockers (OQ-xx): OQ-01, OQ-02
+  - Blockers (OQ-xx): None
 
-- [ ] M2: Stateless import preview + commit API (no DB staging)
-  - Goal: Replace “import session” DB-staging with a stateless backend flow: parse XLSX files + generate suggestions + return drafts without persisting; commit persists transactions only when user submits.
-  - Deliverables: New request/response schemas, new handlers/routes, service functions reusing existing parsers/suggestion logic, and updated/added API tests.
-  - Acceptance criteria: Preview endpoint returns parsed drafts and per-file errors without writing import files/rows/batches; commit endpoint persists transactions (and import batch metadata) from submitted drafts.
+- [ ] M2: Replace imports API with stateless preview + commit
+  - Goal: Remove DB-staged import sessions and replace the existing `/imports*` endpoints with a stateless flow: preview parses + suggests without persisting; commit persists only final reviewed transactions.
+  - Deliverables: Updated request/response schemas, updated handlers/routes, refactored import service logic, and updated/added API tests.
+  - Acceptance criteria: Preview returns parsed drafts and per-file errors without writing import files/rows/errors/batches; commit persists transactions (and a commit-time import batch for grouping).
   - Affected services/components (high level): API imports handlers/services/schemas; serverless route config; API tests.
-  - Rollout/flagging: Feature-flagged (`IMPORT_V2_ENABLED`) with legacy endpoints unchanged.
-  - Blockers (OQ-xx): OQ-03, OQ-04, OQ-05, OQ-06
+  - Rollout/flagging: Always-on; legacy endpoints removed.
+  - Blockers (OQ-xx): None
 
-- [ ] M3: New /imports UI flow (upload → map accounts → parse → audit → submit)
-  - Goal: Rebuild the frontend import screen UX around the new stateless API and account-level bank types.
-  - Deliverables: New UI states + Redux slice/saga (or refactor existing imports feature) to manage draft rows client-side, account mapping, parsing, and submission.
-  - Acceptance criteria: User can upload 1+ XLSX files, assign each to an account, click “Parse”, review/edit rows, then submit to create transactions; nothing persists until submit.
+- [ ] M3: Rebuild /imports UI as strict stepper
+  - Goal: Implement a wizard-style UX: upload → map each file to an account → parse → audit → submit.
+  - Deliverables: New page flow and client-side state for drafts + edits; calls the new preview/commit endpoints.
+  - Acceptance criteria: User can upload 1+ XLSX files, assign each to an account (required), parse using the account’s configured bank type, audit/edit rows, and submit to create transactions; nothing is persisted until submit.
   - Affected services/components (high level): Web imports page, imports feature state, shared API hooks/types.
-  - Rollout/flagging: Feature-flagged (same as M2) with a “Use legacy importer” fallback.
-  - Blockers (OQ-xx): OQ-07, OQ-08
+  - Rollout/flagging: Always-on; legacy UI removed.
+  - Blockers (OQ-xx): None
 
-- [ ] M4: Category suggestions improved by history (deterministic) + contract hardening
-  - Goal: Improve category suggestions using prior transactions/import rules, and make suggestion outputs align to existing categories (IDs) to reduce mismatch.
-  - Deliverables: Server-side “history examples” builder, improved prompt/selection policy, response includes `suggested_category_id` (and optional reason/confidence).
-  - Acceptance criteria: Preview returns stable category ID suggestions for a meaningful subset of rows based on history/rules; graceful fallback when no suggestion exists.
-  - Affected services/components (high level): API imports service; schemas; tests; Web UI to display/apply suggestions.
-  - Rollout/flagging: Behind feature flag or progressive enable in preview response.
-  - Blockers (OQ-xx): OQ-09
-
-- [ ] M5: Bedrock-powered category suggestions + infra enablement
-  - Goal: Use AWS Bedrock to suggest categories using the user’s prior history as context, while keeping the preview stateless and privacy-conscious.
-  - Deliverables: Bedrock invocation wiring, tightened prompt/JSON parsing, IAM permissions, and VPC connectivity (NAT or VPC endpoints) for Bedrock in `eu-north-1`.
-  - Acceptance criteria: When enabled, preview uses Bedrock to return category ID suggestions with confidence/reason; system works in deployed VPC environment; automatic fallback when Bedrock unavailable.
-  - Affected services/components (high level): API imports service; serverless IAM policy; Terraform VPC networking (and/or endpoints).
-  - Rollout/flagging: Feature flag `IMPORT_BEDROCK_ENABLED` default off.
-  - Blockers (OQ-xx): OQ-10, OQ-11
+- [ ] M4: Bedrock suggestions with history context + infra enablement
+  - Goal: Use AWS Bedrock to suggest categories using prior user history as context, with robust fallback and privacy-conscious prompts.
+  - Deliverables: Bedrock invocation wiring (category IDs), tightened prompt/JSON parsing, IAM permissions, and VPC egress (NAT) for Bedrock in `eu-north-1`.
+  - Acceptance criteria: Preview attempts Bedrock suggestions and returns category ID suggestions with confidence/reason; works in deployed VPC environment; gracefully falls back when Bedrock unavailable.
+  - Affected services/components (high level): API imports service; serverless IAM policy; Terraform VPC networking.
+  - Rollout/flagging: Always-on (best-effort with fallback).
+  - Blockers (OQ-xx): None
 
 # 1. Overview
 
-This spec defines a “v2” import flow for bank statement XLSX files. The key change is removing DB-staged import sessions: the backend parses and suggests categories in a stateless preview request, returns draft transactions to the client for audit, and only persists to the database at final submit.
+This spec defines a restructured import flow for bank statement XLSX files. The key change is removing DB-staged import sessions: the backend parses and suggests categories in a stateless preview request, returns draft transactions to the client for audit, and only persists to the database at final submit.
 
 Supported statement formats (existing parsers in `apps/api/services/imports.py`):
 - Swedbank
@@ -91,9 +83,8 @@ Account-level configuration determines which parser to apply for a file (instead
 - Preview must not persist import batches/files/rows/errors, and must not persist transactions.
 
 ## Non-functional constraints
-- API is serverless and currently VPC-attached to private subnets; external calls (e.g., Bedrock) may require explicit network enablement (see OQ-10/OQ-11).
+- API is serverless and currently VPC-attached to private subnets; external calls (e.g., Bedrock) require explicit network enablement (see M4).
 - Keep PII out of logs as much as practical (file contents, descriptions).
-- Keep changes mergeable behind flags; preserve legacy importer until v2 is validated.
 
 # 4. Proposed features and behavior changes
 
@@ -106,10 +97,10 @@ Account-level configuration determines which parser to apply for a file (instead
   - Circle K Mastercard (`circle_k_mastercard`)
 
 ## 4.2 Stateless preview endpoint
-- New endpoint (name/path TBD; see OQ-03) accepts:
+- Preview endpoint `POST /imports/preview` accepts:
   - Files: `{ filename, content_base64, account_id }[]`
   - Optional `note` for UI only (not persisted at preview time)
-  - Optional knobs: `use_bedrock`, limits, etc. (feature-flagged)
+  - Optional guard-rail knobs: limits, etc.
 - Backend looks up each account’s `bank_import_type` and selects parser.
 - Returns:
   - Per-file parse summary + errors
@@ -152,12 +143,12 @@ No DB writes occur during preview (except reads required for category/subscripti
   - `apps/api/handlers/accounts.py`
   - `apps/api/services/account.py`
   - Alembic migration under `apps/api/migrations/versions/*`
-- Imports v2:
-  - `apps/api/handlers/imports.py` (either add v2 handlers here or add a new handler module) (ASSUMPTION AQ-04)
-  - `apps/api/schemas/imports.py` (add v2 schemas)
+- Imports (restructured):
+  - `apps/api/handlers/imports.py` (legacy handlers removed; new preview/commit handlers added)
+  - `apps/api/schemas/imports.py` (new preview/commit schemas; legacy session schemas removed)
   - `apps/api/services/imports.py` (reuse parsing + suggestion helpers; add stateless preview/commit entrypoints)
-  - `infra/serverless/serverless.yml` (add new routes; add IAM permissions for Bedrock)
-  - `infra/terraform/resources/*` (VPC connectivity for Bedrock)
+  - `infra/serverless/serverless.yml` (update routes; add IAM permissions for Bedrock)
+  - `infra/terraform/resources/*` (add NAT for VPC egress)
 - Tests:
   - `apps/api/tests/test_import_handlers.py`
   - `apps/api/tests/integration/test_imports_integration.py`
@@ -166,11 +157,11 @@ No DB writes occur during preview (except reads required for category/subscripti
 - Accounts UI:
   - `apps/web/src/pages/accounts/children/account-modal.tsx`
   - `apps/web/src/types/schemas.ts` (account schema additions)
-- Imports v2 UI/state:
+- Imports UI/state:
   - `apps/web/src/pages/imports/imports.tsx`
   - `apps/web/src/features/imports/importsSaga.ts` and `apps/web/src/features/imports/importsSlice.ts` (refactor or replace to store client-side drafts)
   - `apps/web/src/hooks/use-api.ts` (imports API wrapper)
-  - `apps/web/src/types/schemas.ts` (new v2 request/response schemas)
+  - `apps/web/src/types/schemas.ts` (new preview/commit request/response schemas)
 
 # 6. Data model and external contracts
 
@@ -180,13 +171,13 @@ No DB writes occur during preview (except reads required for category/subscripti
   - `AccountRead`/`AccountWithBalance`: include `bank_import_type?: BankImportType | null`
   - `AccountCreate`/`AccountUpdate`: accept optional `bank_import_type`
 
-## 6.2 Import preview contract (v2)
+## 6.2 Import preview contract (preview)
 
-Proposed request shape (new schema, separate from legacy `ImportBatchCreate`):
+Proposed request shape (new schema; legacy `ImportBatchCreate` removed):
 - `files[]`:
   - `filename: string`
   - `content_base64: string`
-  - `account_id: UUID` (required in v2; see OQ-04)
+  - `account_id: UUID` (required)
 - `note?: string`
 - `options?`:
   - `use_bedrock?: boolean`
@@ -217,7 +208,7 @@ Proposed response shape:
   - `suggested_subscription_id?: UUID | null`
   - `transfer_match?: { transfer_account_id: UUID, confidence?: number, reason?: string } | null` (optional)
 
-## 6.3 Import commit contract (v2)
+## 6.3 Import commit contract (commit)
 
 Proposed request shape:
 - `note?: string`
@@ -237,7 +228,7 @@ Proposed request shape:
 Proposed response shape:
 - `import_batch_id: UUID`
 - `created_transaction_ids: UUID[]`
-- `skipped_count` + `errors[]` (if partial commit allowed; see OQ-06)
+- Commit is all-or-nothing; errors are returned as a single failure response with validation details.
 
 # 7. Step-by-step implementation plan
 
@@ -253,70 +244,50 @@ Proposed response shape:
   - UI can set and persist the value via existing update flow.
   - Existing account flows unaffected (acceptance criteria for M1).
 
-## M2: Stateless import preview + commit API (no DB staging)
-- [ ] Decide final routes and names for v2 preview/commit (OQ-03).
-- [ ] Add new Pydantic schemas in `apps/api/schemas/imports.py` for:
-  - v2 preview request/response
-  - v2 commit request/response
-- [ ] Add new handlers (either in `apps/api/handlers/imports.py` or a new handler module) to implement:
-  - `POST /imports/preview` (or similar)
-  - `POST /imports/commit` (or similar)
+## M2: Replace imports API with stateless preview + commit
+- [ ] Replace existing `/imports*` endpoints with:
+  - `POST /imports/preview` (parse + suggest, stateless)
+  - `POST /imports/commit` (persist reviewed rows, all-or-nothing)
+  - Remove legacy: `GET /imports/{batch_id}`, `POST /imports/{batch_id}/files`, `POST /imports/{batch_id}/commit` (and any unused list endpoints if not needed).
+- [ ] Add new Pydantic schemas in `apps/api/schemas/imports.py` for preview/commit; remove legacy session schemas.
+- [ ] Update `apps/api/handlers/imports.py` to expose only the new endpoints.
 - [ ] In `apps/api/services/imports.py`, implement stateless functions:
-  - Parse each file using existing `_extract_bank_rows` but resolve `bank_type` from the assigned account.
+  - Parse each file using existing per-bank parsers, resolving `bank_type` from the assigned account’s `bank_import_type` (no per-file override).
   - Build draft rows and enrich with deterministic suggestions (rules/subscriptions/transfers), without writing `TransactionImportBatch`, `ImportFile`, `ImportRow`, `ImportErrorRecord`.
-  - Commit: create a new `TransactionImportBatch` and persist transactions/legs from submitted rows.
-- [ ] Update `infra/serverless/serverless.yml` to expose new endpoints (behind feature flag where possible).
+-  - Commit: create a new `TransactionImportBatch` (commit-time only) and persist transactions/legs from submitted rows; commit is transactional (all-or-nothing).
+- [ ] Update `infra/serverless/serverless.yml` to expose only the new endpoints.
 - [ ] Add/adjust tests:
-  - Unit tests in `apps/api/tests/test_import_handlers.py` for preview/commit v2.
+  - Unit tests in `apps/api/tests/test_import_handlers.py` for preview/commit.
   - Integration tests in `apps/api/tests/integration/test_imports_integration.py` for end-to-end preview → commit.
 - [ ] Definition of done:
   - Preview produces rows + errors and does not create import_* records in DB.
   - Commit persists transactions and associates them with a newly created import batch.
 
-## M3: New /imports UI flow (upload → map accounts → parse → audit → submit)
-- [ ] Add new web API schemas/types for v2 preview/commit in `apps/web/src/types/schemas.ts`.
-- [ ] Update `apps/web/src/hooks/use-api.ts` to add v2 calls (preview + commit).
+## M3: Rebuild /imports UI as strict stepper
+- [ ] Add new web API schemas/types for preview/commit in `apps/web/src/types/schemas.ts`.
+- [ ] Update `apps/web/src/hooks/use-api.ts` to add preview + commit calls.
 - [ ] Refactor `apps/web/src/features/imports/*` to store:
   - Selected files + account mapping
   - Preview response (draft rows + per-file errors)
   - Local edits (description/date/amount/category/etc.) before submit
 - [ ] Rework `apps/web/src/pages/imports/imports.tsx` UX:
   - Step 1: Upload files (XLSX only).
-  - Step 2: For each file, choose an account (required) and display derived bank type badge.
-  - Step 3: “Parse files” button calls preview endpoint.
-  - Step 4: Audit table: inline edits + apply suggestion controls; show errors clearly; support deleting rows.
-  - Step 5: “Submit” calls commit endpoint, then navigates/refreshes transactions.
-- [ ] Add feature flag gate + “Use legacy importer” path (or query param) to reduce rollout risk (ASSUMPTION AQ-05).
+  - Step 2: Map each file to an account (required) and show the account’s configured bank type; parsing fails if the bank type is wrong/missing.
+  - Step 3: “Parse files” calls preview endpoint.
+  - Step 4: Audit table: inline edits + apply suggestion controls; show errors clearly; support deleting rows; allow `tax_event_type` marking per row.
+  - Step 5: “Submit” calls commit endpoint (all-or-nothing), then navigates/refreshes transactions.
 - [ ] Definition of done:
-  - Full v2 flow works against local API, and no import session is created prior to submit.
+  - Full flow works against the API, and no import session is created prior to submit.
 
-## M4: Category suggestions improved by history (deterministic) + contract hardening
-- [ ] Extend backend preview enrichment:
-  - Build “history examples” from recent transactions that already have category/subscription assigned.
-  - Prefer deterministic import rules first, then history-based suggestions.
-  - Return `suggested_category_id` (not just category name) by mapping to existing categories.
-- [ ] Tighten suggestion schema contracts and UI behavior:
-  - If suggestion category cannot be mapped, return `null` with a reason.
-  - Ensure the UI can “apply all suggestions” safely.
-- [ ] Add targeted tests covering history suggestion mapping and rule precedence.
-- [ ] Definition of done:
-  - Preview suggestions are stable and consistent with existing category IDs.
-
-## M5: Bedrock-powered category suggestions + infra enablement
-- [ ] Infra/network:
-  - Confirm whether Lambda has outbound access in the target environment (it is attached to private subnets via `infra/serverless/serverless.yml` and the Terraform VPC currently omits IGW/NAT unless public DB is enabled). (See OQ-10/OQ-11)
-  - Add either:
-    - A NAT gateway + route tables, or
-    - Interface VPC endpoints for Bedrock runtime (preferred if supported in `eu-north-1`), plus SG rules.
+## M4: Bedrock suggestions with history context + infra enablement
+- [ ] Infra/network (based on current repo state):
+  - Add NAT gateway + routing for private subnets so Lambdas can reach Bedrock while still connecting to Aurora.
   - Add IAM permission for `bedrock:InvokeModel` (and any required actions) to the Serverless role.
-- [ ] Backend:
+- [ ] Backend preview enrichment:
+  - Build compact “history examples” from recent categorized transactions (and/or `import_rules`) and include allowed categories list (IDs + names).
+  - Prefer deterministic import rules first; Bedrock fills the gaps.
   - Update Bedrock prompt to require strictly valid JSON output.
-  - Include:
-    - allowed categories list (IDs + names),
-    - compact history examples,
-    - current transactions.
   - Implement robust parsing, timeouts, and fallback to deterministic suggestions.
-  - Gate with `IMPORT_BEDROCK_ENABLED` and optionally per-request `use_bedrock`.
 - [ ] Tests:
   - Add unit tests with a fake Bedrock client (pattern exists in investment tests) validating JSON parsing and fallbacks.
 - [ ] Definition of done:
@@ -335,7 +306,7 @@ Proposed response shape:
 
 ## M2
 - Backend:
-  - New handler tests for preview/commit v2.
+  - New handler tests for preview/commit.
   - Integration test preview → commit persists `transactions` and does not persist `import_files/import_rows` at preview time.
   - Run: `pytest apps/api/tests`.
 
@@ -364,25 +335,24 @@ Proposed response shape:
 - VPC connectivity: current Terraform VPC omits IGW/NAT by default; Bedrock may be unreachable from Lambda (mitigate via VPC endpoints or NAT) (OQ-10/OQ-11).
 - IAM: current Serverless IAM statements do not include Bedrock invoke permissions (mitigate by adding explicit actions).
 - Payload size: base64 XLSX uploads could exceed API Gateway limits for large statements (mitigate with file size limits + future S3 presigned upload path).
-- Duplicate imports: without stable external IDs in bank exports, repeated imports may create duplicate transactions (mitigate with optional dedupe checks and/or hashing) (OQ-09).
+- Duplicate imports: without stable external IDs in bank exports, repeated imports may create duplicate transactions (mitigate with optional dedupe warnings during preview and/or future hashing-based dedupe).
 - Privacy: prompts may include transaction descriptions; minimize prompt size and avoid logging raw payloads.
 
-## OPEN QUESTION OQ-xx
-- OQ-01: Should account “none” be represented as `null` or a distinct enum value like `"none"` across API/DB/UI?
-- OQ-02: Should bank type be settable on account create, or only editable after creation?
-- OQ-03: What exact v2 endpoints/paths should we use (e.g., `POST /imports/preview` + `POST /imports/commit` vs `/imports/v2/*`)?
-- OQ-04: In v2, is `account_id` required for every uploaded file before parsing, or can the backend infer account some other way?
-- OQ-05: Should v2 completely replace legacy endpoints, or run side-by-side behind a flag for a period?
-- OQ-06: Should commit be “all-or-nothing” (transactional) or allow partial success with per-row errors?
-- OQ-07: UX: Do you want a strict stepper UI (wizard) or keep it as a single page with sections?
-- OQ-08: Should users be able to override the derived bank type per file during import (e.g., if account bank type is wrong), or force them to fix the account setting first?
-- OQ-09: What is the desired dedupe behavior on commit (warn/skip/allow duplicates), and what matching heuristic is acceptable?
-- OQ-10: Confirm target deployment mode: are Lambdas always in private subnets without NAT, or is outbound internet allowed in production?
-- OQ-11: If outbound is not allowed, do we prefer adding NAT (cost) or using VPC interface endpoints for `bedrock-runtime` (if available in `eu-north-1`)?
+## Resolution log (RESOLVED items; keep IDs stable)
+- AQ-01 (RESOLVED): “None” bank type is represented as `null` (not a new enum member) in API/DB/UI. Answer: “do null”.
+- AQ-02 (RESOLVED): Commit-time grouping via `TransactionImportBatch`. Decision: keep it (commit-time only), per “up to you”.
+- AQ-03 (RESOLVED): Per-transaction `tax_event_type` marking remains supported in the audit/commit flow. Answer: “Yes”.
+- AQ-04 (RESOLVED): Legacy import handlers/UI are removed; no migration/compat concerns. Answer: “delete legacy handler… delete anything legacy”.
+- AQ-05 (RESOLVED): No feature flags; flow is always-on. Answer: “No feature flag… always included”.
 
-## ASSUMPTION AQ-xx
-- AQ-01: “None” bank type is represented as `null` (not a new enum member) in API/DB, and UI shows a “None” option.
-- AQ-02: We keep creating `TransactionImportBatch` at commit time for audit grouping, even though preview is stateless.
-- AQ-03: The v2 audit UI continues to support optional `tax_event_type` and `subscription_id` fields (as current importer does), unless scoped out later.
-- AQ-04: v2 handlers can live alongside legacy handlers in `apps/api/handlers/imports.py` (no need for a new module).
-- AQ-05: A feature flag (env or build-time) is acceptable to gate v2 UI/API until stable.
+- OQ-01 (RESOLVED): None representation. Answer: `null`.
+- OQ-02 (RESOLVED): Bank type settable on create and update. Answer: “both”.
+- OQ-03 (RESOLVED): No versioned endpoints; overwrite existing import API surface. Decision: use `/imports/preview` + `/imports/commit` under the same base path and remove legacy session endpoints.
+- OQ-04 (RESOLVED): Account inference. Answer: do not infer; user must select `account_id` per uploaded file.
+- OQ-05 (RESOLVED): Replacement strategy. Answer: total replace; no parallel legacy.
+- OQ-06 (RESOLVED): Commit semantics. Answer: all-or-nothing.
+- OQ-07 (RESOLVED): UX. Answer: strict stepper UI.
+- OQ-08 (RESOLVED): Bank type overrides. Answer: no; account bank type must be correct, otherwise parsing fails (user responsibility).
+- OQ-09 (RESOLVED): Dedupe policy. Decision: allow duplicates initially; optionally surface “possible duplicates” warnings during preview as a non-blocking UX enhancement.
+- OQ-10 (RESOLVED): Infra check result. Repo shows Lambdas run in private subnets and Terraform has no NAT/VPC endpoints; assume no outbound egress today.
+- OQ-11 (RESOLVED): Preferred infra approach. Decision: add NAT gateway + private subnet routing (copying the existing “private subnets + SG egress” posture, but enabling egress via NAT) and add `bedrock:InvokeModel` IAM permissions.
