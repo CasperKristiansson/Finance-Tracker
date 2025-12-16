@@ -46,6 +46,7 @@ export const TotalCategoryMixCard: React.FC<{
                 axisLine={false}
                 tick={{ fill: "#475569", fontSize: 12 }}
                 domain={[0, 100]}
+                allowDataOverflow
                 tickFormatter={(v) =>
                   `${Number(v).toLocaleString("sv-SE", {
                     maximumFractionDigits: 0,

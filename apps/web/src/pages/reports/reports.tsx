@@ -24,7 +24,6 @@ import { TotalAccountsOverviewCard } from "./components/total-accounts-overview-
 import { TotalCategoryByYearCard } from "./components/total-category-by-year-card";
 import { TotalCategoryChangesCard } from "./components/total-category-changes-card";
 import { TotalCategoryMixCard } from "./components/total-category-mix-card";
-import { TotalCompositionOverTimeCard } from "./components/total-composition-over-time-card";
 import { TotalDebtOverviewCard } from "./components/total-debt-overview-card";
 import { TotalDrilldownDialog } from "./components/total-drilldown-dialog";
 import { TotalHeatmapDialog } from "./components/total-heatmap-dialog";
@@ -216,8 +215,6 @@ export const Reports: React.FC = () => {
     totalNetWorthAttribution,
     totalNetWorthTrajectoryData,
     totalNetWorthTrajectoryDomain,
-    totalExpenseComposition,
-    totalIncomeComposition,
     totalYearly,
     totalYearlyTable,
     totalExpenseMix,
@@ -645,22 +642,6 @@ export const Reports: React.FC = () => {
               data={totalNetWorthTrajectoryData}
               domain={totalNetWorthTrajectoryDomain}
             />
-
-            <div className="grid gap-3 lg:grid-cols-2">
-              <TotalCompositionOverTimeCard
-                flow="income"
-                loading={totalOverviewLoading}
-                composition={totalIncomeComposition}
-                onOpenHeatmapDialog={openTotalHeatmapDialog}
-              />
-
-              <TotalCompositionOverTimeCard
-                flow="expense"
-                loading={totalOverviewLoading}
-                composition={totalExpenseComposition}
-                onOpenHeatmapDialog={openTotalHeatmapDialog}
-              />
-            </div>
 
             <TotalNetWorthGrowthCard
               loading={totalOverviewLoading}

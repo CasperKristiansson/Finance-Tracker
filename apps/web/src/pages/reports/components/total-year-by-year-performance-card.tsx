@@ -54,6 +54,10 @@ export const TotalYearByYearPerformanceCard: React.FC<{
   tableData,
   onOpenDrilldownDialog,
 }) => {
+  const barSize = 26;
+  const minPxPerYear = 72;
+  const chartWidth = chartData.length * minPxPerYear;
+
   return (
     <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
       <CardHeader className="pb-2">
@@ -71,82 +75,92 @@ export const TotalYearByYearPerformanceCard: React.FC<{
           <Skeleton className="h-56 w-full" />
         ) : (
           <>
-            <div className="h-56 rounded-md border border-slate-100 bg-white p-2">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={chartData}
-                  onClick={(
-                    state:
-                      | {
-                          activePayload?: Array<{
-                            payload?: { year?: unknown };
-                          }>;
-                        }
-                      | null
-                      | undefined,
-                  ) => {
-                    const clickedYear =
-                      state?.activePayload?.[0]?.payload?.year;
-                    if (typeof clickedYear === "number") {
-                      onOpenDrilldownDialog({
-                        kind: "year",
-                        year: clickedYear,
-                      });
-                    }
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis
-                    dataKey="year"
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fill: "#475569", fontSize: 12 }}
-                  />
-                  <YAxis
-                    tickLine={false}
-                    axisLine={false}
-                    tick={{ fill: "#475569", fontSize: 12 }}
-                    tickFormatter={(v) => compactCurrency(Number(v))}
-                  />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const yearLabel = payload[0]?.payload?.year;
-                      const income = Number(payload[0]?.payload?.income ?? 0);
-                      const expense = Number(payload[0]?.payload?.expense ?? 0);
-                      const net = Number(payload[0]?.payload?.net ?? 0);
-                      return (
-                        <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                          <p className="font-semibold text-slate-800">
-                            {yearLabel}
-                          </p>
-                          <p className="text-slate-600">
-                            Income: {currency(income)}
-                          </p>
-                          <p className="text-slate-600">
-                            Expense: {currency(expense)}
-                          </p>
-                          <p className="text-slate-600">Net: {currency(net)}</p>
-                        </div>
-                      );
+            <div className="h-56 overflow-x-auto rounded-md border border-slate-100 bg-white p-2">
+              <div
+                className="h-full"
+                style={{ width: `max(100%, ${chartWidth}px)` }}
+              >
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={chartData}
+                    barGap={6}
+                    onClick={(
+                      state:
+                        | {
+                            activePayload?: Array<{
+                              payload?: { year?: unknown };
+                            }>;
+                          }
+                        | null
+                        | undefined,
+                    ) => {
+                      const clickedYear =
+                        state?.activePayload?.[0]?.payload?.year;
+                      if (typeof clickedYear === "number") {
+                        onOpenDrilldownDialog({
+                          kind: "year",
+                          year: clickedYear,
+                        });
+                      }
                     }}
-                  />
-                  <Bar
-                    dataKey="income"
-                    name="Income"
-                    fill="#10b981"
-                    radius={[6, 6, 4, 4]}
-                    barSize={12}
-                  />
-                  <Bar
-                    dataKey="expense"
-                    name="Expense"
-                    fill="#ef4444"
-                    radius={[6, 6, 4, 4]}
-                    barSize={12}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="year"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: "#475569", fontSize: 12 }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: "#475569", fontSize: 12 }}
+                      tickFormatter={(v) => compactCurrency(Number(v))}
+                    />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const yearLabel = payload[0]?.payload?.year;
+                        const income = Number(payload[0]?.payload?.income ?? 0);
+                        const expense = Number(
+                          payload[0]?.payload?.expense ?? 0,
+                        );
+                        const net = Number(payload[0]?.payload?.net ?? 0);
+                        return (
+                          <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
+                            <p className="font-semibold text-slate-800">
+                              {yearLabel}
+                            </p>
+                            <p className="text-slate-600">
+                              Income: {currency(income)}
+                            </p>
+                            <p className="text-slate-600">
+                              Expense: {currency(expense)}
+                            </p>
+                            <p className="text-slate-600">
+                              Net: {currency(net)}
+                            </p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar
+                      dataKey="income"
+                      name="Income"
+                      fill="#10b981"
+                      radius={[6, 6, 4, 4]}
+                      barSize={barSize}
+                    />
+                    <Bar
+                      dataKey="expense"
+                      name="Expense"
+                      fill="#ef4444"
+                      radius={[6, 6, 4, 4]}
+                      barSize={barSize}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
             <div className="max-h-56 overflow-auto rounded-md border border-slate-100 bg-white">

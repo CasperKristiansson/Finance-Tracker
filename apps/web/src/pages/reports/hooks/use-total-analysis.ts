@@ -26,6 +26,42 @@ type Composition = {
   data: Array<Record<string, number | string>>;
 };
 
+const DEFAULT_CHART_COLOR = "#94a3b8";
+const DEFAULT_CATEGORY_COLOR = "#94a3b8";
+
+const MIX_FALLBACK_PALETTE_EXPENSE = [
+  "#ef4444",
+  "#f97316",
+  "#f59e0b",
+  "#eab308",
+  "#84cc16",
+  "#22c55e",
+  "#14b8a6",
+  "#06b6d4",
+] as const;
+
+const MIX_FALLBACK_PALETTE_INCOME = [
+  "#10b981",
+  "#14b8a6",
+  "#06b6d4",
+  "#3b82f6",
+  "#6366f1",
+  "#8b5cf6",
+  "#a855f7",
+  "#ec4899",
+] as const;
+
+const shouldUseProvidedCategoryColor = (
+  colorHex: string | null | undefined,
+) => {
+  if (!colorHex) return false;
+  const normalized = colorHex.trim().toLowerCase();
+  return normalized !== DEFAULT_CATEGORY_COLOR;
+};
+
+const categoryAbsTotal = (category: MixCategory) =>
+  Math.abs(Number(category.total));
+
 const buildComposition = (
   rows: MixYearRow[],
   fallbackColor: string,
@@ -49,7 +85,7 @@ const buildComposition = (
 
   const keys = [...topNames, "Other"];
 
-  const colors: Record<string, string> = { Other: "#94a3b8" };
+  const colors: Record<string, string> = { Other: DEFAULT_CHART_COLOR };
   const ids: Record<string, string | null> = { Other: null };
 
   keys.forEach((key) => {
@@ -378,26 +414,36 @@ export const useTotalAnalysis = ({
       return { data: [], keys: [], colors: {} as Record<string, string> };
     const latest = rows[rows.length - 1];
     const sortedCats = [...latest.categories].sort(
-      (a, b) => Number(b.total) - Number(a.total),
+      (a, b) => categoryAbsTotal(b) - categoryAbsTotal(a),
     );
     const top = sortedCats.filter((c) => c.name !== "Other").slice(0, 7);
-    const includesOther = latest.categories.some((c) => c.name === "Other");
-    const keys = [
-      ...top.map((c) => c.name),
-      ...(includesOther ? ["Other"] : []),
-    ];
+    const keys = [...top.map((c) => c.name), "Other"];
     const colors: Record<string, string> = {};
-    [...top, ...latest.categories.filter((c) => c.name === "Other")].forEach(
-      (c) => {
-        colors[c.name] = c.color_hex ?? "#94a3b8";
-      },
-    );
+    top.forEach((cat, idx) => {
+      colors[cat.name] = shouldUseProvidedCategoryColor(cat.color_hex)
+        ? (cat.color_hex as string).trim()
+        : MIX_FALLBACK_PALETTE_EXPENSE[
+            idx % MIX_FALLBACK_PALETTE_EXPENSE.length
+          ];
+    });
+    colors.Other = DEFAULT_CHART_COLOR;
     const data = rows.map((row) => {
+      const yearTotal = row.categories.reduce(
+        (sum, category) => sum + categoryAbsTotal(category),
+        0,
+      );
       const base: Record<string, number | string> = { year: row.year };
+      let shownAmount = 0;
       keys.forEach((key) => {
+        if (key === "Other") return;
         const match = row.categories.find((c) => c.name === key);
-        base[key] = match ? Number(match.total) : 0;
+        const amount = match ? categoryAbsTotal(match) : 0;
+        shownAmount += amount;
+        base[key] = yearTotal > 0 ? (amount / yearTotal) * 100 : 0;
       });
+
+      const otherAmount = Math.max(0, yearTotal - shownAmount);
+      base.Other = yearTotal > 0 ? (otherAmount / yearTotal) * 100 : 0;
       return base;
     });
     return { data, keys, colors };
@@ -414,26 +460,34 @@ export const useTotalAnalysis = ({
       return { data: [], keys: [], colors: {} as Record<string, string> };
     const latest = rows[rows.length - 1];
     const sortedCats = [...latest.categories].sort(
-      (a, b) => Number(b.total) - Number(a.total),
+      (a, b) => categoryAbsTotal(b) - categoryAbsTotal(a),
     );
     const top = sortedCats.filter((c) => c.name !== "Other").slice(0, 7);
-    const includesOther = latest.categories.some((c) => c.name === "Other");
-    const keys = [
-      ...top.map((c) => c.name),
-      ...(includesOther ? ["Other"] : []),
-    ];
+    const keys = [...top.map((c) => c.name), "Other"];
     const colors: Record<string, string> = {};
-    [...top, ...latest.categories.filter((c) => c.name === "Other")].forEach(
-      (c) => {
-        colors[c.name] = c.color_hex ?? "#94a3b8";
-      },
-    );
+    top.forEach((cat, idx) => {
+      colors[cat.name] = shouldUseProvidedCategoryColor(cat.color_hex)
+        ? (cat.color_hex as string).trim()
+        : MIX_FALLBACK_PALETTE_INCOME[idx % MIX_FALLBACK_PALETTE_INCOME.length];
+    });
+    colors.Other = DEFAULT_CHART_COLOR;
     const data = rows.map((row) => {
+      const yearTotal = row.categories.reduce(
+        (sum, category) => sum + categoryAbsTotal(category),
+        0,
+      );
       const base: Record<string, number | string> = { year: row.year };
+      let shownAmount = 0;
       keys.forEach((key) => {
+        if (key === "Other") return;
         const match = row.categories.find((c) => c.name === key);
-        base[key] = match ? Number(match.total) : 0;
+        const amount = match ? categoryAbsTotal(match) : 0;
+        shownAmount += amount;
+        base[key] = yearTotal > 0 ? (amount / yearTotal) * 100 : 0;
       });
+
+      const otherAmount = Math.max(0, yearTotal - shownAmount);
+      base.Other = yearTotal > 0 ? (otherAmount / yearTotal) * 100 : 0;
       return base;
     });
     return { data, keys, colors };
