@@ -61,15 +61,31 @@ export const TotalCategoryMixCard: React.FC<{
                       <p className="font-semibold text-slate-800">{label}</p>
                       {payload
                         .filter((p) => Number(p.value ?? 0) > 0.1)
-                        .map((p) => (
-                          <p key={String(p.dataKey)} className="text-slate-600">
-                            {p.name}:{" "}
-                            {Number(p.value ?? 0).toLocaleString("sv-SE", {
-                              maximumFractionDigits: 1,
-                            })}
-                            %
-                          </p>
-                        ))}
+                        .map((p) => {
+                          const dataKey = String(p.dataKey);
+                          const swatch =
+                            colors[dataKey] ??
+                            (typeof p.color === "string" ? p.color : "#94a3b8");
+
+                          return (
+                            <div
+                              key={dataKey}
+                              className="flex items-center gap-2 text-slate-600"
+                            >
+                              <span
+                                className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
+                                style={{ backgroundColor: swatch }}
+                              />
+                              <span className="flex-1 truncate">{p.name}</span>
+                              <span className="tabular-nums">
+                                {Number(p.value ?? 0).toLocaleString("sv-SE", {
+                                  maximumFractionDigits: 1,
+                                })}
+                                %
+                              </span>
+                            </div>
+                          );
+                        })}
                     </div>
                   );
                 }}

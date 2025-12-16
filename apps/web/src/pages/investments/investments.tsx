@@ -168,6 +168,9 @@ export const Investments: React.FC = () => {
   const [cashflowDetailsMonth, setCashflowDetailsMonth] = useState<
     string | null
   >(null);
+  const [cashflowsDialogScope, setCashflowsDialogScope] = useState<
+    "portfolio" | "account" | null
+  >(null);
 
   useEffect(() => {
     fetchOverview();
@@ -357,6 +360,23 @@ export const Investments: React.FC = () => {
     if (Number.isNaN(dt.getTime())) return cashflowDetailsMonthKey;
     return dt.toLocaleDateString("en-US", { month: "long", year: "numeric" });
   }, [cashflowDetailsMonth, cashflowDetailsMonthKey]);
+
+  const cashflowsDialogItems = useMemo(() => {
+    const base =
+      cashflowsDialogScope === "account"
+        ? selectedAccountRecentCashflows
+        : recentCashflows;
+    return [...base].sort((a, b) =>
+      String(b.occurred_at).localeCompare(String(a.occurred_at)),
+    );
+  }, [cashflowsDialogScope, recentCashflows, selectedAccountRecentCashflows]);
+
+  const cashflowsDialogTitle = useMemo(() => {
+    if (cashflowsDialogScope === "account" && selectedAccount) {
+      return `Deposits & withdrawals · ${selectedAccount.accountName}`;
+    }
+    return "Deposits & withdrawals";
+  }, [cashflowsDialogScope, selectedAccount]);
 
   useEffect(() => {
     if (!detailsAccountId) return;

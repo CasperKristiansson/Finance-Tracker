@@ -59,8 +59,9 @@ const shouldUseProvidedCategoryColor = (
   return normalized !== DEFAULT_CATEGORY_COLOR;
 };
 
-const categoryAbsTotal = (category: MixCategory) =>
-  Math.abs(Number(category.total));
+function categoryAbsTotal(category: MixCategory) {
+  return Math.abs(Number(category.total));
+}
 
 const buildComposition = (
   rows: MixYearRow[],
