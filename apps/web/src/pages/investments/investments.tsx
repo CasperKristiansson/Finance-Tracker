@@ -341,7 +341,10 @@ export const Investments: React.FC = () => {
     );
   }, [overview?.recent_cashflows, selectedAccount]);
 
-  const recentCashflows = overview?.recent_cashflows ?? [];
+  const recentCashflows = useMemo(
+    () => overview?.recent_cashflows ?? [],
+    [overview?.recent_cashflows],
+  );
   const cashflowDetailsMonthKey = cashflowDetailsMonth?.slice(0, 7) ?? null;
   const cashflowDetailsItems = useMemo(() => {
     if (!cashflowDetailsMonthKey) return [];
@@ -674,12 +677,13 @@ export const Investments: React.FC = () => {
                   <div className="text-xs font-medium text-slate-500 uppercase">
                     Recent deposits & withdrawals
                   </div>
-                  <Link
-                    to={PageRoutes.transactions}
+                  <button
+                    type="button"
                     className="text-xs font-medium text-slate-700 underline underline-offset-4 hover:text-slate-900"
+                    onClick={() => setCashflowsDialogScope("portfolio")}
                   >
                     View all
-                  </Link>
+                  </button>
                 </div>
                 {recentCashflows.length ? (
                   <div className="mt-3 max-h-40 space-y-2 overflow-auto pr-1">
@@ -1001,12 +1005,13 @@ export const Investments: React.FC = () => {
                     <div className="text-xs font-medium text-slate-500 uppercase">
                       Recent deposits & withdrawals
                     </div>
-                    <Link
-                      to={PageRoutes.transactions}
+                    <button
+                      type="button"
                       className="text-xs font-medium text-slate-700 underline underline-offset-4 hover:text-slate-900"
+                      onClick={() => setCashflowsDialogScope("account")}
                     >
                       View all
-                    </Link>
+                    </button>
                   </div>
                   {selectedAccountRecentCashflows.length ? (
                     <div className="mt-3 space-y-2">
@@ -1305,6 +1310,108 @@ export const Investments: React.FC = () => {
           )}
         </SheetContent>
       </Sheet>
+
+      <Dialog
+        open={cashflowsDialogScope !== null}
+        onOpenChange={(open) => {
+          if (!open) setCashflowsDialogScope(null);
+        }}
+      >
+        <DialogContent className="bg-white sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>{cashflowsDialogTitle}</DialogTitle>
+            <DialogDescription className="text-slate-600">
+              Showing all recent deposits and withdrawals in this view.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs text-slate-500">
+                {cashflowsDialogItems.length.toLocaleString("sv-SE")}{" "}
+                transactions
+              </div>
+              <Link
+                to={PageRoutes.transactions}
+                className="text-xs font-medium text-slate-700 underline underline-offset-4 hover:text-slate-900"
+              >
+                View all transactions
+              </Link>
+            </div>
+            {cashflowsDialogItems.length ? (
+              <div className="max-h-[60vh] overflow-auto rounded-md border border-slate-100">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Account</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Direction</TableHead>
+                      <TableHead className="text-right">Amount</TableHead>
+                      <TableHead className="text-right">Transaction</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cashflowsDialogItems.map((row) => {
+                      const dateLabel = String(row.occurred_at).slice(0, 10);
+                      const isDeposit = row.direction === "deposit";
+                      const amount = coerceMoney(row.amount_sek);
+                      return (
+                        <TableRow key={row.transaction_id}>
+                          <TableCell className="font-medium whitespace-nowrap">
+                            {dateLabel}
+                          </TableCell>
+                          <TableCell className="max-w-[14rem] truncate">
+                            {row.account_name}
+                          </TableCell>
+                          <TableCell className="max-w-[22rem] truncate text-slate-600">
+                            {row.description ?? "—"}
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-full px-2 py-1 text-[11px] font-medium",
+                                isDeposit
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : "bg-rose-50 text-rose-700",
+                              )}
+                            >
+                              {isDeposit ? "Deposit" : "Withdrawal"}
+                            </span>
+                          </TableCell>
+                          <TableCell
+                            className={cn(
+                              "text-right font-semibold tabular-nums",
+                              isDeposit ? "text-emerald-700" : "text-rose-700",
+                            )}
+                          >
+                            {isDeposit ? "+" : "-"}
+                            {formatSek(amount)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Link
+                              to={`${PageRoutes.transactions}?search=${encodeURIComponent(
+                                row.transaction_id,
+                              )}`}
+                              className="font-mono text-[11px] text-slate-500 hover:text-slate-700"
+                              title={row.transaction_id}
+                            >
+                              {row.transaction_id}
+                            </Link>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            ) : (
+              <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
+                No recent cashflows found.
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={Boolean(cashflowDetailsMonth)}
