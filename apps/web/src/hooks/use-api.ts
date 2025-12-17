@@ -38,16 +38,14 @@ import {
   type CategoriesState,
 } from "@/features/categories/categoriesSlice";
 import {
-  StartImportSession,
-  AppendImportFiles,
-  FetchImportSession,
-  CommitImportSession,
-  ResetImportSession,
+  CommitImports,
+  PreviewImports,
+  ResetImports,
 } from "@/features/imports/importsSaga";
 import {
-  selectImportSession,
   selectImportsError,
   selectImportsLoading,
+  selectImportPreview,
   selectImportsSaving,
 } from "@/features/imports/importsSlice";
 import {
@@ -129,8 +127,8 @@ import type {
   BudgetUpdateRequest,
   CategoryCreateRequest,
   CategoryUpdateRequest,
-  ImportCreateRequest,
-  ImportCommitRow,
+  ImportCommitRequest,
+  ImportPreviewRequest,
   TransactionCreate,
   TransactionUpdateRequest,
   NordnetSnapshotCreateRequest,
@@ -470,48 +468,31 @@ export const useLoansApi = () => {
 
 export const useImportsApi = () => {
   const dispatch = useAppDispatch();
-  const session = useAppSelector(selectImportSession);
+  const preview = useAppSelector(selectImportPreview);
   const loading = useAppSelector(selectImportsLoading);
   const saving = useAppSelector(selectImportsSaving);
   const error = useAppSelector(selectImportsError);
 
-  const startImportSession = useCallback(
-    (payload: ImportCreateRequest) => dispatch(StartImportSession(payload)),
+  const previewImports = useCallback(
+    (payload: ImportPreviewRequest) => dispatch(PreviewImports(payload)),
     [dispatch],
   );
 
-  const appendImportFiles = useCallback(
-    (sessionId: string, payload: ImportCreateRequest) =>
-      dispatch(AppendImportFiles({ ...payload, sessionId })),
+  const commitImports = useCallback(
+    (payload: ImportCommitRequest) => dispatch(CommitImports(payload)),
     [dispatch],
   );
 
-  const fetchImportSession = useCallback(
-    (sessionId: string) => dispatch(FetchImportSession(sessionId)),
-    [dispatch],
-  );
-
-  const commitImportSession = useCallback(
-    (sessionId: string, rows: ImportCommitRow[]) =>
-      dispatch(CommitImportSession({ sessionId, rows })),
-    [dispatch],
-  );
-
-  const resetImportSession = useCallback(
-    () => dispatch(ResetImportSession()),
-    [dispatch],
-  );
+  const resetImports = useCallback(() => dispatch(ResetImports()), [dispatch]);
 
   return {
-    session,
+    preview,
     loading,
     saving,
     error,
-    startImportSession,
-    appendImportFiles,
-    fetchImportSession,
-    commitImportSession,
-    resetImportSession,
+    previewImports,
+    commitImports,
+    resetImports,
   };
 };
 

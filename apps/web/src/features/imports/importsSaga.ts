@@ -3,64 +3,59 @@ import { call, put, takeLatest } from "redux-saga/effects";
 import { toast } from "sonner";
 import { callApiWithAuth } from "@/features/api/apiSaga";
 import {
-  clearImportSession,
-  setImportSession,
+  clearImportPreview,
+  clearImportsError,
+  setImportPreview,
   setImportsError,
   setImportsLoading,
   setImportsSaving,
 } from "@/features/imports/importsSlice";
 import type {
   ImportCommitRequest,
-  ImportCreateRequest,
-  ImportSessionResponse,
+  ImportCommitResponse,
+  ImportPreviewRequest,
+  ImportPreviewResponse,
 } from "@/types/api";
 import {
   importCommitRequestSchema,
-  importCreateRequestSchema,
-  importSessionResponseSchema,
+  importCommitResponseSchema,
+  importPreviewRequestSchema,
+  importPreviewResponseSchema,
 } from "@/types/schemas";
 
-export const StartImportSession = createAction<ImportCreateRequest>(
-  "imports/startSession",
-);
-export const AppendImportFiles = createAction<
-  ImportCreateRequest & { sessionId: string }
->("imports/appendFiles");
-export const FetchImportSession = createAction<string>("imports/fetchSession");
-export const CommitImportSession = createAction<{
-  sessionId: string;
-  rows: ImportCommitRequest["rows"];
-}>("imports/commitSession");
-export const ResetImportSession = createAction("imports/resetSession");
+export const PreviewImports =
+  createAction<ImportPreviewRequest>("imports/preview");
+export const CommitImports =
+  createAction<ImportCommitRequest>("imports/commit");
+export const ResetImports = createAction("imports/reset");
 
-function* handleStartSession(action: ReturnType<typeof StartImportSession>) {
+function* handlePreview(action: ReturnType<typeof PreviewImports>) {
   yield put(setImportsLoading(true));
+  yield put(clearImportsError());
   try {
-    const body = importCreateRequestSchema.parse(action.payload);
-    const response: ImportSessionResponse = yield call(
+    const body = importPreviewRequestSchema.parse(action.payload);
+    const response: ImportPreviewResponse = yield call(
       callApiWithAuth,
       {
-        path: "/imports",
+        path: "/imports/preview",
         method: "POST",
         body,
-        schema: importSessionResponseSchema,
+        schema: importPreviewResponseSchema,
       },
       { loadingKey: "imports" },
     );
 
-    if (response?.import_session) {
-      yield put(setImportSession(response.import_session));
-      toast.success("Files staged", {
-        description: "Review suggestions and save when ready.",
-      });
-    }
+    yield put(setImportPreview(response));
+    toast.success("Files parsed", {
+      description: "Review transactions and submit when ready.",
+    });
   } catch (error) {
     yield put(
       setImportsError(
-        error instanceof Error ? error.message : "Unable to stage import.",
+        error instanceof Error ? error.message : "Unable to parse files.",
       ),
     );
-    toast.error("Import failed", {
+    toast.error("Parse failed", {
       description:
         error instanceof Error ? error.message : "Please try again shortly.",
     });
@@ -69,88 +64,29 @@ function* handleStartSession(action: ReturnType<typeof StartImportSession>) {
   }
 }
 
-function* handleAppendFiles(action: ReturnType<typeof AppendImportFiles>) {
-  yield put(setImportsLoading(true));
-  try {
-    const { sessionId, ...request } = action.payload;
-    const body = importCreateRequestSchema.parse(request);
-    const response: ImportSessionResponse = yield call(
-      callApiWithAuth,
-      {
-        path: `/imports/${sessionId}/files`,
-        method: "POST",
-        body,
-        schema: importSessionResponseSchema,
-      },
-      { loadingKey: "imports" },
-    );
-
-    if (response?.import_session) {
-      yield put(setImportSession(response.import_session));
-      toast.success("Files added", {
-        description: "New rows are ready for review.",
-      });
-    }
-  } catch (error) {
-    yield put(
-      setImportsError(
-        error instanceof Error ? error.message : "Unable to add files.",
-      ),
-    );
-    toast.error("Upload failed", {
-      description:
-        error instanceof Error ? error.message : "Please try again shortly.",
-    });
-  } finally {
-    yield put(setImportsLoading(false));
-  }
-}
-
-function* handleFetchSession(action: ReturnType<typeof FetchImportSession>) {
-  yield put(setImportsLoading(true));
-  try {
-    const response: ImportSessionResponse = yield call(
-      callApiWithAuth,
-      {
-        path: `/imports/${action.payload}`,
-        schema: importSessionResponseSchema,
-      },
-      { loadingKey: "imports", silent: true },
-    );
-    if (response?.import_session) {
-      yield put(setImportSession(response.import_session));
-    }
-  } catch (error) {
-    yield put(
-      setImportsError(
-        error instanceof Error ? error.message : "Unable to load session.",
-      ),
-    );
-  } finally {
-    yield put(setImportsLoading(false));
-  }
-}
-
-function* handleCommitSession(action: ReturnType<typeof CommitImportSession>) {
+function* handleCommit(action: ReturnType<typeof CommitImports>) {
   yield put(setImportsSaving(true));
+  yield put(clearImportsError());
   try {
-    const body: ImportCommitRequest = importCommitRequestSchema.parse({
-      rows: action.payload.rows,
-    });
-    yield call(
+    const body: ImportCommitRequest = importCommitRequestSchema.parse(
+      action.payload,
+    );
+    const response: ImportCommitResponse = yield call(
       callApiWithAuth,
       {
-        path: `/imports/${action.payload.sessionId}/commit`,
+        path: "/imports/commit",
         method: "POST",
         body,
+        schema: importCommitResponseSchema,
       },
       { loadingKey: "imports" },
     );
+    const parsed = importCommitResponseSchema.parse(response);
 
     toast.success("Transactions saved", {
-      description: "Your staged transactions are now in the ledger.",
+      description: `Batch ${parsed.import_batch_id.slice(0, 8)} created.`,
     });
-    yield put(clearImportSession());
+    yield put(clearImportPreview());
   } catch (error) {
     yield put(
       setImportsError(
@@ -167,11 +103,10 @@ function* handleCommitSession(action: ReturnType<typeof CommitImportSession>) {
 }
 
 export function* ImportsSaga() {
-  yield takeLatest(StartImportSession.type, handleStartSession);
-  yield takeLatest(AppendImportFiles.type, handleAppendFiles);
-  yield takeLatest(FetchImportSession.type, handleFetchSession);
-  yield takeLatest(CommitImportSession.type, handleCommitSession);
-  yield takeLatest(ResetImportSession.type, function* () {
-    yield put(clearImportSession());
+  yield takeLatest(PreviewImports.type, handlePreview);
+  yield takeLatest(CommitImports.type, handleCommit);
+  yield takeLatest(ResetImports.type, function* () {
+    yield put(clearImportPreview());
+    yield put(clearImportsError());
   });
 }

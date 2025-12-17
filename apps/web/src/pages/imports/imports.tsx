@@ -1,14 +1,21 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, Loader2, Plus, Trash2, UploadCloud } from "lucide-react";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Controller, useFieldArray, useForm } from "react-hook-form";
+import {
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Trash2,
+  UploadCloud,
+} from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useAppSelector } from "@/app/hooks";
 import { MotionPage } from "@/components/motion-presets";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -23,79 +30,24 @@ import {
   useCategoriesApi,
   useImportsApi,
 } from "@/hooks/use-api";
-import { apiFetch } from "@/lib/apiClient";
 import { cn } from "@/lib/utils";
-import { AccountType, TaxEventType } from "@/types/api";
 import type {
-  BankImportType,
-  ImportCommitRow,
-  ImportCreateRequest,
-  ImportRowRead,
-  SubscriptionListResponse,
-  SubscriptionRead,
+  AccountWithBalance,
+  ImportCommitRequest,
+  ImportPreviewRequest,
+  ImportPreviewResponse,
+  TaxEventType,
 } from "@/types/api";
-import {
-  bankImportTypeSchema,
-  subscriptionListSchema,
-  subscriptionSchema,
-} from "@/types/schemas";
+import { TaxEventType as TaxEventTypeEnum } from "@/types/api";
 
-const trimmedString = z.string().trim().optional();
+type StepKey = 1 | 2 | 3 | 4 | 5;
 
-const nullableTrimmedString = z.string().trim().nullable().optional();
-
-const uploadFormSchema = z.object({
-  files: z
-    .array(
-      z
-        .object({
-          clientId: z.string(),
-          filename: z.string().min(1, "Filename required"),
-          accountId: z.string().optional(),
-          bankType: bankImportTypeSchema.optional(),
-          contentBase64: z.string().optional(),
-          file: z.any().optional(),
-        })
-        .superRefine((file, ctx) => {
-          if (!file.bankType) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: "Select a bank",
-              path: ["bankType"],
-            });
-          }
-          if (!file.file && !file.contentBase64) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: "Attach a file",
-              path: ["file"],
-            });
-          }
-        }),
-    )
-    .min(1, "Add at least one file"),
-  note: z.string().trim().optional(),
-});
-
-const commitRowSchema = z.object({
-  row_id: z.string(),
-  description: trimmedString,
-  amount: trimmedString,
-  occurred_at: trimmedString,
-  category_id: nullableTrimmedString,
-  account_id: nullableTrimmedString,
-  transfer_account_id: nullableTrimmedString,
-  subscription_id: nullableTrimmedString,
-  tax_event_type: z.enum(TaxEventType).nullable().optional(),
-  delete: z.boolean().optional(),
-});
-
-const commitFormSchema = z.object({
-  rows: z.array(commitRowSchema),
-});
-
-type UploadFormValues = z.infer<typeof uploadFormSchema>;
-type CommitFormValues = z.infer<typeof commitFormSchema>;
+type LocalFile = {
+  id: string;
+  file: File;
+  filename: string;
+  accountId: string | null;
+};
 
 const toBase64 = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -105,91 +57,79 @@ const toBase64 = (file: File) =>
     reader.readAsDataURL(file);
   });
 
-const badgeTone: Record<string, string> = {
-  ready: "bg-emerald-100 text-emerald-800",
-  error: "bg-rose-100 text-rose-800",
-  empty: "bg-slate-100 text-slate-700",
-  staged: "bg-blue-100 text-blue-800",
-  committed: "bg-emerald-100 text-emerald-800",
-};
+const noteSchema = z.object({
+  note: z.string().trim().optional(),
+});
 
-const toStringValue = (value: unknown): string =>
-  value === null || value === undefined ? "" : String(value);
+type NoteValues = z.infer<typeof noteSchema>;
 
-const dayFromDateText = (value?: string | null) => {
-  if (!value) return undefined;
-  const day = Number.parseInt(value.slice(8, 10), 10);
-  return Number.isFinite(day) && day >= 1 && day <= 31 ? day : undefined;
-};
+const commitRowSchema = z.object({
+  id: z.string(),
+  account_id: z.string(),
+  occurred_at: z.string(),
+  amount: z.string(),
+  description: z.string(),
+  category_id: z.string().nullable().optional(),
+  subscription_id: z.string().nullable().optional(),
+  transfer_account_id: z.string().nullable().optional(),
+  tax_event_type: z.enum(TaxEventTypeEnum).nullable().optional(),
+  delete: z.boolean().optional(),
+});
 
-const bankOptions: { id: BankImportType; label: string }[] = [
-  { id: "circle_k_mastercard", label: "Circle K Mastercard" },
-  { id: "seb", label: "SEB" },
-  { id: "swedbank", label: "Swedbank" },
+const commitFormSchema = z.object({
+  rows: z.array(commitRowSchema),
+});
+
+type CommitFormValues = z.infer<typeof commitFormSchema>;
+
+const steps: Array<{ key: StepKey; label: string; description: string }> = [
+  { key: 1, label: "Upload", description: "Choose one or more XLSX files." },
+  { key: 2, label: "Map accounts", description: "Pick an account per file." },
+  { key: 3, label: "Parse", description: "Parse files and get suggestions." },
+  { key: 4, label: "Audit", description: "Review and adjust rows." },
+  {
+    key: 5,
+    label: "Submit",
+    description: "Create transactions in the ledger.",
+  },
 ];
 
-const deriveRowDefaults = (
-  row: ImportRowRead,
-  fileAccountId?: string | null,
-): CommitFormValues["rows"][number] => {
-  const base = (row.data || {}) as Record<string, unknown>;
-  const dateValue =
-    toStringValue(base["date"] ?? base["occurred_at"] ?? base["posted_at"])
-      .trim()
-      .slice(0, 10) || undefined;
-  const amountValue =
-    toStringValue(base["amount"] ?? base["value"] ?? "").trim() || undefined;
-  const descriptionValue =
-    toStringValue(
-      base["description"] ?? base["memo"] ?? base["text"] ?? "",
-    ).trim() || undefined;
-
-  return {
-    row_id: row.id,
-    description: descriptionValue,
-    amount: amountValue,
-    occurred_at: dateValue,
-    category_id: null,
-    account_id: fileAccountId ?? null,
-    transfer_account_id: null,
-    subscription_id: row.suggested_subscription_id ?? null,
-    tax_event_type: null,
-    delete: false,
-  };
+const bankLabel = (
+  value: AccountWithBalance["bank_import_type"] | null | undefined,
+) => {
+  switch (value) {
+    case "swedbank":
+      return "Swedbank";
+    case "seb":
+      return "SEB";
+    case "circle_k_mastercard":
+      return "Circle K Mastercard";
+    default:
+      return "None";
+  }
 };
 
 export const Imports: React.FC = () => {
-  const {
-    loading,
-    saving,
-    session,
-    startImportSession,
-    appendImportFiles,
-    fetchImportSession,
-    commitImportSession,
-    resetImportSession,
-  } = useImportsApi();
+  const token = useAppSelector(selectToken);
   const { items: accounts, fetchAccounts } = useAccountsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
-  const token = useAppSelector(selectToken);
-  const dropRef = useRef<HTMLLabelElement | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [subscriptions, setSubscriptions] = useState<SubscriptionRead[]>([]);
-  const [subscriptionsLoading, setSubscriptionsLoading] = useState(false);
-
-  const uploadForm = useForm<UploadFormValues>({
-    resolver: zodResolver(uploadFormSchema),
-    defaultValues: { files: [], note: "" },
-  });
-
   const {
-    fields: fileFields,
-    append: appendFile,
-    remove: removeFile,
-    update: updateFile,
-  } = useFieldArray({
-    control: uploadForm.control,
-    name: "files",
+    preview,
+    loading,
+    saving,
+    error,
+    previewImports,
+    commitImports,
+    resetImports,
+  } = useImportsApi();
+
+  const [step, setStep] = useState<StepKey>(1);
+  const [files, setFiles] = useState<LocalFile[]>([]);
+  const [commitTriggered, setCommitTriggered] = useState(false);
+
+  const noteForm = useForm<NoteValues>({
+    resolver: zodResolver(noteSchema),
+    defaultValues: { note: "" },
   });
 
   const commitForm = useForm<CommitFormValues>({
@@ -197,7 +137,7 @@ export const Imports: React.FC = () => {
     defaultValues: { rows: [] },
   });
 
-  const { fields: commitFields, replace: replaceCommitRows } = useFieldArray({
+  const { fields: commitRows, replace: replaceCommitRows } = useFieldArray({
     control: commitForm.control,
     name: "rows",
   });
@@ -209,805 +149,718 @@ export const Imports: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!token) return;
-    setSubscriptionsLoading(true);
-    const load = async () => {
-      try {
-        const { data } = await apiFetch<SubscriptionListResponse>({
-          path: "/subscriptions",
-          schema: subscriptionListSchema,
-          token,
-        });
-        setSubscriptions(data.subscriptions ?? []);
-      } catch (error) {
-        toast.error("Unable to load subscriptions", {
-          description:
-            error instanceof Error
-              ? error.message
-              : "Please try again shortly.",
-        });
-      } finally {
-        setSubscriptionsLoading(false);
-      }
-    };
-    void load();
-  }, [token]);
-
-  const currentSession = session;
-  const summaryFiles = useMemo(
-    () => currentSession?.files ?? [],
-    [currentSession?.files],
-  );
-  const rows: ImportRowRead[] = useMemo(
-    () => currentSession?.rows ?? [],
-    [currentSession?.rows],
-  );
-
-  const rowMap = useMemo(() => {
-    const map = new Map<string, ImportRowRead>();
-    rows.forEach((row) => map.set(row.id, row));
-    return map;
-  }, [rows]);
-
-  const fileAccountMap = useMemo(() => {
-    const map = new Map<string, string | null | undefined>();
-    summaryFiles.forEach((file) => map.set(file.id, file.account_id));
-    return map;
-  }, [summaryFiles]);
-
-  useEffect(() => {
-    const defaults = rows.map((row) =>
-      deriveRowDefaults(row, fileAccountMap.get(row.file_id)),
-    );
+    if (!preview) return;
+    const defaults: CommitFormValues["rows"] = preview.rows.map((row) => ({
+      id: row.id,
+      account_id: row.account_id,
+      occurred_at: row.occurred_at,
+      amount: row.amount,
+      description: row.description,
+      category_id: row.suggested_category_id ?? null,
+      subscription_id: row.suggested_subscription_id ?? null,
+      transfer_account_id: null,
+      tax_event_type: null,
+      delete: false,
+    }));
     replaceCommitRows(defaults);
     commitForm.reset({ rows: defaults });
-  }, [rows, commitForm, replaceCommitRows, fileAccountMap]);
+  }, [preview, commitForm, replaceCommitRows]);
 
-  const handleFiles = async (files: FileList | null) => {
-    if (!files) return;
-    const next = Array.from(files).map((file) => ({
-      clientId: crypto.randomUUID(),
-      filename: file.name,
-      file,
-      bankType: undefined,
-      accountId: undefined,
-    }));
-    appendFile(next);
-  };
-
-  const upload = uploadForm.handleSubmit(async (values) => {
-    if (!values.files.length) return;
-    setUploading(true);
-    try {
-      const filesPayload = await Promise.all(
-        values.files.map(async (lf, index) => {
-          const content =
-            lf.contentBase64 ||
-            (lf.file ? await toBase64(lf.file as File) : "");
-          if (content && !lf.contentBase64) {
-            uploadForm.setValue(`files.${index}.contentBase64`, content);
-          }
-          return {
-            filename: lf.filename.trim(),
-            content_base64: content,
-            account_id: lf.accountId || undefined,
-            bank_type: (lf.bankType as BankImportType)!,
-          };
-        }),
-      );
-
-      const payload: ImportCreateRequest = {
-        files: filesPayload,
-        note: values.note?.trim() || undefined,
-      };
-
-      if (currentSession?.id) {
-        await appendImportFiles(currentSession.id, payload);
-        await fetchImportSession(currentSession.id);
-      } else {
-        await startImportSession(payload);
-      }
-      uploadForm.reset({ files: [], note: "" });
-    } finally {
-      setUploading(false);
+  useEffect(() => {
+    if (!commitTriggered) return;
+    if (saving) return;
+    if (error) {
+      setCommitTriggered(false);
+      return;
     }
-  });
+    if (preview) return;
 
-  const commit = commitForm.handleSubmit(async (values) => {
-    if (!currentSession?.id || !values.rows.length) return;
-    const commitRows: ImportCommitRow[] = values.rows.map((row) => ({
-      row_id: row.row_id,
-      category_id: row.category_id ?? undefined,
-      account_id: row.account_id ?? undefined,
-      transfer_account_id: row.transfer_account_id ?? undefined,
-      description: row.description?.trim() || undefined,
-      amount: row.amount?.trim() || undefined,
-      occurred_at: row.occurred_at?.trim() || undefined,
-      subscription_id: row.subscription_id ?? undefined,
-      tax_event_type: row.tax_event_type ?? undefined,
-      delete: Boolean(row.delete),
-    }));
-
-    await commitImportSession(currentSession.id, commitRows);
+    setCommitTriggered(false);
+    setStep(1);
+    setFiles([]);
+    noteForm.reset({ note: "" });
     commitForm.reset({ rows: [] });
+  }, [commitTriggered, saving, preview, error, noteForm, commitForm]);
+
+  const accountById = useMemo(() => {
+    const map = new Map<string, AccountWithBalance>();
+    accounts.forEach((acc) => map.set(acc.id, acc));
+    return map;
+  }, [accounts]);
+
+  const mappedFilesReady = useMemo(
+    () => files.length > 0 && files.every((f) => Boolean(f.accountId)),
+    [files],
+  );
+
+  const previewHasErrors = useMemo(() => {
+    if (!preview) return false;
+    return preview.files.some((f) => (f.error_count ?? 0) > 0);
+  }, [preview]);
+
+  const canProceedToAudit = Boolean(preview) && !previewHasErrors;
+
+  const handleSelectFiles = (list: FileList | null) => {
+    if (!list) return;
+    const next: LocalFile[] = Array.from(list).map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      filename: file.name,
+      accountId: null,
+    }));
+    setFiles((prev) => [...prev, ...next]);
+  };
+
+  const removeFile = (id: string) => {
+    setFiles((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  const updateFileAccount = (id: string, accountId: string | null) => {
+    setFiles((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, accountId } : f)),
+    );
+  };
+
+  const goNext = () => {
+    if (step === 1) {
+      if (!files.length) return;
+      setStep(2);
+      return;
+    }
+    if (step === 2) {
+      if (!mappedFilesReady) return;
+      setStep(3);
+      return;
+    }
+    if (step === 3) {
+      if (!canProceedToAudit) return;
+      setStep(4);
+      return;
+    }
+    if (step === 4) {
+      setStep(5);
+      return;
+    }
+  };
+
+  const goBack = () => {
+    if (step === 1) return;
+    if (step === 2) {
+      setStep(1);
+      return;
+    }
+    if (step === 3) {
+      resetImports();
+      setStep(2);
+      return;
+    }
+    if (step === 4) {
+      setStep(3);
+      return;
+    }
+    if (step === 5) {
+      setStep(4);
+      return;
+    }
+  };
+
+  const parse = async () => {
+    if (!token) {
+      toast.error("Missing session", { description: "Please sign in again." });
+      return;
+    }
+    if (!mappedFilesReady) return;
+
+    const note = noteForm.getValues("note")?.trim() || undefined;
+    const filesPayload: ImportPreviewRequest["files"] = await Promise.all(
+      files.map(async (f) => ({
+        filename: f.filename,
+        content_base64: await toBase64(f.file),
+        account_id: f.accountId!,
+      })),
+    );
+    previewImports({ files: filesPayload, note });
+  };
+
+  const submit = commitForm.handleSubmit(async (values) => {
+    if (!token) {
+      toast.error("Missing session", { description: "Please sign in again." });
+      return;
+    }
+    const note = noteForm.getValues("note")?.trim() || undefined;
+    const payload: ImportCommitRequest = {
+      note,
+      rows: values.rows.map((row) => ({
+        id: row.id,
+        account_id: row.account_id,
+        occurred_at: row.occurred_at,
+        amount: row.amount,
+        description: row.description,
+        category_id: row.category_id ?? null,
+        subscription_id: row.subscription_id ?? null,
+        transfer_account_id: row.transfer_account_id ?? null,
+        tax_event_type:
+          (row.tax_event_type as TaxEventType | null | undefined) ?? null,
+        delete: Boolean(row.delete),
+      })),
+    };
+    commitImports(payload);
+    setCommitTriggered(true);
   });
 
-  const setRowValue = (
-    rowId: string,
-    key: keyof CommitFormValues["rows"][number],
-    value: unknown,
-  ) => {
-    const index = commitFields.findIndex((field) => field.row_id === rowId);
-    if (index < 0) return;
-    switch (key) {
-      case "description":
-        commitForm.setValue(
-          `rows.${index}.description`,
-          (value as string | undefined) ?? undefined,
-          { shouldDirty: true },
+  const stepper = (
+    <div className="grid gap-3 md:grid-cols-5">
+      {steps.map((s) => {
+        const active = s.key === step;
+        const done = s.key < step;
+        return (
+          <div
+            key={s.key}
+            className={cn(
+              "rounded-lg border bg-white p-3",
+              active ? "border-slate-300" : "border-slate-200 opacity-80",
+            )}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500">
+                Step {s.key}
+              </span>
+              {done ? (
+                <span className="text-xs font-semibold text-emerald-700">
+                  Done
+                </span>
+              ) : null}
+            </div>
+            <div className="mt-1 text-sm font-semibold text-slate-900">
+              {s.label}
+            </div>
+            <div className="mt-1 text-xs text-slate-500">{s.description}</div>
+          </div>
         );
-        return;
-      case "amount":
-        commitForm.setValue(
-          `rows.${index}.amount`,
-          (value as string | undefined) ?? undefined,
-          { shouldDirty: true },
-        );
-        return;
-      case "occurred_at":
-        commitForm.setValue(
-          `rows.${index}.occurred_at`,
-          (value as string | undefined) ?? undefined,
-          { shouldDirty: true },
-        );
-        return;
-      case "category_id":
-        commitForm.setValue(
-          `rows.${index}.category_id`,
-          (value as string | null | undefined) ?? null,
-          { shouldDirty: true },
-        );
-        return;
-      case "account_id":
-        commitForm.setValue(
-          `rows.${index}.account_id`,
-          (value as string | null | undefined) ?? null,
-          { shouldDirty: true },
-        );
-        return;
-      case "subscription_id":
-        commitForm.setValue(
-          `rows.${index}.subscription_id`,
-          (value as string | null | undefined) ?? null,
-          { shouldDirty: true },
-        );
-        return;
-      case "transfer_account_id":
-        commitForm.setValue(
-          `rows.${index}.transfer_account_id`,
-          (value as string | null | undefined) ?? null,
-          { shouldDirty: true },
-        );
-        return;
-      case "delete":
-        commitForm.setValue(`rows.${index}.delete`, Boolean(value), {
-          shouldDirty: true,
-        });
-        return;
-      case "tax_event_type":
-        commitForm.setValue(
-          `rows.${index}.tax_event_type`,
-          (value as TaxEventType | null | undefined) ?? null,
-          { shouldDirty: true },
-        );
-        return;
-      default:
-        return;
-    }
-  };
-
-  const createSubscriptionForRow = async (row: ImportRowRead) => {
-    const index = commitFields.findIndex((field) => field.row_id === row.id);
-    if (index < 0) return;
-    const formRow = commitForm.getValues(`rows.${index}`);
-    const base = deriveRowDefaults(row, fileAccountMap.get(row.file_id));
-    const descriptionText = (
-      formRow.description ||
-      base.description ||
-      ""
-    ).trim();
-    const dateValue = formRow.occurred_at || base.occurred_at || "";
-
-    if (!descriptionText) {
-      toast.error("Add a description first", {
-        description: "Use a description to seed the subscription matcher.",
-      });
-      return;
-    }
-
-    if (!token) {
-      toast.error("Missing session", {
-        description: "Sign in again to create a subscription.",
-      });
-      return;
-    }
-
-    setSubscriptionsLoading(true);
-    try {
-      const payload = {
-        name: descriptionText.slice(0, 120),
-        matcher_text: descriptionText.slice(0, 255),
-        matcher_day_of_month: dayFromDateText(dateValue),
-        is_active: true,
-      };
-      const { data } = await apiFetch<SubscriptionRead>({
-        path: "/subscriptions",
-        method: "POST",
-        body: payload,
-        schema: subscriptionSchema,
-        token,
-      });
-      setSubscriptions((prev) => [
-        data,
-        ...prev.filter((s) => s.id !== data.id),
-      ]);
-      setRowValue(row.id, "subscription_id", data.id);
-      toast.success("Subscription created", {
-        description: data.name,
-      });
-    } catch (error) {
-      toast.error("Unable to create subscription", {
-        description:
-          error instanceof Error ? error.message : "Please try again shortly.",
-      });
-    } finally {
-      setSubscriptionsLoading(false);
-    }
-  };
-
-  const watchedRows = commitForm.watch("rows") ?? [];
-  const loanAccounts = useMemo(
-    () => accounts.filter((acc) => acc.account_type === AccountType.DEBT),
-    [accounts],
+      })}
+    </div>
   );
 
   return (
     <MotionPage className="space-y-4">
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
           <p className="text-xs tracking-wide text-slate-500 uppercase">
             Imports
           </p>
           <h1 className="text-2xl font-semibold text-slate-900">
-            Stage, review, then save
+            Upload, map, parse, audit, submit
           </h1>
           <p className="text-sm text-slate-500">
-            Upload multiple files, get AI suggestions, edit inline, and commit
-            when ready.
+            Files are never stored. Transactions are created only when you
+            submit.
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-600">
-          {loading || uploading ? (
+          {loading ? (
             <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
               <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-              Processing
+              Parsing
             </span>
           ) : null}
           {saving ? (
             <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
               <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-              Saving
+              Submitting
             </span>
           ) : null}
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)] lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-slate-800">
-              Upload files (add more anytime)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <label
-              ref={dropRef}
-              onDragOver={(e) => {
-                e.preventDefault();
-                dropRef.current?.classList.add("border-slate-400");
-              }}
-              onDragLeave={() =>
-                dropRef.current?.classList.remove("border-slate-400")
-              }
-              onDrop={(e) => {
-                e.preventDefault();
-                dropRef.current?.classList.remove("border-slate-400");
-                handleFiles(e.dataTransfer.files);
-              }}
-              className="flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center transition hover:border-slate-400"
-            >
-              <UploadCloud className="h-8 w-8 text-slate-500" />
-              <p className="mt-2 text-sm font-medium text-slate-800">
-                Drop bank XLSX files
-              </p>
-              <p className="text-xs text-slate-500">
-                Assign the bank type per file. You can upload more after
-                staging.
-              </p>
-              <input
-                type="file"
-                multiple
-                accept=".xlsx"
-                className="hidden"
-                onChange={(e) => handleFiles(e.target.files)}
-              />
-            </label>
+      {stepper}
 
-            <div className="space-y-2">
-              {fileFields.length === 0 ? (
-                <p className="text-slate-500">No files added yet.</p>
-              ) : (
-                fileFields.map((lf, idx) => (
-                  <div
-                    key={lf.id}
-                    className="grid grid-cols-[1.2fr,1fr,1fr,auto] items-center gap-2 rounded border border-slate-200 bg-white px-3 py-2"
-                  >
-                    <span className="truncate text-sm font-medium text-slate-800">
-                      {lf.filename}
-                    </span>
-                    <select
-                      className="rounded border border-slate-200 px-2 py-1 text-sm"
-                      value={(lf.accountId as string | undefined) || ""}
-                      onChange={(e) =>
-                        updateFile(idx, {
-                          ...lf,
-                          accountId: e.target.value || undefined,
-                        })
-                      }
-                    >
-                      <option value="">Account (optional)</option>
-                      {accounts.map((acc) => (
-                        <option key={acc.id} value={acc.id}>
-                          {acc.account_type} - {acc.id.slice(0, 6)}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="rounded border border-slate-200 px-2 py-1 text-sm"
-                      value={(lf.bankType as string | undefined) || ""}
-                      onChange={(e) =>
-                        updateFile(idx, {
-                          ...lf,
-                          bankType: (e.target.value || undefined) as
-                            | BankImportType
-                            | undefined,
-                        })
-                      }
-                    >
-                      <option value="">Select bank</option>
-                      {bankOptions.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => removeFile(idx)}
-                      className="text-slate-500"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))
-              )}
-              {uploadForm.formState.errors.files ? (
-                <p className="text-xs text-rose-600">
-                  {uploadForm.formState.errors.files.root?.message ??
-                    uploadForm.formState.errors.files?.message ??
-                    ""}
-                </p>
-              ) : null}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <label className="text-sm text-slate-700">Note (optional)</label>
-              <textarea
-                className="min-h-[60px] rounded border border-slate-200 px-3 py-2"
-                {...uploadForm.register("note")}
-                placeholder="e.g., January statements"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2">
-              {currentSession ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-slate-600"
-                  onClick={() => {
-                    resetImportSession();
-                    commitForm.reset({ rows: [] });
-                  }}
-                >
-                  Reset session
-                </Button>
-              ) : null}
-              <Button
-                onClick={() => void upload()}
-                disabled={uploading || fileFields.length === 0}
-                className="gap-2"
-              >
-                {uploading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Plus className="h-4 w-4" />
-                )}
-                Stage files
-              </Button>
-            </div>
+      {error ? (
+        <Card className="border-rose-200 bg-rose-50">
+          <CardContent className="py-4 text-sm text-rose-700">
+            {error}
           </CardContent>
         </Card>
+      ) : null}
 
-        <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-slate-800">
-              Session summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm text-slate-700">
-            {currentSession ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600">Session</span>
-                  <span className="text-xs font-semibold text-slate-900">
-                    {currentSession.id.slice(0, 8)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600">Files</span>
-                  <span className="font-semibold text-slate-900">
-                    {currentSession.file_count}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600">Rows</span>
-                  <span className="font-semibold text-slate-900">
-                    {currentSession.total_rows}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600">Errors</span>
-                  <span className="font-semibold text-slate-900">
-                    {currentSession.total_errors}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600">Status</span>
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-xs font-semibold",
-                      badgeTone[currentSession.status] ||
-                        "bg-slate-100 text-slate-700",
-                    )}
-                  >
-                    {currentSession.status}
-                  </span>
-                </div>
-                <Button
-                  disabled={!rows.length || saving}
-                  className="mt-2 w-full gap-2"
-                  onClick={() => void commit()}
-                >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Check className="h-4 w-4" />
-                  )}
-                  Save all to transactions
-                </Button>
-              </>
-            ) : (
-              <p className="text-slate-500">
-                Stage files to see a session summary.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
+      <Card className="border-slate-200">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm text-slate-800">
-            Staged transactions
+            {steps.find((s) => s.key === step)?.label}
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          {loading && !rows.length ? (
-            <Skeleton className="h-32 w-full" />
-          ) : null}
-          {!rows.length ? (
-            <p className="text-sm text-slate-500">
-              No staged rows yet. Upload files to see parsed transactions.
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Suggested</TableHead>
-                  <TableHead>Subscription</TableHead>
-                  <TableHead>Account</TableHead>
-                  <TableHead>Loan</TableHead>
-                  <TableHead>Delete</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {commitFields.map((field, idx) => {
-                  const row = rowMap.get(field.row_id);
-                  if (!row) return null;
-                  const formRow = watchedRows[idx] ?? field;
-                  const suggestedSubName = row.suggested_subscription_name;
-                  const suggestedSubId = row.suggested_subscription_id;
-                  const suggestedSubConfidence =
-                    row.suggested_subscription_confidence;
-                  const suggestedSubReason = row.suggested_subscription_reason;
+        <CardContent className="space-y-4">
+          {step === 1 ? (
+            <>
+              <label className="flex min-h-[140px] cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center transition hover:border-slate-400">
+                <UploadCloud className="h-8 w-8 text-slate-500" />
+                <p className="mt-2 text-sm font-medium text-slate-800">
+                  Drop bank XLSX files
+                </p>
+                <p className="text-xs text-slate-500">
+                  You will map each file to an account in the next step.
+                </p>
+                <input
+                  type="file"
+                  multiple
+                  accept=".xlsx"
+                  className="hidden"
+                  onChange={(e) => handleSelectFiles(e.target.files)}
+                />
+              </label>
 
-                  return (
-                    <TableRow key={field.id}>
-                      <TableCell className="min-w-[120px]">
-                        <input
-                          type="date"
-                          value={formRow.occurred_at ?? ""}
-                          onChange={(e) =>
-                            setRowValue(
-                              row.id,
-                              "occurred_at",
-                              e.target.value || undefined,
-                            )
-                          }
-                          className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <input
-                          type="text"
-                          value={formRow.description ?? ""}
-                          onChange={(e) =>
-                            setRowValue(row.id, "description", e.target.value)
-                          }
-                          className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
-                          placeholder="Description"
-                        />
-                        {row.suggested_reason ? (
-                          <p className="text-xs text-slate-500">
-                            {row.suggested_reason}
-                          </p>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="min-w-[120px]">
-                        <input
-                          type="text"
-                          value={formRow.amount ?? ""}
-                          onChange={(e) =>
-                            setRowValue(row.id, "amount", e.target.value)
-                          }
-                          className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
-                        />
-                      </TableCell>
-                      <TableCell className="min-w-[180px]">
-                        <div className="flex flex-col gap-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {row.rule_applied ? (
-                              <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
-                                Rule hit
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                                No rule
-                              </span>
-                            )}
-                            {row.rule_summary ? (
-                              <span className="text-[11px] text-slate-500">
-                                {row.rule_summary}
-                              </span>
-                            ) : null}
-                          </div>
-                          <select
-                            className="rounded border border-slate-200 px-2 py-1 text-sm"
-                            value={formRow.category_id ?? ""}
-                            disabled={Boolean(formRow.tax_event_type)}
-                            onChange={(e) =>
-                              setRowValue(
-                                row.id,
-                                "category_id",
-                                e.target.value || null,
-                              )
-                            }
-                          >
-                            <option value="">
-                              {row.suggested_category
-                                ? `Suggested: ${row.suggested_category}`
-                                : "Pick category"}
-                            </option>
-                            {categories.map((cat) => (
-                              <option key={cat.id} value={cat.id}>
-                                {cat.name}
-                              </option>
-                            ))}
-                          </select>
-                          <select
-                            className="rounded border border-slate-200 px-2 py-1 text-sm"
-                            value={formRow.tax_event_type ?? ""}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              const next =
-                                value === TaxEventType.PAYMENT
-                                  ? TaxEventType.PAYMENT
-                                  : value === TaxEventType.REFUND
-                                    ? TaxEventType.REFUND
-                                    : null;
-                              setRowValue(row.id, "tax_event_type", next);
-                              if (next) {
-                                setRowValue(row.id, "category_id", null);
-                                setRowValue(row.id, "subscription_id", null);
-                              }
-                            }}
-                          >
-                            <option value="">Tax: none</option>
-                            <option value="payment">Tax: payment</option>
-                            <option value="refund">Tax: refund</option>
-                          </select>
-                          {row.suggested_confidence ? (
-                            <span className="text-xs text-slate-500">
-                              Confidence{" "}
-                              {Math.round(row.suggested_confidence * 100)}%
-                            </span>
-                          ) : null}
-                          {row.transfer_match ? (
-                            <span className="text-xs text-slate-500">
-                              Transfer? {row.transfer_match.reason}
-                            </span>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell className="min-w-[200px]">
-                        <div className="flex flex-col gap-1">
-                          <select
-                            className="rounded border border-slate-200 px-2 py-1 text-sm"
-                            value={formRow.subscription_id ?? ""}
-                            disabled={Boolean(formRow.tax_event_type)}
-                            onChange={async (e) => {
-                              const value = e.target.value;
-                              if (value === "__create__") {
-                                await createSubscriptionForRow(row);
-                                return;
-                              }
-                              setRowValue(
-                                row.id,
-                                "subscription_id",
-                                value || null,
-                              );
-                            }}
-                          >
-                            <option value="">
-                              {suggestedSubName
-                                ? `Suggested: ${suggestedSubName}`
-                                : "No subscription"}
-                            </option>
-                            {suggestedSubId ? (
-                              <option value={suggestedSubId}>
-                                Use suggested
-                                {suggestedSubConfidence
-                                  ? ` (${Math.round(
-                                      suggestedSubConfidence * 100,
-                                    )}%)`
-                                  : ""}
-                              </option>
-                            ) : null}
-                            {subscriptions.map((sub) => (
-                              <option key={sub.id} value={sub.id}>
-                                {sub.name}
-                              </option>
-                            ))}
-                            <option value="__create__">
-                              Create new from description
-                            </option>
-                          </select>
-                          {suggestedSubReason ? (
-                            <span className="text-xs text-slate-500">
-                              Suggestion: {suggestedSubReason}
-                            </span>
-                          ) : null}
-                          {formRow.subscription_id &&
-                          suggestedSubId === formRow.subscription_id ? (
-                            <span className="text-xs text-emerald-600">
-                              Suggested applied
-                            </span>
-                          ) : null}
-                          {subscriptionsLoading ? (
-                            <span className="text-xs text-slate-500">
-                              Loading subscriptions...
-                            </span>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell className="min-w-[160px]">
-                        <select
-                          className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
-                          value={
-                            formRow.account_id ??
-                            fileAccountMap.get(row.file_id) ??
-                            ""
-                          }
-                          onChange={(e) =>
-                            setRowValue(
-                              row.id,
-                              "account_id",
-                              e.target.value || null,
-                            )
-                          }
-                        >
-                          <option value="">Use file/default account</option>
-                          {accounts.map((acc) => (
-                            <option key={acc.id} value={acc.id}>
-                              {acc.account_type} - {acc.id.slice(0, 6)}
-                            </option>
-                          ))}
-                        </select>
-                      </TableCell>
-                      <TableCell className="min-w-[160px]">
-                        <select
-                          className="w-full rounded border border-slate-200 px-2 py-1 text-sm"
-                          value={formRow.transfer_account_id ?? ""}
-                          onChange={(e) =>
-                            setRowValue(
-                              row.id,
-                              "transfer_account_id",
-                              e.target.value || null,
-                            )
-                          }
-                        >
-                          <option value="">No loan</option>
-                          {loanAccounts.map((acc) => (
-                            <option key={acc.id} value={acc.id}>
-                              {acc.name || "Loan"} - {acc.id.slice(0, 6)}
-                            </option>
-                          ))}
-                        </select>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Links this row as a transfer to the loan.
+              {files.length ? (
+                <div className="space-y-2">
+                  {files.map((f) => (
+                    <div
+                      key={f.id}
+                      className="flex items-center justify-between rounded border border-slate-200 bg-white px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-800">
+                          {f.filename}
                         </p>
-                      </TableCell>
-                      <TableCell className="min-w-[80px]">
-                        <Controller
-                          control={commitForm.control}
-                          name={`rows.${idx}.delete` as const}
-                          render={({ field: { value, onChange } }) => (
-                            <label className="flex items-center gap-2 text-slate-700">
-                              <input
-                                type="checkbox"
-                                checked={Boolean(value)}
-                                onChange={(e) => onChange(e.target.checked)}
-                              />
-                              Remove
-                            </label>
-                          )}
-                        />
-                      </TableCell>
-                    </TableRow>
+                        <p className="text-xs text-slate-500">
+                          {(f.file.size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="text-slate-500"
+                        onClick={() => removeFile(f.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">No files selected yet.</p>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-sm text-slate-700">
+                  Note (optional)
+                </label>
+                <textarea
+                  className="min-h-[60px] w-full rounded border border-slate-200 px-3 py-2"
+                  {...noteForm.register("note")}
+                  placeholder="e.g., January statements"
+                />
+              </div>
+            </>
+          ) : null}
+
+          {step === 2 ? (
+            <>
+              <p className="text-sm text-slate-600">
+                Select the account for each file. The account&apos;s statement
+                format determines how the file is parsed.
+              </p>
+              <div className="space-y-2">
+                {files.map((f) => {
+                  const account = f.accountId
+                    ? accountById.get(f.accountId)
+                    : undefined;
+                  const bankType = account?.bank_import_type ?? null;
+                  return (
+                    <div
+                      key={f.id}
+                      className="grid grid-cols-[1.3fr,1fr,auto] items-center gap-3 rounded border border-slate-200 bg-white px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-800">
+                          {f.filename}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Statement format:{" "}
+                          <span className="font-semibold text-slate-700">
+                            {bankLabel(bankType)}
+                          </span>
+                        </p>
+                      </div>
+                      <select
+                        className="w-full rounded border border-slate-200 px-2 py-2 text-sm"
+                        value={f.accountId ?? ""}
+                        onChange={(e) =>
+                          updateFileAccount(f.id, e.target.value || null)
+                        }
+                      >
+                        <option value="">Select account</option>
+                        {accounts.map((acc) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.name} ({bankLabel(acc.bank_import_type)})
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="text-slate-500"
+                        onClick={() => removeFile(f.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   );
                 })}
-              </TableBody>
-            </Table>
-          )}
+              </div>
+              {!mappedFilesReady ? (
+                <p className="text-xs text-rose-600">
+                  Assign an account to every file to continue.
+                </p>
+              ) : null}
+            </>
+          ) : null}
+
+          {step === 3 ? (
+            <>
+              <p className="text-sm text-slate-600">
+                Parse the files using each account&apos;s configured statement
+                format.
+              </p>
+              <Button
+                className="gap-2"
+                disabled={!mappedFilesReady || loading}
+                onClick={() => void parse()}
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Parse files
+              </Button>
+
+              {preview ? (
+                <>
+                  <Separator />
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-slate-800">
+                      Parse summary
+                    </p>
+                    {preview.files.map((f) => (
+                      <div
+                        key={f.id}
+                        className={cn(
+                          "rounded border px-3 py-2 text-sm",
+                          f.error_count
+                            ? "border-rose-200 bg-rose-50 text-rose-800"
+                            : "border-emerald-200 bg-emerald-50 text-emerald-800",
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{f.filename}</span>
+                          <span className="text-xs font-semibold">
+                            {f.row_count} rows, {f.error_count} errors
+                          </span>
+                        </div>
+                        {f.errors?.length ? (
+                          <ul className="mt-2 space-y-1 text-xs">
+                            {f.errors.slice(0, 5).map((err, idx) => (
+                              <li key={`${f.id}-${idx}`}>
+                                Row {err.row_number}: {err.message}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                  {previewHasErrors ? (
+                    <p className="text-xs text-rose-600">
+                      Fix errors (typically account statement format) to
+                      continue.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-500">
+                      Parsed successfully. Continue to audit.
+                    </p>
+                  )}
+                </>
+              ) : null}
+            </>
+          ) : null}
+
+          {step === 4 && preview ? (
+            <>
+              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">
+                    Draft transactions
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    Edit values, apply categories, or mark rows for deletion.
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!commitRows.length}
+                  onClick={() => {
+                    commitRows.forEach((row, idx) => {
+                      const previewRow = (
+                        preview as ImportPreviewResponse
+                      ).rows.find((r) => r.id === row.id);
+                      if (!previewRow?.suggested_category_id) return;
+                      commitForm.setValue(
+                        `rows.${idx}.category_id`,
+                        previewRow.suggested_category_id,
+                        { shouldDirty: true },
+                      );
+                    });
+                    toast.success("Applied suggested categories");
+                  }}
+                >
+                  Apply suggested categories
+                </Button>
+              </div>
+
+              <div className="rounded border border-slate-200">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-[56px]">Del</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Description</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Tax event</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {commitRows.map((row, idx) => {
+                      const previewRow = preview.rows.find(
+                        (r) => r.id === row.id,
+                      );
+                      const suggested = previewRow?.suggested_category_name;
+                      const suggestedOk =
+                        Boolean(previewRow?.suggested_category_id) &&
+                        commitForm.watch(`rows.${idx}.category_id`) ===
+                          previewRow?.suggested_category_id;
+                      return (
+                        <TableRow key={row.id} className="align-top">
+                          <TableCell>
+                            <input
+                              type="checkbox"
+                              checked={Boolean(
+                                commitForm.watch(`rows.${idx}.delete`),
+                              )}
+                              onChange={(e) =>
+                                commitForm.setValue(
+                                  `rows.${idx}.delete`,
+                                  e.target.checked,
+                                  {
+                                    shouldDirty: true,
+                                  },
+                                )
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <input
+                              className="w-[140px] rounded border border-slate-200 px-2 py-1 text-sm"
+                              value={
+                                commitForm.watch(`rows.${idx}.occurred_at`) ??
+                                ""
+                              }
+                              onChange={(e) =>
+                                commitForm.setValue(
+                                  `rows.${idx}.occurred_at`,
+                                  e.target.value,
+                                  {
+                                    shouldDirty: true,
+                                  },
+                                )
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="space-y-1">
+                              <input
+                                className="w-full min-w-[260px] rounded border border-slate-200 px-2 py-1 text-sm"
+                                value={
+                                  commitForm.watch(`rows.${idx}.description`) ??
+                                  ""
+                                }
+                                onChange={(e) =>
+                                  commitForm.setValue(
+                                    `rows.${idx}.description`,
+                                    e.target.value,
+                                    { shouldDirty: true },
+                                  )
+                                }
+                              />
+                              {suggested ? (
+                                <p className="text-xs text-slate-500">
+                                  Suggested:{" "}
+                                  <span
+                                    className={cn(
+                                      "font-semibold",
+                                      suggestedOk
+                                        ? "text-emerald-700"
+                                        : "text-slate-700",
+                                    )}
+                                  >
+                                    {suggested}
+                                  </span>
+                                </p>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <input
+                              className="w-[120px] rounded border border-slate-200 px-2 py-1 text-sm"
+                              value={
+                                commitForm.watch(`rows.${idx}.amount`) ?? ""
+                              }
+                              onChange={(e) =>
+                                commitForm.setValue(
+                                  `rows.${idx}.amount`,
+                                  e.target.value,
+                                  {
+                                    shouldDirty: true,
+                                  },
+                                )
+                              }
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <select
+                              className="w-[200px] rounded border border-slate-200 px-2 py-1 text-sm"
+                              value={
+                                commitForm.watch(`rows.${idx}.category_id`) ??
+                                ""
+                              }
+                              onChange={(e) =>
+                                commitForm.setValue(
+                                  `rows.${idx}.category_id`,
+                                  e.target.value || null,
+                                  { shouldDirty: true },
+                                )
+                              }
+                              disabled={Boolean(
+                                commitForm.watch(`rows.${idx}.tax_event_type`),
+                              )}
+                            >
+                              <option value="">No category</option>
+                              {categories.map((cat) => (
+                                <option key={cat.id} value={cat.id}>
+                                  {cat.name}
+                                </option>
+                              ))}
+                            </select>
+                          </TableCell>
+                          <TableCell>
+                            <select
+                              className="w-[160px] rounded border border-slate-200 px-2 py-1 text-sm"
+                              value={
+                                commitForm.watch(
+                                  `rows.${idx}.tax_event_type`,
+                                ) ?? ""
+                              }
+                              onChange={(e) =>
+                                commitForm.setValue(
+                                  `rows.${idx}.tax_event_type`,
+                                  (e.target.value ||
+                                    null) as TaxEventType | null,
+                                  { shouldDirty: true },
+                                )
+                              }
+                            >
+                              <option value="">None</option>
+                              <option value="payment">Payment</option>
+                              <option value="refund">Refund</option>
+                            </select>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
+          ) : null}
+
+          {step === 5 ? (
+            <div className="space-y-3">
+              <p className="text-sm text-slate-600">
+                This will create transactions in the ledger. If any row fails
+                validation, nothing will be saved.
+              </p>
+              <Button
+                className="gap-2"
+                disabled={!preview || saving || previewHasErrors}
+                onClick={() => void submit()}
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
+                Submit transactions
+              </Button>
+              <p className="text-xs text-slate-500">
+                Tip: go back to adjust rows before submitting.
+              </p>
+            </div>
+          ) : null}
+
+          <Separator />
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              onClick={goBack}
+              disabled={step === 1 || loading || saving}
+            >
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+
+            <div className="flex items-center gap-2">
+              {step === 3 ? (
+                <Button
+                  onClick={goNext}
+                  disabled={!canProceedToAudit || loading || saving}
+                >
+                  Continue
+                  <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              ) : step === 4 ? (
+                <Button
+                  onClick={goNext}
+                  disabled={loading || saving || previewHasErrors}
+                >
+                  Review submit
+                  <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              ) : step < 5 ? (
+                <Button
+                  onClick={goNext}
+                  disabled={
+                    (step === 1 && !files.length) ||
+                    (step === 2 && !mappedFilesReady) ||
+                    loading ||
+                    saving
+                  }
+                >
+                  Next
+                  <ChevronRight className="ml-2 h-4 w-4" />
+                </Button>
+              ) : (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    resetImports();
+                    setFiles([]);
+                    noteForm.reset({ note: "" });
+                    commitForm.reset({ rows: [] });
+                    setStep(1);
+                  }}
+                >
+                  Start over
+                </Button>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
     </MotionPage>
   );
 };
-
-export default Imports;

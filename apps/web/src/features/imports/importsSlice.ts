@@ -1,15 +1,15 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { ImportSession } from "@/types/api";
+import type { ImportPreviewResponse } from "@/types/api";
 
 export interface ImportsState {
-  session?: ImportSession;
+  preview?: ImportPreviewResponse;
   loading: boolean;
   saving: boolean;
   error?: string;
 }
 
 const initialState: ImportsState = {
-  session: undefined,
+  preview: undefined,
   loading: false,
   saving: false,
 };
@@ -18,12 +18,15 @@ const importsSlice = createSlice({
   name: "imports",
   initialState,
   reducers: {
-    setImportSession(state, action: PayloadAction<ImportSession | undefined>) {
-      state.session = action.payload;
+    setImportPreview(
+      state,
+      action: PayloadAction<ImportPreviewResponse | undefined>,
+    ) {
+      state.preview = action.payload;
       state.error = undefined;
     },
-    clearImportSession(state) {
-      state.session = undefined;
+    clearImportPreview(state) {
+      state.preview = undefined;
     },
     setImportsLoading(state, action: PayloadAction<boolean>) {
       state.loading = action.payload;
@@ -32,12 +35,14 @@ const importsSlice = createSlice({
       state.saving = action.payload;
     },
     setImportsError(state, action: PayloadAction<string | undefined>) {
-      state.error = action.payload ?? "Unable to process import job";
+      state.error = action.payload;
+    },
+    clearImportsError(state) {
+      state.error = undefined;
     },
   },
   selectors: {
-    selectImportsState: (state) => state,
-    selectImportSession: (state) => state.session,
+    selectImportPreview: (state) => state.preview,
     selectImportsLoading: (state) => state.loading,
     selectImportsSaving: (state) => state.saving,
     selectImportsError: (state) => state.error,
@@ -45,18 +50,19 @@ const importsSlice = createSlice({
 });
 
 export const {
-  setImportSession,
-  clearImportSession,
+  setImportPreview,
+  clearImportPreview,
   setImportsLoading,
   setImportsSaving,
   setImportsError,
+  clearImportsError,
 } = importsSlice.actions;
 
 export const {
-  selectImportsState,
-  selectImportSession,
+  selectImportPreview,
   selectImportsLoading,
   selectImportsSaving,
   selectImportsError,
 } = importsSlice.selectors;
+
 export const ImportsReducer = importsSlice.reducer;

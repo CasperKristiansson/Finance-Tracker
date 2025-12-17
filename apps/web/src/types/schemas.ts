@@ -769,97 +769,76 @@ export const importErrorSchema = z.object({
   message: z.string(),
 });
 
-export const importFileUploadSchema = z.object({
+export const importPreviewFileSchema = z.object({
   filename: z.string(),
   content_base64: z.string(),
-  account_id: z.string().optional(),
-  bank_type: bankImportTypeSchema,
+  account_id: z.string(),
 });
 
-export const importExampleTransactionSchema = z.object({
-  description: z.string(),
-  amount: z.string(),
-  category_hint: z.string(),
-});
-
-export const importCreateRequestSchema = z.object({
-  files: z.array(importFileUploadSchema).min(1),
+export const importPreviewRequestSchema = z.object({
+  files: z.array(importPreviewFileSchema).min(1),
   note: z.string().optional(),
-  examples: z.array(importExampleTransactionSchema).optional(),
 });
 
-export const importFileSchema = z.object({
+export const importPreviewFileReadSchema = z.object({
   id: z.string(),
   filename: z.string(),
-  account_id: z.string().optional(),
+  account_id: z.string(),
+  bank_import_type: bankImportTypeSchema.nullable().optional(),
   row_count: numeric,
   error_count: numeric,
-  status: z.string(),
-  bank_type: bankImportTypeSchema,
-  preview_rows: z.array(z.record(z.string(), z.unknown())).default([]),
   errors: z.array(importErrorSchema).default([]),
+  preview_rows: z.array(z.record(z.string(), z.unknown())).default([]),
 });
 
-export const importRowSchema = z
-  .object({
-    id: z.string(),
-    file_id: z.string(),
-    row_index: numeric,
-    data: z.record(z.string(), z.unknown()),
-    suggested_category: nullableString,
-    suggested_confidence: optionalNumeric.nullable(),
-    suggested_reason: nullableString,
-    suggested_subscription_id: nullableString,
-    suggested_subscription_name: nullableString,
-    suggested_subscription_confidence: optionalNumeric.nullable(),
-    suggested_subscription_reason: nullableString,
-    transfer_match: z.record(z.string(), z.string()).nullable().optional(),
-    rule_applied: z.boolean().nullable().optional(),
-    rule_type: nullableString,
-    rule_summary: nullableString,
-  })
-  .loose();
-
-export const importBatchSchema = z.object({
+export const importPreviewRowReadSchema = z.object({
   id: z.string(),
-  source_name: nullableString,
-  note: nullableString,
-  created_at: z.string(),
-  updated_at: z.string(),
-  file_count: numeric,
-  total_rows: numeric,
-  total_errors: numeric,
-  status: z.string(),
-  files: z.array(importFileSchema).default([]),
+  file_id: z.string(),
+  row_index: numeric,
+  account_id: z.string(),
+  occurred_at: z.string(),
+  amount: z.string(),
+  description: z.string(),
+  suggested_category_id: nullableString,
+  suggested_category_name: nullableString,
+  suggested_confidence: optionalNumeric.nullable(),
+  suggested_reason: nullableString,
+  suggested_subscription_id: nullableString,
+  suggested_subscription_name: nullableString,
+  suggested_subscription_confidence: optionalNumeric.nullable(),
+  suggested_subscription_reason: nullableString,
+  transfer_match: z.record(z.string(), z.unknown()).nullable().optional(),
+  rule_applied: z.boolean().nullable().optional(),
+  rule_type: nullableString,
+  rule_summary: nullableString,
 });
 
-export const importSessionSchema = importBatchSchema.extend({
-  rows: z.array(importRowSchema).default([]),
-});
-
-export const importListResponseSchema = z.object({
-  imports: z.array(importBatchSchema),
-});
-
-export const importSessionResponseSchema = z.object({
-  import_session: importSessionSchema,
+export const importPreviewResponseSchema = z.object({
+  files: z.array(importPreviewFileReadSchema),
+  rows: z.array(importPreviewRowReadSchema),
 });
 
 export const importCommitRowSchema = z.object({
-  row_id: z.string(),
+  id: z.string(),
+  account_id: z.string(),
+  occurred_at: z.string(),
+  amount: z.string(),
+  description: z.string(),
   category_id: nullableString,
-  account_id: nullableString,
-  transfer_account_id: nullableString,
-  description: nullableString,
-  amount: nullableString,
-  occurred_at: nullableString,
   subscription_id: nullableString,
+  transfer_account_id: nullableString,
   tax_event_type: taxEventTypeSchema.nullable().optional(),
   delete: z.boolean().optional(),
 });
 
 export const importCommitRequestSchema = z.object({
+  note: z.string().optional(),
   rows: z.array(importCommitRowSchema),
+});
+
+export const importCommitResponseSchema = z.object({
+  import_batch_id: z.string(),
+  transaction_ids: z.array(z.string()),
 });
 
 export const taxEventSchema = z.object({
@@ -1282,19 +1261,13 @@ export type SubscriptionSummaryResponse = z.infer<
 >;
 export type SubscriptionListResponse = z.infer<typeof subscriptionListSchema>;
 export type ImportError = z.infer<typeof importErrorSchema>;
-export type ImportFileRead = z.infer<typeof importFileSchema>;
-export type ImportRowRead = z.infer<typeof importRowSchema>;
-export type ImportBatch = z.infer<typeof importBatchSchema>;
-export type ImportListResponse = z.infer<typeof importListResponseSchema>;
-export type ImportSession = z.infer<typeof importSessionSchema>;
-export type ImportSessionResponse = z.infer<typeof importSessionResponseSchema>;
-export type ImportFileUpload = z.infer<typeof importFileUploadSchema>;
-export type ImportExampleTransaction = z.infer<
-  typeof importExampleTransactionSchema
->;
-export type ImportCreateRequest = z.infer<typeof importCreateRequestSchema>;
+export type ImportPreviewRequest = z.infer<typeof importPreviewRequestSchema>;
+export type ImportPreviewFileRead = z.infer<typeof importPreviewFileReadSchema>;
+export type ImportPreviewRowRead = z.infer<typeof importPreviewRowReadSchema>;
+export type ImportPreviewResponse = z.infer<typeof importPreviewResponseSchema>;
 export type ImportCommitRow = z.infer<typeof importCommitRowSchema>;
 export type ImportCommitRequest = z.infer<typeof importCommitRequestSchema>;
+export type ImportCommitResponse = z.infer<typeof importCommitResponseSchema>;
 export type TaxEventRead = z.infer<typeof taxEventSchema>;
 export type TaxEventCreateRequest = z.infer<typeof taxEventCreateRequestSchema>;
 export type TaxEventCreateResponse = z.infer<

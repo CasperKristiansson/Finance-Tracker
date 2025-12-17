@@ -16,7 +16,7 @@
   - Rollout/flagging: Always-on; legacy endpoints removed.
   - Blockers (OQ-xx): None
 
-- [ ] M3: Rebuild /imports UI as strict stepper
+- [x] M3: Rebuild /imports UI as strict stepper
   - Goal: Implement a wizard-style UX: upload → map each file to an account → parse → audit → submit.
   - Deliverables: New page flow and client-side state for drafts + edits; calls the new preview/commit endpoints.
   - Acceptance criteria: User can upload 1+ XLSX files, assign each to an account (required), parse using the account’s configured bank type, audit/edit rows, and submit to create transactions; nothing is persisted until submit.
@@ -47,22 +47,17 @@ Account-level configuration determines which parser to apply for a file (instead
 
 ## Frontend (current)
 - Route: `apps/web/src/data/routes.ts` uses `/imports`.
-- `apps/web/src/pages/imports/imports.tsx` implements a “stage, review, commit” flow:
-  - User uploads XLSX, selects `bank_type` per file, optionally selects `account_id`.
-  - Frontend sends JSON payload with base64 file contents to `POST /imports`.
-  - UI then edits row overrides and calls `POST /imports/{batch_id}/commit`.
+- `apps/web/src/pages/imports/imports.tsx` implements a strict stepper flow:
+  - Upload 1+ XLSX files.
+  - Map each file to an `account_id` (required); bank parsing uses each account’s configured `bank_import_type`.
+  - Parse via `POST /imports/preview`, audit locally (no persistence), then submit via `POST /imports/commit`.
 
 ## Backend (current)
 - Endpoints configured in `infra/serverless/serverless.yml`:
-  - `GET /imports`, `POST /imports`, `GET /imports/{batch_id}`, `POST /imports/{batch_id}/files`, `POST /imports/{batch_id}/commit`
+  - `POST /imports/preview`, `POST /imports/commit`
 - `apps/api/services/imports.py`:
-  - Parses XLSX per-bank and writes:
-    - `transaction_import_batches`
-    - `import_files`
-    - `import_rows`
-    - `import_errors`
-  - Applies deterministic rule matches (`import_rules`) + subscription suggestion + optional Bedrock suggestion (best-effort, currently can silently no-op).
-  - Commit converts staged rows to actual `transactions` and `transaction_legs`, and records `import_rules` from user overrides.
+  - Preview parses XLSX per-bank and returns per-file errors + draft rows without persisting import files/rows/errors.
+  - Commit persists reviewed rows as transactions atomically, creating `transaction_import_batches` at commit-time only.
 
 ## Key mismatch with desired behavior
 - Desired: “Return parsed transactions to user without storing anything in the DB; only persist when user submits.”
@@ -265,20 +260,21 @@ Proposed response shape:
   - [x] Verified by `make test`, `make type-check`.
 
 ## M3: Rebuild /imports UI as strict stepper
-- [ ] Add new web API schemas/types for preview/commit in `apps/web/src/types/schemas.ts`.
-- [ ] Update `apps/web/src/hooks/use-api.ts` to add preview + commit calls.
-- [ ] Refactor `apps/web/src/features/imports/*` to store:
+- [x] Add new web API schemas/types for preview/commit in `apps/web/src/types/schemas.ts`.
+- [x] Update `apps/web/src/hooks/use-api.ts` to add preview + commit calls.
+- [x] Refactor `apps/web/src/features/imports/*` to store:
   - Selected files + account mapping
   - Preview response (draft rows + per-file errors)
   - Local edits (description/date/amount/category/etc.) before submit
-- [ ] Rework `apps/web/src/pages/imports/imports.tsx` UX:
+- [x] Rework `apps/web/src/pages/imports/imports.tsx` UX:
   - Step 1: Upload files (XLSX only).
   - Step 2: Map each file to an account (required) and show the account’s configured bank type; parsing fails if the bank type is wrong/missing.
   - Step 3: “Parse files” calls preview endpoint.
   - Step 4: Audit table: inline edits + apply suggestion controls; show errors clearly; support deleting rows; allow `tax_event_type` marking per row.
   - Step 5: “Submit” calls commit endpoint (all-or-nothing), then navigates/refreshes transactions.
-- [ ] Definition of done:
-  - Full flow works against the API, and no import session is created prior to submit.
+- [x] Definition of done:
+  - [x] Full flow works against the API, and no import session is created prior to submit.
+  - [x] Verified by `npm run format -w apps/web`, `npm run lint -w apps/web`.
 
 ## M4: Bedrock suggestions with history context + infra enablement
 - [ ] Infra/network (based on current repo state):
