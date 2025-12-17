@@ -89,6 +89,7 @@ class ImportService:
 
         response_files: list[dict[str, Any]] = []
         response_rows: list[dict[str, Any]] = []
+        rows_by_account: dict[UUID, list[tuple[UUID, str]]] = {}
 
         for file_payload in payload.files:
             file_id = uuid4()
@@ -178,6 +179,9 @@ class ImportService:
                 occurred_at = str(row.get("date") or "")
                 amount = str(row.get("amount") or "")
                 description = str(row.get("description") or "")
+                rows_by_account.setdefault(file_payload.account_id, []).append(
+                    (row_id, description)
+                )
 
                 suggestion = category_suggestions.get(idx - 1)
                 suggested_category_id: UUID | None = None
@@ -196,11 +200,6 @@ class ImportService:
 
                 subscription_hint = subscription_suggestions.get(idx - 1)
                 rule_match = rule_matches.get(idx - 1)
-                related_transactions = self._related_transactions_for_row(
-                    account_id=file_payload.account_id,
-                    description=description,
-                    category_lookup_by_id=category_lookup_by_id,
-                )
 
                 response_rows.append(
                     {
@@ -211,7 +210,6 @@ class ImportService:
                         "occurred_at": occurred_at,
                         "amount": amount,
                         "description": description,
-                        "related_transactions": related_transactions,
                         "suggested_category_id": suggested_category_id,
                         "suggested_category_name": suggested_category_name,
                         "suggested_confidence": suggested_confidence,
@@ -235,50 +233,90 @@ class ImportService:
                     }
                 )
 
+        response_accounts: list[dict[str, Any]] = []
+        for account_id, row_entries in rows_by_account.items():
+            response_accounts.append(
+                self._build_account_context(
+                    account_id=account_id,
+                    row_entries=row_entries,
+                    category_lookup_by_id=category_lookup_by_id,
+                )
+            )
+
         return ImportPreviewResponse.model_validate(
-            {"files": response_files, "rows": response_rows}
+            {"files": response_files, "rows": response_rows, "accounts": response_accounts}
         ).model_dump(mode="python")
 
-    def _related_transactions_for_row(
+    def _build_account_context(
         self,
         *,
         account_id: UUID,
-        description: str,
+        row_entries: list[tuple[UUID, str]],
         category_lookup_by_id: dict[UUID, Category],
-        latest_limit: int = 12,
-        similar_limit: int = 12,
-    ) -> list[dict[str, Any]]:
-        latest = self._latest_transactions_for_account(account_id, limit=latest_limit)
-        merchant_tokens = self._merchant_tokens(description)
-        similar = []
-        if merchant_tokens:
+        latest_limit: int = 40,
+        similar_limit: int = 60,
+        per_row_limit: int = 5,
+    ) -> dict[str, Any]:
+        recent = self._latest_transactions_for_account(account_id, limit=latest_limit)
+
+        tokens: list[str] = []
+        seen_tokens: set[str] = set()
+        for _row_id, description in row_entries:
+            for token in self._merchant_tokens(description):
+                if token in seen_tokens:
+                    continue
+                seen_tokens.add(token)
+                tokens.append(token)
+                if len(tokens) >= 8:
+                    break
+            if len(tokens) >= 8:
+                break
+
+        similar: list[Transaction] = []
+        if tokens:
             similar = self._similar_transactions_for_account(
                 account_id,
-                merchant_tokens=merchant_tokens,
+                merchant_tokens=tokens,
                 limit=similar_limit,
             )
 
-        seen: set[UUID] = set()
-        combined: list[Transaction] = []
-        for tx in [*similar, *latest]:
-            if tx.id in seen:
-                continue
-            seen.add(tx.id)
-            combined.append(tx)
-
-        output: list[dict[str, Any]] = []
-        for tx in combined:
+        def tx_payload(tx: Transaction) -> dict[str, Any]:
             category = category_lookup_by_id.get(tx.category_id) if tx.category_id else None
-            output.append(
-                {
-                    "id": tx.id,
-                    "occurred_at": tx.occurred_at.isoformat(),
-                    "description": tx.description or "",
-                    "category_id": tx.category_id,
-                    "category_name": category.name if category else None,
-                }
-            )
-        return output
+            return {
+                "id": tx.id,
+                "occurred_at": tx.occurred_at.isoformat(),
+                "description": tx.description or "",
+                "category_id": tx.category_id,
+                "category_name": category.name if category else None,
+            }
+
+        recent_payloads = [tx_payload(tx) for tx in recent[:latest_limit]]
+        similar_payloads = [tx_payload(tx) for tx in similar[:similar_limit]]
+
+        similar_by_row: list[dict[str, Any]] = []
+        similar_candidates = similar
+        for row_id, description in row_entries:
+            row_tokens = self._merchant_tokens(description)
+            if not row_tokens:
+                similar_by_row.append({"row_id": row_id, "transaction_ids": []})
+                continue
+            matches: list[UUID] = []
+            for tx in similar_candidates:
+                tx_desc = (tx.description or "").lower()
+                if not tx_desc:
+                    continue
+                if any(token in tx_desc for token in row_tokens):
+                    matches.append(tx.id)
+                if len(matches) >= per_row_limit:
+                    break
+            similar_by_row.append({"row_id": row_id, "transaction_ids": matches})
+
+        return {
+            "account_id": account_id,
+            "recent_transactions": recent_payloads,
+            "similar_transactions": similar_payloads,
+            "similar_by_row": similar_by_row,
+        }
 
     def _latest_transactions_for_account(
         self, account_id: UUID, *, limit: int

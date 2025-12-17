@@ -799,17 +799,6 @@ export const importPreviewRowReadSchema = z.object({
   occurred_at: z.string(),
   amount: z.string(),
   description: z.string(),
-  related_transactions: z
-    .array(
-      z.object({
-        id: z.string(),
-        occurred_at: z.string(),
-        description: z.string(),
-        category_id: nullableString,
-        category_name: nullableString,
-      }),
-    )
-    .default([]),
   suggested_category_id: nullableString,
   suggested_category_name: nullableString,
   suggested_confidence: optionalNumeric.nullable(),
@@ -827,6 +816,43 @@ export const importPreviewRowReadSchema = z.object({
 export const importPreviewResponseSchema = z.object({
   files: z.array(importPreviewFileReadSchema),
   rows: z.array(importPreviewRowReadSchema),
+  accounts: z
+    .array(
+      z.object({
+        account_id: z.string(),
+        recent_transactions: z
+          .array(
+            z.object({
+              id: z.string(),
+              occurred_at: z.string(),
+              description: z.string(),
+              category_id: nullableString,
+              category_name: nullableString,
+            }),
+          )
+          .default([]),
+        similar_transactions: z
+          .array(
+            z.object({
+              id: z.string(),
+              occurred_at: z.string(),
+              description: z.string(),
+              category_id: nullableString,
+              category_name: nullableString,
+            }),
+          )
+          .default([]),
+        similar_by_row: z
+          .array(
+            z.object({
+              row_id: z.string(),
+              transaction_ids: z.array(z.string()).default([]),
+            }),
+          )
+          .default([]),
+      }),
+    )
+    .default([]),
 });
 
 export const importCommitRowSchema = z.object({

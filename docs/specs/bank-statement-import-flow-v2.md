@@ -105,7 +105,7 @@ Account-level configuration determines which parser to apply for a file (instead
     - `occurred_at` (ISO date)
     - `amount` (decimal string)
     - `description`
-    - `related_transactions` context (latest account transactions + similar merchant, categorized only)
+    - `accounts` context per account (latest transactions + similar merchant matches per row)
     - Optional suggestions:
       - `suggested_category_id` + `confidence` + `reason`
       - `suggested_subscription_id` + metadata (optional)

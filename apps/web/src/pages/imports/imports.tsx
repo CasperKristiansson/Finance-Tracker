@@ -258,6 +258,37 @@ export const Imports: React.FC = () => {
 
   const canProceedToAudit = Boolean(preview) && !previewHasErrors;
 
+  const contextTxById = useMemo(() => {
+    const map = new Map<
+      string,
+      { category_name?: string | null; description: string }
+    >();
+    if (!preview) return map;
+    preview.accounts?.forEach((ctx) => {
+      [
+        ...(ctx.recent_transactions ?? []),
+        ...(ctx.similar_transactions ?? []),
+      ].forEach((tx) => {
+        map.set(tx.id, {
+          category_name: tx.category_name,
+          description: tx.description,
+        });
+      });
+    });
+    return map;
+  }, [preview]);
+
+  const similarIdsByRowId = useMemo(() => {
+    const map = new Map<string, string[]>();
+    if (!preview) return map;
+    preview.accounts?.forEach((ctx) => {
+      (ctx.similar_by_row ?? []).forEach((match) => {
+        map.set(match.row_id, match.transaction_ids ?? []);
+      });
+    });
+    return map;
+  }, [preview]);
+
   const handleSelectFiles = (list: FileList | null) => {
     if (!list) return;
     const next: LocalFile[] = Array.from(list).map((file) => ({
@@ -732,8 +763,12 @@ export const Imports: React.FC = () => {
                         Boolean(suggestedCategoryId) &&
                         commitForm.watch(`rows.${idx}.category_id`) ===
                           suggestedCategoryId;
-                      const related =
-                        previewRow?.related_transactions?.[0] ?? null;
+                      const rowSimilarIds = previewRow
+                        ? (similarIdsByRowId.get(previewRow.id) ?? [])
+                        : [];
+                      const firstSimilar = rowSimilarIds.length
+                        ? (contextTxById.get(rowSimilarIds[0]) ?? null)
+                        : null;
                       return (
                         <TableRow key={row.id} className="align-top">
                           <TableCell>
@@ -787,10 +822,10 @@ export const Imports: React.FC = () => {
                                   )
                                 }
                               />
-                              {related?.category_name ? (
+                              {firstSimilar?.category_name ? (
                                 <p className="text-[11px] text-slate-500">
-                                  Similar: {related.category_name} •{" "}
-                                  {related.description}
+                                  Similar: {firstSimilar.category_name} •{" "}
+                                  {firstSimilar.description}
                                 </p>
                               ) : null}
                               {suggested ? (

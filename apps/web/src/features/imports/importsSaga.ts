@@ -129,10 +129,41 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
     }
 
     const preview = action.payload.preview;
-    const history: ImportCategorySuggestRequest["history"] = [];
-    const seenHistory = new Set<string>();
-    for (const row of preview.rows) {
-      for (const tx of row.related_transactions ?? []) {
+    const contexts = preview.accounts ?? [];
+    const rowsByAccount = new Map<string, typeof preview.rows>();
+    preview.rows.forEach((row) => {
+      const list = rowsByAccount.get(row.account_id) ?? [];
+      list.push(row);
+      rowsByAccount.set(row.account_id, list);
+    });
+
+    const mapped: Record<
+      string,
+      ImportCategorySuggestResponse["suggestions"][number]
+    > = {};
+
+    for (const ctx of contexts) {
+      const accountRows = rowsByAccount.get(ctx.account_id) ?? [];
+      const transactions: ImportCategorySuggestRequest["transactions"] = [];
+      for (const row of accountRows) {
+        if (row.rule_applied) continue;
+        transactions.push({
+          id: row.id,
+          description: row.description,
+          amount: row.amount,
+          occurred_at: row.occurred_at,
+        });
+        if (transactions.length >= 200) break;
+      }
+      if (!transactions.length) continue;
+
+      const history: ImportCategorySuggestRequest["history"] = [];
+      const seenHistory = new Set<string>();
+      const candidates = [
+        ...(ctx.recent_transactions ?? []),
+        ...(ctx.similar_transactions ?? []),
+      ];
+      for (const tx of candidates) {
         if (!tx.category_id || !tx.description) continue;
         const key = `${tx.category_id}:${tx.description}`.toLowerCase();
         if (seenHistory.has(key)) continue;
@@ -141,53 +172,36 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
           category_id: tx.category_id,
           description: tx.description,
         });
-        if (history.length >= 80) break;
+        if (history.length >= 200) break;
       }
-      if (history.length >= 80) break;
-    }
 
-    const transactions: ImportCategorySuggestRequest["transactions"] = [];
-    for (const row of preview.rows) {
-      if (row.rule_applied) continue;
-      transactions.push({
-        id: row.id,
-        description: row.description,
-        amount: row.amount,
-        occurred_at: row.occurred_at,
+      const payload: ImportCategorySuggestRequest = {
+        categories: available.map((cat) => ({
+          id: cat.id,
+          name: cat.name,
+          category_type: cat.category_type,
+        })),
+        history,
+        transactions,
+      };
+      const body = importCategorySuggestRequestSchema.parse(payload);
+
+      const response: ImportCategorySuggestResponse = yield call(
+        callApiWithAuth,
+        {
+          path: "/imports/suggest-categories",
+          method: "POST",
+          body,
+          schema: importCategorySuggestResponseSchema,
+        },
+        { loadingKey: `imports-suggest-${ctx.account_id}` },
+      );
+      const parsed = importCategorySuggestResponseSchema.parse(response);
+      parsed.suggestions.forEach((suggestion) => {
+        mapped[suggestion.id] = suggestion;
       });
-      if (transactions.length >= 80) break;
     }
-    if (!transactions.length) return;
 
-    const payload: ImportCategorySuggestRequest = {
-      categories: available.map((cat) => ({
-        id: cat.id,
-        name: cat.name,
-        category_type: cat.category_type,
-      })),
-      history,
-      transactions,
-    };
-    const body = importCategorySuggestRequestSchema.parse(payload);
-
-    const response: ImportCategorySuggestResponse = yield call(
-      callApiWithAuth,
-      {
-        path: "/imports/suggest-categories",
-        method: "POST",
-        body,
-        schema: importCategorySuggestResponseSchema,
-      },
-      { loadingKey: "imports-suggest" },
-    );
-    const parsed = importCategorySuggestResponseSchema.parse(response);
-    const mapped: Record<
-      string,
-      ImportCategorySuggestResponse["suggestions"][number]
-    > = {};
-    parsed.suggestions.forEach((suggestion) => {
-      mapped[suggestion.id] = suggestion;
-    });
     yield put(setImportSuggestions(mapped));
   } catch (error) {
     const message =

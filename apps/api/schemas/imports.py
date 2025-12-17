@@ -70,6 +70,22 @@ class ImportRelatedTransactionRead(BaseModel):
     category_name: Optional[str] = None
 
 
+class ImportPreviewRowSimilarMatchRead(BaseModel):
+    """Similar transaction matches for a draft row."""
+
+    row_id: UUID
+    transaction_ids: List[UUID] = Field(default_factory=list)
+
+
+class ImportPreviewAccountContextRead(BaseModel):
+    """Per-account context returned by preview to support category suggestions."""
+
+    account_id: UUID
+    recent_transactions: List[ImportRelatedTransactionRead] = Field(default_factory=list)
+    similar_transactions: List[ImportRelatedTransactionRead] = Field(default_factory=list)
+    similar_by_row: List[ImportPreviewRowSimilarMatchRead] = Field(default_factory=list)
+
+
 class ImportPreviewRowRead(BaseModel):
     """Single draft transaction row returned by preview."""
 
@@ -80,7 +96,6 @@ class ImportPreviewRowRead(BaseModel):
     occurred_at: str
     amount: str
     description: str
-    related_transactions: List[ImportRelatedTransactionRead] = Field(default_factory=list)
     suggested_category_id: Optional[UUID] = None
     suggested_category_name: Optional[str] = None
     suggested_confidence: Optional[float] = None
@@ -100,6 +115,7 @@ class ImportPreviewResponse(BaseModel):
 
     files: List[ImportPreviewFileRead]
     rows: List[ImportPreviewRowRead]
+    accounts: List[ImportPreviewAccountContextRead] = Field(default_factory=list)
 
 
 class ImportCommitRow(BaseModel):
@@ -162,7 +178,7 @@ class ImportCategorySuggestRequest(BaseModel):
     history: List[ImportCategoryHistoryItem] = Field(default_factory=list)
     transactions: List[ImportCategorySuggestTransaction]
     model_id: Optional[str] = Field(default=None, max_length=160)
-    max_tokens: Optional[int] = Field(default=None, ge=50, le=2000)
+    max_tokens: Optional[int] = Field(default=None, ge=50, le=4000)
 
 
 class ImportCategorySuggestionRead(BaseModel):
@@ -186,6 +202,8 @@ __all__ = [
     "ImportPreviewRequest",
     "ImportPreviewFileRead",
     "ImportRelatedTransactionRead",
+    "ImportPreviewRowSimilarMatchRead",
+    "ImportPreviewAccountContextRead",
     "ImportPreviewRowRead",
     "ImportPreviewResponse",
     "ImportCommitRow",

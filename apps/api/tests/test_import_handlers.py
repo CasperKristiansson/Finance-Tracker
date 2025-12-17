@@ -191,7 +191,7 @@ def test_preview_parses_swedbank_and_returns_rows():
     assert body["files"][0]["bank_import_type"] == "swedbank"
     assert body["files"][0]["row_count"] == 2
     assert body["rows"] and len(body["rows"]) == 2
-    assert body["rows"][0]["related_transactions"] == []
+    assert body["accounts"] and body["accounts"][0]["account_id"] == str(account_id)
 
 
 def test_preview_returns_error_when_account_has_no_bank_type():
@@ -254,7 +254,7 @@ def test_preview_includes_related_transactions():
     tx_id = _create_categorized_transaction(
         account_id=account_id,
         category_id=groceries_id,
-        description="ICA supermarket",
+        description="Deposit salary",
     )
     payload = _swedbank_workbook()
     response = preview_imports(
@@ -276,8 +276,11 @@ def test_preview_includes_related_transactions():
     )
     assert response["statusCode"] == 200
     body = _json_body(response)
-    related = body["rows"][0]["related_transactions"]
-    assert any(item["id"] == str(tx_id) for item in related)
+    row_id = body["rows"][0]["id"]
+    account_ctx = next(ctx for ctx in body["accounts"] if ctx["account_id"] == str(account_id))
+    assert any(item["id"] == str(tx_id) for item in account_ctx["similar_transactions"])
+    match = next(m for m in account_ctx["similar_by_row"] if m["row_id"] == row_id)
+    assert str(tx_id) in match["transaction_ids"]
 
 
 def test_commit_is_all_or_nothing():

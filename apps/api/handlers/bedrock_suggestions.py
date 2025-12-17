@@ -21,8 +21,8 @@ from ..schemas import (
 from .utils import get_user_id, json_response, parse_body
 
 BEDROCK_MODEL_ID_DEFAULT = "anthropic.claude-haiku-4-5-20251001-v1:0"
-_MAX_HISTORY = 80
-_MAX_TRANSACTIONS = 80
+_MAX_HISTORY = 200
+_MAX_TRANSACTIONS = 200
 
 
 def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
@@ -94,7 +94,7 @@ def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str,
     )
 
     model_id = request.model_id or BEDROCK_MODEL_ID_DEFAULT
-    max_tokens = request.max_tokens or 600
+    max_tokens = request.max_tokens or 1200
     payload = {
         "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
         "max_tokens": max_tokens,
