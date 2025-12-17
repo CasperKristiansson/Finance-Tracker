@@ -13,9 +13,11 @@ import { useAccountsApi } from "@/hooks/use-api";
 import {
   AccountType,
   InterestCompound,
+  type BankImportType,
   type AccountCreateRequest,
   type AccountWithBalance,
 } from "@/types/api";
+import { bankImportTypeSchema } from "@/types/schemas";
 
 type Props = {
   open: boolean;
@@ -37,6 +39,7 @@ const accountFormSchema = z
     account_type: z.enum(AccountType),
     is_active: z.boolean(),
     icon: z.string().optional(),
+    bank_import_type: bankImportTypeSchema.nullable().optional(),
     loan: z.object({
       origin_principal: z.string().optional(),
       current_principal: z.string().optional(),
@@ -85,6 +88,8 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
       account_type: account?.account_type ?? AccountType.NORMAL,
       is_active: account?.is_active ?? true,
       icon: account?.icon ?? "",
+      bank_import_type:
+        (account?.bank_import_type as BankImportType | null) ?? null,
       loan: {
         origin_principal: account?.loan?.origin_principal ?? "",
         current_principal: account?.loan?.current_principal ?? "",
@@ -115,8 +120,10 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
 
   const accountType = watch("account_type");
   const isActive = watch("is_active");
+  const bankImportType = watch("bank_import_type");
   const accountTypeField = register("account_type");
   const isActiveField = register("is_active");
+  const bankImportTypeField = register("bank_import_type");
 
   const onSubmit = async (values: AccountFormValues) => {
     const payload: AccountCreateRequest = {
@@ -124,6 +131,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
       account_type: values.account_type,
       is_active: values.is_active,
       icon: values.icon?.trim() ? values.icon.trim() : null,
+      bank_import_type: values.bank_import_type ?? null,
       loan: null,
     };
 
@@ -146,7 +154,8 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
         updateAccount(account.id, {
           name: payload.name,
           is_active: payload.is_active,
-          icon: payload.icon ?? undefined,
+          icon: payload.icon,
+          bank_import_type: payload.bank_import_type,
         });
         if (isDebt(values.account_type)) {
           if (account.loan) {
@@ -277,6 +286,33 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
                 <option value={AccountType.NORMAL}>Cash</option>
                 <option value={AccountType.DEBT}>Debt</option>
                 <option value={AccountType.INVESTMENT}>Investment</option>
+              </select>
+            </div>
+            <div className="space-y-1.5">
+              <label
+                className="text-sm text-slate-700"
+                htmlFor="bank_import_type"
+              >
+                Statement format (imports)
+              </label>
+              <select
+                id="bank_import_type"
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                value={bankImportType ?? ""}
+                onChange={(e) => {
+                  bankImportTypeField.onChange(e);
+                  setValue(
+                    "bank_import_type",
+                    (e.target.value || null) as BankImportType | null,
+                  );
+                }}
+                onBlur={bankImportTypeField.onBlur}
+                name={bankImportTypeField.name}
+              >
+                <option value="">None</option>
+                <option value="swedbank">Swedbank</option>
+                <option value="seb">SEB</option>
+                <option value="circle_k_mastercard">Circle K Mastercard</option>
               </select>
             </div>
           </div>

@@ -15,6 +15,8 @@ from sqlmodel import Session
 from ..models import Account, BalanceSnapshot, Loan, Transaction, TransactionLeg
 from ..shared import AccountType, coerce_decimal
 
+_UNSET = object()
+
 
 class AccountRepository:
     """Encapsulates account persistence and related aggregates."""
@@ -93,15 +95,18 @@ class AccountRepository:
         account: Account,
         *,
         name: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        icon: Optional[str] = None,
+        is_active=_UNSET,
+        icon=_UNSET,
+        bank_import_type=_UNSET,
     ) -> Account:
         if name is not None:
             account.name = name
-        if is_active is not None:
+        if is_active is not _UNSET:
             account.is_active = is_active
-        if icon is not None:
+        if icon is not _UNSET:
             account.icon = icon
+        if bank_import_type is not _UNSET:
+            account.bank_import_type = bank_import_type
 
         self.session.add(account)
         self.session.commit()

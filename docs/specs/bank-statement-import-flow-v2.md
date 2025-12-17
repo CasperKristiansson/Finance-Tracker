@@ -1,6 +1,6 @@
 # 0. Milestones
 
-- [ ] M1: Account-level bank type configuration
+- [x] M1: Account-level bank type configuration
   - Goal: Let each account declare which bank statement format it uses (Swedbank, SEB, Circle K Mastercard, or none) so imports can infer parsers from the selected account.
   - Deliverables: DB migration + API field + Accounts UI control for bank type.
   - Acceptance criteria: User can set/clear bank type for an account; `/accounts` responses include the configured value; existing account create/update flows still work.
@@ -233,16 +233,16 @@ Proposed response shape:
 # 7. Step-by-step implementation plan
 
 ## M1: Account-level bank type configuration
-- [ ] Add nullable `bank_import_type` to `apps/api/models/account.py`.
-- [ ] Add field to Pydantic schemas in `apps/api/schemas/account.py` for read + write.
-- [ ] Update account handlers/services/repositories to allow setting/updating the field.
-- [ ] Add Alembic migration under `apps/api/migrations/versions/*`.
-- [ ] Update web account Zod schemas in `apps/web/src/types/schemas.ts` to include `bank_import_type`.
-- [ ] Update `apps/web/src/pages/accounts/children/account-modal.tsx` to include a “Statement format” select (None/Swedbank/SEB/Circle K Mastercard).
-- [ ] Definition of done:
-  - API returns the new field for accounts.
-  - UI can set and persist the value via existing update flow.
-  - Existing account flows unaffected (acceptance criteria for M1).
+- [x] Add nullable `bank_import_type` to `apps/api/models/account.py`.
+- [x] Add field to Pydantic schemas in `apps/api/schemas/account.py` for read + write.
+- [x] Update account handlers/services/repositories to allow setting/updating the field.
+- [x] Add Alembic migration `apps/api/migrations/versions/20251217_01_account_bank_import_type.py`.
+- [x] Update web account Zod schemas in `apps/web/src/types/schemas.ts` to include `bank_import_type`.
+- [x] Update `apps/web/src/pages/accounts/children/account-modal.tsx` to include a “Statement format” select (None/Swedbank/SEB/Circle K Mastercard).
+- [x] Definition of done:
+  - [x] API returns the new field for accounts.
+  - [x] UI can set and persist the value via existing create/update flows.
+  - [x] Verified by `PYTHONPATH=. pytest apps/api/tests/test_account_handlers.py -q`, `make type-check`, `npm run lint -w apps/web`.
 
 ## M2: Replace imports API with stateless preview + commit
 - [ ] Replace existing `/imports*` endpoints with:

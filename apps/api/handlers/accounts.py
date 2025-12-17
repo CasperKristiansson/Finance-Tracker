@@ -151,6 +151,7 @@ def create_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         account_type=data.account_type,
         is_active=data.is_active,
         icon=data.icon,
+        bank_import_type=data.bank_import_type,
     )
 
     with session_scope(user_id=user_id) as session:
@@ -180,14 +181,14 @@ def update_account(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
+    updates = data.model_dump(exclude_unset=True)
+
     with session_scope(user_id=user_id) as session:
         service = AccountService(session)
         try:
             updated = service.update_account(
                 account_id,
-                name=data.name,
-                is_active=data.is_active,
-                icon=data.icon,
+                **updates,
             )
         except LookupError:
             return json_response(404, {"error": "Account not found"})

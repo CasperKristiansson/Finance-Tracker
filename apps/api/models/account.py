@@ -42,6 +42,10 @@ class Account(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, tab
 
     name: str = Field(default="", sa_column=Column(String(120), nullable=False, server_default=""))
     icon: str | None = Field(default=None, sa_column=Column(String(255), nullable=True))
+    bank_import_type: str | None = Field(
+        default=None,
+        sa_column=Column(String(64), nullable=True),
+    )
     account_type: AccountType = Field(sa_column=Column(SAEnum(AccountType), nullable=False))
     is_active: bool = Field(
         default=True,

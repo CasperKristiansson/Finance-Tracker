@@ -63,6 +63,7 @@ def test_create_and_list_account():
             {
                 "account_type": "normal",
                 "is_active": True,
+                "bank_import_type": "seb",
             }
         ),
         "isBase64Encoded": False,
@@ -71,12 +72,14 @@ def test_create_and_list_account():
     assert created_response["statusCode"] == 201
     created_body = _json_body(created_response)
     account_id = UUID(created_body["id"])
+    assert created_body["bank_import_type"] == "seb"
 
     list_response = list_accounts({"queryStringParameters": None}, None)
     assert list_response["statusCode"] == 200
     accounts = _json_body(list_response)["accounts"]
     assert len(accounts) == 1
     assert accounts[0]["id"] == str(account_id)
+    assert accounts[0]["bank_import_type"] == "seb"
 
 
 def test_create_debt_account_requires_loan():
@@ -99,7 +102,7 @@ def test_update_account_flow():
     account_id = _json_body(created_response)["id"]
 
     update_event = {
-        "body": json.dumps({"is_active": False}),
+        "body": json.dumps({"is_active": False, "bank_import_type": "swedbank"}),
         "isBase64Encoded": False,
         "pathParameters": {"account_id": account_id},
     }
@@ -107,12 +110,26 @@ def test_update_account_flow():
     assert updated_response["statusCode"] == 200
     updated_body = _json_body(updated_response)
     assert updated_body["is_active"] is False
+    assert updated_body["bank_import_type"] == "swedbank"
 
     list_response = list_accounts({"queryStringParameters": {"include_inactive": "true"}}, None)
     accounts = _json_body(list_response)["accounts"]
     assert any(
-        account["id"] == account_id and account["is_active"] is False for account in accounts
+        account["id"] == account_id
+        and account["is_active"] is False
+        and account["bank_import_type"] == "swedbank"
+        for account in accounts
     )
+
+    clear_event = {
+        "body": json.dumps({"bank_import_type": None}),
+        "isBase64Encoded": False,
+        "pathParameters": {"account_id": account_id},
+    }
+    cleared_response = update_account(clear_event, None)
+    assert cleared_response["statusCode"] == 200
+    cleared_body = _json_body(cleared_response)
+    assert cleared_body["bank_import_type"] is None
 
 
 def test_update_account_not_found():

@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ..shared import AccountType, InterestCompound
+from ..shared import AccountType, BankImportType, InterestCompound
 
 
 class LoanCreate(BaseModel):
@@ -47,6 +47,7 @@ class AccountCreate(BaseModel):
     account_type: AccountType
     is_active: bool = True
     icon: Optional[str] = None
+    bank_import_type: Optional[BankImportType] = None
     loan: Optional[LoanCreate] = None
 
     @model_validator(mode="after")
@@ -72,12 +73,13 @@ class AccountUpdate(BaseModel):
     name: Optional[str] = None
     is_active: Optional[bool] = None
     icon: Optional[str] = None
+    bank_import_type: Optional[BankImportType] = None
 
     @model_validator(mode="after")
     def ensure_fields_present(self) -> "AccountUpdate":
-        if not any(value is not None for value in (self.name, self.is_active, self.icon)):
+        if not self.model_fields_set:
             raise ValueError("At least one field must be provided for update")
-        if self.name is not None:
+        if "name" in self.model_fields_set and self.name is not None:
             if not self.name.strip():
                 raise ValueError("Account name cannot be empty")
             self.name = self.name.strip()
@@ -94,6 +96,7 @@ class AccountRead(BaseModel):
     account_type: AccountType
     is_active: bool
     icon: Optional[str] = None
+    bank_import_type: Optional[BankImportType] = None
     created_at: datetime
     updated_at: datetime
     loan: Optional[LoanRead] = None

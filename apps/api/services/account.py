@@ -82,21 +82,12 @@ class AccountService:
     def update_account(
         self,
         account_id: UUID,
-        *,
-        name: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        icon: Optional[str] = None,
+        **updates,
     ) -> Account:
         account = self.repository.get(account_id, with_relationships=True)
         if account is None:
             raise LookupError("Account not found")
-        updated = self.repository.update_fields(
-            account,
-            name=name,
-            is_active=is_active,
-            icon=icon,
-        )
-        return updated
+        return self.repository.update_fields(account, **updates)
 
     def calculate_account_balance(
         self,

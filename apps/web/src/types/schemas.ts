@@ -18,6 +18,12 @@ export const numeric = z.coerce.number();
 export const optionalNumeric = numeric.optional();
 export const nullableNumeric = numeric.nullable().optional();
 
+export const bankImportTypeSchema = z.enum([
+  "circle_k_mastercard",
+  "seb",
+  "swedbank",
+] as const);
+
 export const loanCreateRequestSchema = z.object({
   account_id: z.string(),
   origin_principal: z.string(),
@@ -55,6 +61,7 @@ export const accountCreateRequestSchema = z.object({
   account_type: z.enum(AccountType),
   is_active: z.boolean().optional(),
   icon: z.string().nullable().optional(),
+  bank_import_type: bankImportTypeSchema.nullable().optional(),
   loan: loanCreateRequestSchema
     .omit({ account_id: true })
     .nullable()
@@ -65,6 +72,7 @@ export const accountUpdateRequestSchema = z.object({
   name: z.string().optional(),
   is_active: z.boolean().optional(),
   icon: z.string().nullable().optional(),
+  bank_import_type: bankImportTypeSchema.nullable().optional(),
 });
 
 export const accountSchema = z.object({
@@ -73,6 +81,7 @@ export const accountSchema = z.object({
   account_type: z.enum(AccountType),
   is_active: z.boolean(),
   icon: z.string().nullable().optional(),
+  bank_import_type: bankImportTypeSchema.nullable().optional(),
   created_at: z.string(),
   updated_at: z.string(),
   loan: loanSchema.nullable().optional(),
@@ -752,12 +761,6 @@ export const subscriptionSummaryResponseSchema = z.object({
 export const subscriptionListSchema = z.object({
   subscriptions: z.array(subscriptionSchema),
 });
-
-export const bankImportTypeSchema = z.enum([
-  "circle_k_mastercard",
-  "seb",
-  "swedbank",
-] as const);
 
 export const taxEventTypeSchema = z.enum(TaxEventType);
 
