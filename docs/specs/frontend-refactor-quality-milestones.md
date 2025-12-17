@@ -84,6 +84,42 @@ This spec is a refactor roadmap (recommendations only). It focuses on reducing c
   - Affected services/components (high level): Reports/Dashboard pages, `apps/web/src/hooks/use-api.ts`, feature sagas.
   - Blockers (OQ-xx): Decide which option fits the repo’s direction.
 
+- [ ] M7: Add shared “composed UI” blocks (not new primitives)
+  - Goal: Reduce repeated UI patterns (empty/error/loading/headers/confirm flows) without wrapping shadcn/Radix primitives just for naming.
+  - Deliverables (only introduce when used in 3+ places):
+    - `EmptyState` (icon + title + description + action)
+    - `InlineError` (compact error surface with optional retry)
+    - `LoadingCard`/`SkeletonCard` (consistent “card with loading” pattern)
+    - `PageHeader`/`SectionHeader` (title + subtitle + actions; consistent spacing)
+    - `ConfirmDialog` helper for common destructive/confirm flows
+  - Acceptance criteria:
+    - Pages stop inlining bespoke “no data” and “error” boxes; use shared blocks where appropriate.
+    - Shared blocks remain composition-level (use existing `components/ui/*` primitives internally).
+  - Affected services/components (high level): Large pages and dialogs across `apps/web/src/pages/**`.
+  - Blockers (OQ-xx): Agree on a minimal API for each block to avoid prop sprawl.
+
+- [ ] M8: Consolidate chart containers and chart conventions
+  - Goal: Reduce drift and boilerplate around charts (headers, actions, loading, empty states, tooltip formatting, axis styling).
+  - Deliverables:
+    - Consolidate the “chart card” pattern into a single shared component (there is already `apps/web/src/pages/reports/components/chart-card.tsx`, and Dashboard has a page-local `ChartCard`).
+    - Establish a small set of chart conventions used everywhere (tooltip content, empty-state message, axis label formatting helpers).
+  - Acceptance criteria:
+    - Dashboard and Reports use the same chart container and styling conventions.
+    - Chart-related formatting helpers come from the shared formatting milestone (M1) or a dedicated chart utils module (kept small).
+  - Affected services/components (high level): `apps/web/src/pages/dashboard/*`, `apps/web/src/pages/reports/components/*`, other chart-heavy pages.
+  - Blockers (OQ-xx): Decide whether to keep one container or allow minor per-page variants.
+
+- [ ] M9: Standardize “table in a card” wrappers (scroll + truncation)
+  - Goal: Reduce repeated table scaffolding (border/header/scroll/truncation) and make large tables consistent and easier to read.
+  - Deliverables:
+    - A small wrapper component for “carded tables” used in dialogs/cards (header row + scroll container + optional footer/action).
+    - Consistent truncation patterns for long labels (e.g. account/category names) and consistent empty states.
+  - Acceptance criteria:
+    - Reports dialogs stop repeating `max-h-* overflow-auto rounded-md border ...` blocks inline.
+    - Table layouts remain accessible and responsive (headers readable; columns consistent).
+  - Affected services/components (high level): Reports dialogs (notably drilldowns), other pages with repeated table cards.
+  - Blockers (OQ-xx): None
+
 # 1. Background and motivation
 
 The frontend has several extremely large route screens (1k–2k+ LOC) and at least one very large dialog component. The symptoms are:
@@ -110,11 +146,13 @@ This spec proposes refactors that keep the UI stable and reduce cognitive load b
 # 3. Suggested sequencing (practical roadmap)
 
 1. **M1 (format helpers)** first: safe, mechanical change; reduces noise in every later refactor.
-2. **M2 (TotalDrilldownDialog split)** next: biggest localized complexity payoff.
-3. **M3 (Reports page by mode)** to make future reports changes easier.
-4. **M4 (data shaping)** as follow-up: makes charts/cards more maintainable once structure is improved.
-5. **M5 (apply pattern to other pages)** incrementally, one page at a time.
-6. **M6 (API boundary standardization)** once the team agrees on the preferred direction.
+2. **M7 (composed UI blocks)** early: reduces repeated UI scaffolding and improves consistency quickly.
+3. **M8/M9 (chart + table conventions)** early-to-mid: cuts a lot of repeated JSX once formatting is standardized.
+4. **M2 (TotalDrilldownDialog split)** next: biggest localized complexity payoff.
+5. **M3 (Reports page by mode)** to make future reports changes easier.
+6. **M4 (data shaping)** as follow-up: makes charts/cards more maintainable once structure is improved.
+7. **M5 (apply pattern to other pages)** incrementally, one page at a time.
+8. **M6 (API boundary standardization)** once the team agrees on the preferred direction.
 
 # 4. “Definition of done” metrics (lightweight)
 
@@ -123,4 +161,3 @@ Suggested heuristics to validate impact without over-engineering:
 - Eliminate duplicated formatting functions across `pages/`.
 - Reduce JSX transformation density: chart/table components should mostly “render”, not “compute”.
 - Keep imports stable and predictable (avoid circular/hidden dependencies).
-
