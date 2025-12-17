@@ -520,32 +520,55 @@ class ImportService:
     def _parse_circle_k_mastercard(
         self, sheet
     ) -> tuple[List[dict[str, Any]], List[Tuple[int, str]]]:
-        headers = None
+        header_map: Dict[str, int] | None = None
         rows: List[dict[str, Any]] = []
         errors: List[Tuple[int, str]] = []
 
         for idx, row in enumerate(sheet.iter_rows(values_only=True), start=1):
             cleaned = [self._clean_value(cell) for cell in row]
-            if headers is None:
-                if {"datum", "belopp"}.issubset({self._clean_header(cell) for cell in row}):
-                    headers = [self._clean_header(cell) for cell in row]
+            if header_map is None:
+                candidate_headers = {
+                    self._clean_header(val): pos for pos, val in enumerate(row) if val is not None
+                }
+                if {"datum", "belopp"}.issubset(candidate_headers.keys()):
+                    header_map = candidate_headers
                 continue
             if not any(cleaned):
                 continue
-            if isinstance(cleaned[0], str) and "totalt belopp" in cleaned[0].lower():
+            first_cell = cleaned[0].lower() if cleaned and isinstance(cleaned[0], str) else ""
+            if first_cell == "datum":
+                candidate_headers = {
+                    self._clean_header(val): pos for pos, val in enumerate(row) if val is not None
+                }
+                if {"datum", "belopp"}.issubset(candidate_headers.keys()):
+                    header_map = candidate_headers
+                continue
+            if "totalt belopp" in first_cell:
+                continue
+            if "summa" in first_cell or (
+                len(cleaned) > 2 and isinstance(cleaned[2], str) and "summa" in cleaned[2].lower()
+            ):
                 continue
 
             try:
-                date_text = cleaned[0] or cleaned[1] or ""
+                date_idx = header_map.get("datum", 0)
+                date_text = cleaned[date_idx] if date_idx < len(cleaned) else ""
                 occurred_at = self._parse_date(str(date_text))
                 if occurred_at is None:
-                    raise ValueError("invalid date")
-                description = cleaned[2] or ""
-                if cleaned[3]:
-                    description = (
-                        f"{description} ({cleaned[3]})" if description else str(cleaned[3])
-                    )
-                amount_raw = cleaned[6] if len(cleaned) > 6 else None
+                    continue
+
+                description_idx = header_map.get("specifikation", 2)
+                description = cleaned[description_idx] if description_idx < len(cleaned) else ""
+
+                location_idx = header_map.get("ort", 3)
+                location = cleaned[location_idx] if location_idx < len(cleaned) else ""
+                if location:
+                    description = f"{description} ({location})" if description else str(location)
+
+                amount_idx = header_map.get("belopp", 6)
+                amount_raw = cleaned[amount_idx] if amount_idx < len(cleaned) else ""
+                if amount_raw == "":
+                    continue
                 amount = Decimal(str(amount_raw))
                 amount = -abs(amount)
                 rows.append(
@@ -558,7 +581,7 @@ class ImportService:
             except Exception as exc:
                 errors.append((idx, f"Unable to parse row: {exc}"))
 
-        if headers is None:
+        if header_map is None:
             errors.append((0, "Circle K Mastercard export is missing the expected headers"))
 
         return rows, errors
@@ -582,6 +605,8 @@ class ImportService:
                 continue
             try:
                 date_text = cleaned[headers.get("bokförd", 0)] if headers else cleaned[0]
+                if not date_text:
+                    continue
                 occurred_at = self._parse_date(str(date_text))
                 if occurred_at is None:
                     raise ValueError("invalid date")
