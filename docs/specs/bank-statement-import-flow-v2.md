@@ -8,7 +8,7 @@
   - Rollout/flagging: Always-on (safe additive field).
   - Blockers (OQ-xx): None
 
-- [ ] M2: Replace imports API with stateless preview + commit
+- [x] M2: Replace imports API with stateless preview + commit
   - Goal: Remove DB-staged import sessions and replace the existing `/imports*` endpoints with a stateless flow: preview parses + suggests without persisting; commit persists only final reviewed transactions.
   - Deliverables: Updated request/response schemas, updated handlers/routes, refactored import service logic, and updated/added API tests.
   - Acceptance criteria: Preview returns parsed drafts and per-file errors without writing import files/rows/errors/batches; commit persists transactions (and a commit-time import batch for grouping).
@@ -245,23 +245,24 @@ Proposed response shape:
   - [x] Verified by `PYTHONPATH=. pytest apps/api/tests/test_account_handlers.py -q`, `make type-check`, `npm run lint -w apps/web`.
 
 ## M2: Replace imports API with stateless preview + commit
-- [ ] Replace existing `/imports*` endpoints with:
+- [x] Replace existing `/imports*` endpoints with:
   - `POST /imports/preview` (parse + suggest, stateless)
   - `POST /imports/commit` (persist reviewed rows, all-or-nothing)
   - Remove legacy: `GET /imports/{batch_id}`, `POST /imports/{batch_id}/files`, `POST /imports/{batch_id}/commit` (and any unused list endpoints if not needed).
-- [ ] Add new Pydantic schemas in `apps/api/schemas/imports.py` for preview/commit; remove legacy session schemas.
-- [ ] Update `apps/api/handlers/imports.py` to expose only the new endpoints.
-- [ ] In `apps/api/services/imports.py`, implement stateless functions:
+- [x] Add new Pydantic schemas in `apps/api/schemas/imports.py` for preview/commit; remove legacy session schemas.
+- [x] Update `apps/api/handlers/imports.py` to expose only the new endpoints.
+- [x] In `apps/api/services/imports.py`, implement stateless functions:
   - Parse each file using existing per-bank parsers, resolving `bank_type` from the assigned account’s `bank_import_type` (no per-file override).
   - Build draft rows and enrich with deterministic suggestions (rules/subscriptions/transfers), without writing `TransactionImportBatch`, `ImportFile`, `ImportRow`, `ImportErrorRecord`.
--  - Commit: create a new `TransactionImportBatch` (commit-time only) and persist transactions/legs from submitted rows; commit is transactional (all-or-nothing).
-- [ ] Update `infra/serverless/serverless.yml` to expose only the new endpoints.
-- [ ] Add/adjust tests:
+  - Commit: create a new `TransactionImportBatch` (commit-time only) and persist transactions/legs from submitted rows; commit is transactional (all-or-nothing).
+- [x] Update `infra/serverless/serverless.yml` to expose only the new endpoints.
+- [x] Add/adjust tests:
   - Unit tests in `apps/api/tests/test_import_handlers.py` for preview/commit.
   - Integration tests in `apps/api/tests/integration/test_imports_integration.py` for end-to-end preview → commit.
-- [ ] Definition of done:
-  - Preview produces rows + errors and does not create import_* records in DB.
-  - Commit persists transactions and associates them with a newly created import batch.
+- [x] Definition of done:
+  - [x] Preview produces rows + errors and does not create import_* records in DB.
+  - [x] Commit persists transactions and associates them with a newly created import batch.
+  - [x] Verified by `make test`, `make type-check`.
 
 ## M3: Rebuild /imports UI as strict stepper
 - [ ] Add new web API schemas/types for preview/commit in `apps/web/src/types/schemas.ts`.

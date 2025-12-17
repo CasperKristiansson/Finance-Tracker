@@ -121,63 +121,27 @@ functions:
           method: POST
           authorizer: cognitoJwt
 
-  listImports:
-    handler: apps/api/handlers/imports.list_import_batches
-    timeout: 29
-    memorySize: 512
-    layers:
-      - ${self:custom.backendLayerArn}
-    events:
-      - httpApi:
-          path: /imports
-          method: GET
-          authorizer: cognitoJwt
-
-  createImportBatch:
-    handler: apps/api/handlers/imports.create_import_batch
+  previewImports:
+    handler: apps/api/handlers/imports.preview_imports
     timeout: 60
     memorySize: 512
     layers:
       - ${self:custom.backendLayerArn}
     events:
       - httpApi:
-          path: /imports
+          path: /imports/preview
           method: POST
           authorizer: cognitoJwt
 
-  getImportSession:
-    handler: apps/api/handlers/imports.get_import_session
-    timeout: 29
-    memorySize: 512
-    layers:
-      - ${self:custom.backendLayerArn}
-    events:
-      - httpApi:
-          path: /imports/{batch_id}
-          method: GET
-          authorizer: cognitoJwt
-
-  appendImportFiles:
-    handler: apps/api/handlers/imports.append_import_files
+  commitImports:
+    handler: apps/api/handlers/imports.commit_imports
     timeout: 60
     memorySize: 512
     layers:
       - ${self:custom.backendLayerArn}
     events:
       - httpApi:
-          path: /imports/{batch_id}/files
-          method: POST
-          authorizer: cognitoJwt
-
-  commitImportSession:
-    handler: apps/api/handlers/imports.commit_import_session
-    timeout: 60
-    memorySize: 512
-    layers:
-      - ${self:custom.backendLayerArn}
-    events:
-      - httpApi:
-          path: /imports/{batch_id}/commit
+          path: /imports/commit
           method: POST
           authorizer: cognitoJwt
 

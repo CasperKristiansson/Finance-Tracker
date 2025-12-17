@@ -75,6 +75,7 @@ class TransactionService:
         legs: List[TransactionLeg],
         *,
         import_batch: Optional[TransactionImportBatch] = None,
+        commit: bool = True,
     ) -> Transaction:
         prepared_legs = list(legs)
         if transaction.posted_at is None:  # pragma: no cover - safeguard
@@ -94,9 +95,10 @@ class TransactionService:
             transaction,
             prepared_legs,
             import_batch=import_batch,
+            commit=commit,
         )
 
-        self._record_loan_events(created, category)
+        self._record_loan_events(created, category, commit=commit)
         return created
 
     def update_transaction(
@@ -159,6 +161,7 @@ class TransactionService:
         event_type: LoanEventType,
         amount: Decimal,
         occurred_at: datetime,
+        commit: bool = True,
     ) -> LoanEvent:
         return self.repository.create_loan_event(
             loan_id=loan_id,
@@ -167,6 +170,7 @@ class TransactionService:
             event_type=event_type,
             amount=amount,
             occurred_at=occurred_at,
+            commit=commit,
         )
 
     def _get_category(self, category_id: Optional[UUID]) -> Optional[Category]:
@@ -235,6 +239,8 @@ class TransactionService:
         self,
         transaction: Transaction,
         category: Optional[Category],
+        *,
+        commit: bool,
     ) -> None:
         if transaction.id is None:
             return
@@ -268,6 +274,7 @@ class TransactionService:
                 event_type=event_type,
                 amount=coerce_decimal(leg.amount).copy_abs(),
                 occurred_at=transaction.occurred_at,
+                commit=commit,
             )
 
     def _loan_lookup(self, account_ids: Iterable[UUID]) -> dict[UUID, Loan]:

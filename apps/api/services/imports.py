@@ -1,4 +1,4 @@
-"""Service layer for imports."""
+"""Service layer for imports (stateless preview + atomic commit)."""
 
 # pylint: disable=broad-exception-caught,too-many-lines
 
@@ -6,17 +6,13 @@ from __future__ import annotations
 
 import base64
 import io
-import json
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
-import boto3
-from botocore.config import Config
-from botocore.exceptions import BotoCoreError, ClientError
 from openpyxl import load_workbook
 from sqlalchemy import func
 from sqlmodel import Session, select
@@ -24,9 +20,6 @@ from sqlmodel import Session, select
 from ..models import (
     Account,
     Category,
-    ImportErrorRecord,
-    ImportFile,
-    ImportRow,
     ImportRule,
     Subscription,
     TaxEvent,
@@ -34,9 +27,12 @@ from ..models import (
     TransactionImportBatch,
     TransactionLeg,
 )
-from ..repositories.imports import ImportRepository
-from ..schemas import ExampleTransaction, ImportBatchCreate, ImportCommitRequest
-from ..schemas import ImportFile as ImportFilePayload
+from ..schemas import (
+    ImportCommitRequest,
+    ImportCommitResponse,
+    ImportPreviewRequest,
+    ImportPreviewResponse,
+)
 from ..shared import (
     AccountType,
     BankImportType,
@@ -48,20 +44,7 @@ from .transaction import TransactionService
 
 
 @dataclass
-class ParsedImportFile:
-    """Captured parsing results for a file."""
-
-    model: ImportFile
-    rows: List[dict]
-    preview_rows: List[dict[str, Any]]
-    errors: List[Tuple[int, str]]
-    column_map: Optional[Dict[str, str]]
-
-
-@dataclass
 class CategorySuggestion:
-    """Represents a suggested category for a transaction row."""
-
     category: Optional[str]
     confidence: float
     reason: Optional[str] = None
@@ -69,8 +52,6 @@ class CategorySuggestion:
 
 @dataclass
 class SubscriptionSuggestion:
-    """Represents a suggested subscription for a transaction row."""
-
     subscription_id: UUID
     subscription_name: str
     confidence: float
@@ -79,8 +60,6 @@ class SubscriptionSuggestion:
 
 @dataclass
 class RuleMatch:
-    """Represents a deterministic rule hit for a row."""
-
     rule_id: UUID
     category_id: Optional[UUID]
     category_name: Optional[str]
@@ -91,488 +70,295 @@ class RuleMatch:
     rule_type: str
 
 
-BEDROCK_REGION = "eu-north-1"
-BEDROCK_MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
 SUBSCRIPTION_SUGGESTION_THRESHOLD = 0.8
 
 
 class ImportService:
-    """Coordinates import batch creation and retrieval."""
+    """Coordinates stateless import preview and atomic commit."""
 
     def __init__(self, session: Session):
         self.session = session
-        self.repository = ImportRepository(session)
 
-    def create_batch_with_files(
-        self, payload: ImportBatchCreate
-    ) -> tuple[TransactionImportBatch, List[ParsedImportFile]]:
-        batch = TransactionImportBatch(
-            source_name=self._derive_source_name(payload),
-            note=payload.note,
-        )
+    def preview_import(self, payload: ImportPreviewRequest) -> dict[str, Any]:
+        """Parse files and return draft rows + suggestions without persisting."""
 
-        parsed_files = [self._parse_file(file) for file in payload.files]
-
-        row_models: List[ImportRow] = []
-        error_models: List[ImportErrorRecord] = []
         category_lookup_by_id = self._category_lookup_by_id()
         subscription_lookup_by_id = self._subscription_lookup_by_id()
+        category_by_name = self._category_lookup()
 
-        for parsed in parsed_files:
+        response_files: list[dict[str, Any]] = []
+        response_rows: list[dict[str, Any]] = []
+
+        for file_payload in payload.files:
+            file_id = uuid4()
+            file_errors: list[tuple[int, str]] = []
+            rows: list[dict[str, Any]] = []
+            bank_import_type: BankImportType | None = None
+
+            account = self.session.get(Account, file_payload.account_id)
+            if account is None:
+                file_errors.append((0, "Account not found"))
+            else:
+                bank_import_type = self._coerce_bank_import_type(account.bank_import_type)
+                if bank_import_type is None:
+                    file_errors.append((0, "Account has no bank import type configured"))
+                else:
+                    decoded = self._decode_base64(file_payload.content_base64)
+                    rows, parse_errors = self._extract_bank_rows(
+                        filename=file_payload.filename,
+                        content=decoded,
+                        bank_type=bank_import_type,
+                    )
+                    file_errors.extend(parse_errors)
+
+            column_map: dict[str, str] | None = (
+                {"date": "date", "description": "description", "amount": "amount"} if rows else None
+            )
+            file_errors.extend(self._validate_rows(rows, column_map))
+
             rule_matches = self._rule_matches(
-                parsed.rows,
-                parsed.column_map or {},
+                rows,
+                column_map or {},
                 category_lookup_by_id,
                 subscription_lookup_by_id,
             )
-            suggestions = self._suggest_rows(
-                parsed.rows, parsed.column_map or {}, payload.examples or [], rule_matches
-            )
+            category_suggestions = self._suggest_rows(rows, column_map or {}, rule_matches)
             subscription_suggestions = self._suggest_subscriptions(
-                parsed.rows, parsed.column_map or {}, rule_matches
+                rows, column_map or {}, rule_matches
             )
-            transfers = self._match_transfers(parsed.rows, parsed.column_map or {})
+            transfers = self._match_transfers(rows, column_map or {})
 
-            # decorate preview rows
-            for idx, row in enumerate(parsed.preview_rows):
-                suggestion = suggestions.get(idx)
+            preview_rows = rows[:5]
+            decorated_preview_rows: list[dict[str, Any]] = []
+            for idx, row in enumerate(preview_rows):
+                decorated = dict(row)
+                suggestion = category_suggestions.get(idx)
                 subscription_hint = subscription_suggestions.get(idx)
                 transfer = transfers.get(idx)
                 rule_match = rule_matches.get(idx)
                 if suggestion:
-                    row["suggested_category"] = suggestion.category
-                    row["suggested_confidence"] = round(suggestion.confidence, 2)
+                    decorated["suggested_category"] = suggestion.category
+                    decorated["suggested_confidence"] = round(suggestion.confidence, 2)
                     if suggestion.reason:
-                        row["suggested_reason"] = suggestion.reason
+                        decorated["suggested_reason"] = suggestion.reason
                 if subscription_hint:
-                    row["suggested_subscription_id"] = str(subscription_hint.subscription_id)
-                    row["suggested_subscription_name"] = subscription_hint.subscription_name
-                    row["suggested_subscription_confidence"] = round(
+                    decorated["suggested_subscription_id"] = str(subscription_hint.subscription_id)
+                    decorated["suggested_subscription_name"] = subscription_hint.subscription_name
+                    decorated["suggested_subscription_confidence"] = round(
                         subscription_hint.confidence, 2
                     )
                     if subscription_hint.reason:
-                        row["suggested_subscription_reason"] = subscription_hint.reason
+                        decorated["suggested_subscription_reason"] = subscription_hint.reason
                 if transfer:
-                    row["transfer_match"] = transfer
+                    decorated["transfer_match"] = transfer
                 if rule_match:
-                    row["rule_applied"] = True
-                    row["rule_type"] = rule_match.rule_type
-                    row["rule_summary"] = rule_match.summary
+                    decorated["rule_applied"] = True
+                    decorated["rule_type"] = rule_match.rule_type
+                    decorated["rule_summary"] = rule_match.summary
+                decorated_preview_rows.append(decorated)
 
-            for row_number, message in parsed.errors:
-                error_models.append(
-                    ImportErrorRecord(
-                        file_id=parsed.model.id,
-                        row_number=row_number,
-                        message=message,
-                    )
-                )
+            error_payloads = [{"row_number": row, "message": msg} for row, msg in file_errors]
 
-            parsed.model.row_count = len(parsed.rows)
-            parsed.model.error_count = len(parsed.errors)
-            parsed.model.status = "ready"
-            if parsed.errors:
-                parsed.model.status = "error"
-            elif not parsed.rows:
-                parsed.model.status = "empty"
+            response_files.append(
+                {
+                    "id": file_id,
+                    "filename": file_payload.filename,
+                    "account_id": file_payload.account_id,
+                    "bank_import_type": bank_import_type,
+                    "row_count": len(rows),
+                    "error_count": len(file_errors),
+                    "errors": error_payloads,
+                    "preview_rows": decorated_preview_rows,
+                }
+            )
 
-            for idx, row in enumerate(parsed.rows, start=1):
-                suggestion = suggestions.get(idx - 1)
-                transfer = transfers.get(idx - 1)
+            for idx, row in enumerate(rows, start=1):
+                row_id = uuid4()
+                occurred_at = str(row.get("date") or "")
+                amount = str(row.get("amount") or "")
+                description = str(row.get("description") or "")
+
+                suggestion = category_suggestions.get(idx - 1)
+                suggested_category_id: UUID | None = None
+                suggested_category_name: str | None = None
+                suggested_confidence: float | None = None
+                suggested_reason: str | None = None
+                if suggestion and suggestion.category:
+                    suggested_category_name = suggestion.category
+                    suggested_confidence = round(suggestion.confidence, 2)
+                    suggested_reason = suggestion.reason
+                    category = category_by_name.get(suggestion.category.lower())
+                    if category is not None:
+                        suggested_category_id = category.id
+
                 subscription_hint = subscription_suggestions.get(idx - 1)
                 rule_match = rule_matches.get(idx - 1)
-                row_models.append(
-                    ImportRow(
-                        file_id=parsed.model.id,
-                        row_index=idx,
-                        data=row,
-                        suggested_category=suggestion.category if suggestion else None,
-                        suggested_confidence=suggestion.confidence if suggestion else None,
-                        suggested_reason=suggestion.reason if suggestion else None,
-                        suggested_subscription_id=(
+
+                response_rows.append(
+                    {
+                        "id": row_id,
+                        "file_id": file_id,
+                        "row_index": idx,
+                        "account_id": file_payload.account_id,
+                        "occurred_at": occurred_at,
+                        "amount": amount,
+                        "description": description,
+                        "suggested_category_id": suggested_category_id,
+                        "suggested_category_name": suggested_category_name,
+                        "suggested_confidence": suggested_confidence,
+                        "suggested_reason": suggested_reason,
+                        "suggested_subscription_id": (
                             subscription_hint.subscription_id if subscription_hint else None
                         ),
-                        suggested_subscription_name=(
+                        "suggested_subscription_name": (
                             subscription_hint.subscription_name if subscription_hint else None
                         ),
-                        suggested_subscription_confidence=(
-                            subscription_hint.confidence if subscription_hint else None
+                        "suggested_subscription_confidence": (
+                            round(subscription_hint.confidence, 2) if subscription_hint else None
                         ),
-                        suggested_subscription_reason=(
+                        "suggested_subscription_reason": (
                             subscription_hint.reason if subscription_hint else None
                         ),
-                        transfer_match=transfer,
-                        rule_applied=bool(rule_match),
-                        rule_type=rule_match.rule_type if rule_match else None,
-                        rule_summary=rule_match.summary if rule_match else None,
-                        rule_id=rule_match.rule_id if rule_match else None,
-                    )
+                        "transfer_match": transfers.get(idx - 1),
+                        "rule_applied": bool(rule_match),
+                        "rule_type": rule_match.rule_type if rule_match else None,
+                        "rule_summary": rule_match.summary if rule_match else None,
+                    }
                 )
 
-        saved_batch = self.repository.create_batch(
-            batch,
-            [result.model for result in parsed_files],
-            row_models,
-            error_models,
+        return ImportPreviewResponse.model_validate(
+            {"files": response_files, "rows": response_rows}
+        ).model_dump(mode="python")
+
+    def commit_import(self, payload: ImportCommitRequest) -> dict[str, Any]:
+        """Persist reviewed rows as transactions (all-or-nothing)."""
+
+        if not payload.rows:
+            raise ValueError("No rows provided")
+
+        now = datetime.now(timezone.utc)
+        batch = TransactionImportBatch(
+            source_name=payload.note or "import",
+            note=payload.note,
+            created_at=now,
+            updated_at=now,
         )
+        self.session.add(batch)
+        self.session.flush()
 
-        return saved_batch, parsed_files
-
-    def list_imports(self) -> List[TransactionImportBatch]:
-        return self.repository.list_batches(
-            include_files=True, include_errors=True, include_rows=True
-        )
-
-    def get_import_session(self, batch_id: UUID) -> Optional[TransactionImportBatch]:
-        return self.repository.get_batch(
-            batch_id,
-            include_files=True,
-            include_errors=True,
-            include_rows=True,
-        )
-
-    def commit_session(
-        self,
-        batch_id: UUID,
-        payload: ImportCommitRequest,
-    ) -> TransactionImportBatch:
-        batch = self.get_import_session(batch_id)
-        if batch is None:
-            raise LookupError("Import session not found")
-
-        override_map = {item.row_id: item for item in (payload.rows or [])}
         transaction_service = TransactionService(self.session)
         offset_account = self._get_or_create_offset_account()
-        unassigned_account = self._get_or_create_unassigned_account()
 
-        error_models: List[ImportErrorRecord] = []
-        category_map = self._category_lookup()
+        created_ids: list[UUID] = []
+        tax_events: list[TaxEvent] = []
 
-        for file in batch.files:
-            added_errors = 0
-            for row in getattr(file, "rows", []):
-                override = override_map.get(row.id)
-                if override and override.delete:
-                    continue
+        for row in payload.rows:
+            if row.delete:
+                continue
 
-                payload_data = dict(row.data)
-                if override and override.description is not None:
-                    payload_data["description"] = override.description
-                if override and override.amount is not None:
-                    payload_data["amount"] = override.amount
-                if override and override.occurred_at is not None:
-                    payload_data["occurred_at"] = override.occurred_at.isoformat()
+            occurred_at = self._parse_date(row.occurred_at)
+            if occurred_at is None:
+                raise ValueError("Date is not a valid ISO date")
 
-                date_value = (
-                    payload_data.get("date")
-                    or payload_data.get("occurred_at")
-                    or payload_data.get("posted_at")
-                )
-                occurred_at = (
-                    override.occurred_at
-                    if override and override.occurred_at is not None
-                    else self._parse_date(str(date_value))
-                )
-                if occurred_at is None:
-                    error_models.append(
-                        ImportErrorRecord(
-                            file_id=file.id,
-                            row_number=row.row_index,
-                            message="Date is not a valid ISO date",
-                        )
-                    )
-                    added_errors += 1
-                    continue
+            if not self._is_decimal(row.amount):
+                raise ValueError("Amount must be numeric")
 
-                amount_text = payload_data.get("amount") or payload_data.get("value")
-                if not self._is_decimal(str(amount_text)):
-                    error_models.append(
-                        ImportErrorRecord(
-                            file_id=file.id,
-                            row_number=row.row_index,
-                            message="Amount must be numeric",
-                        )
-                    )
-                    added_errors += 1
-                    continue
+            amount = Decimal(str(row.amount))
+            description = str(row.description or "").strip()
+            if not description:
+                raise ValueError("Description is required")
 
-                amount = Decimal(str(amount_text))
-                description = str(payload_data.get("description", "")) or None
-                tax_event_type: Optional[TaxEventType] = (
-                    override.tax_event_type if override is not None else None
-                )
-                category_id = None
-                if tax_event_type is None and override and override.category_id:
-                    category_id = override.category_id
-                elif tax_event_type is None and row.suggested_category:
-                    category = category_map.get(row.suggested_category.lower())
-                    if category:
-                        category_id = category.id
-                subscription_id = (
-                    None
-                    if tax_event_type is not None
-                    else (override.subscription_id if override else None)
-                )
+            tax_event_type: TaxEventType | None = row.tax_event_type
+            category_id = row.category_id if tax_event_type is None else None
+            subscription_id = row.subscription_id if tax_event_type is None else None
 
-                target_account_id = (
-                    override.account_id
-                    if override and override.account_id is not None
-                    else file.account_id or unassigned_account.id
-                )
+            target_account_id = row.account_id
+            counterparty_account_id = row.transfer_account_id
 
-                counterparty_account_id = (
-                    override.transfer_account_id
-                    if override and override.transfer_account_id is not None
-                    else None
-                )
+            abs_amount = abs(amount)
+            if tax_event_type is not None:
+                cash_delta = abs_amount if tax_event_type == TaxEventType.REFUND else -abs_amount
+                legs = [
+                    TransactionLeg(account_id=target_account_id, amount=cash_delta),
+                    TransactionLeg(account_id=offset_account.id, amount=-cash_delta),
+                ]
+                counterparty_account_id = None
+            elif counterparty_account_id is not None:
+                legs = [
+                    TransactionLeg(account_id=target_account_id, amount=amount),
+                    TransactionLeg(account_id=counterparty_account_id, amount=-amount),
+                ]
+            else:
+                legs = [
+                    TransactionLeg(account_id=target_account_id, amount=amount),
+                    TransactionLeg(account_id=offset_account.id, amount=-amount),
+                ]
 
-                abs_amount = abs(amount)
-                if tax_event_type is not None:
-                    cash_delta = (
-                        abs_amount if tax_event_type == TaxEventType.REFUND else -abs_amount
-                    )
-                    legs = [
-                        TransactionLeg(account_id=target_account_id, amount=cash_delta),
-                        TransactionLeg(account_id=offset_account.id, amount=-cash_delta),
-                    ]
-                    counterparty_account_id = None
-                elif counterparty_account_id is not None:
-                    legs = [
-                        TransactionLeg(account_id=target_account_id, amount=amount),
-                        TransactionLeg(account_id=counterparty_account_id, amount=-amount),
-                    ]
-                else:
-                    legs = [
-                        TransactionLeg(account_id=target_account_id, amount=amount),
-                        TransactionLeg(account_id=offset_account.id, amount=-amount),
-                    ]
-
-                transaction = Transaction(
-                    category_id=category_id,
-                    transaction_type=TransactionType.TRANSFER,
-                    description=description,
-                    notes=None,
-                    external_id=None,
-                    occurred_at=occurred_at,
-                    posted_at=occurred_at,
-                    subscription_id=subscription_id,
-                    created_source=CreatedSource.IMPORT,
-                    import_batch_id=batch.id,
-                )
-
-                try:
-                    created_tx = transaction_service.create_transaction(
-                        transaction, legs, import_batch=batch
-                    )
-                    if tax_event_type is not None:
-                        self.session.add(
-                            TaxEvent(
-                                transaction_id=created_tx.id,
-                                event_type=tax_event_type,
-                            )
-                        )
-                    else:
-                        self._record_rule_from_row(
-                            description,
-                            amount,
-                            occurred_at,
-                            category_id,
-                            subscription_id,
-                        )
-                except Exception as exc:  # pragma: no cover - defensive
-                    error_models.append(
-                        ImportErrorRecord(
-                            file_id=file.id,
-                            row_number=row.row_index,
-                            message=str(exc),
-                        )
-                    )
-                    added_errors += 1
-                    continue
-
-            if added_errors:
-                file.status = "error"
-                file.error_count += added_errors
-            elif file.status == "staged":
-                file.status = "committed"
-
-            self.session.add(file)
-
-        self.session.commit()
-
-        if error_models:
-            self.repository.add_errors(error_models)
-
-        self.session.refresh(batch)
-        return batch
-
-    def append_files_to_session(
-        self,
-        batch_id: UUID,
-        files: List[ImportFilePayload],
-        examples: List[ExampleTransaction] | None = None,
-    ) -> TransactionImportBatch:
-        batch = self.get_import_session(batch_id)
-        if batch is None:
-            raise LookupError("Import session not found")
-
-        parsed_files = [self._parse_file(file) for file in files]
-        row_models: List[ImportRow] = []
-        error_models: List[ImportErrorRecord] = []
-        category_lookup_by_id = self._category_lookup_by_id()
-        subscription_lookup_by_id = self._subscription_lookup_by_id()
-
-        for parsed in parsed_files:
-            rule_matches = self._rule_matches(
-                parsed.rows,
-                parsed.column_map or {},
-                category_lookup_by_id,
-                subscription_lookup_by_id,
+            transaction = Transaction(
+                category_id=category_id,
+                transaction_type=TransactionType.TRANSFER,
+                description=description,
+                notes=None,
+                external_id=None,
+                occurred_at=occurred_at,
+                posted_at=occurred_at,
+                subscription_id=subscription_id,
+                created_source=CreatedSource.IMPORT,
+                import_batch_id=batch.id,
+                created_at=now,
+                updated_at=now,
             )
-            suggestions = self._suggest_rows(
-                parsed.rows, parsed.column_map or {}, examples or [], rule_matches
-            )
-            subscription_suggestions = self._suggest_subscriptions(
-                parsed.rows, parsed.column_map or {}, rule_matches
-            )
-            transfers = self._match_transfers(parsed.rows, parsed.column_map or {})
 
-            for idx, row in enumerate(parsed.preview_rows):
-                suggestion = suggestions.get(idx)
-                subscription_hint = subscription_suggestions.get(idx)
-                transfer = transfers.get(idx)
-                rule_match = rule_matches.get(idx)
-                if suggestion:
-                    row["suggested_category"] = suggestion.category
-                    row["suggested_confidence"] = round(suggestion.confidence, 2)
-                    if suggestion.reason:
-                        row["suggested_reason"] = suggestion.reason
-                if subscription_hint:
-                    row["suggested_subscription_id"] = str(subscription_hint.subscription_id)
-                    row["suggested_subscription_name"] = subscription_hint.subscription_name
-                    row["suggested_subscription_confidence"] = round(
-                        subscription_hint.confidence, 2
-                    )
-                    if subscription_hint.reason:
-                        row["suggested_subscription_reason"] = subscription_hint.reason
-                if transfer:
-                    row["transfer_match"] = transfer
-                if rule_match:
-                    row["rule_applied"] = True
-                    row["rule_type"] = rule_match.rule_type
-                    row["rule_summary"] = rule_match.summary
+            created_tx = transaction_service.create_transaction(
+                transaction,
+                legs,
+                import_batch=batch,
+                commit=False,
+            )
+            if created_tx.id is None:  # pragma: no cover - defensive
+                raise ValueError("Transaction was not persisted")
+            created_ids.append(created_tx.id)
 
-            for row_number, message in parsed.errors:
-                error_models.append(
-                    ImportErrorRecord(
-                        file_id=parsed.model.id,
-                        row_number=row_number,
-                        message=message,
+            if tax_event_type is not None:
+                tax_events.append(
+                    TaxEvent(
+                        transaction_id=created_tx.id,
+                        event_type=tax_event_type,
                     )
                 )
-
-            parsed.model.row_count = len(parsed.rows)
-            parsed.model.error_count = len(parsed.errors)
-            parsed.model.status = "staged"
-            if parsed.errors:
-                parsed.model.status = "error"
-            if not parsed.rows:
-                parsed.model.status = "empty"
-
-            parsed.model.batch_id = batch.id
-            self.session.add(parsed.model)
-
-            for idx, row in enumerate(parsed.rows, start=1):
-                suggestion = suggestions.get(idx - 1)
-                subscription_hint = subscription_suggestions.get(idx - 1)
-                transfer = transfers.get(idx - 1)
-                rule_match = rule_matches.get(idx - 1)
-                row_models.append(
-                    ImportRow(
-                        file_id=parsed.model.id,
-                        row_index=idx,
-                        data=row,
-                        suggested_category=suggestion.category if suggestion else None,
-                        suggested_confidence=suggestion.confidence if suggestion else None,
-                        suggested_reason=suggestion.reason if suggestion else None,
-                        suggested_subscription_id=(
-                            subscription_hint.subscription_id if subscription_hint else None
-                        ),
-                        suggested_subscription_name=(
-                            subscription_hint.subscription_name if subscription_hint else None
-                        ),
-                        suggested_subscription_confidence=(
-                            subscription_hint.confidence if subscription_hint else None
-                        ),
-                        suggested_subscription_reason=(
-                            subscription_hint.reason if subscription_hint else None
-                        ),
-                        transfer_match=transfer,
-                        rule_applied=bool(rule_match),
-                        rule_type=rule_match.rule_type if rule_match else None,
-                        rule_summary=rule_match.summary if rule_match else None,
-                        rule_id=rule_match.rule_id if rule_match else None,
-                    )
+            else:
+                self._record_rule_from_row(
+                    description,
+                    amount,
+                    occurred_at,
+                    category_id,
+                    subscription_id,
                 )
 
-        self.session.flush()
-        for row_model in row_models:
-            self.session.add(row_model)
+        if tax_events:
+            self.session.add_all(tax_events)
 
-        if error_models:
-            self.session.add_all(error_models)
-
-        self.session.commit()
-        self.session.refresh(batch)
-        return batch
-
-    def _derive_source_name(self, payload: ImportBatchCreate) -> str:
-        return payload.note or (payload.files[0].filename if payload.files else "import")
-
-    def _parse_file(self, file: ImportFilePayload) -> ParsedImportFile:
-        decoded = self._decode_base64(file.content_base64)
-        rows, parse_errors = self._extract_bank_rows(
-            filename=file.filename, content=decoded, bank_type=file.bank_type
-        )
-        column_map: Optional[Dict[str, str]] = (
-            {"date": "date", "description": "description", "amount": "amount"} if rows else None
-        )
-        validation_errors = self._validate_rows(rows, column_map)
-        errors = parse_errors + validation_errors
-
-        status = "ready"
-        if errors:
-            status = "error"
-        if not rows:
-            status = "empty"
-
-        model = ImportFile(
-            filename=file.filename,
-            account_id=file.account_id,
-            bank_type=(
-                file.bank_type.value
-                if isinstance(file.bank_type, BankImportType)
-                else str(file.bank_type)
-            ),
-            row_count=len(rows),
-            error_count=len(errors),
-            status=status,
-        )
-
-        preview_rows = rows[:5]
-        return ParsedImportFile(
-            model=model,
-            rows=rows,
-            preview_rows=preview_rows,
-            errors=errors,
-            column_map=column_map,
-        )
+        return ImportCommitResponse(
+            import_batch_id=batch.id,
+            transaction_ids=created_ids,
+        ).model_dump(mode="python")
 
     def _decode_base64(self, payload: str) -> bytes:
         try:
             return base64.b64decode(payload, validate=True)
-        except Exception as exc:  # pragma: no cover - validated earlier
+        except Exception as exc:
             raise ValueError("Unable to decode file content") from exc
+
+    def _coerce_bank_import_type(self, value: Any) -> BankImportType | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        try:
+            return BankImportType(text)
+        except ValueError:
+            return None
 
     def _extract_bank_rows(
         self, *, filename: str, content: bytes, bank_type: BankImportType
@@ -618,7 +404,7 @@ class ImportService:
 
             try:
                 date_text = cleaned[0] or cleaned[1] or ""
-                occurred_at = self._parse_date(date_text)
+                occurred_at = self._parse_date(str(date_text))
                 if occurred_at is None:
                     raise ValueError("invalid date")
                 description = cleaned[2] or ""
@@ -765,46 +551,6 @@ class ImportService:
 
         return errors
 
-    def _enrich_previews(
-        self, parsed_files: List[ParsedImportFile], examples: List[ExampleTransaction]
-    ) -> None:
-        for parsed in parsed_files:
-            if parsed.column_map is None or not parsed.rows:
-                continue
-
-            category_lookup_by_id = self._category_lookup_by_id()
-            subscription_lookup_by_id = self._subscription_lookup_by_id()
-            rule_matches = self._rule_matches(
-                parsed.rows, parsed.column_map, category_lookup_by_id, subscription_lookup_by_id
-            )
-            suggestions = self._suggest_rows(parsed.rows, parsed.column_map, examples, rule_matches)
-            subscription_suggestions = self._suggest_subscriptions(
-                parsed.rows, parsed.column_map, rule_matches
-            )
-            transfers = self._match_transfers(parsed.rows, parsed.column_map)
-
-            for idx, row in enumerate(parsed.preview_rows):
-                suggestion = suggestions.get(idx)
-                if suggestion:
-                    row["suggested_category"] = suggestion.category
-                    row["suggested_confidence"] = round(suggestion.confidence, 2)
-                    if suggestion.reason:
-                        row["suggested_reason"] = suggestion.reason
-
-                subscription_hint = subscription_suggestions.get(idx)
-                if subscription_hint:
-                    row["suggested_subscription_id"] = str(subscription_hint.subscription_id)
-                    row["suggested_subscription_name"] = subscription_hint.subscription_name
-                    row["suggested_subscription_confidence"] = round(
-                        subscription_hint.confidence, 2
-                    )
-                    if subscription_hint.reason:
-                        row["suggested_subscription_reason"] = subscription_hint.reason
-
-                transfer = transfers.get(idx)
-                if transfer:
-                    row["transfer_match"] = transfer
-
     def _rule_matches(
         self,
         rows: List[dict],
@@ -918,7 +664,6 @@ class ImportService:
         self,
         rows: List[dict],
         column_map: Dict[str, str],
-        examples: List[ExampleTransaction],
         rule_matches: Optional[Dict[int, RuleMatch]] = None,
     ) -> Dict[int, CategorySuggestion]:
         if not column_map or not column_map.get("description") or not column_map.get("amount"):
@@ -938,32 +683,17 @@ class ImportService:
         for idx, row in enumerate(rows):
             if idx in locked:
                 continue
-            heuristic[idx] = self._suggest_category_heuristic(row, column_map, examples)
-
-        bedrock_client = self._get_bedrock_client()
-        if bedrock_client:
-            bedrock = self._bedrock_suggest_batch(bedrock_client, rows, column_map, examples)
-            for idx, suggestion in bedrock.items():
-                if idx in locked:
-                    continue
-                heuristic[idx] = suggestion
+            heuristic[idx] = self._suggest_category_heuristic(row, column_map)
 
         return heuristic
 
     def _suggest_category_heuristic(
-        self,
-        row: dict,
-        column_map: Dict[str, str],
-        examples: List[ExampleTransaction],
+        self, row: dict, column_map: Dict[str, str]
     ) -> CategorySuggestion:
         description = str(row.get(column_map["description"], ""))
         amount_text = str(row.get(column_map["amount"], ""))
 
         normalized_desc = description.lower()
-        for example in examples:
-            if example.description.lower() in normalized_desc:
-                return CategorySuggestion(category=example.category_hint, confidence=0.78)
-
         keyword_map = {
             "rent": "Rent",
             "salary": "Salary",
@@ -1129,79 +859,78 @@ class ImportService:
             lookup[sub_id] = Decimal(str(amount))
         return lookup
 
-    def _get_bedrock_client(self):
-        try:
-            cfg = Config(
-                read_timeout=5,
-                connect_timeout=3,
-                retries={"max_attempts": 1, "mode": "standard"},
-            )
-            return boto3.client("bedrock-runtime", region_name=BEDROCK_REGION, config=cfg)
-        except (BotoCoreError, ClientError):  # pragma: no cover - environment dependent
-            return None
-
-    def _bedrock_suggest_batch(  # pylint: disable=too-many-positional-arguments
-        self,
-        client,
-        rows: List[dict],
-        column_map: Dict[str, str],
-        examples: List[ExampleTransaction],
-    ) -> Dict[int, CategorySuggestion]:
-        transactions: list[dict[str, str]] = []
-        for row in rows:
-            transactions.append(
-                {
-                    "description": str(row.get(column_map.get("description") or "")),
-                    "amount": str(row.get(column_map.get("amount") or "")),
-                }
-            )
-
-        prompt = (
-            "Suggest spending categories for each transaction. "
-            "Return a JSON array of objects with fields category, confidence (0-1), and reason. "
-            f"Examples: {json.dumps([ex.model_dump() for ex in examples])}. "
-            f"Transactions: {json.dumps(transactions)}"
-        )
-
-        payload = {
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [{"type": "text", "text": prompt}],
-                }
-            ],
-            "max_tokens": 1200,
-            "temperature": 0.2,
-            "top_p": 0.9,
-        }
-
-        try:
-            response = client.invoke_model(
-                modelId=BEDROCK_MODEL_ID,
-                contentType="application/json",
-                accept="application/json",
-                body=json.dumps(payload),
-            )
-            raw_body = response.get("body")
-            if raw_body is None:
-                return {}
-            body_text = raw_body.read().decode("utf-8")
-            parsed = json.loads(body_text)
-            output_text = (
-                parsed.get("output_text") or parsed.get("content", [{}])[0].get("text") or ""
-            )
-
-            suggestions_raw = json.loads(output_text)
-            suggestions: Dict[int, CategorySuggestion] = {}
-            for idx, item in enumerate(suggestions_raw):
-                suggestions[idx] = CategorySuggestion(
-                    category=item.get("category"),
-                    confidence=float(item.get("confidence", 0.5)),
-                    reason=item.get("reason"),
-                )
-            return suggestions
-        except Exception:  # pragma: no cover - external dependency
+    def _match_transfers(
+        self, rows: List[dict[str, Any]], column_map: Dict[str, str]
+    ) -> Dict[int, dict[str, Any]]:
+        if not rows:
             return {}
+
+        amount_header = column_map.get("amount")
+        date_header = column_map.get("date")
+        if not amount_header:
+            return {}
+
+        entries: List[Dict[str, Any]] = []
+        for idx, row in enumerate(rows):
+            try:
+                amount = Decimal(str(row.get(amount_header, "")))
+            except Exception:
+                continue
+            date_value = self._parse_date(str(row.get(date_header, ""))) if date_header else None
+            entries.append({"idx": idx, "amount": amount, "date": date_value})
+
+        matches: Dict[int, dict[str, Any]] = {}
+        used: set[int] = set()
+        for entry in entries:
+            if entry["idx"] in used:
+                continue
+            for other in entries:
+                if other["idx"] in used or other["idx"] == entry["idx"]:
+                    continue
+                if (entry["amount"] + other["amount"]) != 0:
+                    continue
+                if entry["date"] and other["date"]:
+                    delta = abs((entry["date"] - other["date"]).days)
+                    if delta > 2:
+                        continue
+                match_payload = {
+                    "paired_with": other["idx"] + 1,
+                    "reason": "Matched transfer by amount and date proximity",
+                }
+                matches[entry["idx"]] = match_payload
+                matches[other["idx"]] = {
+                    "paired_with": entry["idx"] + 1,
+                    "reason": "Matched transfer by amount and date proximity",
+                }
+                used.update({entry["idx"], other["idx"]})
+                break
+        return matches
+
+    def _get_or_create_offset_account(self) -> Account:
+        if hasattr(self, "_offset_account"):
+            return getattr(self, "_offset_account")
+
+        statement = select(Account).where(
+            cast(Any, Account.is_active).is_(False), Account.name == "Offset"
+        )
+        account = self.session.exec(statement).one_or_none()
+        if account is None:
+            account = Account(
+                name="Offset",
+                account_type=AccountType.NORMAL,
+                is_active=False,
+            )
+            self.session.add(account)
+            self.session.flush()
+        else:
+            account.name = account.name or "Offset"
+        setattr(self, "_offset_account", account)
+        return account
+
+    def _category_lookup(self) -> dict[str, Category]:
+        statement = select(Category)
+        categories = self.session.exec(statement).all()
+        return {cat.name.lower(): cat for cat in categories}
 
     # pylint: disable=too-many-positional-arguments
     def _record_rule_from_row(
@@ -1259,208 +988,6 @@ class ImportService:
         percent = (amount_abs * Decimal("0.02")).quantize(Decimal("0.01"))
         return max(baseline, percent)
 
-    def _match_transfers(
-        self, rows: List[dict[str, Any]], column_map: Dict[str, str]
-    ) -> Dict[int, dict[str, Any]]:
-        if not rows:
-            return {}
-
-        amount_header = column_map.get("amount")
-        date_header = column_map.get("date")
-        if not amount_header:
-            return {}
-
-        entries: List[Dict[str, Any]] = []
-        for idx, row in enumerate(rows):
-            try:
-                amount = Decimal(str(row.get(amount_header, "")))
-            except Exception:
-                continue
-            date_value = self._parse_date(str(row.get(date_header, ""))) if date_header else None
-            entries.append({"idx": idx, "amount": amount, "date": date_value})
-
-        matches: Dict[int, dict[str, Any]] = {}
-        used: set[int] = set()
-        for entry in entries:
-            if entry["idx"] in used:
-                continue
-            for other in entries:
-                if other["idx"] in used or other["idx"] == entry["idx"]:
-                    continue
-                if (entry["amount"] + other["amount"]) != 0:
-                    continue
-                if entry["date"] and other["date"]:
-                    delta = abs((entry["date"] - other["date"]).days)
-                    if delta > 2:
-                        continue
-                match_payload = {
-                    "paired_with": other["idx"] + 1,  # human-friendly row number
-                    "reason": "Matched transfer by amount and date proximity",
-                }
-                matches[entry["idx"]] = match_payload
-                matches[other["idx"]] = {
-                    "paired_with": entry["idx"] + 1,
-                    "reason": "Matched transfer by amount and date proximity",
-                }
-                used.update({entry["idx"], other["idx"]})
-                break
-        return matches
-
-    def _get_or_create_offset_account(self) -> Account:
-        if hasattr(self, "_offset_account"):
-            return getattr(self, "_offset_account")
-
-        statement = select(Account).where(
-            cast(Any, Account.is_active).is_(False), Account.name == "Offset"
-        )
-        account = self.session.exec(statement).one_or_none()
-        if account is None:
-            account = Account(
-                name="Offset",
-                account_type=AccountType.NORMAL,
-                is_active=False,
-            )
-            self.session.add(account)
-            self.session.commit()
-            self.session.refresh(account)
-        else:
-            account.name = account.name or "Offset"
-        setattr(self, "_offset_account", account)
-        return account
-
-    def _get_or_create_unassigned_account(self) -> Account:
-        if hasattr(self, "_unassigned_account"):
-            return getattr(self, "_unassigned_account")
-
-        statement = select(Account).where(
-            cast(Any, Account.is_active).is_(False), Account.name == "Unassigned"
-        )
-        account = self.session.exec(statement).one_or_none()
-        if account is None:
-            account = Account(
-                name="Unassigned",
-                account_type=AccountType.NORMAL,
-                is_active=False,
-            )
-            self.session.add(account)
-            self.session.commit()
-            self.session.refresh(account)
-        else:
-            account.name = account.name or "Unassigned"
-        setattr(self, "_unassigned_account", account)
-        return account
-
-    def _category_lookup(self) -> dict[str, Category]:
-        statement = select(Category)
-        categories = self.session.exec(statement).all()
-        return {cat.name.lower(): cat for cat in categories}
-
-    def _ingest_files(
-        self,
-        batch: TransactionImportBatch,
-        parsed_files: List[ParsedImportFile],
-        examples: List[ExampleTransaction],
-    ) -> List[ImportErrorRecord]:
-        errors: List[ImportErrorRecord] = []
-        transaction_service = TransactionService(self.session)
-        offset_account = self._get_or_create_offset_account()
-        category_map = self._category_lookup()
-        category_lookup_by_id = self._category_lookup_by_id()
-        subscription_lookup_by_id = self._subscription_lookup_by_id()
-
-        for saved_file, parsed in zip(batch.files, parsed_files):
-            if saved_file.status == "error" or not parsed.rows or parsed.column_map is None:
-                saved_file.status = saved_file.status or "error"
-                continue
-
-            rule_matches = self._rule_matches(
-                parsed.rows, parsed.column_map, category_lookup_by_id, subscription_lookup_by_id
-            )
-            suggestions = self._suggest_rows(parsed.rows, parsed.column_map, examples, rule_matches)
-            added_errors = 0
-
-            for idx, row in enumerate(parsed.rows, start=1):
-                target_account_id = (
-                    saved_file.account_id or self._get_or_create_unassigned_account().id
-                )
-                date_value = row.get(parsed.column_map["date"], "")
-                occurred_at = self._parse_date(str(date_value))
-                if occurred_at is None:
-                    errors.append(
-                        ImportErrorRecord(
-                            file_id=saved_file.id,
-                            row_number=idx,
-                            message="Date is not a valid ISO date",
-                        )
-                    )
-                    added_errors += 1
-                    continue
-
-                amount_text = row.get(parsed.column_map["amount"], "")
-                if not self._is_decimal(str(amount_text)):
-                    errors.append(
-                        ImportErrorRecord(
-                            file_id=saved_file.id,
-                            row_number=idx,
-                            message="Amount must be numeric",
-                        )
-                    )
-                    added_errors += 1
-                    continue
-
-                amount = Decimal(str(amount_text))
-                description = str(row.get(parsed.column_map["description"], "")).strip() or None
-                suggestion = suggestions.get(idx - 1)
-                category_id = None
-                if suggestion and suggestion.category:
-                    category = category_map.get(suggestion.category.lower())
-                    if category:
-                        category_id = category.id
-
-                legs = [
-                    TransactionLeg(account_id=target_account_id, amount=amount),
-                    TransactionLeg(account_id=offset_account.id, amount=-amount),
-                ]
-
-                transaction = Transaction(
-                    category_id=category_id,
-                    transaction_type=TransactionType.TRANSFER,
-                    description=description,
-                    notes=None,
-                    external_id=None,
-                    occurred_at=occurred_at,
-                    posted_at=occurred_at,
-                    created_source=CreatedSource.IMPORT,
-                )
-
-                try:
-                    transaction_service.create_transaction(
-                        transaction,
-                        legs,
-                        import_batch=batch,
-                    )
-                except Exception as exc:  # pragma: no cover - defensive
-                    errors.append(
-                        ImportErrorRecord(
-                            file_id=saved_file.id,
-                            row_number=idx,
-                            message=str(exc),
-                        )
-                    )
-                    added_errors += 1
-                    continue
-
-            if added_errors:
-                saved_file.status = "error"
-                saved_file.error_count += added_errors
-            elif saved_file.status == "ready":
-                saved_file.status = "imported"
-
-            self.session.add(saved_file)
-
-        self.session.commit()
-        return errors
-
     def _parse_date(self, value: str) -> Optional[datetime]:
         if not value:
             return None
@@ -1503,4 +1030,4 @@ class ImportService:
             return False
 
 
-__all__ = ["ImportService", "ParsedImportFile", "CategorySuggestion", "RuleMatch"]
+__all__ = ["ImportService", "CategorySuggestion", "SubscriptionSuggestion", "RuleMatch"]

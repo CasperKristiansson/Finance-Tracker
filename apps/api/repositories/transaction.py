@@ -151,6 +151,7 @@ class TransactionRepository:
         legs: List[TransactionLeg],
         *,
         import_batch: Optional[TransactionImportBatch] = None,
+        commit: bool = True,
     ) -> Transaction:
         if not legs:
             raise ValueError("Transactions require at least one leg")
@@ -166,8 +167,11 @@ class TransactionRepository:
             leg.transaction_id = transaction.id
             self.session.add(leg)
 
-        self.session.commit()
-        self.session.refresh(transaction)
+        self.session.flush()
+
+        if commit:
+            self.session.commit()
+            self.session.refresh(transaction)
         return transaction
 
     def update(
@@ -269,6 +273,7 @@ class TransactionRepository:
         event_type: LoanEventType,
         amount: Decimal,
         occurred_at: datetime,
+        commit: bool = True,
     ) -> LoanEvent:
         event = LoanEvent(
             loan_id=loan_id,
@@ -279,8 +284,11 @@ class TransactionRepository:
             occurred_at=occurred_at,
         )
         self.session.add(event)
-        self.session.commit()
-        self.session.refresh(event)
+        if commit:
+            self.session.commit()
+            self.session.refresh(event)
+        else:
+            self.session.flush()
         return event
 
 
