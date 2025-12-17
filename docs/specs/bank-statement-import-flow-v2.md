@@ -68,7 +68,7 @@ Account-level configuration determines which parser to apply for a file (instead
 ## Functional requirements
 - Account-level field for statement format: Swedbank / SEB / Circle K Mastercard / none.
 - Import screen flow:
-  1. Upload one or multiple XLSX files (templates under `docs/data/bank transactions/*`).
+  1. Upload one or multiple XLSX files (templates under `apps/api/tests/fixtures/bank-transactions/*`).
   2. Assign each uploaded file to an account.
   3. Click “Parse” to get transactions + category suggestions.
   4. Audit/edit transactions (description, amount, date, category, etc.).
@@ -310,7 +310,7 @@ Proposed response shape:
 ## M3
 - Frontend:
   - Manual flow check:
-    - Upload sample files from `docs/data/bank transactions/*`
+    - Upload sample files from `apps/api/tests/fixtures/bank-transactions/*`
     - Map to accounts with configured bank types
     - Parse, edit, submit
     - Verify new transactions appear under `/transactions`

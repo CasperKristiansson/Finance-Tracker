@@ -553,9 +553,6 @@ class ImportService:
             try:
                 date_idx = header_map.get("datum", 0)
                 date_text = cleaned[date_idx] if date_idx < len(cleaned) else ""
-                occurred_at = self._parse_date(str(date_text))
-                if occurred_at is None:
-                    continue
 
                 description_idx = header_map.get("specifikation", 2)
                 description = cleaned[description_idx] if description_idx < len(cleaned) else ""
@@ -567,6 +564,12 @@ class ImportService:
 
                 amount_idx = header_map.get("belopp", 6)
                 amount_raw = cleaned[amount_idx] if amount_idx < len(cleaned) else ""
+
+                occurred_at = self._parse_date(str(date_text))
+                if occurred_at is None:
+                    if date_text and description and amount_raw != "":
+                        raise ValueError("invalid date")
+                    continue
                 if amount_raw == "":
                     continue
                 amount = Decimal(str(amount_raw))

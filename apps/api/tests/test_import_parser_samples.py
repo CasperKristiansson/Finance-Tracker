@@ -72,8 +72,8 @@ def _json_body(response: dict) -> dict:
     ],
 )
 def test_preview_parses_sample_bank_statement(bank_import_type: str, filename: str):
-    repo_root = Path(__file__).resolve().parents[3]
-    file_path = repo_root / "docs" / "data" / "bank transactions" / filename
+    fixtures_dir = Path(__file__).resolve().parent / "fixtures" / "bank-transactions"
+    file_path = fixtures_dir / filename
     assert file_path.exists(), f"Missing sample file: {file_path}"
 
     account_id = _create_account(bank_import_type=bank_import_type)
