@@ -1,24 +1,32 @@
 import { createAction } from "@reduxjs/toolkit";
-import { call, put, takeLatest } from "redux-saga/effects";
+import { call, put, select, takeLatest } from "redux-saga/effects";
 import { toast } from "sonner";
 import { callApiWithAuth } from "@/features/api/apiSaga";
+import { selectCategories } from "@/features/categories/categoriesSlice";
 import {
   clearImportPreview,
   clearImportsError,
+  setImportSuggestions,
   setImportPreview,
   setImportsError,
   setImportsLoading,
+  setImportsSuggestionsError,
+  setImportsSuggesting,
   setImportsSaving,
 } from "@/features/imports/importsSlice";
 import type {
   ImportCommitRequest,
   ImportCommitResponse,
+  ImportCategorySuggestRequest,
+  ImportCategorySuggestResponse,
   ImportPreviewRequest,
   ImportPreviewResponse,
 } from "@/types/api";
 import {
   importCommitRequestSchema,
   importCommitResponseSchema,
+  importCategorySuggestRequestSchema,
+  importCategorySuggestResponseSchema,
   importPreviewRequestSchema,
   importPreviewResponseSchema,
 } from "@/types/schemas";
@@ -27,6 +35,9 @@ export const PreviewImports =
   createAction<ImportPreviewRequest>("imports/preview");
 export const CommitImports =
   createAction<ImportCommitRequest>("imports/commit");
+export const SuggestImportCategories = createAction<{
+  preview: ImportPreviewResponse;
+}>("imports/suggestCategories");
 export const ResetImports = createAction("imports/reset");
 
 function* handlePreview(action: ReturnType<typeof PreviewImports>) {
@@ -102,11 +113,100 @@ function* handleCommit(action: ReturnType<typeof CommitImports>) {
   }
 }
 
+function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
+  yield put(setImportsSuggesting(true));
+  yield put(setImportsSuggestionsError(undefined));
+  try {
+    const categories: Array<{
+      id: string;
+      name: string;
+      category_type: string;
+      is_archived?: boolean;
+    }> = yield select(selectCategories);
+    const available = categories.filter((cat) => !cat.is_archived);
+    if (!available.length) {
+      throw new Error("No categories available for suggestions.");
+    }
+
+    const preview = action.payload.preview;
+    const history: ImportCategorySuggestRequest["history"] = [];
+    const seenHistory = new Set<string>();
+    for (const row of preview.rows) {
+      for (const tx of row.related_transactions ?? []) {
+        if (!tx.category_id || !tx.description) continue;
+        const key = `${tx.category_id}:${tx.description}`.toLowerCase();
+        if (seenHistory.has(key)) continue;
+        seenHistory.add(key);
+        history.push({
+          category_id: tx.category_id,
+          description: tx.description,
+        });
+        if (history.length >= 80) break;
+      }
+      if (history.length >= 80) break;
+    }
+
+    const transactions: ImportCategorySuggestRequest["transactions"] = [];
+    for (const row of preview.rows) {
+      if (row.rule_applied) continue;
+      transactions.push({
+        id: row.id,
+        description: row.description,
+        amount: row.amount,
+        occurred_at: row.occurred_at,
+      });
+      if (transactions.length >= 80) break;
+    }
+    if (!transactions.length) return;
+
+    const payload: ImportCategorySuggestRequest = {
+      categories: available.map((cat) => ({
+        id: cat.id,
+        name: cat.name,
+        category_type: cat.category_type,
+      })),
+      history,
+      transactions,
+    };
+    const body = importCategorySuggestRequestSchema.parse(payload);
+
+    const response: ImportCategorySuggestResponse = yield call(
+      callApiWithAuth,
+      {
+        path: "/imports/suggest-categories",
+        method: "POST",
+        body,
+        schema: importCategorySuggestResponseSchema,
+      },
+      { loadingKey: "imports-suggest" },
+    );
+    const parsed = importCategorySuggestResponseSchema.parse(response);
+    const mapped: Record<
+      string,
+      ImportCategorySuggestResponse["suggestions"][number]
+    > = {};
+    parsed.suggestions.forEach((suggestion) => {
+      mapped[suggestion.id] = suggestion;
+    });
+    yield put(setImportSuggestions(mapped));
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to suggest categories.";
+    yield put(setImportsSuggestionsError(message));
+    toast.error("Category suggestions unavailable", { description: message });
+  } finally {
+    yield put(setImportsSuggesting(false));
+  }
+}
+
 export function* ImportsSaga() {
   yield takeLatest(PreviewImports.type, handlePreview);
   yield takeLatest(CommitImports.type, handleCommit);
+  yield takeLatest(SuggestImportCategories.type, handleSuggest);
   yield takeLatest(ResetImports.type, function* () {
     yield put(clearImportPreview());
     yield put(clearImportsError());
+    yield put(setImportsSuggesting(false));
+    yield put(setImportsSuggestionsError(undefined));
   });
 }

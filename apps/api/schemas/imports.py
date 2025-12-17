@@ -60,6 +60,16 @@ class ImportPreviewFileRead(BaseModel):
     preview_rows: List[dict[str, Any]] = Field(default_factory=list)
 
 
+class ImportRelatedTransactionRead(BaseModel):
+    """Previously categorized transaction used as suggestion context."""
+
+    id: UUID
+    occurred_at: str
+    description: str
+    category_id: Optional[UUID] = None
+    category_name: Optional[str] = None
+
+
 class ImportPreviewRowRead(BaseModel):
     """Single draft transaction row returned by preview."""
 
@@ -70,6 +80,7 @@ class ImportPreviewRowRead(BaseModel):
     occurred_at: str
     amount: str
     description: str
+    related_transactions: List[ImportRelatedTransactionRead] = Field(default_factory=list)
     suggested_category_id: Optional[UUID] = None
     suggested_category_name: Optional[str] = None
     suggested_confidence: Optional[float] = None
@@ -174,6 +185,7 @@ __all__ = [
     "ImportPreviewFile",
     "ImportPreviewRequest",
     "ImportPreviewFileRead",
+    "ImportRelatedTransactionRead",
     "ImportPreviewRowRead",
     "ImportPreviewResponse",
     "ImportCommitRow",

@@ -74,7 +74,7 @@ Account-level configuration determines which parser to apply for a file (instead
   4. Audit/edit transactions (description, amount, date, category, etc.).
   5. Submit to persist to DB.
 - Parsing supported only for the 3 formats above.
-- Category suggestions should use previous history and Bedrock AI via the isolated suggestion endpoint when enabled.
+- Category suggestions should use previous history and Bedrock AI via the isolated suggestion endpoint (batch).
 - Preview must not persist import batches/files/rows/errors, and must not persist transactions.
 
 ## Non-functional constraints
@@ -105,6 +105,7 @@ Account-level configuration determines which parser to apply for a file (instead
     - `occurred_at` (ISO date)
     - `amount` (decimal string)
     - `description`
+    - `related_transactions` context (latest account transactions + similar merchant, categorized only)
     - Optional suggestions:
       - `suggested_category_id` + `confidence` + `reason`
       - `suggested_subscription_id` + metadata (optional)
@@ -269,8 +270,8 @@ Proposed response shape:
 - [x] Rework `apps/web/src/pages/imports/imports.tsx` UX:
   - Step 1: Upload files (XLSX only).
   - Step 2: Map each file to an account (required) and show the account’s configured bank type; parsing fails if the bank type is wrong/missing.
-  - Step 3: “Parse files” calls preview endpoint.
-  - Step 4: Audit table: inline edits + apply suggestion controls; show errors clearly; support deleting rows; allow `tax_event_type` marking per row.
+  - Step 3: Parsing runs (automatically) and calls preview endpoint.
+  - Step 4: Audit table appears immediately after parse; category suggestions load asynchronously via `POST /imports/suggest-categories`.
   - Step 5: “Submit” calls commit endpoint (all-or-nothing), then navigates/refreshes transactions.
 - [x] Definition of done:
   - [x] Full flow works against the API, and no import session is created prior to submit.

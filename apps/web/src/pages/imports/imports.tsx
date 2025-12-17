@@ -7,7 +7,7 @@ import {
   Trash2,
   UploadCloud,
 } from "lucide-react";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
@@ -117,15 +117,21 @@ export const Imports: React.FC = () => {
     preview,
     loading,
     saving,
+    suggesting,
+    suggestions,
+    suggestionsError,
     error,
     previewImports,
     commitImports,
+    suggestCategories,
     resetImports,
   } = useImportsApi();
 
   const [step, setStep] = useState<StepKey>(1);
   const [files, setFiles] = useState<LocalFile[]>([]);
   const [commitTriggered, setCommitTriggered] = useState(false);
+  const [suggestionsRequested, setSuggestionsRequested] = useState(false);
+  const [autoParseRequested, setAutoParseRequested] = useState(false);
 
   const noteForm = useForm<NoteValues>({
     resolver: zodResolver(noteSchema),
@@ -150,13 +156,16 @@ export const Imports: React.FC = () => {
 
   useEffect(() => {
     if (!preview) return;
+    if (commitRows.length) return;
     const defaults: CommitFormValues["rows"] = preview.rows.map((row) => ({
       id: row.id,
       account_id: row.account_id,
       occurred_at: row.occurred_at,
       amount: row.amount,
       description: row.description,
-      category_id: row.suggested_category_id ?? null,
+      category_id: row.rule_applied
+        ? (row.suggested_category_id ?? null)
+        : null,
       subscription_id: row.suggested_subscription_id ?? null,
       transfer_account_id: null,
       tax_event_type: null,
@@ -164,7 +173,7 @@ export const Imports: React.FC = () => {
     }));
     replaceCommitRows(defaults);
     commitForm.reset({ rows: defaults });
-  }, [preview, commitForm, replaceCommitRows]);
+  }, [preview, commitRows.length, commitForm, replaceCommitRows]);
 
   useEffect(() => {
     if (!commitTriggered) return;
@@ -180,7 +189,56 @@ export const Imports: React.FC = () => {
     setFiles([]);
     noteForm.reset({ note: "" });
     commitForm.reset({ rows: [] });
+    setSuggestionsRequested(false);
   }, [commitTriggered, saving, preview, error, noteForm, commitForm]);
+
+  useEffect(() => {
+    const hasErrors = preview
+      ? preview.files.some((file) => (file.error_count ?? 0) > 0)
+      : false;
+    if (!preview || hasErrors) {
+      setSuggestionsRequested(false);
+      return;
+    }
+    if (suggestionsRequested) return;
+    if (!categories.length) return;
+    if (Object.keys(suggestions).length) return;
+    if (suggesting) return;
+
+    suggestCategories(preview);
+    setSuggestionsRequested(true);
+  }, [
+    preview,
+    suggestionsRequested,
+    categories.length,
+    suggestions,
+    suggesting,
+    suggestCategories,
+  ]);
+
+  useEffect(() => {
+    if (!Object.keys(suggestions).length) return;
+    commitRows.forEach((row, idx) => {
+      const suggestion = suggestions[row.id];
+      if (!suggestion?.category_id) return;
+      const currentCategory = commitForm.getValues(`rows.${idx}.category_id`);
+      if (currentCategory) return;
+      const taxEvent = commitForm.getValues(`rows.${idx}.tax_event_type`);
+      if (taxEvent) return;
+      const isDeleted = commitForm.getValues(`rows.${idx}.delete`);
+      if (isDeleted) return;
+      commitForm.setValue(`rows.${idx}.category_id`, suggestion.category_id, {
+        shouldDirty: true,
+      });
+    });
+  }, [suggestions, commitRows, commitForm]);
+
+  useEffect(() => {
+    if (!preview) return;
+    if (step !== 3) return;
+    if (preview.files.some((file) => (file.error_count ?? 0) > 0)) return;
+    setStep(4);
+  }, [preview, step]);
 
   const accountById = useMemo(() => {
     const map = new Map<string, AccountWithBalance>();
@@ -264,13 +322,14 @@ export const Imports: React.FC = () => {
     }
   };
 
-  const parse = async () => {
+  const parse = useCallback(async () => {
     if (!token) {
       toast.error("Missing session", { description: "Please sign in again." });
       return;
     }
     if (!mappedFilesReady) return;
 
+    setSuggestionsRequested(false);
     const note = noteForm.getValues("note")?.trim() || undefined;
     const filesPayload: ImportPreviewRequest["files"] = await Promise.all(
       files.map(async (f) => ({
@@ -280,7 +339,21 @@ export const Imports: React.FC = () => {
       })),
     );
     previewImports({ files: filesPayload, note });
-  };
+  }, [files, mappedFilesReady, noteForm, previewImports, token]);
+
+  useEffect(() => {
+    if (step !== 3) {
+      setAutoParseRequested(false);
+      return;
+    }
+    if (autoParseRequested) return;
+    if (!mappedFilesReady) return;
+    if (loading) return;
+    if (preview) return;
+
+    setAutoParseRequested(true);
+    void parse();
+  }, [step, autoParseRequested, mappedFilesReady, loading, preview, parse]);
 
   const submit = commitForm.handleSubmit(async (values) => {
     if (!token) {
@@ -588,6 +661,15 @@ export const Imports: React.FC = () => {
                   <p className="text-xs text-slate-500">
                     Edit values, apply categories, or mark rows for deletion.
                   </p>
+                  {suggesting ? (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Suggesting categories with Bedrock…
+                    </p>
+                  ) : suggestionsError ? (
+                    <p className="mt-1 text-xs text-rose-600">
+                      Category suggestions unavailable: {suggestionsError}
+                    </p>
+                  ) : null}
                 </div>
                 <Button
                   variant="secondary"
@@ -598,10 +680,14 @@ export const Imports: React.FC = () => {
                       const previewRow = (
                         preview as ImportPreviewResponse
                       ).rows.find((r) => r.id === row.id);
-                      if (!previewRow?.suggested_category_id) return;
+                      const nextCategory =
+                        suggestions[row.id]?.category_id ??
+                        previewRow?.suggested_category_id ??
+                        null;
+                      if (!nextCategory) return;
                       commitForm.setValue(
                         `rows.${idx}.category_id`,
-                        previewRow.suggested_category_id,
+                        nextCategory,
                         { shouldDirty: true },
                       );
                     });
@@ -629,11 +715,25 @@ export const Imports: React.FC = () => {
                       const previewRow = preview.rows.find(
                         (r) => r.id === row.id,
                       );
-                      const suggested = previewRow?.suggested_category_name;
+                      const suggestedCategoryId =
+                        suggestions[row.id]?.category_id ??
+                        previewRow?.suggested_category_id ??
+                        null;
+                      const suggestedFromCategories = suggestedCategoryId
+                        ? (categories.find(
+                            (cat) => cat.id === suggestedCategoryId,
+                          )?.name ?? null)
+                        : null;
+                      const suggested =
+                        suggestedFromCategories ??
+                        previewRow?.suggested_category_name ??
+                        null;
                       const suggestedOk =
-                        Boolean(previewRow?.suggested_category_id) &&
+                        Boolean(suggestedCategoryId) &&
                         commitForm.watch(`rows.${idx}.category_id`) ===
-                          previewRow?.suggested_category_id;
+                          suggestedCategoryId;
+                      const related =
+                        previewRow?.related_transactions?.[0] ?? null;
                       return (
                         <TableRow key={row.id} className="align-top">
                           <TableCell>
@@ -687,8 +787,14 @@ export const Imports: React.FC = () => {
                                   )
                                 }
                               />
+                              {related?.category_name ? (
+                                <p className="text-[11px] text-slate-500">
+                                  Similar: {related.category_name} •{" "}
+                                  {related.description}
+                                </p>
+                              ) : null}
                               {suggested ? (
-                                <p className="text-xs text-slate-500">
+                                <p className="text-[11px] text-slate-500">
                                   Suggested:{" "}
                                   <span
                                     className={cn(
@@ -723,7 +829,7 @@ export const Imports: React.FC = () => {
                           </TableCell>
                           <TableCell>
                             <select
-                              className="w-[200px] rounded border border-slate-200 px-2 py-1 text-sm"
+                              className="w-[220px] rounded border border-slate-200 px-2 py-1 text-sm"
                               value={
                                 commitForm.watch(`rows.${idx}.category_id`) ??
                                 ""
@@ -739,13 +845,22 @@ export const Imports: React.FC = () => {
                                 commitForm.watch(`rows.${idx}.tax_event_type`),
                               )}
                             >
-                              <option value="">No category</option>
+                              <option value="">
+                                {suggesting ? "Suggesting…" : "No category"}
+                              </option>
                               {categories.map((cat) => (
                                 <option key={cat.id} value={cat.id}>
                                   {cat.name}
                                 </option>
                               ))}
                             </select>
+                            {suggesting &&
+                            !commitForm.watch(`rows.${idx}.category_id`) ? (
+                              <div className="mt-1 flex items-center gap-1 text-[11px] text-slate-500">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Waiting for Bedrock…
+                              </div>
+                            ) : null}
                           </TableCell>
                           <TableCell>
                             <select
@@ -851,6 +966,7 @@ export const Imports: React.FC = () => {
                     setFiles([]);
                     noteForm.reset({ note: "" });
                     commitForm.reset({ rows: [] });
+                    setSuggestionsRequested(false);
                     setStep(1);
                   }}
                 >

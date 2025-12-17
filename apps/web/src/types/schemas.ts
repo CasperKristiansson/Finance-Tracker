@@ -799,6 +799,17 @@ export const importPreviewRowReadSchema = z.object({
   occurred_at: z.string(),
   amount: z.string(),
   description: z.string(),
+  related_transactions: z
+    .array(
+      z.object({
+        id: z.string(),
+        occurred_at: z.string(),
+        description: z.string(),
+        category_id: nullableString,
+        category_name: nullableString,
+      }),
+    )
+    .default([]),
   suggested_category_id: nullableString,
   suggested_category_name: nullableString,
   suggested_confidence: optionalNumeric.nullable(),
@@ -839,6 +850,43 @@ export const importCommitRequestSchema = z.object({
 export const importCommitResponseSchema = z.object({
   import_batch_id: z.string(),
   transaction_ids: z.array(z.string()),
+});
+
+export const importCategoryOptionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  category_type: z.string(),
+});
+
+export const importCategoryHistoryItemSchema = z.object({
+  description: z.string(),
+  category_id: z.string(),
+});
+
+export const importCategorySuggestTransactionSchema = z.object({
+  id: z.string(),
+  description: z.string(),
+  amount: z.string().nullable().optional(),
+  occurred_at: z.string().nullable().optional(),
+});
+
+export const importCategorySuggestRequestSchema = z.object({
+  categories: z.array(importCategoryOptionSchema).min(1),
+  history: z.array(importCategoryHistoryItemSchema).optional(),
+  transactions: z.array(importCategorySuggestTransactionSchema).min(1),
+  model_id: z.string().nullable().optional(),
+  max_tokens: optionalNumeric.nullable().optional(),
+});
+
+export const importCategorySuggestionReadSchema = z.object({
+  id: z.string(),
+  category_id: nullableString,
+  confidence: optionalNumeric,
+  reason: nullableString,
+});
+
+export const importCategorySuggestResponseSchema = z.object({
+  suggestions: z.array(importCategorySuggestionReadSchema),
 });
 
 export const taxEventSchema = z.object({
@@ -1268,6 +1316,22 @@ export type ImportPreviewResponse = z.infer<typeof importPreviewResponseSchema>;
 export type ImportCommitRow = z.infer<typeof importCommitRowSchema>;
 export type ImportCommitRequest = z.infer<typeof importCommitRequestSchema>;
 export type ImportCommitResponse = z.infer<typeof importCommitResponseSchema>;
+export type ImportCategoryOption = z.infer<typeof importCategoryOptionSchema>;
+export type ImportCategoryHistoryItem = z.infer<
+  typeof importCategoryHistoryItemSchema
+>;
+export type ImportCategorySuggestTransaction = z.infer<
+  typeof importCategorySuggestTransactionSchema
+>;
+export type ImportCategorySuggestRequest = z.infer<
+  typeof importCategorySuggestRequestSchema
+>;
+export type ImportCategorySuggestionRead = z.infer<
+  typeof importCategorySuggestionReadSchema
+>;
+export type ImportCategorySuggestResponse = z.infer<
+  typeof importCategorySuggestResponseSchema
+>;
 export type TaxEventRead = z.infer<typeof taxEventSchema>;
 export type TaxEventCreateRequest = z.infer<typeof taxEventCreateRequestSchema>;
 export type TaxEventCreateResponse = z.infer<

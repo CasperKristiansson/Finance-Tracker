@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple, cast
 from uuid import UUID, uuid4
 
 from openpyxl import load_workbook
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlmodel import Session, select
 
 from ..models import (
@@ -196,6 +196,11 @@ class ImportService:
 
                 subscription_hint = subscription_suggestions.get(idx - 1)
                 rule_match = rule_matches.get(idx - 1)
+                related_transactions = self._related_transactions_for_row(
+                    account_id=file_payload.account_id,
+                    description=description,
+                    category_lookup_by_id=category_lookup_by_id,
+                )
 
                 response_rows.append(
                     {
@@ -206,6 +211,7 @@ class ImportService:
                         "occurred_at": occurred_at,
                         "amount": amount,
                         "description": description,
+                        "related_transactions": related_transactions,
                         "suggested_category_id": suggested_category_id,
                         "suggested_category_name": suggested_category_name,
                         "suggested_confidence": suggested_confidence,
@@ -232,6 +238,92 @@ class ImportService:
         return ImportPreviewResponse.model_validate(
             {"files": response_files, "rows": response_rows}
         ).model_dump(mode="python")
+
+    def _related_transactions_for_row(
+        self,
+        *,
+        account_id: UUID,
+        description: str,
+        category_lookup_by_id: dict[UUID, Category],
+        latest_limit: int = 12,
+        similar_limit: int = 12,
+    ) -> list[dict[str, Any]]:
+        latest = self._latest_transactions_for_account(account_id, limit=latest_limit)
+        merchant_tokens = self._merchant_tokens(description)
+        similar = []
+        if merchant_tokens:
+            similar = self._similar_transactions_for_account(
+                account_id,
+                merchant_tokens=merchant_tokens,
+                limit=similar_limit,
+            )
+
+        seen: set[UUID] = set()
+        combined: list[Transaction] = []
+        for tx in [*similar, *latest]:
+            if tx.id in seen:
+                continue
+            seen.add(tx.id)
+            combined.append(tx)
+
+        output: list[dict[str, Any]] = []
+        for tx in combined:
+            category = category_lookup_by_id.get(tx.category_id) if tx.category_id else None
+            output.append(
+                {
+                    "id": tx.id,
+                    "occurred_at": tx.occurred_at.isoformat(),
+                    "description": tx.description or "",
+                    "category_id": tx.category_id,
+                    "category_name": category.name if category else None,
+                }
+            )
+        return output
+
+    def _latest_transactions_for_account(
+        self, account_id: UUID, *, limit: int
+    ) -> list[Transaction]:
+        statement = (
+            select(Transaction)
+            .join(TransactionLeg, cast(Any, TransactionLeg.transaction_id) == Transaction.id)
+            .where(cast(Any, TransactionLeg.account_id) == account_id)
+            .where(cast(Any, Transaction.description).is_not(None))
+            .order_by(cast(Any, Transaction.occurred_at).desc())
+            .limit(limit)
+        )
+        return list(self.session.exec(statement).all())
+
+    def _similar_transactions_for_account(
+        self,
+        account_id: UUID,
+        *,
+        merchant_tokens: list[str],
+        limit: int,
+    ) -> list[Transaction]:
+        if not merchant_tokens:
+            return []
+
+        patterns = [f"%{token}%" for token in merchant_tokens]
+        lowered = func.lower(cast(Any, Transaction.description))
+        conditions = [lowered.like(pattern) for pattern in patterns]
+        statement = (
+            select(Transaction)
+            .join(TransactionLeg, cast(Any, TransactionLeg.transaction_id) == Transaction.id)
+            .where(cast(Any, TransactionLeg.account_id) == account_id)
+            .where(cast(Any, Transaction.category_id).is_not(None))
+            .where(cast(Any, Transaction.description).is_not(None))
+            .where(or_(*conditions))
+            .order_by(cast(Any, Transaction.occurred_at).desc())
+            .limit(limit)
+        )
+        return list(self.session.exec(statement).all())
+
+    def _merchant_tokens(self, description: str) -> list[str]:
+        cleaned = re.sub(r"[^a-zA-Z0-9\\s]", " ", (description or "")).lower()
+        parts = [part for part in cleaned.split() if len(part) >= 4]
+        stop = {"card", "konto", "betalning", "payment", "purchase", "ab", "se", "sweden"}
+        parts = [part for part in parts if part not in stop]
+        return parts[:2]
 
     def commit_import(self, payload: ImportCommitRequest) -> dict[str, Any]:
         """Persist reviewed rows as transactions (all-or-nothing)."""

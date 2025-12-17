@@ -47,6 +47,7 @@ from .imports import (
     ImportPreviewRequest,
     ImportPreviewResponse,
     ImportPreviewRowRead,
+    ImportRelatedTransactionRead,
 )
 from .investments import (
     BenchmarkRead,
@@ -176,6 +177,7 @@ __all__ = [
     "ImportPreviewFile",
     "ImportPreviewRequest",
     "ImportPreviewFileRead",
+    "ImportRelatedTransactionRead",
     "ImportPreviewRowRead",
     "ImportPreviewResponse",
     "InvestmentTransactionRead",

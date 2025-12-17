@@ -41,11 +41,15 @@ import {
   CommitImports,
   PreviewImports,
   ResetImports,
+  SuggestImportCategories,
 } from "@/features/imports/importsSaga";
 import {
   selectImportsError,
   selectImportsLoading,
   selectImportPreview,
+  selectImportSuggestions,
+  selectImportsSuggesting,
+  selectImportsSuggestionsError,
   selectImportsSaving,
 } from "@/features/imports/importsSlice";
 import {
@@ -129,6 +133,7 @@ import type {
   CategoryUpdateRequest,
   ImportCommitRequest,
   ImportPreviewRequest,
+  ImportPreviewResponse,
   TransactionCreate,
   TransactionUpdateRequest,
   NordnetSnapshotCreateRequest,
@@ -471,6 +476,9 @@ export const useImportsApi = () => {
   const preview = useAppSelector(selectImportPreview);
   const loading = useAppSelector(selectImportsLoading);
   const saving = useAppSelector(selectImportsSaving);
+  const suggesting = useAppSelector(selectImportsSuggesting);
+  const suggestions = useAppSelector(selectImportSuggestions);
+  const suggestionsError = useAppSelector(selectImportsSuggestionsError);
   const error = useAppSelector(selectImportsError);
 
   const previewImports = useCallback(
@@ -485,13 +493,23 @@ export const useImportsApi = () => {
 
   const resetImports = useCallback(() => dispatch(ResetImports()), [dispatch]);
 
+  const suggestCategories = useCallback(
+    (previewResponse: ImportPreviewResponse) =>
+      dispatch(SuggestImportCategories({ preview: previewResponse })),
+    [dispatch],
+  );
+
   return {
     preview,
     loading,
     saving,
+    suggesting,
+    suggestions,
+    suggestionsError,
     error,
     previewImports,
     commitImports,
+    suggestCategories,
     resetImports,
   };
 };

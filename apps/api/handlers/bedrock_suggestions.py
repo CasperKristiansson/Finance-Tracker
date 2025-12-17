@@ -21,6 +21,8 @@ from ..schemas import (
 from .utils import get_user_id, json_response, parse_body
 
 BEDROCK_MODEL_ID_DEFAULT = "anthropic.claude-haiku-4-5-20251001-v1:0"
+_MAX_HISTORY = 80
+_MAX_TRANSACTIONS = 80
 
 
 def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
@@ -44,7 +46,7 @@ def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str,
         for cat in request.categories
     ]
     history_payload = []
-    for item in request.history[:80]:
+    for item in request.history[:_MAX_HISTORY]:
         category = category_by_id.get(item.category_id)
         history_payload.append(
             {
@@ -53,15 +55,26 @@ def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str,
                 "category_name": category.name if category else None,
             }
         )
-    tx_payload = [
-        {
-            "id": str(tx.id),
-            "description": tx.description,
-            "amount": tx.amount,
-            "occurred_at": tx.occurred_at,
-        }
-        for tx in request.transactions[:80]
-    ]
+    signature_to_ids: dict[str, list[UUID]] = {}
+    signature_to_payload: dict[str, dict[str, Any]] = {}
+    rep_id_to_signature: dict[UUID, str] = {}
+    for tx in request.transactions[:_MAX_TRANSACTIONS]:
+        signature = _signature(tx.description)
+        signature_to_ids.setdefault(signature, []).append(tx.id)
+        if signature not in signature_to_payload:
+            signature_to_payload[signature] = {
+                "id": str(tx.id),
+                "description": tx.description,
+                "amount": tx.amount,
+                "occurred_at": tx.occurred_at,
+                "count": 1,
+            }
+            rep_id_to_signature[tx.id] = signature
+        else:
+            signature_to_payload[signature]["count"] = (
+                int(signature_to_payload[signature]["count"]) + 1
+            )
+    tx_payload = list(signature_to_payload.values())
 
     prompt_data = {
         "categories": category_payload,
@@ -150,14 +163,16 @@ def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str,
         reason = item.get("reason")
         reason_text = str(reason)[:220] if isinstance(reason, str) and reason else None
 
-        suggestions.append(
-            ImportCategorySuggestionRead(
-                id=tx_id,
-                category_id=category_id,
-                confidence=confidence,
-                reason=reason_text,
+        signature = rep_id_to_signature.get(tx_id) or ""
+        for original_id in signature_to_ids.get(signature, [tx_id]):
+            suggestions.append(
+                ImportCategorySuggestionRead(
+                    id=original_id,
+                    category_id=category_id,
+                    confidence=confidence,
+                    reason=reason_text,
+                )
             )
-        )
 
     payload_out = ImportCategorySuggestResponse(suggestions=suggestions).model_dump(mode="json")
     return json_response(200, payload_out)
@@ -194,6 +209,13 @@ def _get_bedrock_client():
         )
     except (BotoCoreError, ClientError):  # pragma: no cover - environment dependent
         return None
+
+
+def _signature(description: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9\\s]", " ", (description or "")).lower()
+    cleaned = re.sub(r"\\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"\\b\\d+\\b", "", cleaned).strip()
+    return cleaned[:120]
 
 
 __all__ = [
