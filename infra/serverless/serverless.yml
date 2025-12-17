@@ -31,6 +31,10 @@ provider:
             - ssm:GetParameter
             - ssm:GetParameters
           Resource: arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/finance-tracker/${self:provider.stage}/bedrock/*
+        - Effect: Allow
+          Action:
+            - bedrock:InvokeModel
+          Resource: "*"
   domain:
     name: api.finance-tracker.casperkristiansson.com
     apiType: HTTP
@@ -142,6 +146,19 @@ functions:
     events:
       - httpApi:
           path: /imports/commit
+          method: POST
+          authorizer: cognitoJwt
+
+  suggestImportCategories:
+    handler: apps/api/handlers/bedrock_suggestions.suggest_import_categories
+    timeout: 30
+    memorySize: 512
+    vpc: ~
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /imports/suggest-categories
           method: POST
           authorizer: cognitoJwt
 

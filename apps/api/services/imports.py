@@ -45,6 +45,7 @@ from .transaction import TransactionService
 
 @dataclass
 class CategorySuggestion:
+    category_id: UUID | None
     category: Optional[str]
     confidence: float
     reason: Optional[str] = None
@@ -183,13 +184,15 @@ class ImportService:
                 suggested_category_name: str | None = None
                 suggested_confidence: float | None = None
                 suggested_reason: str | None = None
-                if suggestion and suggestion.category:
+                if suggestion:
+                    suggested_category_id = suggestion.category_id
                     suggested_category_name = suggestion.category
                     suggested_confidence = round(suggestion.confidence, 2)
                     suggested_reason = suggestion.reason
-                    category = category_by_name.get(suggestion.category.lower())
-                    if category is not None:
-                        suggested_category_id = category.id
+                    if suggested_category_id is None and suggestion.category:
+                        category = category_by_name.get(suggestion.category.lower())
+                        if category is not None:
+                            suggested_category_id = category.id
 
                 subscription_hint = subscription_suggestions.get(idx - 1)
                 rule_match = rule_matches.get(idx - 1)
@@ -674,6 +677,7 @@ class ImportService:
             for idx, match in rule_matches.items():
                 if match.category_name:
                     heuristic[idx] = CategorySuggestion(
+                        category_id=match.category_id,
                         category=match.category_name,
                         confidence=0.95,
                         reason=match.summary or "Rule match",
@@ -708,10 +712,13 @@ class ImportService:
         }
         for keyword, category in keyword_map.items():
             if keyword in normalized_desc:
-                return CategorySuggestion(category=category, confidence=0.65)
+                return CategorySuggestion(category_id=None, category=category, confidence=0.65)
 
         return CategorySuggestion(
-            category=None, confidence=0.3, reason=f"No signal for {amount_text}"
+            category_id=None,
+            category=None,
+            confidence=0.3,
+            reason=f"No signal for {amount_text}",
         )
 
     def _suggest_subscriptions(

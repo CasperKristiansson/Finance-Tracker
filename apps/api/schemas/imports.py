@@ -120,6 +120,55 @@ class ImportCommitResponse(BaseModel):
     transaction_ids: List[UUID]
 
 
+class ImportCategoryOption(BaseModel):
+    """Category metadata provided to Bedrock suggestion endpoint."""
+
+    id: UUID
+    name: str = Field(min_length=1, max_length=120)
+    category_type: str = Field(min_length=1, max_length=32)
+
+
+class ImportCategoryHistoryItem(BaseModel):
+    """Previously categorized transaction used as context for suggestions."""
+
+    description: str = Field(min_length=1, max_length=250)
+    category_id: UUID
+
+
+class ImportCategorySuggestTransaction(BaseModel):
+    """Draft transaction needing a category suggestion."""
+
+    id: UUID
+    description: str = Field(min_length=1, max_length=250)
+    amount: Optional[str] = Field(default=None, max_length=32)
+    occurred_at: Optional[str] = Field(default=None, max_length=32)
+
+
+class ImportCategorySuggestRequest(BaseModel):
+    """Request payload for Bedrock-based category suggestions (no DB access)."""
+
+    categories: List[ImportCategoryOption]
+    history: List[ImportCategoryHistoryItem] = Field(default_factory=list)
+    transactions: List[ImportCategorySuggestTransaction]
+    model_id: Optional[str] = Field(default=None, max_length=160)
+    max_tokens: Optional[int] = Field(default=None, ge=50, le=2000)
+
+
+class ImportCategorySuggestionRead(BaseModel):
+    """Single suggestion result for a draft transaction."""
+
+    id: UUID
+    category_id: Optional[UUID] = None
+    confidence: float = Field(ge=0.0, le=1.0)
+    reason: Optional[str] = Field(default=None, max_length=220)
+
+
+class ImportCategorySuggestResponse(BaseModel):
+    """Response payload for Bedrock-based category suggestions."""
+
+    suggestions: List[ImportCategorySuggestionRead]
+
+
 __all__ = [
     "ImportErrorRead",
     "ImportPreviewFile",
@@ -130,4 +179,10 @@ __all__ = [
     "ImportCommitRow",
     "ImportCommitRequest",
     "ImportCommitResponse",
+    "ImportCategoryOption",
+    "ImportCategoryHistoryItem",
+    "ImportCategorySuggestTransaction",
+    "ImportCategorySuggestRequest",
+    "ImportCategorySuggestionRead",
+    "ImportCategorySuggestResponse",
 ]

@@ -24,11 +24,11 @@
   - Rollout/flagging: Always-on; legacy UI removed.
   - Blockers (OQ-xx): None
 
-- [ ] M4: Bedrock suggestions with history context + infra enablement
+- [x] M4: Bedrock suggestions with history context + infra enablement
   - Goal: Use AWS Bedrock to suggest categories using prior user history as context, with robust fallback and privacy-conscious prompts.
-  - Deliverables: Bedrock invocation wiring (category IDs), tightened prompt/JSON parsing, IAM permissions, and VPC egress (NAT) for Bedrock in `eu-north-1`.
-  - Acceptance criteria: Preview attempts Bedrock suggestions and returns category ID suggestions with confidence/reason; works in deployed VPC environment; gracefully falls back when Bedrock unavailable.
-  - Affected services/components (high level): API imports service; serverless IAM policy; Terraform VPC networking.
+  - Deliverables: A non-VPC Bedrock suggestion endpoint (no DB access), tightened prompt/JSON parsing, and IAM permissions for `bedrock:InvokeModel`.
+  - Acceptance criteria: Main import preview remains deterministic (no Bedrock calls); the Bedrock suggestion endpoint returns category ID suggestions using client-provided history and draft transactions.
+  - Affected services/components (high level): API Bedrock suggestion handler + schemas; serverless IAM policy.
   - Rollout/flagging: Always-on (best-effort with fallback).
   - Blockers (OQ-xx): None
 
@@ -61,7 +61,7 @@ Account-level configuration determines which parser to apply for a file (instead
 
 ## Key mismatch with desired behavior
 - Desired: “Return parsed transactions to user without storing anything in the DB; only persist when user submits.”
-- Current: Persists batches/files/rows/errors as soon as the user stages files.
+- Current: Matches desired behavior: preview is read-only (DB reads only); commit persists atomically.
 
 # 3. Requirements and constraints
 
@@ -74,11 +74,11 @@ Account-level configuration determines which parser to apply for a file (instead
   4. Audit/edit transactions (description, amount, date, category, etc.).
   5. Submit to persist to DB.
 - Parsing supported only for the 3 formats above.
-- Category suggestions should use previous history and Bedrock AI when enabled.
+- Category suggestions should use previous history and Bedrock AI via the isolated suggestion endpoint when enabled.
 - Preview must not persist import batches/files/rows/errors, and must not persist transactions.
 
 ## Non-functional constraints
-- API is serverless and currently VPC-attached to private subnets; external calls (e.g., Bedrock) require explicit network enablement (see M4).
+- API is serverless and VPC-attached to private subnets; Bedrock calls should be done via a separate non-VPC Lambda to avoid NAT costs.
 - Keep PII out of logs as much as practical (file contents, descriptions).
 
 # 4. Proposed features and behavior changes
@@ -277,19 +277,18 @@ Proposed response shape:
   - [x] Verified by `npm run format -w apps/web`, `npm run lint -w apps/web`.
 
 ## M4: Bedrock suggestions with history context + infra enablement
-- [ ] Infra/network (based on current repo state):
-  - Add NAT gateway + routing for private subnets so Lambdas can reach Bedrock while still connecting to Aurora.
-  - Add IAM permission for `bedrock:InvokeModel` (and any required actions) to the Serverless role.
-- [ ] Backend preview enrichment:
-  - Build compact “history examples” from recent categorized transactions (and/or `import_rules`) and include allowed categories list (IDs + names).
-  - Prefer deterministic import rules first; Bedrock fills the gaps.
-  - Update Bedrock prompt to require strictly valid JSON output.
-  - Implement robust parsing, timeouts, and fallback to deterministic suggestions.
-- [ ] Tests:
-  - Add unit tests with a fake Bedrock client (pattern exists in investment tests) validating JSON parsing and fallbacks.
-- [ ] Definition of done:
-  - In an environment with Bedrock connectivity, preview returns Bedrock suggestions.
-  - In environments without Bedrock, preview still works and degrades gracefully.
+- [x] Infra/network:
+  - [x] Add IAM permission for `bedrock:InvokeModel` to the Serverless role.
+  - [x] Add a dedicated non-VPC Lambda endpoint: `POST /imports/suggest-categories` (no DB access; not attached to the VPC).
+- [x] Endpoint behavior:
+  - [x] Accept client-provided `categories`, `history` (existing categorized transactions), and `transactions` needing suggestions.
+  - [x] Require strictly valid JSON output and implement robust JSON extraction/parsing.
+  - [x] Return suggestions as `{id, category_id, confidence, reason}`.
+- [x] Tests:
+  - [x] Unit test with a fake Bedrock client validating suggestion parsing + category ID mapping.
+- [x] Definition of done:
+  - [x] Main import preview remains deterministic (no Bedrock calls).
+  - [x] Suggestion endpoint returns Bedrock suggestions when available and fails clearly otherwise.
 
 # 8. Test plan
 
@@ -318,7 +317,8 @@ Proposed response shape:
 
 ## M4
 - Backend:
-  - Tests for deterministic history suggestion mapping to category IDs and rule precedence.
+  - Unit test exercises suggestion handler with a fake client.
+  - Run: `make type-check` and `PYTHONPATH=. pytest apps/api/tests -q`
 
 ## M5
 - Backend:
@@ -329,8 +329,8 @@ Proposed response shape:
 # 9. Risks and open questions
 
 ## Technical risks
-- VPC connectivity: current Terraform VPC omits IGW/NAT by default; Bedrock may be unreachable from Lambda (mitigate via VPC endpoints or NAT) (OQ-10/OQ-11).
-- IAM: current Serverless IAM statements do not include Bedrock invoke permissions (mitigate by adding explicit actions).
+- IAM: Bedrock invoke permission must exist in the deployed role (included in `infra/serverless/serverless.yml`).
+- Misconfiguration: ensure the Bedrock suggestion function is not attached to the VPC; otherwise it may require NAT and incur costs.
 - Payload size: base64 XLSX uploads could exceed API Gateway limits for large statements (mitigate with file size limits + future S3 presigned upload path).
 - Duplicate imports: without stable external IDs in bank exports, repeated imports may create duplicate transactions (mitigate with optional dedupe warnings during preview and/or future hashing-based dedupe).
 - Privacy: prompts may include transaction descriptions; minimize prompt size and avoid logging raw payloads.

@@ -33,6 +33,12 @@ from .category import (
 )
 from .goal import GoalCreate, GoalListResponse, GoalRead, GoalUpdate
 from .imports import (
+    ImportCategoryHistoryItem,
+    ImportCategoryOption,
+    ImportCategorySuggestionRead,
+    ImportCategorySuggestRequest,
+    ImportCategorySuggestResponse,
+    ImportCategorySuggestTransaction,
     ImportCommitRequest,
     ImportCommitResponse,
     ImportErrorRead,
@@ -161,6 +167,12 @@ __all__ = [
     "ImportErrorRead",
     "ImportCommitRequest",
     "ImportCommitResponse",
+    "ImportCategoryHistoryItem",
+    "ImportCategoryOption",
+    "ImportCategorySuggestRequest",
+    "ImportCategorySuggestResponse",
+    "ImportCategorySuggestTransaction",
+    "ImportCategorySuggestionRead",
     "ImportPreviewFile",
     "ImportPreviewRequest",
     "ImportPreviewFileRead",
