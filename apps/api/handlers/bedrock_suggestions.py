@@ -20,7 +20,7 @@ from ..schemas import (
 )
 from .utils import get_user_id, json_response, parse_body
 
-BEDROCK_MODEL_ID_DEFAULT = "anthropic.claude-haiku-4-5-20251001-v1:0"
+BEDROCK_MODEL_ID_DEFAULT = "anthropic.claude-3-5-haiku-20241022-v1:0"
 _MAX_HISTORY = 200
 _MAX_TRANSACTIONS = 200
 
