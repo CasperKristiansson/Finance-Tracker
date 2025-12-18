@@ -127,8 +127,8 @@ functions:
 
   previewImports:
     handler: apps/api/handlers/imports.preview_imports
-    timeout: 60
     memorySize: 512
+    timeout: 29
     layers:
       - ${self:custom.backendLayerArn}
     events:
@@ -139,8 +139,8 @@ functions:
 
   commitImports:
     handler: apps/api/handlers/imports.commit_imports
-    timeout: 60
     memorySize: 512
+    timeout: 29
     layers:
       - ${self:custom.backendLayerArn}
     events:
@@ -151,7 +151,7 @@ functions:
 
   suggestImportCategories:
     handler: apps/api/handlers/bedrock_suggestions.suggest_import_categories
-    timeout: 30
+    timeout: 29
     memorySize: 512
     vpc: ~
     layers:
