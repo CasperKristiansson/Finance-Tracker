@@ -23,6 +23,7 @@ from .utils import get_user_id, json_response, parse_body
 BEDROCK_MODEL_ID_DEFAULT = "anthropic.claude-3-haiku-20240307-v1:0"
 _MAX_HISTORY = 200
 _MAX_TRANSACTIONS = 200
+_TOOL_NAME = "categorize_transactions"
 
 
 def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
@@ -81,25 +82,52 @@ def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str,
         "history": history_payload,
         "transactions": tx_payload,
     }
-    prompt = (
+    system = (
         "You suggest transaction categories for a personal finance app.\n"
-        "Constraints:\n"
-        "- You MUST pick category_id from categories.id, or null if unsure.\n"
+        "Rules:\n"
+        "- You MUST choose category_id from categories.id, or null if unsure.\n"
         "- Prefer matching past behavior from history when applicable.\n"
-        "- Return ONLY valid JSON with shape:\n"
-        '  {"suggestions":[{"id":string,"category_id":string|null,"confidence":number,'
-        '"reason":string}]}\n'
-        "No markdown, no prose.\n"
-        f"Data: {json.dumps(prompt_data, ensure_ascii=False)}"
+        "- Confidence must be between 0 and 0.99.\n"
+        "- Keep reason short (<= 60 characters).\n"
+        "- Use the provided tool and do not output any prose.\n"
     )
+    user_text = json.dumps(prompt_data, ensure_ascii=False)
 
     model_id = request.model_id or BEDROCK_MODEL_ID_DEFAULT
     max_tokens = request.max_tokens or 1200
+    tools = [
+        {
+            "name": _TOOL_NAME,
+            "description": "Return category suggestions for the given transactions.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "suggestions": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": {"type": "string"},
+                                "category_id": {"type": ["string", "null"]},
+                                "confidence": {"type": "number"},
+                                "reason": {"type": "string"},
+                            },
+                            "required": ["id", "category_id", "confidence"],
+                        },
+                    }
+                },
+                "required": ["suggestions"],
+            },
+        }
+    ]
     payload = {
         "anthropic_version": "bedrock-2023-05-31",
-        "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+        "system": system,
+        "messages": [{"role": "user", "content": [{"type": "text", "text": user_text}]}],
+        "tools": tools,
+        "tool_choice": {"type": "tool", "name": _TOOL_NAME},
         "max_tokens": max_tokens,
-        "temperature": 0.2,
+        "temperature": 0.0,
         "top_p": 0.9,
     }
 
@@ -119,11 +147,24 @@ def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str,
 
     body_text = raw_body.read().decode("utf-8")
     parsed = _safe_json_loads(body_text)
-    output_text = ""
-    if isinstance(parsed, dict):
-        output_text = parsed.get("output_text") or parsed.get("content", [{}])[0].get("text") or ""
-    parsed_json = _extract_json(output_text)
+    parsed_json = _extract_tool_input(parsed=parsed, tool_name=_TOOL_NAME)
+    if parsed_json is None:
+        output_text = _extract_output_text(parsed)
+        parsed_json = _extract_json(output_text)
+    if isinstance(parsed_json, list):
+        parsed_json = {"suggestions": parsed_json}
     if not isinstance(parsed_json, dict):
+        stop_reason = _extract_stop_reason(parsed)
+        if stop_reason == "max_tokens":
+            return json_response(
+                502,
+                {
+                    "error": (
+                        "Bedrock response was truncated (max_tokens). "
+                        "Increase max_tokens or reduce the number of transactions."
+                    )
+                },
+            )
         return json_response(502, {"error": "Bedrock response was not valid JSON"})
 
     raw_suggestions = parsed_json.get("suggestions")
@@ -186,6 +227,67 @@ def _safe_json_loads(text: str) -> Any:
         return None
 
 
+def _extract_stop_reason(parsed: Any) -> str | None:
+    if not isinstance(parsed, dict):
+        return None
+    stop_reason = parsed.get("stop_reason")
+    return stop_reason if isinstance(stop_reason, str) else None
+
+
+def _extract_tool_input(*, parsed: Any, tool_name: str) -> dict[str, Any] | list[Any] | None:
+    if not isinstance(parsed, dict):
+        return None
+
+    content = parsed.get("content")
+    if not isinstance(content, list):
+        return None
+
+    for item in content:
+        if not isinstance(item, dict):
+            continue
+        if item.get("type") != "tool_use":
+            continue
+        if item.get("name") != tool_name:
+            continue
+        tool_input = item.get("input")
+        if isinstance(tool_input, dict):
+            return tool_input
+        if isinstance(tool_input, list):
+            return tool_input
+        if isinstance(tool_input, str):
+            parsed_input = _safe_json_loads(tool_input)
+            if isinstance(parsed_input, (dict, list)):
+                return parsed_input
+
+    return None
+
+
+def _extract_output_text(parsed: Any) -> str:
+    if not isinstance(parsed, dict):
+        return ""
+
+    output_text = parsed.get("output_text")
+    if isinstance(output_text, str) and output_text.strip():
+        return output_text
+
+    content = parsed.get("content")
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            text = item.get("text")
+            if isinstance(text, str) and text:
+                parts.append(text)
+        return "".join(parts).strip()
+
+    completion = parsed.get("completion")
+    if isinstance(completion, str) and completion.strip():
+        return completion
+
+    return ""
+
+
 def _extract_json(text: str) -> Any:
     cleaned = text.strip()
     cleaned = re.sub(r"^```(json)?\\s*", "", cleaned, flags=re.IGNORECASE)
@@ -194,10 +296,17 @@ def _extract_json(text: str) -> Any:
     if parsed is not None:
         return parsed
 
-    match = re.search(r"\\{.*\\}", cleaned, flags=re.DOTALL)
-    if not match:
-        return None
-    return _safe_json_loads(match.group(0))
+    obj_match = re.search(r"\\{.*\\}", cleaned, flags=re.DOTALL)
+    if obj_match:
+        parsed_obj = _safe_json_loads(obj_match.group(0))
+        if parsed_obj is not None:
+            return parsed_obj
+
+    arr_match = re.search(r"\\[.*\\]", cleaned, flags=re.DOTALL)
+    if arr_match:
+        return _safe_json_loads(arr_match.group(0))
+
+    return None
 
 
 def _get_bedrock_client():
