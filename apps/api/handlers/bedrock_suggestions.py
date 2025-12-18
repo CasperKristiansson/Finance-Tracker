@@ -20,7 +20,7 @@ from ..schemas import (
 )
 from .utils import get_user_id, json_response, parse_body
 
-BEDROCK_MODEL_ID_DEFAULT = "anthropic.claude-3-5-haiku-20241022-v1:0"
+BEDROCK_MODEL_ID_DEFAULT = "anthropic.claude-3-haiku-20240307-v1:0"
 _MAX_HISTORY = 200
 _MAX_TRANSACTIONS = 200
 
@@ -96,6 +96,7 @@ def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str,
     model_id = request.model_id or BEDROCK_MODEL_ID_DEFAULT
     max_tokens = request.max_tokens or 1200
     payload = {
+        "anthropic_version": "bedrock-2023-05-31",
         "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
         "max_tokens": max_tokens,
         "temperature": 0.2,
@@ -200,7 +201,7 @@ def _extract_json(text: str) -> Any:
 
 
 def _get_bedrock_client():
-    region = os.getenv("BEDROCK_REGION") or os.getenv("AWS_REGION") or "eu-north-1"
+    region = os.getenv("BEDROCK_REGION") or "eu-west-1"
     try:
         return boto3.client(
             "bedrock-runtime",
