@@ -57,12 +57,6 @@ const toBase64 = (file: File) =>
     reader.readAsDataURL(file);
   });
 
-const noteSchema = z.object({
-  note: z.string().trim().optional(),
-});
-
-type NoteValues = z.infer<typeof noteSchema>;
-
 const commitRowSchema = z.object({
   id: z.string(),
   account_id: z.string(),
@@ -133,11 +127,6 @@ export const Imports: React.FC = () => {
   const [suggestionsRequested, setSuggestionsRequested] = useState(false);
   const [autoParseRequested, setAutoParseRequested] = useState(false);
 
-  const noteForm = useForm<NoteValues>({
-    resolver: zodResolver(noteSchema),
-    defaultValues: { note: "" },
-  });
-
   const commitForm = useForm<CommitFormValues>({
     resolver: zodResolver(commitFormSchema),
     defaultValues: { rows: [] },
@@ -187,10 +176,9 @@ export const Imports: React.FC = () => {
     setCommitTriggered(false);
     setStep(1);
     setFiles([]);
-    noteForm.reset({ note: "" });
     commitForm.reset({ rows: [] });
     setSuggestionsRequested(false);
-  }, [commitTriggered, saving, preview, error, noteForm, commitForm]);
+  }, [commitTriggered, saving, preview, error, commitForm]);
 
   useEffect(() => {
     const hasErrors = preview
@@ -361,7 +349,6 @@ export const Imports: React.FC = () => {
     if (!mappedFilesReady) return;
 
     setSuggestionsRequested(false);
-    const note = noteForm.getValues("note")?.trim() || undefined;
     const filesPayload: ImportPreviewRequest["files"] = await Promise.all(
       files.map(async (f) => ({
         filename: f.filename,
@@ -369,8 +356,8 @@ export const Imports: React.FC = () => {
         account_id: f.accountId!,
       })),
     );
-    previewImports({ files: filesPayload, note });
-  }, [files, mappedFilesReady, noteForm, previewImports, token]);
+    previewImports({ files: filesPayload });
+  }, [files, mappedFilesReady, previewImports, token]);
 
   useEffect(() => {
     if (step !== 3) {
@@ -391,9 +378,7 @@ export const Imports: React.FC = () => {
       toast.error("Missing session", { description: "Please sign in again." });
       return;
     }
-    const note = noteForm.getValues("note")?.trim() || undefined;
     const payload: ImportCommitRequest = {
-      note,
       rows: values.rows.map((row) => ({
         id: row.id,
         account_id: row.account_id,
@@ -541,17 +526,6 @@ export const Imports: React.FC = () => {
               ) : (
                 <p className="text-sm text-slate-500">No files selected yet.</p>
               )}
-
-              <div className="space-y-2">
-                <label className="text-sm text-slate-700">
-                  Note (optional)
-                </label>
-                <textarea
-                  className="min-h-[60px] w-full rounded border border-slate-200 px-3 py-2"
-                  {...noteForm.register("note")}
-                  placeholder="e.g., January statements"
-                />
-              </div>
             </>
           ) : null}
 
@@ -999,7 +973,6 @@ export const Imports: React.FC = () => {
                   onClick={() => {
                     resetImports();
                     setFiles([]);
-                    noteForm.reset({ note: "" });
                     commitForm.reset({ rows: [] });
                     setSuggestionsRequested(false);
                     setStep(1);
