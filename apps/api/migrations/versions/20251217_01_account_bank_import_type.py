@@ -1,7 +1,7 @@
 """Add accounts.bank_import_type.
 
 Revision ID: account_bank_import_type_20251217
-Revises: drop_transaction_status_20251214
+Revises: expand_alembic_version_20251218
 Create Date: 2025-12-17
 """
 
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "account_bank_import_type_20251217"
-down_revision = "drop_transaction_status_20251214"
+down_revision = "expand_alembic_version_20251218"
 branch_labels = None
 depends_on = None
 
