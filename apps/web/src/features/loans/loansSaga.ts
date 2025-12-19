@@ -1,6 +1,8 @@
 import { createAction } from "@reduxjs/toolkit";
-import { call, put, takeLatest } from "redux-saga/effects";
+import { call, put, select, takeLatest } from "redux-saga/effects";
+import { demoLoanEvents, demoLoanSchedules } from "@/data/demoPayloads";
 import { callApiWithAuth } from "@/features/api/apiSaga";
+import { selectIsDemo } from "@/features/auth/authSlice";
 import {
   setLoanError,
   setLoanEvents,
@@ -26,6 +28,7 @@ function* handleFetchSchedule(action: ReturnType<typeof FetchLoanSchedule>) {
   const { accountId, asOfDate, periods } = action.payload;
   const loadingKey = `loan-schedule-${accountId}`;
   yield put(setLoanLoading({ key: loadingKey, isLoading: true }));
+  const isDemo: boolean = yield select(selectIsDemo);
 
   try {
     const query = {
@@ -33,17 +36,24 @@ function* handleFetchSchedule(action: ReturnType<typeof FetchLoanSchedule>) {
       ...(periods ? { periods } : {}),
     };
 
-    const response: LoanScheduleRead = yield call(
-      callApiWithAuth,
-      {
-        path: `/loans/${accountId}/schedule`,
-        query,
-        schema: loanScheduleSchema,
-      },
-      { loadingKey },
-    );
+    if (isDemo) {
+      const schedule = demoLoanSchedules[accountId];
+      if (schedule) {
+        yield put(setLoanSchedule({ accountId, schedule }));
+      }
+    } else {
+      const response: LoanScheduleRead = yield call(
+        callApiWithAuth,
+        {
+          path: `/loans/${accountId}/schedule`,
+          query,
+          schema: loanScheduleSchema,
+        },
+        { loadingKey },
+      );
 
-    yield put(setLoanSchedule({ accountId, schedule: response }));
+      yield put(setLoanSchedule({ accountId, schedule: response }));
+    }
   } catch (error) {
     yield put(
       setLoanError(
@@ -59,6 +69,7 @@ function* handleFetchEvents(action: ReturnType<typeof FetchLoanEvents>) {
   const { accountId, limit, offset } = action.payload;
   const loadingKey = `loan-events-${accountId}`;
   yield put(setLoanLoading({ key: loadingKey, isLoading: true }));
+  const isDemo: boolean = yield select(selectIsDemo);
 
   try {
     const query = {
@@ -66,17 +77,22 @@ function* handleFetchEvents(action: ReturnType<typeof FetchLoanEvents>) {
       ...(offset ? { offset } : {}),
     };
 
-    const response: { events: LoanEventRead[] } = yield call(
-      callApiWithAuth,
-      {
-        path: `/loans/${accountId}/events`,
-        query,
-        schema: loanEventsResponseSchema,
-      },
-      { loadingKey },
-    );
+    if (isDemo) {
+      const events = demoLoanEvents[accountId] ?? [];
+      yield put(setLoanEvents({ accountId, events }));
+    } else {
+      const response: { events: LoanEventRead[] } = yield call(
+        callApiWithAuth,
+        {
+          path: `/loans/${accountId}/events`,
+          query,
+          schema: loanEventsResponseSchema,
+        },
+        { loadingKey },
+      );
 
-    yield put(setLoanEvents({ accountId, events: response.events }));
+      yield put(setLoanEvents({ accountId, events: response.events }));
+    }
   } catch (error) {
     yield put(
       setLoanError(

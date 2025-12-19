@@ -5,6 +5,7 @@ import authService, { PendingApprovalError } from "@/features/auth/authHelpers";
 import {
   loginSuccess,
   logoutSuccess,
+  selectIsDemo,
   selectToken,
 } from "@/features/auth/authSlice";
 import { apiFetch, ApiError, type ApiRequest } from "@/lib/apiClient";
@@ -32,11 +33,19 @@ const describeError = (error: unknown): string | undefined => {
   return undefined;
 };
 
+export class DemoModeError extends Error {
+  constructor(message = "Network requests are disabled in demo mode.") {
+    super(message);
+    this.name = "DemoModeError";
+  }
+}
+
 export function* callApiWithAuth<T>(
   request: ApiRequest,
   options: ApiCallOptions = {},
 ): Generator<unknown, T, unknown> {
   const token = (yield select(selectToken)) as string | undefined;
+  const isDemo = (yield select(selectIsDemo)) as boolean;
   const loadingKey = options.loadingKey;
 
   if (loadingKey) {
@@ -44,6 +53,10 @@ export function* callApiWithAuth<T>(
   }
 
   try {
+    if (isDemo) {
+      throw new DemoModeError();
+    }
+
     const { data } = (yield call(apiFetch<T>, {
       ...request,
       token,
