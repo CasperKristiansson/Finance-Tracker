@@ -39,7 +39,7 @@ from .settings import (
     DB_USER_ENV,
     DatabaseSettings,
 )
-from .validation import ensure_balanced_legs
+from .validation import ensure_balanced_legs, validate_transaction_legs
 from .views import create_or_replace_materialized_views
 
 __all__ = [
@@ -69,6 +69,7 @@ __all__ = [
     "session_scope",
     "init_db",
     "ensure_balanced_legs",
+    "validate_transaction_legs",
     "coerce_decimal",
     "validate_category_amount",
     "DatabaseSettings",
