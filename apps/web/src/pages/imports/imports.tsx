@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Sparkles,
   Trash2,
   UploadCloud,
 } from "lucide-react";
@@ -15,6 +16,13 @@ import { useAppSelector } from "@/app/hooks";
 import { MotionPage } from "@/components/motion-presets";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import {
   Table,
@@ -24,15 +32,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { selectToken } from "@/features/auth/authSlice";
 import {
   useAccountsApi,
   useCategoriesApi,
   useImportsApi,
 } from "@/hooks/use-api";
+import { renderCategoryIcon } from "@/lib/category-icons";
 import { cn } from "@/lib/utils";
 import type {
   AccountWithBalance,
+  CategoryRead,
   ImportCommitRequest,
   ImportPreviewRequest,
   ImportPreviewResponse,
@@ -56,6 +67,84 @@ const toBase64 = (file: File) =>
     reader.onerror = (err) => reject(err);
     reader.readAsDataURL(file);
   });
+
+const toDateInputValue = (value: string | null | undefined) => {
+  if (!value) return "";
+  const match = String(value).match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : String(value);
+};
+
+const toOccurredAt = (
+  dateValue: string,
+  previous: string | null | undefined,
+) => {
+  if (!dateValue) return "";
+  const prev = String(previous ?? "");
+  const time = prev.includes("T") ? prev.slice(prev.indexOf("T")) : "T00:00:00";
+  return `${dateValue}${time.startsWith("T") ? time : "T00:00:00"}`;
+};
+
+type CategoryPickerProps = {
+  value: string | null | undefined;
+  categories: CategoryRead[];
+  disabled?: boolean;
+  suggesting?: boolean;
+  onChange: (value: string | null) => void;
+};
+
+const CategoryPicker: React.FC<CategoryPickerProps> = ({
+  value,
+  categories,
+  disabled,
+  suggesting,
+  onChange,
+}) => {
+  const selected = value ? categories.find((cat) => cat.id === value) : null;
+  const label = selected?.name ?? (suggesting ? "Suggesting…" : "No category");
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild disabled={disabled}>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-9 w-[240px] justify-start gap-2 border-slate-200 bg-white px-2 text-sm font-normal text-slate-800"
+          disabled={disabled}
+        >
+          {selected
+            ? renderCategoryIcon(selected.icon, selected.name, "h-4 w-4")
+            : null}
+          <span className="truncate">{label}</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="max-h-[340px] w-[280px] overflow-auto"
+      >
+        <DropdownMenuItem
+          onSelect={() => onChange(null)}
+          className="text-slate-700"
+        >
+          <div className="flex h-4 w-4 items-center justify-center rounded bg-slate-100 text-[10px] font-bold text-slate-600">
+            ∅
+          </div>
+          No category
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {categories.map((cat) => (
+          <DropdownMenuItem
+            key={cat.id}
+            onSelect={() => onChange(cat.id)}
+            className="text-slate-800"
+          >
+            {renderCategoryIcon(cat.icon, cat.name, "h-4 w-4")}
+            <span className="truncate">{cat.name}</span>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
 
 const commitRowSchema = z.object({
   id: z.string(),
@@ -126,6 +215,9 @@ export const Imports: React.FC = () => {
   const [commitTriggered, setCommitTriggered] = useState(false);
   const [suggestionsRequested, setSuggestionsRequested] = useState(false);
   const [autoParseRequested, setAutoParseRequested] = useState(false);
+  const [activeAuditFileId, setActiveAuditFileId] = useState<string | null>(
+    null,
+  );
 
   const commitForm = useForm<CommitFormValues>({
     resolver: zodResolver(commitFormSchema),
@@ -135,6 +227,7 @@ export const Imports: React.FC = () => {
   const { fields: commitRows, replace: replaceCommitRows } = useFieldArray({
     control: commitForm.control,
     name: "rows",
+    keyName: "fieldId",
   });
 
   useEffect(() => {
@@ -210,11 +303,19 @@ export const Imports: React.FC = () => {
       const suggestion = suggestions[row.id];
       if (!suggestion?.category_id) return;
       const currentCategory = commitForm.getValues(`rows.${idx}.category_id`);
-      if (currentCategory) return;
       const taxEvent = commitForm.getValues(`rows.${idx}.tax_event_type`);
       if (taxEvent) return;
       const isDeleted = commitForm.getValues(`rows.${idx}.delete`);
       if (isDeleted) return;
+      const categoryField = commitForm.getFieldState(
+        `rows.${idx}.category_id`,
+        commitForm.formState,
+      );
+      const shouldOverwrite =
+        !categoryField.isDirty &&
+        (currentCategory !== suggestion.category_id || !currentCategory);
+      if (!shouldOverwrite) return;
+
       commitForm.setValue(`rows.${idx}.category_id`, suggestion.category_id, {
         shouldDirty: true,
       });
@@ -226,6 +327,19 @@ export const Imports: React.FC = () => {
     if (step !== 3) return;
     if (preview.files.some((file) => (file.error_count ?? 0) > 0)) return;
     setStep(4);
+  }, [preview, step]);
+
+  useEffect(() => {
+    if (!preview) return;
+    if (step !== 4) return;
+    const firstId = preview.files[0]?.id ?? null;
+    if (!firstId) return;
+    setActiveAuditFileId((current) => {
+      if (!current) return firstId;
+      return preview.files.some((file) => file.id === current)
+        ? current
+        : firstId;
+    });
   }, [preview, step]);
 
   const accountById = useMemo(() => {
@@ -245,6 +359,25 @@ export const Imports: React.FC = () => {
   }, [preview]);
 
   const canProceedToAudit = Boolean(preview) && !previewHasErrors;
+
+  const previewRowById = useMemo(() => {
+    const map = new Map<string, ImportPreviewResponse["rows"][number]>();
+    if (!preview) return map;
+    preview.rows.forEach((row) => map.set(row.id, row));
+    return map;
+  }, [preview]);
+
+  const categoriesById = useMemo(() => {
+    const map = new Map<string, CategoryRead>();
+    categories.forEach((category) => map.set(category.id, category));
+    return map;
+  }, [categories]);
+
+  const commitIndexByRowId = useMemo(() => {
+    const map = new Map<string, number>();
+    commitRows.forEach((row, idx) => map.set(row.id, idx));
+    return map;
+  }, [commitRows]);
 
   const contextTxById = useMemo(() => {
     const map = new Map<
@@ -682,9 +815,7 @@ export const Imports: React.FC = () => {
                   disabled={!commitRows.length}
                   onClick={() => {
                     commitRows.forEach((row, idx) => {
-                      const previewRow = (
-                        preview as ImportPreviewResponse
-                      ).rows.find((r) => r.id === row.id);
+                      const previewRow = previewRowById.get(row.id) ?? null;
                       const nextCategory =
                         suggestions[row.id]?.category_id ??
                         previewRow?.suggested_category_id ??
@@ -703,202 +834,281 @@ export const Imports: React.FC = () => {
                 </Button>
               </div>
 
-              <div className="rounded border border-slate-200">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-[56px]">Del</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Description</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Category</TableHead>
-                      <TableHead>Tax event</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {commitRows.map((row, idx) => {
-                      const previewRow = preview.rows.find(
-                        (r) => r.id === row.id,
-                      );
-                      const suggestedCategoryId =
-                        suggestions[row.id]?.category_id ??
-                        previewRow?.suggested_category_id ??
-                        null;
-                      const suggestedFromCategories = suggestedCategoryId
-                        ? (categories.find(
-                            (cat) => cat.id === suggestedCategoryId,
-                          )?.name ?? null)
-                        : null;
-                      const suggested =
-                        suggestedFromCategories ??
-                        previewRow?.suggested_category_name ??
-                        null;
-                      const suggestedOk =
-                        Boolean(suggestedCategoryId) &&
-                        commitForm.watch(`rows.${idx}.category_id`) ===
-                          suggestedCategoryId;
-                      const rowSimilarIds = previewRow
-                        ? (similarIdsByRowId.get(previewRow.id) ?? [])
-                        : [];
-                      const firstSimilar = rowSimilarIds.length
-                        ? (contextTxById.get(rowSimilarIds[0]) ?? null)
-                        : null;
+              <Tabs
+                value={activeAuditFileId ?? preview.files[0]?.id ?? ""}
+                onValueChange={setActiveAuditFileId}
+              >
+                {preview.files.length > 1 ? (
+                  <TabsList className="h-auto w-full flex-wrap justify-start">
+                    {preview.files.map((file) => {
+                      const account = accountById.get(file.account_id);
                       return (
-                        <TableRow key={row.id} className="align-top">
-                          <TableCell>
-                            <input
-                              type="checkbox"
-                              checked={Boolean(
-                                commitForm.watch(`rows.${idx}.delete`),
-                              )}
-                              onChange={(e) =>
-                                commitForm.setValue(
-                                  `rows.${idx}.delete`,
-                                  e.target.checked,
-                                  {
-                                    shouldDirty: true,
-                                  },
-                                )
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <input
-                              className="w-[140px] rounded border border-slate-200 px-2 py-1 text-sm"
-                              value={
-                                commitForm.watch(`rows.${idx}.occurred_at`) ??
-                                ""
-                              }
-                              onChange={(e) =>
-                                commitForm.setValue(
-                                  `rows.${idx}.occurred_at`,
-                                  e.target.value,
-                                  {
-                                    shouldDirty: true,
-                                  },
-                                )
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <div className="space-y-1">
-                              <input
-                                className="w-full min-w-[260px] rounded border border-slate-200 px-2 py-1 text-sm"
-                                value={
-                                  commitForm.watch(`rows.${idx}.description`) ??
-                                  ""
-                                }
-                                onChange={(e) =>
-                                  commitForm.setValue(
-                                    `rows.${idx}.description`,
-                                    e.target.value,
-                                    { shouldDirty: true },
-                                  )
-                                }
-                              />
-                              {firstSimilar?.category_name ? (
-                                <p className="text-[11px] text-slate-500">
-                                  Similar: {firstSimilar.category_name} •{" "}
-                                  {firstSimilar.description}
-                                </p>
-                              ) : null}
-                              {suggested ? (
-                                <p className="text-[11px] text-slate-500">
-                                  Suggested:{" "}
-                                  <span
-                                    className={cn(
-                                      "font-semibold",
-                                      suggestedOk
-                                        ? "text-emerald-700"
-                                        : "text-slate-700",
-                                    )}
-                                  >
-                                    {suggested}
-                                  </span>
-                                </p>
-                              ) : null}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <input
-                              className="w-[120px] rounded border border-slate-200 px-2 py-1 text-sm"
-                              value={
-                                commitForm.watch(`rows.${idx}.amount`) ?? ""
-                              }
-                              onChange={(e) =>
-                                commitForm.setValue(
-                                  `rows.${idx}.amount`,
-                                  e.target.value,
-                                  {
-                                    shouldDirty: true,
-                                  },
-                                )
-                              }
-                            />
-                          </TableCell>
-                          <TableCell>
-                            <select
-                              className="w-[220px] rounded border border-slate-200 px-2 py-1 text-sm"
-                              value={
-                                commitForm.watch(`rows.${idx}.category_id`) ??
-                                ""
-                              }
-                              onChange={(e) =>
-                                commitForm.setValue(
-                                  `rows.${idx}.category_id`,
-                                  e.target.value || null,
-                                  { shouldDirty: true },
-                                )
-                              }
-                              disabled={Boolean(
-                                commitForm.watch(`rows.${idx}.tax_event_type`),
-                              )}
-                            >
-                              <option value="">
-                                {suggesting ? "Suggesting…" : "No category"}
-                              </option>
-                              {categories.map((cat) => (
-                                <option key={cat.id} value={cat.id}>
-                                  {cat.name}
-                                </option>
-                              ))}
-                            </select>
-                            {suggesting &&
-                            !commitForm.watch(`rows.${idx}.category_id`) ? (
-                              <div className="mt-1 flex items-center gap-1 text-[11px] text-slate-500">
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                                Waiting for Bedrock…
-                              </div>
-                            ) : null}
-                          </TableCell>
-                          <TableCell>
-                            <select
-                              className="w-[160px] rounded border border-slate-200 px-2 py-1 text-sm"
-                              value={
-                                commitForm.watch(
-                                  `rows.${idx}.tax_event_type`,
-                                ) ?? ""
-                              }
-                              onChange={(e) =>
-                                commitForm.setValue(
-                                  `rows.${idx}.tax_event_type`,
-                                  (e.target.value ||
-                                    null) as TaxEventType | null,
-                                  { shouldDirty: true },
-                                )
-                              }
-                            >
-                              <option value="">None</option>
-                              <option value="payment">Payment</option>
-                              <option value="refund">Refund</option>
-                            </select>
-                          </TableCell>
-                        </TableRow>
+                        <TabsTrigger
+                          key={file.id}
+                          value={file.id}
+                          className="max-w-[280px] flex-none flex-col items-start justify-start gap-0.5 px-3 py-2"
+                        >
+                          <span className="truncate">
+                            {account?.name ?? "Account"}
+                          </span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {file.filename}
+                          </span>
+                        </TabsTrigger>
                       );
                     })}
-                  </TableBody>
-                </Table>
-              </div>
+                  </TabsList>
+                ) : null}
+
+                {preview.files.map((file) => {
+                  const account = accountById.get(file.account_id);
+                  const fileRows = preview.rows
+                    .filter((row) => row.file_id === file.id)
+                    .sort((a, b) => a.row_index - b.row_index);
+
+                  return (
+                    <TabsContent key={file.id} value={file.id}>
+                      {preview.files.length === 1 ? (
+                        <div className="mb-2 text-sm font-medium text-slate-700">
+                          {account?.name ?? "Account"} • {file.filename}
+                        </div>
+                      ) : null}
+
+                      <div className="rounded border border-slate-200">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[56px]">Del</TableHead>
+                              <TableHead>Date</TableHead>
+                              <TableHead>Description</TableHead>
+                              <TableHead>Amount</TableHead>
+                              <TableHead>Category</TableHead>
+                              <TableHead>Tax event</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {fileRows.map((previewRow) => {
+                              const idx =
+                                commitIndexByRowId.get(previewRow.id) ?? -1;
+                              if (idx < 0) return null;
+
+                              const suggestion = suggestions[previewRow.id];
+                              const suggestedCategoryId =
+                                suggestion?.category_id ?? null;
+                              const suggestedCategory = suggestedCategoryId
+                                ? (categoriesById.get(suggestedCategoryId) ??
+                                  null)
+                                : null;
+
+                              const rowSimilarIds =
+                                similarIdsByRowId.get(previewRow.id) ?? [];
+                              const firstSimilar = rowSimilarIds.length
+                                ? (contextTxById.get(rowSimilarIds[0]) ?? null)
+                                : null;
+
+                              const occurredAt =
+                                commitForm.watch(`rows.${idx}.occurred_at`) ??
+                                "";
+
+                              const currentCategoryId =
+                                commitForm.watch(`rows.${idx}.category_id`) ??
+                                null;
+                              const suggestionApplied =
+                                Boolean(suggestedCategoryId) &&
+                                currentCategoryId === suggestedCategoryId;
+
+                              const confidencePct =
+                                typeof suggestion?.confidence === "number"
+                                  ? Math.round(
+                                      suggestion.confidence > 1
+                                        ? suggestion.confidence
+                                        : suggestion.confidence * 100,
+                                    )
+                                  : null;
+
+                              return (
+                                <TableRow
+                                  key={commitRows[idx].fieldId}
+                                  className="align-top"
+                                >
+                                  <TableCell>
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(
+                                        commitForm.watch(`rows.${idx}.delete`),
+                                      )}
+                                      onChange={(e) =>
+                                        commitForm.setValue(
+                                          `rows.${idx}.delete`,
+                                          e.target.checked,
+                                          { shouldDirty: true },
+                                        )
+                                      }
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <input
+                                      type="date"
+                                      className="w-[148px] rounded border border-slate-200 bg-white px-2 py-1 text-sm"
+                                      value={toDateInputValue(occurredAt)}
+                                      onChange={(e) =>
+                                        commitForm.setValue(
+                                          `rows.${idx}.occurred_at`,
+                                          toOccurredAt(
+                                            e.target.value,
+                                            occurredAt,
+                                          ),
+                                          { shouldDirty: true },
+                                        )
+                                      }
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="space-y-1">
+                                      <input
+                                        className="w-full min-w-[260px] rounded border border-slate-200 bg-white px-2 py-1 text-sm"
+                                        value={
+                                          commitForm.watch(
+                                            `rows.${idx}.description`,
+                                          ) ?? ""
+                                        }
+                                        onChange={(e) =>
+                                          commitForm.setValue(
+                                            `rows.${idx}.description`,
+                                            e.target.value,
+                                            { shouldDirty: true },
+                                          )
+                                        }
+                                      />
+                                      {firstSimilar?.category_name ? (
+                                        <p className="text-[11px] text-slate-500">
+                                          Similar: {firstSimilar.category_name}{" "}
+                                          • {firstSimilar.description}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <input
+                                      className="w-[120px] rounded border border-slate-200 bg-white px-2 py-1 text-sm"
+                                      value={
+                                        commitForm.watch(
+                                          `rows.${idx}.amount`,
+                                        ) ?? ""
+                                      }
+                                      onChange={(e) =>
+                                        commitForm.setValue(
+                                          `rows.${idx}.amount`,
+                                          e.target.value,
+                                          { shouldDirty: true },
+                                        )
+                                      }
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="space-y-1">
+                                      <CategoryPicker
+                                        value={currentCategoryId}
+                                        categories={categories}
+                                        disabled={Boolean(
+                                          commitForm.watch(
+                                            `rows.${idx}.tax_event_type`,
+                                          ),
+                                        )}
+                                        suggesting={
+                                          suggesting &&
+                                          !suggestion &&
+                                          !currentCategoryId
+                                        }
+                                        onChange={(next) =>
+                                          commitForm.setValue(
+                                            `rows.${idx}.category_id`,
+                                            next,
+                                            { shouldDirty: true },
+                                          )
+                                        }
+                                      />
+
+                                      {suggesting && !suggestion ? (
+                                        <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                                          <Loader2 className="h-3 w-3 animate-spin" />
+                                          Waiting for Bedrock…
+                                        </div>
+                                      ) : suggestion ? (
+                                        <div className="space-y-0.5 text-[11px] text-slate-500">
+                                          <div className="flex items-center gap-1">
+                                            <Sparkles className="h-3 w-3" />
+                                            {suggestedCategory ? (
+                                              <span>
+                                                Bedrock:{" "}
+                                                <span
+                                                  className={cn(
+                                                    "font-semibold",
+                                                    suggestionApplied
+                                                      ? "text-emerald-700"
+                                                      : "text-slate-700",
+                                                  )}
+                                                >
+                                                  {renderCategoryIcon(
+                                                    suggestedCategory.icon,
+                                                    suggestedCategory.name,
+                                                    "mr-1 inline h-3 w-3",
+                                                  )}
+                                                  {suggestedCategory.name}
+                                                </span>
+                                              </span>
+                                            ) : (
+                                              <span>
+                                                Bedrock: no suggestion
+                                              </span>
+                                            )}
+                                            {confidencePct !== null ? (
+                                              <span className="text-slate-400">
+                                                ({confidencePct}%)
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                          {suggestion.reason ? (
+                                            <div className="text-slate-500">
+                                              {suggestion.reason}
+                                            </div>
+                                          ) : null}
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <select
+                                      className="w-[160px] rounded border border-slate-200 bg-white px-2 py-1 text-sm"
+                                      value={
+                                        commitForm.watch(
+                                          `rows.${idx}.tax_event_type`,
+                                        ) ?? ""
+                                      }
+                                      onChange={(e) =>
+                                        commitForm.setValue(
+                                          `rows.${idx}.tax_event_type`,
+                                          (e.target.value ||
+                                            null) as TaxEventType | null,
+                                          { shouldDirty: true },
+                                        )
+                                      }
+                                    >
+                                      <option value="">None</option>
+                                      <option value="payment">Payment</option>
+                                      <option value="refund">Refund</option>
+                                    </select>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </TabsContent>
+                  );
+                })}
+              </Tabs>
             </>
           ) : null}
 
