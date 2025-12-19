@@ -572,7 +572,9 @@ class ImportService:
                     continue
                 if amount_raw == "":
                     continue
-                amount = Decimal(str(amount_raw))
+                amount = self._parse_decimal_value(amount_raw)
+                if amount is None:
+                    raise ValueError("invalid amount")
                 amount = -abs(amount)
                 rows.append(
                     {
@@ -617,7 +619,9 @@ class ImportService:
                 if not description:
                     description = cleaned[headers.get("typ", 3)] if headers else ""
                 amount_raw = cleaned[headers.get("insättningar/uttag", 5)] if headers else ""
-                amount = Decimal(str(amount_raw))
+                amount = self._parse_decimal_value(amount_raw)
+                if amount is None:
+                    raise ValueError("invalid amount")
                 rows.append(
                     {
                         "date": occurred_at.isoformat(),
@@ -641,9 +645,7 @@ class ImportService:
 
         for idx, row in enumerate(sheet.iter_rows(values_only=True), start=1):
             header_map = {self._clean_header(val): pos for pos, val in enumerate(row) if val}
-            if not header_index and {"radnummer", "bokföringsdag", "belopp"}.issubset(
-                header_map.keys()
-            ):
+            if not header_index and {"bokföringsdag", "belopp"}.issubset(header_map.keys()):
                 header_index = idx
                 headers = header_map
                 continue
@@ -661,7 +663,9 @@ class ImportService:
                 desc = cleaned[headers.get("beskrivning", 5)] if headers else ""
                 description = f"{ref} {desc}".strip() or desc or ref
                 amount_raw = cleaned[headers.get("belopp", 6)] if headers else ""
-                amount = Decimal(str(amount_raw))
+                amount = self._parse_decimal_value(amount_raw)
+                if amount is None:
+                    raise ValueError("invalid amount")
                 rows.append(
                     {
                         "date": occurred_at.isoformat(),
@@ -1170,6 +1174,34 @@ class ImportService:
         if isinstance(value, (int, float, Decimal)):
             return str(value)
         return str(value).strip()
+
+    def _parse_decimal_value(self, value: object) -> Optional[Decimal]:
+        if value is None:
+            return None
+        if isinstance(value, Decimal):
+            return value
+        if isinstance(value, (int, float)):
+            return Decimal(str(value))
+        text = str(value).strip()
+        if not text:
+            return None
+        cleaned = text.replace("\u2212", "-").replace("−", "-").replace("\xa0", "").replace(" ", "")
+        match = re.search(r"-?[\d.,]+", cleaned)
+        if not match:
+            return None
+        numeric = match.group(0)
+        if "," in numeric and "." in numeric:
+            if numeric.rfind(",") > numeric.rfind("."):
+                numeric = numeric.replace(".", "")
+                numeric = numeric.replace(",", ".")
+            else:
+                numeric = numeric.replace(",", "")
+        else:
+            numeric = numeric.replace(",", ".")
+        try:
+            return Decimal(numeric)
+        except Exception:
+            return None
 
     def _is_decimal(self, value: str) -> bool:
         try:
