@@ -241,16 +241,15 @@ export const Imports: React.FC = () => {
   });
 
   const watchedRows = commitForm.watch("rows");
-  const missingCategoryCount = useMemo(() => {
-    if (!Array.isArray(watchedRows) || !watchedRows.length) return 0;
-    return watchedRows.reduce((count, row) => {
-      if (!row) return count;
-      if (row.delete) return count;
-      if (row.tax_event_type) return count;
-      if (!row.category_id) return count + 1;
-      return count;
-    }, 0);
-  }, [watchedRows]);
+  const missingCategoryCount = Array.isArray(watchedRows)
+    ? watchedRows.reduce((count, row) => {
+        if (!row) return count;
+        if (row.delete) return count;
+        if (row.tax_event_type) return count;
+        if (!row.category_id) return count + 1;
+        return count;
+      }, 0)
+    : 0;
   const hasMissingCategories = missingCategoryCount > 0;
 
   const { fields: commitRows, replace: replaceCommitRows } = useFieldArray({
