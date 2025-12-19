@@ -94,6 +94,7 @@ type CategoryPickerProps = {
   value: string | null | undefined;
   categories: CategoryRead[];
   disabled?: boolean;
+  missing?: boolean;
   suggesting?: boolean;
   onChange: (value: string | null) => void;
 };
@@ -102,6 +103,7 @@ const CategoryPicker: React.FC<CategoryPickerProps> = ({
   value,
   categories,
   disabled,
+  missing,
   suggesting,
   onChange,
 }) => {
@@ -114,7 +116,12 @@ const CategoryPicker: React.FC<CategoryPickerProps> = ({
         <Button
           type="button"
           variant="outline"
-          className="h-9 w-[240px] justify-start gap-2 border-slate-200 bg-white px-2 text-sm font-normal text-slate-800"
+          className={cn(
+            "h-9 w-[240px] justify-start gap-2 px-2 text-sm font-normal",
+            missing
+              ? "border-amber-300 bg-amber-50 text-amber-900"
+              : "border-slate-200 bg-white text-slate-800",
+          )}
           disabled={disabled}
         >
           {selected
@@ -232,6 +239,19 @@ export const Imports: React.FC = () => {
     resolver: zodResolver(commitFormSchema),
     defaultValues: { rows: [] },
   });
+
+  const watchedRows = commitForm.watch("rows");
+  const missingCategoryCount = useMemo(() => {
+    if (!Array.isArray(watchedRows) || !watchedRows.length) return 0;
+    return watchedRows.reduce((count, row) => {
+      if (!row) return count;
+      if (row.delete) return count;
+      if (row.tax_event_type) return count;
+      if (!row.category_id) return count + 1;
+      return count;
+    }, 0);
+  }, [watchedRows]);
+  const hasMissingCategories = missingCategoryCount > 0;
 
   const { fields: commitRows, replace: replaceCommitRows } = useFieldArray({
     control: commitForm.control,
@@ -876,6 +896,12 @@ export const Imports: React.FC = () => {
                   <p className="text-xs text-slate-500">
                     Edit values, apply categories, or mark rows for deletion.
                   </p>
+                  {hasMissingCategories ? (
+                    <Badge className="mt-2 w-fit bg-amber-100 text-amber-700">
+                      {missingCategoryCount} row
+                      {missingCategoryCount === 1 ? "" : "s"} missing category
+                    </Badge>
+                  ) : null}
                   {suggesting ? (
                     <p className="mt-1 text-xs text-slate-500">
                       Suggesting categories with Bedrock…
@@ -973,6 +999,13 @@ export const Imports: React.FC = () => {
                                 commitForm.watch(
                                   `rows.${idx}.tax_event_type`,
                                 ) ?? null;
+                              const isDeleted = Boolean(
+                                commitForm.watch(`rows.${idx}.delete`),
+                              );
+                              const isMissingCategory =
+                                !isDeleted &&
+                                !taxEventType &&
+                                !currentCategoryId;
                               const suggestionApplied =
                                 Boolean(suggestedCategoryId) &&
                                 currentCategoryId === suggestedCategoryId;
@@ -989,14 +1022,17 @@ export const Imports: React.FC = () => {
                               return (
                                 <TableRow
                                   key={commitRows[idx].fieldId}
-                                  className="align-top"
+                                  className={cn(
+                                    "align-top",
+                                    isMissingCategory
+                                      ? "bg-amber-50/60 hover:bg-amber-50/80"
+                                      : null,
+                                  )}
                                 >
                                   <TableCell>
                                     <input
                                       type="checkbox"
-                                      checked={Boolean(
-                                        commitForm.watch(`rows.${idx}.delete`),
-                                      )}
+                                      checked={isDeleted}
                                       onChange={(e) =>
                                         commitForm.setValue(
                                           `rows.${idx}.delete`,
@@ -1077,6 +1113,7 @@ export const Imports: React.FC = () => {
                                         value={currentCategoryId}
                                         categories={categories}
                                         disabled={Boolean(taxEventType)}
+                                        missing={isMissingCategory}
                                         suggesting={
                                           suggesting &&
                                           !suggestion &&
@@ -1192,7 +1229,12 @@ export const Imports: React.FC = () => {
                 <Button
                   className="gap-2"
                   onClick={() => void submit()}
-                  disabled={loading || saving || previewHasErrors}
+                  disabled={
+                    loading ||
+                    saving ||
+                    previewHasErrors ||
+                    hasMissingCategories
+                  }
                 >
                   {saving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
