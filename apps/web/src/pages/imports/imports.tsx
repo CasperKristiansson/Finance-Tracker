@@ -118,7 +118,11 @@ const CategoryPicker: React.FC<CategoryPickerProps> = ({
           disabled={disabled}
         >
           {selected
-            ? renderCategoryIcon(selected.icon, selected.name, "h-4 w-4")
+            ? renderCategoryIcon(
+                selected.icon,
+                selected.name,
+                "inline-flex h-4 w-4 items-center justify-center leading-none",
+              )
             : null}
           <span className="truncate">{label}</span>
         </Button>
@@ -143,7 +147,11 @@ const CategoryPicker: React.FC<CategoryPickerProps> = ({
             onSelect={() => onChange(cat.id)}
             className="text-slate-800"
           >
-            {renderCategoryIcon(cat.icon, cat.name, "h-4 w-4")}
+            {renderCategoryIcon(
+              cat.icon,
+              cat.name,
+              "inline-flex h-4 w-4 items-center justify-center leading-none",
+            )}
             <span className="truncate">{cat.name}</span>
           </DropdownMenuItem>
         ))}
@@ -1106,7 +1114,7 @@ export const Imports: React.FC = () => {
                                                   {renderCategoryIcon(
                                                     suggestedCategory.icon,
                                                     suggestedCategory.name,
-                                                    "mr-1 inline h-3 w-3",
+                                                    "mr-1 inline-flex h-3 w-3 items-center justify-center leading-none",
                                                   )}
                                                   {suggestedCategory.name}
                                                 </span>

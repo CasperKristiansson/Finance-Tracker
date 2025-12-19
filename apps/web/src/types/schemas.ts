@@ -904,6 +904,12 @@ export const importCategorySuggestRequestSchema = z.object({
   max_tokens: optionalNumeric.nullable().optional(),
 });
 
+export const importCategorySuggestJobRequestSchema =
+  importCategorySuggestRequestSchema.extend({
+    client_id: z.string(),
+    client_token: z.string().min(16),
+  });
+
 export const importCategorySuggestionReadSchema = z.object({
   id: z.string(),
   category_id: nullableString,
@@ -913,6 +919,10 @@ export const importCategorySuggestionReadSchema = z.object({
 
 export const importCategorySuggestResponseSchema = z.object({
   suggestions: z.array(importCategorySuggestionReadSchema),
+});
+
+export const importCategorySuggestJobResponseSchema = z.object({
+  job_id: z.string(),
 });
 
 export const taxEventSchema = z.object({
@@ -1352,11 +1362,17 @@ export type ImportCategorySuggestTransaction = z.infer<
 export type ImportCategorySuggestRequest = z.infer<
   typeof importCategorySuggestRequestSchema
 >;
+export type ImportCategorySuggestJobRequest = z.infer<
+  typeof importCategorySuggestJobRequestSchema
+>;
 export type ImportCategorySuggestionRead = z.infer<
   typeof importCategorySuggestionReadSchema
 >;
 export type ImportCategorySuggestResponse = z.infer<
   typeof importCategorySuggestResponseSchema
+>;
+export type ImportCategorySuggestJobResponse = z.infer<
+  typeof importCategorySuggestJobResponseSchema
 >;
 export type TaxEventRead = z.infer<typeof taxEventSchema>;
 export type TaxEventCreateRequest = z.infer<typeof taxEventCreateRequestSchema>;

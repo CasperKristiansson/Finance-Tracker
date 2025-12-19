@@ -196,6 +196,19 @@ class ImportCategorySuggestResponse(BaseModel):
     suggestions: List[ImportCategorySuggestionRead]
 
 
+class ImportCategorySuggestJobRequest(ImportCategorySuggestRequest):
+    """Async suggestion request payload tied to a websocket client."""
+
+    client_id: UUID
+    client_token: str = Field(min_length=16, max_length=160)
+
+
+class ImportCategorySuggestJobResponse(BaseModel):
+    """Async suggestion response with a queued job id."""
+
+    job_id: UUID
+
+
 __all__ = [
     "ImportErrorRead",
     "ImportPreviewFile",
@@ -215,4 +228,6 @@ __all__ = [
     "ImportCategorySuggestRequest",
     "ImportCategorySuggestionRead",
     "ImportCategorySuggestResponse",
+    "ImportCategorySuggestJobRequest",
+    "ImportCategorySuggestJobResponse",
 ]

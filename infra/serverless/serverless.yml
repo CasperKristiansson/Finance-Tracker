@@ -35,6 +35,31 @@ provider:
           Action:
             - bedrock:InvokeModel
           Resource: "*"
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:DeleteItem
+            - dynamodb:Query
+          Resource:
+            - Fn::GetAtt:
+                - ImportSuggestionsConnectionsTable
+                - Arn
+            - Fn::Sub: "${ImportSuggestionsConnectionsTable.Arn}/index/client_id-index"
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+            - sqs:ReceiveMessage
+            - sqs:DeleteMessage
+            - sqs:GetQueueAttributes
+          Resource:
+            - Fn::GetAtt:
+                - ImportSuggestionsQueue
+                - Arn
+        - Effect: Allow
+          Action:
+            - execute-api:ManageConnections
+          Resource:
+            - Fn::Sub: "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebsocketsApi}/*"
   domain:
     name: api.finance-tracker.casperkristiansson.com
     apiType: HTTP
@@ -51,6 +76,8 @@ provider:
         issuerUrl: ${aws:ssm:/finance-tracker/${self:provider.stage}/auth/user_pool_issuer}
         audience:
           - ${aws:ssm:/finance-tracker/${self:provider.stage}/auth/user_pool_client_id}
+  websocketsApiName: ${self:service}-${self:provider.stage}-ws
+  websocketsApiRouteSelectionExpression: $request.body.action
 
 package:
   patterns:
@@ -161,6 +188,72 @@ functions:
           path: /imports/suggest-categories
           method: POST
           authorizer: cognitoJwt
+
+  importSuggestionsConnect:
+    handler: apps/api/handlers/bedrock_suggestions.connect_import_suggestions
+    timeout: 10
+    memorySize: 256
+    vpc: ~
+    layers:
+      - ${self:custom.backendLayerArn}
+    environment:
+      IMPORT_SUGGESTIONS_CONNECTIONS_TABLE:
+        Ref: ImportSuggestionsConnectionsTable
+    events:
+      - websocket:
+          route: $connect
+
+  importSuggestionsDisconnect:
+    handler: apps/api/handlers/bedrock_suggestions.disconnect_import_suggestions
+    timeout: 10
+    memorySize: 256
+    vpc: ~
+    layers:
+      - ${self:custom.backendLayerArn}
+    environment:
+      IMPORT_SUGGESTIONS_CONNECTIONS_TABLE:
+        Ref: ImportSuggestionsConnectionsTable
+    events:
+      - websocket:
+          route: $disconnect
+
+  suggestImportCategoriesJob:
+    handler: apps/api/handlers/bedrock_suggestions.enqueue_import_category_suggestions
+    timeout: 15
+    memorySize: 256
+    vpc: ~
+    layers:
+      - ${self:custom.backendLayerArn}
+    environment:
+      IMPORT_SUGGESTIONS_CONNECTIONS_TABLE:
+        Ref: ImportSuggestionsConnectionsTable
+      IMPORT_SUGGESTIONS_QUEUE_URL:
+        Ref: ImportSuggestionsQueue
+    events:
+      - httpApi:
+          path: /imports/suggest-categories/jobs
+          method: POST
+          authorizer: cognitoJwt
+
+  importSuggestionsWorker:
+    handler: apps/api/handlers/bedrock_suggestions.process_import_category_suggestions
+    timeout: 120
+    memorySize: 512
+    vpc: ~
+    layers:
+      - ${self:custom.backendLayerArn}
+    environment:
+      IMPORT_SUGGESTIONS_CONNECTIONS_TABLE:
+        Ref: ImportSuggestionsConnectionsTable
+      IMPORT_SUGGESTIONS_QUEUE_URL:
+        Ref: ImportSuggestionsQueue
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt:
+              - ImportSuggestionsQueue
+              - Arn
+          batchSize: 1
 
   getSettings:
     handler: apps/api/handlers/settings.get_settings
@@ -761,3 +854,34 @@ functions:
           path: /investments/sync-ledger
           method: POST
           authorizer: cognitoJwt
+
+resources:
+  Resources:
+    ImportSuggestionsConnectionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:service}-${self:provider.stage}-import-suggestions-connections
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          - AttributeName: connection_id
+            AttributeType: S
+          - AttributeName: client_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: connection_id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          - IndexName: client_id-index
+            KeySchema:
+              - AttributeName: client_id
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL
+        TimeToLiveSpecification:
+          AttributeName: expires_at
+          Enabled: true
+    ImportSuggestionsQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-${self:provider.stage}-import-suggestions
+        VisibilityTimeout: 180

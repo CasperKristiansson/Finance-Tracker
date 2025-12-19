@@ -5,16 +5,21 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
+from dataclasses import dataclass
 from typing import Any, Dict, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import boto3
+from boto3.dynamodb.conditions import Key
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import ValidationError
 
 from ..schemas import (
     ImportCategorySuggestionRead,
+    ImportCategorySuggestJobRequest,
+    ImportCategorySuggestJobResponse,
     ImportCategorySuggestRequest,
     ImportCategorySuggestResponse,
 )
@@ -24,6 +29,22 @@ BEDROCK_MODEL_ID_DEFAULT = "anthropic.claude-3-haiku-20240307-v1:0"
 _MAX_HISTORY = 200
 _MAX_TRANSACTIONS = 200
 _TOOL_NAME = "categorize_transactions"
+_CONNECTIONS_TABLE_ENV = "IMPORT_SUGGESTIONS_CONNECTIONS_TABLE"
+_SUGGESTIONS_QUEUE_ENV = "IMPORT_SUGGESTIONS_QUEUE_URL"
+_CONNECTION_TTL_SECONDS = 3600
+
+
+@dataclass(frozen=True)
+class SuggestionConnection:
+    connection_id: str
+    endpoint: str
+    client_token: str
+
+
+class SuggestionError(RuntimeError):
+    def __init__(self, message: str, *, status_code: int = 502) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
@@ -37,10 +58,172 @@ def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str,
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
+    try:
+        suggestions = _suggest_with_bedrock(request)
+    except SuggestionError as exc:
+        return json_response(exc.status_code, {"error": str(exc)})
+
+    payload_out = ImportCategorySuggestResponse(suggestions=suggestions).model_dump(mode="json")
+    return json_response(200, payload_out)
+
+
+def connect_import_suggestions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    params = event.get("queryStringParameters") or {}
+    client_id = params.get("client_id") or params.get("clientId")
+    client_token = params.get("token") or params.get("client_token") or params.get("clientToken")
+    if not client_id or not client_token:
+        return {"statusCode": 400, "body": "Missing client_id or token"}
+
+    request_context = event.get("requestContext") or {}
+    connection_id = request_context.get("connectionId")
+    domain_name = request_context.get("domainName")
+    stage = request_context.get("stage")
+    if not connection_id or not domain_name or not stage:
+        return {"statusCode": 400, "body": "Invalid websocket context"}
+
+    endpoint = f"https://{domain_name}/{stage}"
+    if not _store_connection(
+        connection_id=connection_id,
+        client_id=client_id,
+        client_token=str(client_token),
+        endpoint=endpoint,
+    ):
+        return {"statusCode": 503, "body": "Connection store unavailable"}
+
+    return {"statusCode": 200, "body": "connected"}
+
+
+def disconnect_import_suggestions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    request_context = event.get("requestContext") or {}
+    connection_id = request_context.get("connectionId")
+    if not connection_id:
+        return {"statusCode": 400, "body": "Missing connection id"}
+
+    _remove_connection(connection_id)
+    return {"statusCode": 200, "body": "disconnected"}
+
+
+def enqueue_import_category_suggestions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    _ = get_user_id(event)
+    parsed_body = parse_body(event)
+
+    try:
+        request = ImportCategorySuggestJobRequest.model_validate(parsed_body)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    queue_url = os.getenv(_SUGGESTIONS_QUEUE_ENV)
+    if not queue_url:
+        return json_response(503, {"error": "Suggestion queue unavailable"})
+
+    connection = _fetch_connection_by_client(request.client_id)
+    if connection is None:
+        return json_response(409, {"error": "Suggestions websocket not connected"})
+    if connection.client_token != request.client_token:
+        return json_response(403, {"error": "Client token mismatch"})
+
+    job_id = uuid4()
+    message_payload = request.model_dump(mode="json")
+    message_payload["job_id"] = str(job_id)
+
+    sqs = boto3.client("sqs")
+    sqs.send_message(QueueUrl=queue_url, MessageBody=json.dumps(message_payload))
+
+    response_payload = ImportCategorySuggestJobResponse(job_id=job_id).model_dump(mode="json")
+    return json_response(202, response_payload)
+
+
+def process_import_category_suggestions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    for record in event.get("Records", []):
+        body = record.get("body") or ""
+        try:
+            payload = json.loads(body) if body else {}
+            job_id = payload.get("job_id")
+            request = ImportCategorySuggestJobRequest.model_validate(payload)
+        except (ValueError, ValidationError):
+            continue
+
+        message: dict[str, Any]
+        try:
+            suggestions = _suggest_with_bedrock(request)
+            message = {
+                "type": "import_suggestions",
+                "job_id": job_id,
+                "client_id": str(request.client_id),
+                "suggestions": [item.model_dump(mode="json") for item in suggestions],
+            }
+        except SuggestionError as exc:
+            message = {
+                "type": "import_suggestions_error",
+                "job_id": job_id,
+                "client_id": str(request.client_id),
+                "error": str(exc),
+            }
+
+        _send_to_client(request.client_id, request.client_token, message)
+
+    return {"batchItemFailures": []}
+
+
+def _suggest_with_bedrock(
+    request: ImportCategorySuggestRequest,
+) -> list[ImportCategorySuggestionRead]:
     client = _get_bedrock_client()
     if client is None:
-        return json_response(503, {"error": "Bedrock client unavailable"})
+        raise SuggestionError("Bedrock client unavailable", status_code=503)
 
+    (
+        prompt_data,
+        category_by_id,
+        signature_to_ids,
+        rep_id_to_signature,
+    ) = _prepare_prompt_data(request)
+    model_id, payload = _build_bedrock_payload(prompt_data, request)
+
+    try:
+        response = client.invoke_model(
+            modelId=model_id,
+            contentType="application/json",
+            accept="application/json",
+            body=json.dumps(payload),
+        )
+    except (BotoCoreError, ClientError) as exc:  # pragma: no cover - environment dependent
+        raise SuggestionError(f"Bedrock invocation failed: {exc}") from exc
+
+    raw_body = response.get("body")
+    if raw_body is None:
+        raise SuggestionError("Empty Bedrock response")
+
+    body_text = raw_body.read().decode("utf-8")
+    parsed = _safe_json_loads(body_text)
+    parsed_json = _extract_tool_input(parsed=parsed, tool_name=_TOOL_NAME)
+    if parsed_json is None:
+        output_text = _extract_output_text(parsed)
+        parsed_json = _extract_json(output_text)
+    if isinstance(parsed_json, list):
+        parsed_json = {"suggestions": parsed_json}
+    if not isinstance(parsed_json, dict):
+        stop_reason = _extract_stop_reason(parsed)
+        if stop_reason == "max_tokens":
+            raise SuggestionError(
+                (
+                    "Bedrock response was truncated (max_tokens). "
+                    "Increase max_tokens or reduce the number of transactions."
+                )
+            )
+        raise SuggestionError("Bedrock response was not valid JSON")
+
+    return _parse_suggestions(
+        parsed_json=parsed_json,
+        category_by_id=category_by_id,
+        signature_to_ids=signature_to_ids,
+        rep_id_to_signature=rep_id_to_signature,
+    )
+
+
+def _prepare_prompt_data(
+    request: ImportCategorySuggestRequest,
+) -> tuple[dict[str, Any], dict[UUID, Any], dict[str, list[UUID]], dict[UUID, str]]:
     category_by_id = {cat.id: cat for cat in request.categories}
     category_payload = [
         {"id": str(cat.id), "name": cat.name, "type": cat.category_type}
@@ -56,6 +239,7 @@ def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str,
                 "category_name": category.name if category else None,
             }
         )
+
     signature_to_ids: dict[str, list[UUID]] = {}
     signature_to_payload: dict[str, dict[str, Any]] = {}
     rep_id_to_signature: dict[UUID, str] = {}
@@ -75,6 +259,7 @@ def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str,
             signature_to_payload[signature]["count"] = (
                 int(signature_to_payload[signature]["count"]) + 1
             )
+
     tx_payload = list(signature_to_payload.values())
 
     prompt_data = {
@@ -82,6 +267,13 @@ def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str,
         "history": history_payload,
         "transactions": tx_payload,
     }
+    return prompt_data, category_by_id, signature_to_ids, rep_id_to_signature
+
+
+def _build_bedrock_payload(
+    prompt_data: dict[str, Any],
+    request: ImportCategorySuggestRequest,
+) -> tuple[str, dict[str, Any]]:
     system = (
         "You suggest transaction categories for a personal finance app.\n"
         "Rules:\n"
@@ -130,43 +322,16 @@ def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str,
         "temperature": 0.0,
         "top_p": 0.9,
     }
+    return model_id, payload
 
-    try:
-        response = client.invoke_model(
-            modelId=model_id,
-            contentType="application/json",
-            accept="application/json",
-            body=json.dumps(payload),
-        )
-    except (BotoCoreError, ClientError) as exc:  # pragma: no cover - environment dependent
-        return json_response(502, {"error": f"Bedrock invocation failed: {exc}"})
 
-    raw_body = response.get("body")
-    if raw_body is None:
-        return json_response(502, {"error": "Empty Bedrock response"})
-
-    body_text = raw_body.read().decode("utf-8")
-    parsed = _safe_json_loads(body_text)
-    parsed_json = _extract_tool_input(parsed=parsed, tool_name=_TOOL_NAME)
-    if parsed_json is None:
-        output_text = _extract_output_text(parsed)
-        parsed_json = _extract_json(output_text)
-    if isinstance(parsed_json, list):
-        parsed_json = {"suggestions": parsed_json}
-    if not isinstance(parsed_json, dict):
-        stop_reason = _extract_stop_reason(parsed)
-        if stop_reason == "max_tokens":
-            return json_response(
-                502,
-                {
-                    "error": (
-                        "Bedrock response was truncated (max_tokens). "
-                        "Increase max_tokens or reduce the number of transactions."
-                    )
-                },
-            )
-        return json_response(502, {"error": "Bedrock response was not valid JSON"})
-
+def _parse_suggestions(
+    *,
+    parsed_json: dict[str, Any],
+    category_by_id: dict[UUID, Any],
+    signature_to_ids: dict[str, list[UUID]],
+    rep_id_to_signature: dict[UUID, str],
+) -> list[ImportCategorySuggestionRead]:
     raw_suggestions = parsed_json.get("suggestions")
     if not isinstance(raw_suggestions, list):
         raw_suggestions = []
@@ -216,8 +381,93 @@ def suggest_import_categories(event: Dict[str, Any], _context: Any) -> Dict[str,
                 )
             )
 
-    payload_out = ImportCategorySuggestResponse(suggestions=suggestions).model_dump(mode="json")
-    return json_response(200, payload_out)
+    return suggestions
+
+
+def _get_connections_table():
+    table_name = os.getenv(_CONNECTIONS_TABLE_ENV)
+    if not table_name:
+        return None
+    return boto3.resource("dynamodb").Table(table_name)
+
+
+def _store_connection(
+    *,
+    connection_id: str,
+    client_id: str,
+    client_token: str,
+    endpoint: str,
+) -> bool:
+    table = _get_connections_table()
+    if table is None:
+        return False
+    expires_at = int(time.time()) + _CONNECTION_TTL_SECONDS
+    table.put_item(
+        Item={
+            "connection_id": connection_id,
+            "client_id": client_id,
+            "client_token": client_token,
+            "endpoint": endpoint,
+            "expires_at": expires_at,
+        }
+    )
+    return True
+
+
+def _remove_connection(connection_id: str) -> None:
+    table = _get_connections_table()
+    if table is None:
+        return
+    table.delete_item(Key={"connection_id": connection_id})
+
+
+def _fetch_connection_by_client(client_id: UUID) -> Optional[SuggestionConnection]:
+    table = _get_connections_table()
+    if table is None:
+        return None
+    response = table.query(
+        IndexName="client_id-index",
+        KeyConditionExpression=Key("client_id").eq(str(client_id)),
+        Limit=1,
+    )
+    items = response.get("Items") or []
+    if not items:
+        return None
+    item = items[0]
+    connection_id = item.get("connection_id")
+    endpoint = item.get("endpoint")
+    client_token = item.get("client_token")
+    if not connection_id or not endpoint or not client_token:
+        return None
+    return SuggestionConnection(
+        connection_id=str(connection_id),
+        endpoint=str(endpoint),
+        client_token=str(client_token),
+    )
+
+
+def _post_to_connection(connection: SuggestionConnection, payload: dict[str, Any]) -> None:
+    client = boto3.client("apigatewaymanagementapi", endpoint_url=connection.endpoint)
+    try:
+        client.post_to_connection(
+            ConnectionId=connection.connection_id,
+            Data=json.dumps(payload).encode("utf-8"),
+        )
+    except ClientError as exc:  # pragma: no cover - environment dependent
+        code = exc.response.get("Error", {}).get("Code")
+        if code == "GoneException":
+            _remove_connection(connection.connection_id)
+            return
+        raise
+
+
+def _send_to_client(client_id: UUID, client_token: str, payload: dict[str, Any]) -> None:
+    connection = _fetch_connection_by_client(client_id)
+    if connection is None:
+        return
+    if connection.client_token != client_token:
+        return
+    _post_to_connection(connection, payload)
 
 
 def _safe_json_loads(text: str) -> Any:
@@ -330,4 +580,8 @@ def _signature(description: str) -> str:
 
 __all__ = [
     "suggest_import_categories",
+    "connect_import_suggestions",
+    "disconnect_import_suggestions",
+    "enqueue_import_category_suggestions",
+    "process_import_category_suggestions",
 ]
