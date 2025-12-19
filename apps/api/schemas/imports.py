@@ -64,6 +64,7 @@ class ImportRelatedTransactionRead(BaseModel):
     """Previously categorized transaction used as suggestion context."""
 
     id: UUID
+    account_id: UUID
     occurred_at: str
     description: str
     category_id: Optional[UUID] = None

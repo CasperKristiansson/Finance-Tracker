@@ -284,6 +284,7 @@ class ImportService:
             category = category_lookup_by_id.get(tx.category_id) if tx.category_id else None
             return {
                 "id": tx.id,
+                "account_id": account_id,
                 "occurred_at": tx.occurred_at.isoformat(),
                 "description": tx.description or "",
                 "category_id": tx.category_id,

@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  MoveRight,
   Sparkles,
   Trash2,
   UploadCloud,
@@ -20,7 +21,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -47,6 +50,7 @@ import type {
   AccountWithBalance,
   CategoryRead,
   ImportCommitRequest,
+  ImportPreviewResponse,
   ImportPreviewRequest,
   TaxEventType,
 } from "@/types/api";
@@ -60,6 +64,8 @@ type LocalFile = {
   filename: string;
   accountId: string | null;
 };
+
+type PreviewFile = ImportPreviewResponse["files"][number];
 
 const toBase64 = (file: File) =>
   new Promise<string>((resolve, reject) => {
@@ -167,6 +173,180 @@ const CategoryPicker: React.FC<CategoryPickerProps> = ({
   );
 };
 
+type TransferPickerProps = {
+  value: string | null | undefined;
+  currentAccountId: string;
+  accounts: AccountWithBalance[];
+  batchOptions: Array<{
+    key: string;
+    accountId: string;
+    description: string;
+    amount: string;
+    occurredAt?: string | null;
+    fileLabel?: string;
+  }>;
+  existingOptions: Array<{
+    key: string;
+    accountId: string;
+    description: string;
+    occurredAt?: string | null;
+    categoryName?: string | null;
+  }>;
+  onSelectAccount: (accountId: string | null) => void;
+  disabled?: boolean;
+};
+
+const TransferPicker: React.FC<TransferPickerProps> = ({
+  value,
+  currentAccountId,
+  accounts,
+  batchOptions,
+  existingOptions,
+  onSelectAccount,
+  disabled,
+}) => {
+  const target = value ? accounts.find((acc) => acc.id === value) : null;
+  const label = target ? target.name : "Mark as transfer";
+
+  const renderOptionMeta = (
+    description: string,
+    occurredAt?: string | null,
+    suffix?: string | null,
+  ) => (
+    <div className="flex min-w-0 flex-col">
+      <span className="truncate text-sm font-medium text-slate-800">
+        {description}
+      </span>
+      <span className="truncate text-[11px] text-slate-500">
+        {occurredAt ? `${occurredAt.slice(0, 10)} • ` : ""}
+        {suffix ?? ""}
+      </span>
+    </div>
+  );
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild disabled={disabled}>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-9 w-[240px] justify-start gap-2 px-2 text-sm font-normal"
+          disabled={disabled}
+        >
+          <MoveRight className="h-4 w-4 text-slate-500" />
+          <span className="truncate">
+            {target ? `Transfer to ${label}` : label}
+          </span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="max-h-[420px] w-[340px] overflow-auto"
+      >
+        <DropdownMenuLabel className="text-[11px] text-slate-500">
+          Transfer handling
+        </DropdownMenuLabel>
+        <DropdownMenuItem
+          onSelect={() => onSelectAccount(null)}
+          className="text-slate-700"
+        >
+          <div className="flex items-center gap-2">
+            <div className="flex h-4 w-4 items-center justify-center rounded bg-slate-100 text-[10px] font-bold text-slate-600">
+              ∅
+            </div>
+            <span>Not a transfer</span>
+          </div>
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-[11px] text-slate-500">
+          Link within this upload
+        </DropdownMenuLabel>
+        {batchOptions.length ? (
+          batchOptions.map((option) => {
+            const account = accounts.find((acc) => acc.id === option.accountId);
+            return (
+              <DropdownMenuItem
+                key={option.key}
+                onSelect={() => onSelectAccount(option.accountId)}
+                className="flex items-start gap-2 text-slate-800"
+              >
+                <div className="flex h-6 w-6 items-center justify-center rounded bg-slate-100 text-[10px] font-semibold text-slate-600">
+                  {account?.name?.slice(0, 2).toUpperCase() ?? "AC"}
+                </div>
+                {renderOptionMeta(
+                  option.description || "Transfer row",
+                  option.occurredAt,
+                  `${option.amount} ${option.fileLabel ? `• ${option.fileLabel}` : ""}`,
+                )}
+              </DropdownMenuItem>
+            );
+          })
+        ) : (
+          <DropdownMenuItem disabled className="text-slate-400">
+            No other rows in this upload
+          </DropdownMenuItem>
+        )}
+
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-[11px] text-slate-500">
+          Link with existing transaction
+        </DropdownMenuLabel>
+        {existingOptions.length ? (
+          existingOptions.map((option) => {
+            const account = accounts.find((acc) => acc.id === option.accountId);
+            return (
+              <DropdownMenuItem
+                key={option.key}
+                onSelect={() => onSelectAccount(option.accountId)}
+                className="flex items-start gap-2 text-slate-800"
+              >
+                <div className="flex h-6 w-6 items-center justify-center rounded bg-slate-100 text-[10px] font-semibold text-slate-600">
+                  {account?.name?.slice(0, 2).toUpperCase() ?? "AC"}
+                </div>
+                {renderOptionMeta(
+                  option.description || "Existing transaction",
+                  option.occurredAt,
+                  option.categoryName ?? "Uncategorized",
+                )}
+              </DropdownMenuItem>
+            );
+          })
+        ) : (
+          <DropdownMenuItem disabled className="text-slate-400">
+            No suggested matches in your history
+          </DropdownMenuItem>
+        )}
+
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-[11px] text-slate-500">
+          Create transfer event
+        </DropdownMenuLabel>
+        <DropdownMenuGroup>
+          {accounts
+            .filter((acc) => acc.id !== currentAccountId)
+            .map((acc) => (
+              <DropdownMenuItem
+                key={acc.id}
+                onSelect={() => onSelectAccount(acc.id)}
+                className="flex items-start gap-2 text-slate-800"
+              >
+                <div className="flex h-6 w-6 items-center justify-center rounded bg-slate-100 text-[10px] font-semibold text-slate-600">
+                  {acc.name.slice(0, 2).toUpperCase()}
+                </div>
+                {renderOptionMeta(
+                  acc.name,
+                  null,
+                  bankLabel(acc.bank_import_type),
+                )}
+              </DropdownMenuItem>
+            ))}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
 const commitRowSchema = z.object({
   id: z.string(),
   account_id: z.string(),
@@ -246,6 +426,7 @@ export const Imports: React.FC = () => {
         if (!row) return count;
         if (row.delete) return count;
         if (row.tax_event_type) return count;
+        if (row.transfer_account_id) return count;
         if (!row.category_id) return count + 1;
         return count;
       }, 0)
@@ -332,7 +513,11 @@ export const Imports: React.FC = () => {
       if (!suggestion?.category_id) return;
       const currentCategory = commitForm.getValues(`rows.${idx}.category_id`);
       const taxEvent = commitForm.getValues(`rows.${idx}.tax_event_type`);
+      const transferAccount = commitForm.getValues(
+        `rows.${idx}.transfer_account_id`,
+      );
       if (taxEvent) return;
+      if (transferAccount) return;
       const isDeleted = commitForm.getValues(`rows.${idx}.delete`);
       if (isDeleted) return;
       const categoryField = commitForm.getFieldState(
@@ -411,7 +596,12 @@ export const Imports: React.FC = () => {
   const contextTxById = useMemo(() => {
     const map = new Map<
       string,
-      { category_name?: string | null; description: string }
+      {
+        account_id?: string;
+        category_name?: string | null;
+        description: string;
+        occurred_at?: string;
+      }
     >();
     if (!preview) return map;
     preview.accounts?.forEach((ctx) => {
@@ -420,8 +610,10 @@ export const Imports: React.FC = () => {
         ...(ctx.similar_transactions ?? []),
       ].forEach((tx) => {
         map.set(tx.id, {
+          account_id: tx.account_id,
           category_name: tx.category_name,
           description: tx.description,
+          occurred_at: tx.occurred_at,
         });
       });
     });
@@ -436,6 +628,13 @@ export const Imports: React.FC = () => {
         map.set(match.row_id, match.transaction_ids ?? []);
       });
     });
+    return map;
+  }, [preview]);
+
+  const fileById = useMemo(() => {
+    const map = new Map<string, PreviewFile>();
+    if (!preview) return map;
+    preview.files.forEach((file) => map.set(file.id, file));
     return map;
   }, [preview]);
 
@@ -961,6 +1160,7 @@ export const Imports: React.FC = () => {
                               <TableHead>Date</TableHead>
                               <TableHead>Description</TableHead>
                               <TableHead>Amount</TableHead>
+                              <TableHead>Transfer</TableHead>
                               <TableHead>Category</TableHead>
                               <TableHead>Tax event</TableHead>
                             </TableRow>
@@ -978,6 +1178,31 @@ export const Imports: React.FC = () => {
                                 ? (categoriesById.get(suggestedCategoryId) ??
                                   null)
                                 : null;
+
+                              const transferAccountId =
+                                commitForm.watch(
+                                  `rows.${idx}.transfer_account_id`,
+                                ) ?? null;
+                              const transferTarget = transferAccountId
+                                ? (accountById.get(transferAccountId) ?? null)
+                                : null;
+                              const transferMatch = previewRow.transfer_match;
+                              const transferPairValue =
+                                transferMatch &&
+                                typeof transferMatch === "object" &&
+                                "paired_with" in transferMatch &&
+                                (typeof transferMatch.paired_with ===
+                                  "number" ||
+                                  typeof transferMatch.paired_with === "string")
+                                  ? String(transferMatch.paired_with)
+                                  : null;
+                              const transferReason =
+                                transferMatch &&
+                                typeof transferMatch === "object" &&
+                                "reason" in transferMatch &&
+                                typeof transferMatch.reason === "string"
+                                  ? transferMatch.reason
+                                  : null;
 
                               const rowSimilarIds =
                                 similarIdsByRowId.get(previewRow.id) ?? [];
@@ -1004,6 +1229,7 @@ export const Imports: React.FC = () => {
                               const isMissingCategory =
                                 !isDeleted &&
                                 !taxEventType &&
+                                !transferAccountId &&
                                 !currentCategoryId;
                               const suggestionApplied =
                                 Boolean(suggestedCategoryId) &&
@@ -1017,6 +1243,69 @@ export const Imports: React.FC = () => {
                                         : suggestion.confidence * 100,
                                     )
                                   : null;
+
+                              const batchTransferOptions = preview.rows
+                                .filter((row) => row.id !== previewRow.id)
+                                .map((row) => {
+                                  const fileMeta = fileById.get(row.file_id);
+                                  const fileLabel = fileMeta
+                                    ? fileMeta.filename
+                                    : undefined;
+                                  return {
+                                    key: row.id,
+                                    accountId: row.account_id,
+                                    description: row.description,
+                                    amount: row.amount,
+                                    occurredAt: row.occurred_at,
+                                    fileLabel,
+                                  };
+                                });
+
+                              const existingTransferOptions = rowSimilarIds
+                                .map((txId) => {
+                                  const tx = contextTxById.get(txId);
+                                  if (!tx || !tx.account_id) return null;
+                                  return {
+                                    key: txId,
+                                    accountId: tx.account_id,
+                                    description: tx.description,
+                                    occurredAt: tx.occurred_at,
+                                    categoryName: tx.category_name,
+                                  };
+                                })
+                                .filter(
+                                  (
+                                    option,
+                                  ): option is NonNullable<typeof option> =>
+                                    Boolean(option),
+                                );
+
+                              const setTransferAccount = (
+                                accountId: string | null,
+                              ) => {
+                                commitForm.setValue(
+                                  `rows.${idx}.transfer_account_id`,
+                                  accountId,
+                                  { shouldDirty: true },
+                                );
+                                if (accountId) {
+                                  commitForm.setValue(
+                                    `rows.${idx}.tax_event_type`,
+                                    null,
+                                    { shouldDirty: true },
+                                  );
+                                  commitForm.setValue(
+                                    `rows.${idx}.category_id`,
+                                    null,
+                                    { shouldDirty: true },
+                                  );
+                                  commitForm.setValue(
+                                    `rows.${idx}.subscription_id`,
+                                    null,
+                                    { shouldDirty: true },
+                                  );
+                                }
+                              };
 
                               return (
                                 <TableRow
@@ -1108,10 +1397,48 @@ export const Imports: React.FC = () => {
                                   </TableCell>
                                   <TableCell>
                                     <div className="space-y-1">
+                                      <TransferPicker
+                                        value={transferAccountId}
+                                        currentAccountId={
+                                          commitRows[idx].account_id
+                                        }
+                                        accounts={accounts}
+                                        batchOptions={batchTransferOptions}
+                                        existingOptions={
+                                          existingTransferOptions ?? []
+                                        }
+                                        onSelectAccount={setTransferAccount}
+                                        disabled={
+                                          isDeleted || Boolean(taxEventType)
+                                        }
+                                      />
+                                      {transferPairValue ? (
+                                        <p className="text-[11px] text-slate-500">
+                                          Suggested pair: row{" "}
+                                          {transferPairValue} •{" "}
+                                          {transferReason ??
+                                            "Possible transfer"}
+                                        </p>
+                                      ) : null}
+                                      {transferTarget ? (
+                                        <p className="text-[11px] text-slate-500">
+                                          Will create transfer between{" "}
+                                          {account?.name ?? "account"} and{" "}
+                                          {transferTarget.name}.
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="space-y-1">
                                       <CategoryPicker
                                         value={currentCategoryId}
                                         categories={categories}
-                                        disabled={Boolean(taxEventType)}
+                                        disabled={Boolean(
+                                          taxEventType ||
+                                            transferAccountId ||
+                                            isDeleted,
+                                        )}
                                         missing={isMissingCategory}
                                         suggesting={
                                           suggesting &&
@@ -1179,15 +1506,26 @@ export const Imports: React.FC = () => {
                                     <input
                                       type="checkbox"
                                       checked={Boolean(taxEventType)}
-                                      onChange={(e) =>
+                                      disabled={Boolean(
+                                        transferAccountId || isDeleted,
+                                      )}
+                                      onChange={(e) => {
+                                        const nextValue = e.target.checked
+                                          ? inferTaxEventType(amountValue)
+                                          : null;
                                         commitForm.setValue(
                                           `rows.${idx}.tax_event_type`,
-                                          e.target.checked
-                                            ? inferTaxEventType(amountValue)
-                                            : null,
+                                          nextValue,
                                           { shouldDirty: true },
-                                        )
-                                      }
+                                        );
+                                        if (e.target.checked) {
+                                          commitForm.setValue(
+                                            `rows.${idx}.transfer_account_id`,
+                                            null,
+                                            { shouldDirty: true },
+                                          );
+                                        }
+                                      }}
                                       aria-label="Tax event"
                                     />
                                   </TableCell>
