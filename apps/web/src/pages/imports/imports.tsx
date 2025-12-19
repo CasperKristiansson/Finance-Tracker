@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { useAppSelector } from "@/app/hooks";
 import { MotionPage } from "@/components/motion-presets";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -23,6 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import {
   Table,
@@ -46,12 +48,11 @@ import type {
   CategoryRead,
   ImportCommitRequest,
   ImportPreviewRequest,
-  ImportPreviewResponse,
   TaxEventType,
 } from "@/types/api";
 import { TaxEventType as TaxEventTypeEnum } from "@/types/api";
 
-type StepKey = 1 | 2 | 3 | 4 | 5;
+type StepKey = 1 | 2 | 3 | 4;
 
 type LocalFile = {
   id: string;
@@ -82,6 +83,11 @@ const toOccurredAt = (
   const prev = String(previous ?? "");
   const time = prev.includes("T") ? prev.slice(prev.indexOf("T")) : "T00:00:00";
   return `${dateValue}${time.startsWith("T") ? time : "T00:00:00"}`;
+};
+
+const inferTaxEventType = (amount: string | null | undefined): TaxEventType => {
+  const numeric = Number(amount ?? "");
+  return numeric > 0 ? TaxEventTypeEnum.REFUND : TaxEventTypeEnum.PAYMENT;
 };
 
 type CategoryPickerProps = {
@@ -169,12 +175,7 @@ const steps: Array<{ key: StepKey; label: string; description: string }> = [
   { key: 1, label: "Upload", description: "Choose one or more XLSX files." },
   { key: 2, label: "Map accounts", description: "Pick an account per file." },
   { key: 3, label: "Parse", description: "Parse files and get suggestions." },
-  { key: 4, label: "Audit", description: "Review and adjust rows." },
-  {
-    key: 5,
-    label: "Submit",
-    description: "Create transactions in the ledger.",
-  },
+  { key: 4, label: "Audit", description: "Review, adjust, and submit rows." },
 ];
 
 const bankLabel = (
@@ -352,6 +353,14 @@ export const Imports: React.FC = () => {
     () => files.length > 0 && files.every((f) => Boolean(f.accountId)),
     [files],
   );
+  const unmappedCount = useMemo(
+    () => files.filter((f) => !f.accountId).length,
+    [files],
+  );
+  const mappedCount = files.length - unmappedCount;
+  const mappedProgress = files.length
+    ? Math.round((mappedCount / files.length) * 100)
+    : 0;
 
   const previewHasErrors = useMemo(() => {
     if (!preview) return false;
@@ -359,13 +368,6 @@ export const Imports: React.FC = () => {
   }, [preview]);
 
   const canProceedToAudit = Boolean(preview) && !previewHasErrors;
-
-  const previewRowById = useMemo(() => {
-    const map = new Map<string, ImportPreviewResponse["rows"][number]>();
-    if (!preview) return map;
-    preview.rows.forEach((row) => map.set(row.id, row));
-    return map;
-  }, [preview]);
 
   const categoriesById = useMemo(() => {
     const map = new Map<string, CategoryRead>();
@@ -447,10 +449,6 @@ export const Imports: React.FC = () => {
       setStep(4);
       return;
     }
-    if (step === 4) {
-      setStep(5);
-      return;
-    }
   };
 
   const goBack = () => {
@@ -466,10 +464,6 @@ export const Imports: React.FC = () => {
     }
     if (step === 4) {
       setStep(3);
-      return;
-    }
-    if (step === 5) {
-      setStep(4);
       return;
     }
   };
@@ -531,7 +525,7 @@ export const Imports: React.FC = () => {
   });
 
   const stepper = (
-    <div className="grid gap-3 md:grid-cols-5">
+    <div className="grid gap-3 md:grid-cols-4">
       {steps.map((s) => {
         const active = s.key === step;
         const done = s.key < step;
@@ -664,63 +658,138 @@ export const Imports: React.FC = () => {
 
           {step === 2 ? (
             <>
-              <p className="text-sm text-slate-600">
-                Select the account for each file. The account&apos;s statement
-                format determines how the file is parsed.
-              </p>
-              <div className="space-y-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      Map each file to an account
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      The selected account&apos;s statement format is used to
+                      parse each file.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+                    <Badge
+                      variant="secondary"
+                      className="border border-slate-200 bg-white text-slate-700"
+                    >
+                      {mappedCount}/{files.length} mapped
+                    </Badge>
+                    {unmappedCount ? (
+                      <Badge className="bg-amber-100 text-amber-700">
+                        {unmappedCount} left
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-emerald-100 text-emerald-700">
+                        All mapped
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <Progress
+                  className="mt-3"
+                  value={mappedProgress}
+                  indicatorClassName={
+                    unmappedCount ? "bg-amber-500" : "bg-emerald-500"
+                  }
+                />
+              </div>
+
+              <div className="space-y-3">
                 {files.map((f) => {
                   const account = f.accountId
                     ? accountById.get(f.accountId)
                     : undefined;
                   const bankType = account?.bank_import_type ?? null;
+                  const isMapped = Boolean(account);
+                  const statementLabel = account
+                    ? bankLabel(bankType)
+                    : "Select account to see format";
                   return (
                     <div
                       key={f.id}
-                      className="grid grid-cols-[1.3fr,1fr,auto] items-center gap-3 rounded border border-slate-200 bg-white px-3 py-2"
+                      className={cn(
+                        "rounded-xl border p-4 transition",
+                        isMapped
+                          ? "border-slate-200 bg-white"
+                          : "border-amber-200 bg-amber-50",
+                      )}
                     >
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-slate-800">
-                          {f.filename}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          Statement format:{" "}
-                          <span className="font-semibold text-slate-700">
-                            {bankLabel(bankType)}
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+                            File
+                          </p>
+                          <p className="truncate text-sm font-semibold text-slate-900">
+                            {f.filename}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {(f.file.size / 1024).toFixed(1)} KB
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={cn(
+                              "rounded-full px-2.5 py-1 text-xs font-semibold",
+                              isMapped
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-amber-100 text-amber-700",
+                            )}
+                          >
+                            {isMapped ? "Mapped" : "Needs account"}
                           </span>
-                        </p>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="text-slate-500"
+                            onClick={() => removeFile(f.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <select
-                        className="w-full rounded border border-slate-200 px-2 py-2 text-sm"
-                        value={f.accountId ?? ""}
-                        onChange={(e) =>
-                          updateFileAccount(f.id, e.target.value || null)
-                        }
-                      >
-                        <option value="">Select account</option>
-                        {accounts.map((acc) => (
-                          <option key={acc.id} value={acc.id}>
-                            {acc.name} ({bankLabel(acc.bank_import_type)})
-                          </option>
-                        ))}
-                      </select>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="text-slate-500"
-                        onClick={() => removeFile(f.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+
+                      <div className="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr),220px] md:items-center">
+                        <div>
+                          <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+                            Account
+                          </p>
+                          <select
+                            className="mt-1 w-full rounded border border-slate-200 bg-white px-3 py-2 text-sm"
+                            value={f.accountId ?? ""}
+                            onChange={(e) =>
+                              updateFileAccount(f.id, e.target.value || null)
+                            }
+                          >
+                            <option value="">Select account</option>
+                            {accounts.map((acc) => (
+                              <option key={acc.id} value={acc.id}>
+                                {acc.name} ({bankLabel(acc.bank_import_type)})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div
+                          className={cn(
+                            "rounded-lg border px-3 py-2 text-xs",
+                            isMapped
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-slate-200 bg-white text-slate-600",
+                          )}
+                        >
+                          <div className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
+                            Statement format
+                          </div>
+                          <div className="text-sm font-semibold text-slate-800">
+                            {statementLabel}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
               </div>
-              {!mappedFilesReady ? (
-                <p className="text-xs text-rose-600">
-                  Assign an account to every file to continue.
-                </p>
-              ) : null}
             </>
           ) : null}
 
@@ -809,29 +878,6 @@ export const Imports: React.FC = () => {
                     </p>
                   ) : null}
                 </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={!commitRows.length}
-                  onClick={() => {
-                    commitRows.forEach((row, idx) => {
-                      const previewRow = previewRowById.get(row.id) ?? null;
-                      const nextCategory =
-                        suggestions[row.id]?.category_id ??
-                        previewRow?.suggested_category_id ??
-                        null;
-                      if (!nextCategory) return;
-                      commitForm.setValue(
-                        `rows.${idx}.category_id`,
-                        nextCategory,
-                        { shouldDirty: true },
-                      );
-                    });
-                    toast.success("Applied suggested categories");
-                  }}
-                >
-                  Apply suggested categories
-                </Button>
               </div>
 
               <Tabs
@@ -909,10 +955,16 @@ export const Imports: React.FC = () => {
                               const occurredAt =
                                 commitForm.watch(`rows.${idx}.occurred_at`) ??
                                 "";
+                              const amountValue =
+                                commitForm.watch(`rows.${idx}.amount`) ?? "";
 
                               const currentCategoryId =
                                 commitForm.watch(`rows.${idx}.category_id`) ??
                                 null;
+                              const taxEventType =
+                                commitForm.watch(
+                                  `rows.${idx}.tax_event_type`,
+                                ) ?? null;
                               const suggestionApplied =
                                 Boolean(suggestedCategoryId) &&
                                 currentCategoryId === suggestedCategoryId;
@@ -991,18 +1043,24 @@ export const Imports: React.FC = () => {
                                   <TableCell>
                                     <input
                                       className="w-[120px] rounded border border-slate-200 bg-white px-2 py-1 text-sm"
-                                      value={
-                                        commitForm.watch(
-                                          `rows.${idx}.amount`,
-                                        ) ?? ""
-                                      }
-                                      onChange={(e) =>
+                                      value={amountValue}
+                                      onChange={(e) => {
+                                        const nextAmount = e.target.value;
                                         commitForm.setValue(
                                           `rows.${idx}.amount`,
-                                          e.target.value,
+                                          nextAmount,
                                           { shouldDirty: true },
-                                        )
-                                      }
+                                        );
+                                        if (!taxEventType) return;
+                                        const nextType =
+                                          inferTaxEventType(nextAmount);
+                                        if (nextType === taxEventType) return;
+                                        commitForm.setValue(
+                                          `rows.${idx}.tax_event_type`,
+                                          nextType,
+                                          { shouldDirty: true },
+                                        );
+                                      }}
                                     />
                                   </TableCell>
                                   <TableCell>
@@ -1010,11 +1068,7 @@ export const Imports: React.FC = () => {
                                       <CategoryPicker
                                         value={currentCategoryId}
                                         categories={categories}
-                                        disabled={Boolean(
-                                          commitForm.watch(
-                                            `rows.${idx}.tax_event_type`,
-                                          ),
-                                        )}
+                                        disabled={Boolean(taxEventType)}
                                         suggesting={
                                           suggesting &&
                                           !suggestion &&
@@ -1078,26 +1132,20 @@ export const Imports: React.FC = () => {
                                     </div>
                                   </TableCell>
                                   <TableCell>
-                                    <select
-                                      className="w-[160px] rounded border border-slate-200 bg-white px-2 py-1 text-sm"
-                                      value={
-                                        commitForm.watch(
-                                          `rows.${idx}.tax_event_type`,
-                                        ) ?? ""
-                                      }
+                                    <input
+                                      type="checkbox"
+                                      checked={Boolean(taxEventType)}
                                       onChange={(e) =>
                                         commitForm.setValue(
                                           `rows.${idx}.tax_event_type`,
-                                          (e.target.value ||
-                                            null) as TaxEventType | null,
+                                          e.target.checked
+                                            ? inferTaxEventType(amountValue)
+                                            : null,
                                           { shouldDirty: true },
                                         )
                                       }
-                                    >
-                                      <option value="">None</option>
-                                      <option value="payment">Payment</option>
-                                      <option value="refund">Refund</option>
-                                    </select>
+                                      aria-label="Tax event"
+                                    />
                                   </TableCell>
                                 </TableRow>
                               );
@@ -1110,30 +1158,6 @@ export const Imports: React.FC = () => {
                 })}
               </Tabs>
             </>
-          ) : null}
-
-          {step === 5 ? (
-            <div className="space-y-3">
-              <p className="text-sm text-slate-600">
-                This will create transactions in the ledger. If any row fails
-                validation, nothing will be saved.
-              </p>
-              <Button
-                className="gap-2"
-                disabled={!preview || saving || previewHasErrors}
-                onClick={() => void submit()}
-              >
-                {saving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Check className="h-4 w-4" />
-                )}
-                Submit transactions
-              </Button>
-              <p className="text-xs text-slate-500">
-                Tip: go back to adjust rows before submitting.
-              </p>
-            </div>
           ) : null}
 
           <Separator />
@@ -1158,13 +1182,18 @@ export const Imports: React.FC = () => {
                 </Button>
               ) : step === 4 ? (
                 <Button
-                  onClick={goNext}
+                  className="gap-2"
+                  onClick={() => void submit()}
                   disabled={loading || saving || previewHasErrors}
                 >
-                  Review submit
-                  <ChevronRight className="ml-2 h-4 w-4" />
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  Submit
                 </Button>
-              ) : step < 5 ? (
+              ) : step < 4 ? (
                 <Button
                   onClick={goNext}
                   disabled={
@@ -1177,20 +1206,7 @@ export const Imports: React.FC = () => {
                   Next
                   <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
-              ) : (
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    resetImports();
-                    setFiles([]);
-                    commitForm.reset({ rows: [] });
-                    setSuggestionsRequested(false);
-                    setStep(1);
-                  }}
-                >
-                  Start over
-                </Button>
-              )}
+              ) : null}
             </div>
           </div>
         </CardContent>
