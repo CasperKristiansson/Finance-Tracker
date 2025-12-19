@@ -3,6 +3,7 @@ import { ResponsiveContainer, Sankey } from "recharts";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { currency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 export type SankeyCategoryItem = {
@@ -54,11 +55,7 @@ type SankeyLinkRendererProps = {
 const formatCurrency = (value: unknown) => {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return "—";
-  return numeric.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: 0,
-  });
+  return currency(numeric);
 };
 
 const clampPositive = (value: number) =>

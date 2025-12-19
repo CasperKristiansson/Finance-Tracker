@@ -2,7 +2,7 @@ import { useMemo } from "react";
 
 import type { TotalOverviewResponse } from "@/types/api";
 
-import { monthLabel } from "../reports-utils";
+import { formatDate, monthLabel } from "../reports-utils";
 
 type TotalWindowPreset = "all" | "10" | "5" | "3";
 type TotalWindowRange = { start: string; end: string } | null;
@@ -196,7 +196,7 @@ export const useTotalAnalysis = ({
     if (!totalOverview) return [];
     return totalOverview.net_worth_series.map((row) => ({
       date: row.date,
-      label: new Date(row.date).toLocaleDateString("sv-SE", {
+      label: formatDate(row.date, {
         month: "short",
         year: "2-digit",
       }),

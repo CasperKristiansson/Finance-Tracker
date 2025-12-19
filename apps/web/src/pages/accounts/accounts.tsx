@@ -38,18 +38,14 @@ import { PageRoutes } from "@/data/routes";
 import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useInvestmentsApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
+import { currency } from "@/lib/format";
 import { AccountType, type YearlyOverviewResponse } from "@/types/api";
 import { yearlyOverviewSchema } from "@/types/schemas";
 import { AccountModal } from "./children/account-modal";
 
 type SortKey = "name" | "type" | "status" | "balance";
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: 0,
-  }).format(value);
+const formatCurrency = (value: number) => currency(value);
 
 const formatAccountType = (type: AccountType) => {
   switch (type) {
