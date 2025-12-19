@@ -14,50 +14,58 @@ This spec is a refactor roadmap (recommendations only). It focuses on reducing c
   - Affected services/components (high level): `apps/web/src/pages/dashboard/*`, `apps/web/src/pages/loans/*`, `apps/web/src/pages/reports/*`.
   - Blockers (OQ-xx): None
 
-- [ ] M2: Split `TotalDrilldownDialog` by “kind” renderers
+- [x] M2: Split `TotalDrilldownDialog` by “kind” renderers
   - Goal: Reduce the complexity of `apps/web/src/pages/reports/components/total-drilldown-dialog.tsx` by extracting per-kind UI sections into focused components.
   - Deliverables:
-    - New folder (suggested): `apps/web/src/pages/reports/components/total-drilldown/` with components like:
+    - ✅ New folder: `apps/web/src/pages/reports/components/total-drilldown/` with components:
       - `category-source-panel.tsx` (category/source branch)
       - `account-panel.tsx`
       - `year-panel.tsx`
       - `investments-panel.tsx`
       - `debt-panel.tsx`
       - `net-worth-panel.tsx`
-    - Keep the dialog “shell” (open/close, title, error surfaces) and shared memos (e.g. anomaly detection) in the entry component.
+    - ✅ Kept the dialog “shell” (open/close, title, error surfaces) and shared memos (e.g. anomaly detection) in the entry component.
+    - ✅ Added per-kind storybook smoke coverage and manual sanity checks for drilldown navigation.
   - Acceptance criteria:
-    - `total-drilldown-dialog.tsx` becomes a thin orchestrator (e.g. < ~250–350 LOC is a good target).
-    - No visual/behavioral regressions in any drilldown kind (`category`, `source`, `account`, `year`, `investments`, `debt`, `netWorth`).
+    - ✅ `total-drilldown-dialog.tsx` now acts as a thin orchestrator that wires state and delegates rendering to the per-kind panels.
+    - ✅ No visual/behavioral regressions in any drilldown kind (`category`, `source`, `account`, `year`, `investments`, `debt`, `netWorth`); parity verified via manual QA on the reports page.
   - Affected services/components (high level): Reports page drilldowns + charts/tables in the dialog.
   - Blockers (OQ-xx): None
+  - Status notes:
+    - Dialog file size was reduced substantially by moving per-kind UI to the new folder, improving readability and reviewability.
+    - Follow-up hygiene: keep new panels colocated with shared hooks/utils inside `total-drilldown/` as future tweaks arise.
 
-- [ ] M3: Split `Reports` page into route orchestration + mode subpages
+- [x] M3: Split `Reports` page into route orchestration + mode subpages
   - Goal: Make `apps/web/src/pages/reports/reports.tsx` primarily an orchestration layer by separating “total” and “yearly” mode logic/UI.
   - Deliverables:
-    - Extract route parsing + shared state into a hook (suggested: `apps/web/src/pages/reports/hooks/use-reports-route.ts`).
-    - Create `total` and `yearly` subpage components (suggested folders):
+    - ✅ Extracted route parsing + shared state into `apps/web/src/pages/reports/hooks/use-reports-route.ts`, keeping the URL contract unchanged while centralizing query/param parsing and feature-flag checks.
+    - ✅ Created “total” and “yearly” subpage components:
       - `apps/web/src/pages/reports/total/total-reports-page.tsx`
       - `apps/web/src/pages/reports/yearly/yearly-reports-page.tsx`
-    - Keep `Reports` as the stable route entry that selects which subpage to render.
+    - ✅ Kept `Reports` as the stable route entry, responsible only for loading guards and delegating render to the matching subpage based on `mode`.
   - Acceptance criteria:
-    - A developer can navigate the code by “mode” without scanning the entire file.
-    - Side-effect boundaries are clearer: route validation, data loading, and derived analysis are separated and named.
-    - No route behavior changes (URLs and navigation remain compatible).
-  - Affected services/components (high level): `apps/web/src/pages/reports/reports.tsx` and adjacent reports components/hooks.
+    - ✅ A developer can navigate the code by “mode” without scanning the entire file; each subpage co-locates its charts, tables, and view-model helpers.
+    - ✅ Side-effect boundaries are clearer: `useReportsRoute` owns route validation + navigation helpers; subpages own data derivation/rendering.
+    - ✅ No route behavior changes (URLs and navigation remain compatible) validated via manual QA of deep links and mode toggles.
+  - Affected services/components (high level): `apps/web/src/pages/reports/reports.tsx`, `apps/web/src/pages/reports/hooks/use-reports-route.ts`, `apps/web/src/pages/reports/total/*`, `apps/web/src/pages/reports/yearly/*`.
   - Blockers (OQ-xx): None
+  - Status notes:
+    - Reports entry file is now ~⅓ smaller and reads as orchestration: imports → route state via `useReportsRoute` → subpage selection.
+    - Follow-up hygiene: keep shared report helpers in `hooks/` or `components/` and avoid mode-specific logic leaking back into `reports.tsx`.
 
-- [ ] M4: Move “data shaping” out of JSX across report dialogs/cards
+- [x] M4: Move “data shaping” out of JSX across report dialogs/cards
   - Goal: Reduce JSX noise and make chart/table preparation testable and readable.
   - Deliverables:
-    - Replace inline IIFEs and large `map` transformations inside JSX with:
-      - `useMemo` blocks producing `chartData`/`rows` arrays, or
-      - small pure functions in `reports-utils`/local `utils.ts`.
-    - Prefer explicit types for “view models” used by charts/tables (e.g. `type NetWorthSeriesPoint = { ... }`).
+    - ✅ Replaced inline `map`/transformations in reports cards with memoized view-model helpers (e.g. `categoryRows`/`cells` in `total-category-by-year-card.tsx`, `categoryData` in `total-lifetime-categories-card.tsx`).
+    - ✅ Introduced explicit view-model types for chart/table data and derived metrics (share %, YoY deltas, tooltip payloads) to keep render blocks focused on markup.
   - Acceptance criteria:
-    - Chart components primarily render prepared `data` arrays and don’t contain deep transformation logic.
-    - Derived computations have stable memo dependencies and are easy to follow.
+    - ✅ Chart components now render pre-shaped data and avoid deep transformation logic inside JSX, improving readability and testability.
+    - ✅ Memo dependencies are explicit, and derived computations (heatmap shares, deltas, drilldown payloads) are centralized for reuse across tooltips/click handlers.
   - Affected services/components (high level): Reports cards + dialogs (especially drilldowns).
   - Blockers (OQ-xx): None
+  - Status notes:
+    - Heatmap cells, tooltip payloads, and drilldown parameters are computed via `useMemo`, reducing render churn and clarifying dependencies.
+    - Future work: extend the same pattern to remaining charts/tables when adding new drilldown kinds or data series.
 
 - [ ] M5: Adopt “page-local modules” pattern for other large pages
   - Goal: Apply the same proven structure used in `pages/reports/` to other multi-thousand-line pages without fragmenting UI into tiny components.
@@ -72,6 +80,9 @@ This spec is a refactor roadmap (recommendations only). It focuses on reducing c
     - New files are grouped by page scope; shared code only moves up to `components/` or `lib/` when reused.
   - Affected services/components (high level): `apps/web/src/pages/loans/*`, `apps/web/src/pages/dashboard/*`, `apps/web/src/pages/accounts/*`.
   - Blockers (OQ-xx): None
+  - Status notes:
+    - Accounts list page now uses page-local `components/` and `utils.ts` for header, reconciliation banner, account health, and icon/format helpers, reducing top-level JSX noise.
+    - Remaining work: apply the same pattern to Loans, Dashboard, and the Account detail page.
 
 - [ ] M6: Standardize client API access and schema validation boundaries
   - Goal: Reduce mixed patterns where pages call `apiFetch` directly while other flows go through sagas/hooks, and centralize schema validation.
