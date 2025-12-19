@@ -1,8 +1,9 @@
 export const PageRoutes = {
+  landing: "/",
   cover: "/cover",
   login: "/login",
   notFound: "*",
-  home: "/",
+  home: "/dashboard",
   accounts: "/accounts",
   accountDetails: "/accounts/:accountId",
   categories: "/categories",

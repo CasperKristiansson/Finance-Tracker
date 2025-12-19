@@ -25,6 +25,7 @@ import { Dashboard } from "./pages/dashboard/dashboard.tsx";
 import { Goals } from "./pages/goals/goals.tsx";
 import { Imports } from "./pages/imports/imports.tsx";
 import { Investments } from "./pages/investments/investments.tsx";
+import { Landing } from "./pages/landing/landing.tsx";
 import { Loans } from "./pages/loans/loans.tsx";
 import { Login } from "./pages/login/login.tsx";
 import { Navigation } from "./pages/navigation/navigation.tsx";
@@ -111,6 +112,7 @@ export const App: React.FC = () => {
     <>
       <Redirect />
       <Routes>
+        <Route path={PageRoutes.landing} element={<Landing />} />
         <Route path={PageRoutes.login} element={<Login />} />
         <Route path={PageRoutes.cover} element={<Cover />} />
         <Route path={PageRoutes.notFound} element={<NotFound />} />
