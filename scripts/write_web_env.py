@@ -133,6 +133,7 @@ def write_env_file(
 ) -> None:
     existing = _parse_existing_env(env_path)
     api_base = existing.get("VITE_API_BASE_URL", "")
+    ws_api_base = existing.get("VITE_WS_API_BASE_URL", "")
     fallback_signin = oauth_settings.get("callback_urls", [""])[0]
     fallback_signout = oauth_settings.get("logout_urls", [""])[0]
     redirect_signin = redirect_signin or fallback_signin
@@ -148,6 +149,7 @@ def write_env_file(
         f"VITE_OAUTH_REDIRECT_SIGNIN={redirect_signin}\n"
         f"VITE_OAUTH_REDIRECT_SIGNOUT={redirect_signout}\n"
         f"VITE_API_BASE_URL={api_base}\n"
+        f"VITE_WS_API_BASE_URL={ws_api_base}\n"
     )
     env_path.write_text(content, encoding="utf-8")
 

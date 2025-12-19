@@ -41,10 +41,8 @@ provider:
             - dynamodb:DeleteItem
             - dynamodb:Query
           Resource:
-            - Fn::GetAtt:
-                - ImportSuggestionsConnectionsTable
-                - Arn
-            - Fn::Sub: "${ImportSuggestionsConnectionsTable.Arn}/index/client_id-index"
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${ssm:/finance-tracker/${self:provider.stage}/imports/suggestions/connections_table}
+            - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${ssm:/finance-tracker/${self:provider.stage}/imports/suggestions/connections_table}/index/client_id-index
         - Effect: Allow
           Action:
             - sqs:SendMessage
@@ -52,22 +50,14 @@ provider:
             - sqs:DeleteMessage
             - sqs:GetQueueAttributes
           Resource:
-            - Fn::GetAtt:
-                - ImportSuggestionsQueue
-                - Arn
+            - ${ssm:/finance-tracker/${self:provider.stage}/imports/suggestions/queue_arn}
         - Effect: Allow
           Action:
             - execute-api:ManageConnections
           Resource:
             - Fn::Sub: "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebsocketsApi}/*"
-  domain:
-    name: api.finance-tracker.casperkristiansson.com
-    apiType: HTTP
-    endpointType: regional
-    certificateArn: ${aws:ssm:/finance-tracker/${self:provider.stage}/api/custom_domain/certificate_arn}
-    createRoute53Record: true
-    createRoute53IPv6Record: true
   httpApi:
+    name: ${self:service}-${self:provider.stage}-http
     cors: true
     authorizers:
       cognitoJwt:
@@ -197,8 +187,7 @@ functions:
     layers:
       - ${self:custom.backendLayerArn}
     environment:
-      IMPORT_SUGGESTIONS_CONNECTIONS_TABLE:
-        Ref: ImportSuggestionsConnectionsTable
+      IMPORT_SUGGESTIONS_CONNECTIONS_TABLE: ${ssm:/finance-tracker/${self:provider.stage}/imports/suggestions/connections_table}
     events:
       - websocket:
           route: $connect
@@ -211,8 +200,7 @@ functions:
     layers:
       - ${self:custom.backendLayerArn}
     environment:
-      IMPORT_SUGGESTIONS_CONNECTIONS_TABLE:
-        Ref: ImportSuggestionsConnectionsTable
+      IMPORT_SUGGESTIONS_CONNECTIONS_TABLE: ${ssm:/finance-tracker/${self:provider.stage}/imports/suggestions/connections_table}
     events:
       - websocket:
           route: $disconnect
@@ -225,10 +213,8 @@ functions:
     layers:
       - ${self:custom.backendLayerArn}
     environment:
-      IMPORT_SUGGESTIONS_CONNECTIONS_TABLE:
-        Ref: ImportSuggestionsConnectionsTable
-      IMPORT_SUGGESTIONS_QUEUE_URL:
-        Ref: ImportSuggestionsQueue
+      IMPORT_SUGGESTIONS_CONNECTIONS_TABLE: ${ssm:/finance-tracker/${self:provider.stage}/imports/suggestions/connections_table}
+      IMPORT_SUGGESTIONS_QUEUE_URL: ${ssm:/finance-tracker/${self:provider.stage}/imports/suggestions/queue_url}
     events:
       - httpApi:
           path: /imports/suggest-categories/jobs
@@ -243,16 +229,11 @@ functions:
     layers:
       - ${self:custom.backendLayerArn}
     environment:
-      IMPORT_SUGGESTIONS_CONNECTIONS_TABLE:
-        Ref: ImportSuggestionsConnectionsTable
-      IMPORT_SUGGESTIONS_QUEUE_URL:
-        Ref: ImportSuggestionsQueue
+      IMPORT_SUGGESTIONS_CONNECTIONS_TABLE: ${ssm:/finance-tracker/${self:provider.stage}/imports/suggestions/connections_table}
+      IMPORT_SUGGESTIONS_QUEUE_URL: ${ssm:/finance-tracker/${self:provider.stage}/imports/suggestions/queue_url}
     events:
       - sqs:
-          arn:
-            Fn::GetAtt:
-              - ImportSuggestionsQueue
-              - Arn
+          arn: ${ssm:/finance-tracker/${self:provider.stage}/imports/suggestions/queue_arn}
           batchSize: 1
 
   getSettings:
@@ -854,34 +835,3 @@ functions:
           path: /investments/sync-ledger
           method: POST
           authorizer: cognitoJwt
-
-resources:
-  Resources:
-    ImportSuggestionsConnectionsTable:
-      Type: AWS::DynamoDB::Table
-      Properties:
-        TableName: ${self:service}-${self:provider.stage}-import-suggestions-connections
-        BillingMode: PAY_PER_REQUEST
-        AttributeDefinitions:
-          - AttributeName: connection_id
-            AttributeType: S
-          - AttributeName: client_id
-            AttributeType: S
-        KeySchema:
-          - AttributeName: connection_id
-            KeyType: HASH
-        GlobalSecondaryIndexes:
-          - IndexName: client_id-index
-            KeySchema:
-              - AttributeName: client_id
-                KeyType: HASH
-            Projection:
-              ProjectionType: ALL
-        TimeToLiveSpecification:
-          AttributeName: expires_at
-          Enabled: true
-    ImportSuggestionsQueue:
-      Type: AWS::SQS::Queue
-      Properties:
-        QueueName: ${self:service}-${self:provider.stage}-import-suggestions
-        VisibilityTimeout: 180
