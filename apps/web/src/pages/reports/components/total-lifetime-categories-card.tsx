@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   Bar,
   BarChart,
@@ -10,11 +10,12 @@ import {
   YAxis,
 } from "recharts";
 
+import { EmptyState } from "@/components/composed/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import type { TotalDrilldownState } from "../reports-types";
-import { currency, isRecord } from "../reports-utils";
+import { currency } from "../reports-utils";
 
 export const TotalLifetimeCategoriesCard: React.FC<{
   flow: "income" | "expense";
@@ -34,6 +35,47 @@ export const TotalLifetimeCategoriesCard: React.FC<{
       : "Expense categories (lifetime)";
   const fallbackColor = flow === "income" ? "#10b981" : "#ef4444";
 
+  type LifetimeCategoryDatum = {
+    id: string | null;
+    name: string;
+    total: number;
+    color: string;
+    txCount: number;
+  };
+
+  const categoryData = useMemo<LifetimeCategoryDatum[]>(
+    () =>
+      rows.map((row) => ({
+        ...row,
+        color: row.color || fallbackColor,
+      })),
+    [fallbackColor, rows],
+  );
+
+  type LifetimeCategoryWithId = LifetimeCategoryDatum & { id: string };
+
+  const categoryById = useMemo(
+    () =>
+      new Map<string, LifetimeCategoryWithId>(
+        categoryData
+          .filter((row): row is LifetimeCategoryWithId => Boolean(row.id))
+          .map((row) => [row.id, { ...row, id: row.id }]),
+      ),
+    [categoryData],
+  );
+
+  const handleBarClick = (categoryId: string) => {
+    const category = categoryById.get(categoryId);
+    if (!category) return;
+    onOpenDrilldownDialog({
+      kind: "category",
+      flow,
+      categoryId: category.id,
+      name: category.name,
+      color: category.color,
+    });
+  };
+
   return (
     <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
       <CardHeader className="pb-2">
@@ -47,32 +89,20 @@ export const TotalLifetimeCategoriesCard: React.FC<{
       <CardContent className="h-80">
         {!hasOverview ? (
           <Skeleton className="h-56 w-full" />
-        ) : rows.length ? (
+        ) : categoryData.length ? (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
-              data={rows}
+              data={categoryData}
               layout="vertical"
               margin={{ left: 16, right: 12, top: 8, bottom: 8 }}
               onClick={(
                 state: { activePayload?: Array<{ payload?: unknown }> } | null,
               ) => {
-                const payload = state?.activePayload?.[0]?.payload;
-                if (!isRecord(payload)) return;
-                const id = payload.id;
-                if (typeof id !== "string" || !id.length) return;
-                const name =
-                  typeof payload.name === "string" ? payload.name : "Category";
-                const color =
-                  typeof payload.color === "string"
-                    ? payload.color
-                    : fallbackColor;
-                onOpenDrilldownDialog({
-                  kind: "category",
-                  flow,
-                  categoryId: id,
-                  name,
-                  color,
-                });
+                const payload = state?.activePayload?.[0]?.payload as
+                  | LifetimeCategoryDatum
+                  | undefined;
+                if (!payload || typeof payload.id !== "string") return;
+                handleBarClick(payload.id);
               }}
             >
               <CartesianGrid strokeDasharray="3 3" horizontal={false} />
@@ -88,16 +118,17 @@ export const TotalLifetimeCategoriesCard: React.FC<{
               <Tooltip
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
-                  const item = payload[0]?.payload;
-                  if (!isRecord(item)) return null;
-                  const name =
-                    typeof item.name === "string" ? item.name : "Category";
-                  const total = Number(item.total ?? 0);
-                  const txCount = Number(item.txCount ?? 0);
+                  const item = payload[0]?.payload as
+                    | LifetimeCategoryDatum
+                    | undefined;
+                  if (!item) return null;
+                  const txCount = item.txCount;
                   return (
                     <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                      <p className="font-semibold text-slate-800">{name}</p>
-                      <p className="text-slate-600">{currency(total)}</p>
+                      <p className="font-semibold text-slate-800">
+                        {item.name}
+                      </p>
+                      <p className="text-slate-600">{currency(item.total)}</p>
                       {Number.isFinite(txCount) && txCount > 0 ? (
                         <p className="text-slate-500">{txCount} tx</p>
                       ) : null}
@@ -106,16 +137,14 @@ export const TotalLifetimeCategoriesCard: React.FC<{
                 }}
               />
               <Bar dataKey="total" radius={[6, 6, 6, 6]}>
-                {rows.map((entry) => (
-                  <Cell key={entry.name} fill={entry.color || fallbackColor} />
+                {categoryData.map((entry) => (
+                  <Cell key={entry.name} fill={entry.color} />
                 ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-            No lifetime category data yet.
-          </div>
+          <EmptyState title="No lifetime category data yet." />
         )}
       </CardContent>
     </Card>

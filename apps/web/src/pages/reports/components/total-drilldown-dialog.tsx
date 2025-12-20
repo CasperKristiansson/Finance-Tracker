@@ -15,6 +15,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { InlineError } from "@/components/composed/inline-error";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -231,9 +232,7 @@ export const TotalDrilldownDialog: React.FC<{
               </p>
             </div>
             {totalDrilldownError ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-                {totalDrilldownError}
-              </div>
+              <InlineError message={totalDrilldownError} />
             ) : null}
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-3">
@@ -410,9 +409,7 @@ export const TotalDrilldownDialog: React.FC<{
               </p>
             </div>
             {totalDrilldownError ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-                {totalDrilldownError}
-              </div>
+              <InlineError message={totalDrilldownError} />
             ) : null}
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-3">
