@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Loader2,
   MoveRight,
+  Scissors,
   Sparkles,
   Trash2,
   UploadCloud,
@@ -19,6 +20,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -27,6 +36,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -347,6 +358,18 @@ const TransferPicker: React.FC<TransferPickerProps> = ({
   );
 };
 
+type SplitItem = {
+  id: string;
+  method: "amount" | "percent";
+  value: string;
+  description: string;
+};
+
+type SplitPreviewRow = ImportPreviewResponse["rows"][number] & {
+  source_row_id: string;
+  is_split: true;
+};
+
 const commitRowSchema = z.object({
   id: z.string(),
   account_id: z.string(),
@@ -414,6 +437,21 @@ export const Imports: React.FC = () => {
   const [activeAuditFileId, setActiveAuditFileId] = useState<string | null>(
     null,
   );
+  const [splitDialogOpen, setSplitDialogOpen] = useState(false);
+  const [splitDraftItems, setSplitDraftItems] = useState<SplitItem[]>([]);
+  const [splitBaseRow, setSplitBaseRow] = useState<{
+    id: string;
+    file_id: string;
+    account_id: string;
+    amount: string;
+    description: string;
+    occurred_at: string;
+    row_index: number;
+  } | null>(null);
+  const [splitRows, setSplitRows] = useState<SplitPreviewRow[]>([]);
+  const [splitRowIdsBySource, setSplitRowIdsBySource] = useState<
+    Record<string, string[]>
+  >({});
 
   const commitForm = useForm<CommitFormValues>({
     resolver: zodResolver(commitFormSchema),
@@ -444,6 +482,15 @@ export const Imports: React.FC = () => {
     fetchCategories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (preview) return;
+    setSplitRows([]);
+    setSplitRowIdsBySource({});
+    setSplitBaseRow(null);
+    setSplitDraftItems([]);
+    setSplitDialogOpen(false);
+  }, [preview]);
 
   useEffect(() => {
     if (!preview) return;
@@ -586,6 +633,11 @@ export const Imports: React.FC = () => {
     categories.forEach((category) => map.set(category.id, category));
     return map;
   }, [categories]);
+  const previewRowById = useMemo(() => {
+    const map = new Map<string, ImportPreviewResponse["rows"][number]>();
+    preview?.rows.forEach((row) => map.set(row.id, row));
+    return map;
+  }, [preview]);
 
   const commitIndexByRowId = useMemo(() => {
     const map = new Map<string, number>();
@@ -630,6 +682,16 @@ export const Imports: React.FC = () => {
     });
     return map;
   }, [preview]);
+
+  const splitRowsByFile = useMemo(() => {
+    const map = new Map<string, SplitPreviewRow[]>();
+    splitRows.forEach((row) => {
+      const list = map.get(row.file_id) ?? [];
+      list.push(row);
+      map.set(row.file_id, list);
+    });
+    return map;
+  }, [splitRows]);
 
   const fileById = useMemo(() => {
     const map = new Map<string, PreviewFile>();
@@ -725,6 +787,223 @@ export const Imports: React.FC = () => {
     setAutoParseRequested(true);
     void parse();
   }, [step, autoParseRequested, mappedFilesReady, loading, preview, parse]);
+
+  const handleOpenSplitDialog = (
+    row: ImportPreviewResponse["rows"][number],
+  ) => {
+    const idx = commitIndexByRowId.get(row.id);
+    if (idx === undefined) {
+      toast.error("Unable to open split dialog for this row.");
+      return;
+    }
+    const baseRow = commitForm.getValues(`rows.${idx}`);
+    const existingSplits = splitRows.filter(
+      (item) => item.source_row_id === row.id,
+    );
+    const nextItems: SplitItem[] = existingSplits.length
+      ? existingSplits.map((split) => ({
+          id: split.id,
+          method: "amount",
+          value: Math.abs(Number(split.amount || 0)).toString(),
+          description: split.description,
+        }))
+      : [
+          {
+            id: crypto.randomUUID(),
+            method: "percent",
+            value: "50",
+            description: `${baseRow.description || row.description} (Split 1)`,
+          },
+          {
+            id: crypto.randomUUID(),
+            method: "percent",
+            value: "50",
+            description: `${baseRow.description || row.description} (Split 2)`,
+          },
+        ];
+
+    setSplitDraftItems(nextItems);
+    setSplitBaseRow({
+      id: row.id,
+      file_id: row.file_id,
+      account_id: baseRow.account_id,
+      amount: baseRow.amount,
+      description: baseRow.description,
+      occurred_at: baseRow.occurred_at,
+      row_index: row.row_index,
+    });
+    setSplitDialogOpen(true);
+  };
+
+  const clearSplitsForRow = (sourceRowId: string) => {
+    const splitIds = splitRowIdsBySource[sourceRowId] ?? [];
+    if (!splitIds.length) return;
+    const currentRows = commitForm.getValues("rows");
+    const filtered = currentRows
+      .filter((row) => !splitIds.includes(row.id))
+      .map((row) => (row.id === sourceRowId ? { ...row, delete: false } : row));
+    replaceCommitRows(filtered);
+    commitForm.reset({ rows: filtered });
+    setSplitRows((prev) =>
+      prev.filter((row) => row.source_row_id !== sourceRowId),
+    );
+    setSplitRowIdsBySource((prev) => {
+      const next = { ...prev };
+      delete next[sourceRowId];
+      return next;
+    });
+    toast.success("Splits removed and original row restored.");
+  };
+
+  const splitAmounts = useMemo(() => {
+    if (!splitBaseRow) {
+      return { computed: [] as number[], total: 0, remainder: 0 };
+    }
+    const baseAmount = Number(splitBaseRow.amount);
+    const sign = baseAmount >= 0 ? 1 : -1;
+    const computed = splitDraftItems.map((item) => {
+      const raw = Number(item.value);
+      if (!Number.isFinite(raw)) return 0;
+      const normalized = Math.abs(raw);
+      const amount =
+        item.method === "percent"
+          ? Math.abs(baseAmount) * (normalized / 100)
+          : normalized;
+      return amount * sign;
+    });
+    const total = computed.reduce((sum, value) => sum + value, 0);
+    const remainder = baseAmount - total;
+    return { computed, total, remainder };
+  }, [splitBaseRow, splitDraftItems]);
+
+  const applySplitDraft = () => {
+    if (!splitBaseRow) return;
+    const baseIdx = commitIndexByRowId.get(splitBaseRow.id);
+    if (baseIdx === undefined) {
+      toast.error("Unable to find row to split.");
+      return;
+    }
+    const baseRows = commitForm.getValues("rows");
+    const baseRow = baseRows[baseIdx];
+    if (!baseRow) {
+      toast.error("Unable to find row to split.");
+      return;
+    }
+    const { computed, remainder } = splitAmounts;
+    const validRemainder = Math.abs(remainder) < 0.01;
+    const hasValues =
+      splitDraftItems.length >= 2 &&
+      splitDraftItems.every((item) => Number(item.value) > 0);
+    if (!validRemainder || !hasValues) {
+      toast.error(
+        "Split must include at least two parts and the total must match the original amount.",
+      );
+      return;
+    }
+
+    const existingSplitIds = splitRowIdsBySource[splitBaseRow.id] ?? [];
+    const withoutOldSplits = baseRows.filter(
+      (row) => !existingSplitIds.includes(row.id),
+    );
+    const baseMarked = withoutOldSplits.map((row) =>
+      row.id === splitBaseRow.id ? { ...row, delete: true } : row,
+    );
+
+    const newCommitRows: CommitFormValues["rows"] = [];
+    const newPreviewRows: SplitPreviewRow[] = [];
+    const basePreviewRow = previewRowById.get(splitBaseRow.id);
+    const baseRowIndex = basePreviewRow?.row_index ?? splitBaseRow.row_index;
+
+    computed.forEach((amount, idx) => {
+      const splitId = crypto.randomUUID();
+      const description =
+        splitDraftItems[idx]?.description?.trim() ||
+        `${splitBaseRow.description} (Split ${idx + 1})`;
+      const amountText = amount.toFixed(2);
+      const nextRow = {
+        ...baseRow,
+        id: splitId,
+        amount: amountText,
+        description,
+        delete: false,
+      };
+      newCommitRows.push(nextRow);
+      newPreviewRows.push({
+        id: splitId,
+        file_id: splitBaseRow.file_id,
+        row_index: baseRowIndex + (idx + 1) / 10,
+        account_id: splitBaseRow.account_id,
+        occurred_at: splitBaseRow.occurred_at,
+        amount: amountText,
+        description,
+        suggested_category_id: basePreviewRow?.suggested_category_id ?? null,
+        suggested_category_name:
+          basePreviewRow?.suggested_category_name ?? null,
+        suggested_confidence: null,
+        suggested_reason: null,
+        suggested_subscription_id:
+          basePreviewRow?.suggested_subscription_id ?? null,
+        suggested_subscription_name:
+          basePreviewRow?.suggested_subscription_name ?? null,
+        suggested_subscription_confidence: null,
+        suggested_subscription_reason: null,
+        transfer_match: null,
+        rule_applied: false,
+        rule_type: null,
+        rule_summary: null,
+        source_row_id: splitBaseRow.id,
+        is_split: true,
+      });
+    });
+
+    const baseInsertIndex = baseMarked.findIndex(
+      (row) => row.id === splitBaseRow.id,
+    );
+    const mergedRows = [
+      ...baseMarked.slice(0, baseInsertIndex + 1),
+      ...newCommitRows,
+      ...baseMarked.slice(baseInsertIndex + 1),
+    ];
+
+    replaceCommitRows(mergedRows);
+    commitForm.reset({ rows: mergedRows });
+    setSplitRows((prev) => [
+      ...prev.filter((row) => row.source_row_id !== splitBaseRow.id),
+      ...newPreviewRows,
+    ]);
+    setSplitRowIdsBySource((prev) => ({
+      ...prev,
+      [splitBaseRow.id]: newCommitRows.map((row) => row.id),
+    }));
+    setSplitDialogOpen(false);
+    toast.success("Split applied. Review the new rows below.");
+  };
+
+  const updateSplitItem = (id: string, changes: Partial<SplitItem>) => {
+    setSplitDraftItems((items) =>
+      items.map((item) => (item.id === id ? { ...item, ...changes } : item)),
+    );
+  };
+
+  const addSplitItem = () => {
+    setSplitDraftItems((items) => [
+      ...items,
+      {
+        id: crypto.randomUUID(),
+        method: "amount",
+        value: "0",
+        description: `${splitBaseRow?.description ?? "Split"} (Part ${
+          items.length + 1
+        })`,
+      },
+    ]);
+  };
+
+  const removeSplitItem = (id: string) => {
+    setSplitDraftItems((items) =>
+      items.length <= 2 ? items : items.filter((item) => item.id !== id),
+    );
+  };
 
   const submit = commitForm.handleSubmit(async (values) => {
     if (!token) {
@@ -1140,9 +1419,15 @@ export const Imports: React.FC = () => {
 
                 {preview.files.map((file) => {
                   const account = accountById.get(file.account_id);
-                  const fileRows = preview.rows
+                  const baseFileRows = preview.rows
                     .filter((row) => row.file_id === file.id)
                     .sort((a, b) => a.row_index - b.row_index);
+                  const splitFileRows = (
+                    splitRowsByFile.get(file.id) ?? []
+                  ).sort((a, b) => a.row_index - b.row_index);
+                  const fileRows = [...baseFileRows, ...splitFileRows].sort(
+                    (a, b) => a.row_index - b.row_index,
+                  );
 
                   return (
                     <TabsContent key={file.id} value={file.id}>
@@ -1203,6 +1488,14 @@ export const Imports: React.FC = () => {
                                 typeof transferMatch.reason === "string"
                                   ? transferMatch.reason
                                   : null;
+                              const isSplitRow =
+                                (previewRow as SplitPreviewRow).is_split ===
+                                true;
+                              const splitSourceId = isSplitRow
+                                ? (previewRow as SplitPreviewRow).source_row_id
+                                : null;
+                              const splitChildrenCount =
+                                splitRowIdsBySource[previewRow.id]?.length ?? 0;
 
                               const rowSimilarIds =
                                 similarIdsByRowId.get(previewRow.id) ?? [];
@@ -1370,6 +1663,34 @@ export const Imports: React.FC = () => {
                                           • {firstSimilar.description}
                                         </p>
                                       ) : null}
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-7 gap-1 text-xs"
+                                          onClick={() =>
+                                            handleOpenSplitDialog(previewRow)
+                                          }
+                                          disabled={isDeleted || isSplitRow}
+                                        >
+                                          <Scissors className="h-3.5 w-3.5" />
+                                          Split
+                                        </Button>
+                                        {splitChildrenCount ? (
+                                          <Badge className="bg-indigo-100 text-indigo-700">
+                                            Split into {splitChildrenCount} part
+                                            {splitChildrenCount === 1
+                                              ? ""
+                                              : "s"}
+                                          </Badge>
+                                        ) : null}
+                                        {isSplitRow && splitSourceId ? (
+                                          <Badge variant="secondary">
+                                            From row {splitSourceId}
+                                          </Badge>
+                                        ) : null}
+                                      </div>
                                     </div>
                                   </TableCell>
                                   <TableCell>
@@ -1598,6 +1919,179 @@ export const Imports: React.FC = () => {
           </div>
         </CardContent>
       </Card>
+
+      <Dialog open={splitDialogOpen} onOpenChange={setSplitDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Split transaction</DialogTitle>
+            <DialogDescription>
+              Divide a transaction into multiple parts by percentage or fixed
+              amount. The total must match the original amount.
+            </DialogDescription>
+          </DialogHeader>
+
+          {splitBaseRow ? (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <Badge
+                  variant="secondary"
+                  className="bg-slate-100 text-slate-700"
+                >
+                  Original amount: {splitBaseRow.amount}
+                </Badge>
+                <Badge
+                  variant="secondary"
+                  className="bg-slate-100 text-slate-700"
+                >
+                  Date: {toDateInputValue(splitBaseRow.occurred_at)}
+                </Badge>
+                <Badge
+                  variant="secondary"
+                  className="bg-slate-100 text-slate-700"
+                >
+                  Parts: {splitDraftItems.length}
+                </Badge>
+                <Badge
+                  className={cn(
+                    "text-xs",
+                    Math.abs(splitAmounts.remainder) < 0.01
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-amber-100 text-amber-800",
+                  )}
+                >
+                  Remainder: {splitAmounts.remainder.toFixed(2)}
+                </Badge>
+              </div>
+
+              <div className="space-y-3">
+                {splitDraftItems.map((item, idx) => (
+                  <div
+                    key={item.id}
+                    className="space-y-3 rounded-lg border border-slate-200 bg-white p-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
+                          {idx + 1}
+                        </div>
+                        <p className="text-sm font-semibold text-slate-800">
+                          Split part {idx + 1}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 text-xs text-slate-600"
+                        onClick={() => removeSplitItem(item.id)}
+                        disabled={splitDraftItems.length <= 2}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-4">
+                      <div className="md:col-span-2">
+                        <Label className="text-xs text-slate-600">
+                          Description
+                        </Label>
+                        <Input
+                          value={item.description}
+                          onChange={(e) =>
+                            updateSplitItem(item.id, {
+                              description: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-slate-600">Mode</Label>
+                        <select
+                          className="mt-1 w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-sm"
+                          value={item.method}
+                          onChange={(e) =>
+                            updateSplitItem(item.id, {
+                              method: e.target.value as SplitItem["method"],
+                            })
+                          }
+                        >
+                          <option value="amount">Amount</option>
+                          <option value="percent">Percent</option>
+                        </select>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-slate-600">
+                          {item.method === "percent"
+                            ? "Percent of total"
+                            : "Amount"}
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={item.value}
+                          onChange={(e) =>
+                            updateSplitItem(item.id, { value: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="text-sm text-slate-600 md:col-span-4">
+                        Computed amount:{" "}
+                        <span className="font-semibold text-slate-900">
+                          {splitAmounts.computed[idx]?.toFixed(2) ?? "0.00"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-9 w-fit"
+                  onClick={addSplitItem}
+                >
+                  Add another part
+                </Button>
+              </div>
+
+              <DialogFooter className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm text-slate-600">
+                  Totals must match the original amount exactly. Percentages are
+                  applied to the absolute value and keep the original sign.
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {splitRowIdsBySource[splitBaseRow.id]?.length ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => clearSplitsForRow(splitBaseRow.id)}
+                    >
+                      Clear splits
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    onClick={applySplitDraft}
+                    disabled={
+                      splitDraftItems.length < 2 ||
+                      splitDraftItems.some((item) => Number(item.value) <= 0) ||
+                      Math.abs(splitAmounts.remainder) >= 0.01
+                    }
+                  >
+                    Apply split
+                  </Button>
+                </div>
+              </DialogFooter>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600">
+              Select a row in the audit table to start a split.
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
     </MotionPage>
   );
 };
