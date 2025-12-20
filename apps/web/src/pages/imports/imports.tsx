@@ -30,7 +30,6 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -184,185 +183,37 @@ const CategoryPicker: React.FC<CategoryPickerProps> = ({
   );
 };
 
-type TransferPickerProps = {
-  value: string | null | undefined;
-  currentAccountId: string;
-  accounts: AccountWithBalance[];
-  batchOptions: Array<{
-    key: string;
-    accountId: string;
-    description: string;
-    amount: string;
-    occurredAt?: string | null;
-    fileLabel?: string;
-  }>;
-  existingOptions: Array<{
-    key: string;
-    accountId: string;
-    description: string;
-    occurredAt?: string | null;
-    categoryName?: string | null;
-  }>;
-  onSelectAccount: (accountId: string | null) => void;
-  disabled?: boolean;
-};
-
-const TransferPicker: React.FC<TransferPickerProps> = ({
-  value,
-  currentAccountId,
-  accounts,
-  batchOptions,
-  existingOptions,
-  onSelectAccount,
-  disabled,
-}) => {
-  const target = value ? accounts.find((acc) => acc.id === value) : null;
-  const label = target ? target.name : "Mark as transfer";
-
-  const renderOptionMeta = (
-    description: string,
-    occurredAt?: string | null,
-    suffix?: string | null,
-  ) => (
-    <div className="flex min-w-0 flex-col">
-      <span className="truncate text-sm font-medium text-slate-800">
-        {description}
-      </span>
-      <span className="truncate text-[11px] text-slate-500">
-        {occurredAt ? `${occurredAt.slice(0, 10)} • ` : ""}
-        {suffix ?? ""}
-      </span>
-    </div>
-  );
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild disabled={disabled}>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-9 w-[240px] justify-start gap-2 px-2 text-sm font-normal"
-          disabled={disabled}
-        >
-          <MoveRight className="h-4 w-4 text-slate-500" />
-          <span className="truncate">
-            {target ? `Transfer to ${label}` : label}
-          </span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        className="max-h-[420px] w-[340px] overflow-auto"
-      >
-        <DropdownMenuLabel className="text-[11px] text-slate-500">
-          Transfer handling
-        </DropdownMenuLabel>
-        <DropdownMenuItem
-          onSelect={() => onSelectAccount(null)}
-          className="text-slate-700"
-        >
-          <div className="flex items-center gap-2">
-            <div className="flex h-4 w-4 items-center justify-center rounded bg-slate-100 text-[10px] font-bold text-slate-600">
-              ∅
-            </div>
-            <span>Not a transfer</span>
-          </div>
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-[11px] text-slate-500">
-          Link within this upload
-        </DropdownMenuLabel>
-        {batchOptions.length ? (
-          batchOptions.map((option) => {
-            const account = accounts.find((acc) => acc.id === option.accountId);
-            return (
-              <DropdownMenuItem
-                key={option.key}
-                onSelect={() => onSelectAccount(option.accountId)}
-                className="flex items-start gap-2 text-slate-800"
-              >
-                <div className="flex h-6 w-6 items-center justify-center rounded bg-slate-100 text-[10px] font-semibold text-slate-600">
-                  {account?.name?.slice(0, 2).toUpperCase() ?? "AC"}
-                </div>
-                {renderOptionMeta(
-                  option.description || "Transfer row",
-                  option.occurredAt,
-                  `${option.amount} ${option.fileLabel ? `• ${option.fileLabel}` : ""}`,
-                )}
-              </DropdownMenuItem>
-            );
-          })
-        ) : (
-          <DropdownMenuItem disabled className="text-slate-400">
-            No other rows in this upload
-          </DropdownMenuItem>
-        )}
-
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-[11px] text-slate-500">
-          Link with existing transaction
-        </DropdownMenuLabel>
-        {existingOptions.length ? (
-          existingOptions.map((option) => {
-            const account = accounts.find((acc) => acc.id === option.accountId);
-            return (
-              <DropdownMenuItem
-                key={option.key}
-                onSelect={() => onSelectAccount(option.accountId)}
-                className="flex items-start gap-2 text-slate-800"
-              >
-                <div className="flex h-6 w-6 items-center justify-center rounded bg-slate-100 text-[10px] font-semibold text-slate-600">
-                  {account?.name?.slice(0, 2).toUpperCase() ?? "AC"}
-                </div>
-                {renderOptionMeta(
-                  option.description || "Existing transaction",
-                  option.occurredAt,
-                  option.categoryName ?? "Uncategorized",
-                )}
-              </DropdownMenuItem>
-            );
-          })
-        ) : (
-          <DropdownMenuItem disabled className="text-slate-400">
-            No suggested matches in your history
-          </DropdownMenuItem>
-        )}
-
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-[11px] text-slate-500">
-          Create transfer event
-        </DropdownMenuLabel>
-        <DropdownMenuGroup>
-          {accounts
-            .filter((acc) => acc.id !== currentAccountId)
-            .map((acc) => (
-              <DropdownMenuItem
-                key={acc.id}
-                onSelect={() => onSelectAccount(acc.id)}
-                className="flex items-start gap-2 text-slate-800"
-              >
-                <div className="flex h-6 w-6 items-center justify-center rounded bg-slate-100 text-[10px] font-semibold text-slate-600">
-                  {acc.name.slice(0, 2).toUpperCase()}
-                </div>
-                {renderOptionMeta(
-                  acc.name,
-                  null,
-                  bankLabel(acc.bank_import_type),
-                )}
-              </DropdownMenuItem>
-            ))}
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-};
+type SplitMode = "amount" | "percent";
 
 type SplitItem = {
   id: string;
-  method: "amount" | "percent";
   value: string;
   description: string;
+};
+
+type TransferOption = {
+  key: string;
+  accountId: string;
+  description: string;
+  occurredAt?: string | null;
+  categoryName?: string | null;
+  amount?: string;
+  fileLabel?: string;
+};
+
+type TransferDialogState = {
+  rowId: string;
+  commitIndex: number;
+  currentAccountId: string;
+  value: string | null;
+  batchOptions: TransferOption[];
+  existingOptions: TransferOption[];
+};
+
+type TaxDialogState = {
+  rowId: string;
+  commitIndex: number;
+  currentValue: TaxEventType | null;
 };
 
 type SplitPreviewRow = ImportPreviewResponse["rows"][number] & {
@@ -439,6 +290,7 @@ export const Imports: React.FC = () => {
   );
   const [splitDialogOpen, setSplitDialogOpen] = useState(false);
   const [splitDraftItems, setSplitDraftItems] = useState<SplitItem[]>([]);
+  const [splitMode, setSplitMode] = useState<SplitMode>("percent");
   const [splitBaseRow, setSplitBaseRow] = useState<{
     id: string;
     file_id: string;
@@ -452,6 +304,15 @@ export const Imports: React.FC = () => {
   const [splitRowIdsBySource, setSplitRowIdsBySource] = useState<
     Record<string, string[]>
   >({});
+  const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+  const [transferDialogState, setTransferDialogState] =
+    useState<TransferDialogState | null>(null);
+  const [transferSearch, setTransferSearch] = useState("");
+  const [transferTab, setTransferTab] = useState("upload");
+  const [taxDialogOpen, setTaxDialogOpen] = useState(false);
+  const [taxDialogState, setTaxDialogState] = useState<TaxDialogState | null>(
+    null,
+  );
 
   const commitForm = useForm<CommitFormValues>({
     resolver: zodResolver(commitFormSchema),
@@ -490,6 +351,12 @@ export const Imports: React.FC = () => {
     setSplitBaseRow(null);
     setSplitDraftItems([]);
     setSplitDialogOpen(false);
+    setTransferDialogOpen(false);
+    setTransferDialogState(null);
+    setTransferSearch("");
+    setTransferTab("upload");
+    setTaxDialogOpen(false);
+    setTaxDialogState(null);
   }, [preview]);
 
   useEffect(() => {
@@ -800,29 +667,28 @@ export const Imports: React.FC = () => {
     const existingSplits = splitRows.filter(
       (item) => item.source_row_id === row.id,
     );
-    const nextItems: SplitItem[] = existingSplits.length
+    const hasExisting = existingSplits.length > 0;
+    const nextItems: SplitItem[] = hasExisting
       ? existingSplits.map((split) => ({
           id: split.id,
-          method: "amount",
           value: Math.abs(Number(split.amount || 0)).toString(),
           description: split.description,
         }))
       : [
           {
             id: crypto.randomUUID(),
-            method: "percent",
             value: "50",
             description: `${baseRow.description || row.description} (Split 1)`,
           },
           {
             id: crypto.randomUUID(),
-            method: "percent",
             value: "50",
             description: `${baseRow.description || row.description} (Split 2)`,
           },
         ];
 
     setSplitDraftItems(nextItems);
+    setSplitMode(hasExisting ? "amount" : "percent");
     setSplitBaseRow({
       id: row.id,
       file_id: row.file_id,
@@ -857,24 +723,57 @@ export const Imports: React.FC = () => {
 
   const splitAmounts = useMemo(() => {
     if (!splitBaseRow) {
-      return { computed: [] as number[], total: 0, remainder: 0 };
+      return {
+        computed: [] as number[],
+        total: 0,
+        remainder: 0,
+        percentTotal: 0,
+        percentRemainder: 0,
+      };
     }
     const baseAmount = Number(splitBaseRow.amount);
+    const baseAbs = Math.abs(baseAmount);
     const sign = baseAmount >= 0 ? 1 : -1;
-    const computed = splitDraftItems.map((item) => {
+    const values = splitDraftItems.map((item) => {
       const raw = Number(item.value);
       if (!Number.isFinite(raw)) return 0;
-      const normalized = Math.abs(raw);
-      const amount =
-        item.method === "percent"
-          ? Math.abs(baseAmount) * (normalized / 100)
-          : normalized;
-      return amount * sign;
+      return Math.abs(raw);
     });
+
+    const percentTotal =
+      splitMode === "percent"
+        ? values.reduce((sum, value) => sum + value, 0)
+        : 0;
+    const percentRemainder = splitMode === "percent" ? 100 - percentTotal : 0;
+
+    const computedRaw = values.map((value, idx) => {
+      if (splitMode === "percent") {
+        const normalizedPercent =
+          idx === values.length - 1
+            ? Math.max(value + percentRemainder, 0)
+            : value;
+        return baseAbs * (normalizedPercent / 100);
+      }
+      return value;
+    });
+
+    const rounded = computedRaw.map((value, idx) => {
+      if (idx === computedRaw.length - 1) {
+        const previous = computedRaw
+          .slice(0, idx)
+          .reduce((sum, val) => sum + Number(val.toFixed(2)), 0);
+        const last = Math.max(baseAbs - previous, 0);
+        return Number(last.toFixed(2));
+      }
+      return Number(value.toFixed(2));
+    });
+
+    const computed = rounded.map((value) => value * sign);
     const total = computed.reduce((sum, value) => sum + value, 0);
     const remainder = baseAmount - total;
-    return { computed, total, remainder };
-  }, [splitBaseRow, splitDraftItems]);
+
+    return { computed, total, remainder, percentTotal, percentRemainder };
+  }, [splitBaseRow, splitDraftItems, splitMode]);
 
   const applySplitDraft = () => {
     if (!splitBaseRow) return;
@@ -889,14 +788,16 @@ export const Imports: React.FC = () => {
       toast.error("Unable to find row to split.");
       return;
     }
-    const { computed, remainder } = splitAmounts;
+    const { computed, remainder, percentRemainder } = splitAmounts;
     const validRemainder = Math.abs(remainder) < 0.01;
+    const validPercent =
+      splitMode === "amount" || Math.abs(percentRemainder) < 5;
     const hasValues =
       splitDraftItems.length >= 2 &&
       splitDraftItems.every((item) => Number(item.value) > 0);
-    if (!validRemainder || !hasValues) {
+    if (!validRemainder || !validPercent || !hasValues) {
       toast.error(
-        "Split must include at least two parts and the total must match the original amount.",
+        "Split must include at least two parts and totals must match the original amount.",
       );
       return;
     }
@@ -986,23 +887,117 @@ export const Imports: React.FC = () => {
   };
 
   const addSplitItem = () => {
-    setSplitDraftItems((items) => [
-      ...items,
-      {
-        id: crypto.randomUUID(),
-        method: "amount",
-        value: "0",
-        description: `${splitBaseRow?.description ?? "Split"} (Part ${
-          items.length + 1
-        })`,
-      },
-    ]);
+    setSplitDraftItems((items) => {
+      const nextIndex = items.length + 1;
+      const sharedPercent =
+        splitMode === "percent" ? (100 / nextIndex).toFixed(2) : "0";
+      return [
+        ...items,
+        {
+          id: crypto.randomUUID(),
+          value: sharedPercent,
+          description: `${splitBaseRow?.description ?? "Split"} (Part ${nextIndex})`,
+        },
+      ];
+    });
   };
 
   const removeSplitItem = (id: string) => {
     setSplitDraftItems((items) =>
       items.length <= 2 ? items : items.filter((item) => item.id !== id),
     );
+  };
+
+  const changeSplitMode = (mode: SplitMode) => {
+    if (mode === splitMode || !splitBaseRow) return;
+    const baseAmount = Math.abs(Number(splitBaseRow.amount) || 0);
+    setSplitDraftItems((items) =>
+      items.map((item) => {
+        const raw = Math.abs(Number(item.value)) || 0;
+        if (mode === "percent") {
+          if (baseAmount === 0) return { ...item, value: "0" };
+          const percent = ((raw / baseAmount) * 100).toFixed(2);
+          return { ...item, value: percent };
+        }
+        const amount = ((raw / 100) * baseAmount).toFixed(2);
+        return { ...item, value: amount };
+      }),
+    );
+    setSplitMode(mode);
+  };
+
+  const [transferDraftValue, setTransferDraftValue] = useState<string | null>(
+    null,
+  );
+
+  const handleOpenTransferDialog = (
+    row: ImportPreviewResponse["rows"][number],
+    commitIndex: number,
+    batchOptions: TransferOption[],
+    existingOptions: TransferOption[],
+    currentValue: string | null,
+  ) => {
+    setTransferDialogState({
+      rowId: row.id,
+      commitIndex,
+      currentAccountId: commitRows[commitIndex].account_id,
+      value: currentValue,
+      batchOptions,
+      existingOptions,
+    });
+    setTransferDraftValue(currentValue);
+    setTransferSearch("");
+    setTransferTab(batchOptions.length ? "upload" : "existing");
+    setTransferDialogOpen(true);
+  };
+
+  const applyTransferSelection = (accountId: string | null) => {
+    if (!transferDialogState) return;
+    const { commitIndex } = transferDialogState;
+    commitForm.setValue(`rows.${commitIndex}.transfer_account_id`, accountId, {
+      shouldDirty: true,
+    });
+    if (accountId) {
+      commitForm.setValue(`rows.${commitIndex}.tax_event_type`, null, {
+        shouldDirty: true,
+      });
+      commitForm.setValue(`rows.${commitIndex}.category_id`, null, {
+        shouldDirty: true,
+      });
+      commitForm.setValue(`rows.${commitIndex}.subscription_id`, null, {
+        shouldDirty: true,
+      });
+    }
+    setTransferDialogOpen(false);
+    setTransferDialogState(null);
+  };
+
+  const [taxDraftValue, setTaxDraftValue] = useState<TaxEventType | null>(null);
+
+  const handleOpenTaxDialog = (
+    commitIndex: number,
+    currentValue: TaxEventType | null,
+  ) => {
+    const rowId = commitRows[commitIndex]?.id;
+    if (!rowId) return;
+    setTaxDialogState({ rowId, commitIndex, currentValue });
+    setTaxDraftValue(currentValue);
+    setTaxDialogOpen(true);
+  };
+
+  const applyTaxSelection = (value: TaxEventType | null) => {
+    if (!taxDialogState) return;
+    const { commitIndex } = taxDialogState;
+    commitForm.setValue(`rows.${commitIndex}.tax_event_type`, value, {
+      shouldDirty: true,
+    });
+    if (value) {
+      commitForm.setValue(`rows.${commitIndex}.transfer_account_id`, null, {
+        shouldDirty: true,
+      });
+    }
+    setTaxDialogOpen(false);
+    setTaxDialogState(null);
   };
 
   const submit = commitForm.handleSubmit(async (values) => {
@@ -1445,9 +1440,10 @@ export const Imports: React.FC = () => {
                               <TableHead>Date</TableHead>
                               <TableHead>Description</TableHead>
                               <TableHead>Amount</TableHead>
-                              <TableHead>Transfer</TableHead>
                               <TableHead>Category</TableHead>
-                              <TableHead>Tax event</TableHead>
+                              <TableHead className="w-[160px]">
+                                Actions
+                              </TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -1573,33 +1569,6 @@ export const Imports: React.FC = () => {
                                     Boolean(option),
                                 );
 
-                              const setTransferAccount = (
-                                accountId: string | null,
-                              ) => {
-                                commitForm.setValue(
-                                  `rows.${idx}.transfer_account_id`,
-                                  accountId,
-                                  { shouldDirty: true },
-                                );
-                                if (accountId) {
-                                  commitForm.setValue(
-                                    `rows.${idx}.tax_event_type`,
-                                    null,
-                                    { shouldDirty: true },
-                                  );
-                                  commitForm.setValue(
-                                    `rows.${idx}.category_id`,
-                                    null,
-                                    { shouldDirty: true },
-                                  );
-                                  commitForm.setValue(
-                                    `rows.${idx}.subscription_id`,
-                                    null,
-                                    { shouldDirty: true },
-                                  );
-                                }
-                              };
-
                               return (
                                 <TableRow
                                   key={commitRows[idx].fieldId}
@@ -1664,19 +1633,6 @@ export const Imports: React.FC = () => {
                                         </p>
                                       ) : null}
                                       <div className="flex flex-wrap items-center gap-2">
-                                        <Button
-                                          type="button"
-                                          size="sm"
-                                          variant="outline"
-                                          className="h-7 gap-1 text-xs"
-                                          onClick={() =>
-                                            handleOpenSplitDialog(previewRow)
-                                          }
-                                          disabled={isDeleted || isSplitRow}
-                                        >
-                                          <Scissors className="h-3.5 w-3.5" />
-                                          Split
-                                        </Button>
                                         {splitChildrenCount ? (
                                           <Badge className="bg-indigo-100 text-indigo-700">
                                             Split into {splitChildrenCount} part
@@ -1690,7 +1646,25 @@ export const Imports: React.FC = () => {
                                             From row {splitSourceId}
                                           </Badge>
                                         ) : null}
+                                        {transferTarget ? (
+                                          <Badge className="bg-emerald-100 text-emerald-700">
+                                            Transfer → {transferTarget.name}
+                                          </Badge>
+                                        ) : null}
+                                        {taxEventType ? (
+                                          <Badge className="bg-amber-100 text-amber-800">
+                                            Tax {taxEventType.toLowerCase()}
+                                          </Badge>
+                                        ) : null}
                                       </div>
+                                      {transferPairValue ? (
+                                        <p className="text-[11px] text-slate-500">
+                                          Suggested pair: row{" "}
+                                          {transferPairValue} •{" "}
+                                          {transferReason ??
+                                            "Possible transfer"}
+                                        </p>
+                                      ) : null}
                                     </div>
                                   </TableCell>
                                   <TableCell>
@@ -1718,47 +1692,13 @@ export const Imports: React.FC = () => {
                                   </TableCell>
                                   <TableCell>
                                     <div className="space-y-1">
-                                      <TransferPicker
-                                        value={transferAccountId}
-                                        currentAccountId={
-                                          commitRows[idx].account_id
-                                        }
-                                        accounts={accounts}
-                                        batchOptions={batchTransferOptions}
-                                        existingOptions={
-                                          existingTransferOptions ?? []
-                                        }
-                                        onSelectAccount={setTransferAccount}
-                                        disabled={
-                                          isDeleted || Boolean(taxEventType)
-                                        }
-                                      />
-                                      {transferPairValue ? (
-                                        <p className="text-[11px] text-slate-500">
-                                          Suggested pair: row{" "}
-                                          {transferPairValue} •{" "}
-                                          {transferReason ??
-                                            "Possible transfer"}
-                                        </p>
-                                      ) : null}
-                                      {transferTarget ? (
-                                        <p className="text-[11px] text-slate-500">
-                                          Will create transfer between{" "}
-                                          {account?.name ?? "account"} and{" "}
-                                          {transferTarget.name}.
-                                        </p>
-                                      ) : null}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell>
-                                    <div className="space-y-1">
                                       <CategoryPicker
                                         value={currentCategoryId}
                                         categories={categories}
                                         disabled={Boolean(
                                           taxEventType ||
-                                            transferAccountId ||
-                                            isDeleted,
+                                          transferAccountId ||
+                                          isDeleted,
                                         )}
                                         missing={isMissingCategory}
                                         suggesting={
@@ -1824,31 +1764,92 @@ export const Imports: React.FC = () => {
                                     </div>
                                   </TableCell>
                                   <TableCell>
-                                    <input
-                                      type="checkbox"
-                                      checked={Boolean(taxEventType)}
-                                      disabled={Boolean(
-                                        transferAccountId || isDeleted,
-                                      )}
-                                      onChange={(e) => {
-                                        const nextValue = e.target.checked
-                                          ? inferTaxEventType(amountValue)
-                                          : null;
-                                        commitForm.setValue(
-                                          `rows.${idx}.tax_event_type`,
-                                          nextValue,
-                                          { shouldDirty: true },
-                                        );
-                                        if (e.target.checked) {
-                                          commitForm.setValue(
-                                            `rows.${idx}.transfer_account_id`,
-                                            null,
-                                            { shouldDirty: true },
-                                          );
-                                        }
-                                      }}
-                                      aria-label="Tax event"
-                                    />
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          className="h-8 w-full justify-between px-3 text-xs"
+                                          disabled={isDeleted}
+                                        >
+                                          Actions
+                                          <ChevronRight className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent
+                                        align="end"
+                                        className="w-[240px]"
+                                      >
+                                        <DropdownMenuLabel className="text-[11px] text-slate-500">
+                                          Row actions
+                                        </DropdownMenuLabel>
+                                        <DropdownMenuItem
+                                          onSelect={() =>
+                                            handleOpenSplitDialog(previewRow)
+                                          }
+                                          disabled={isSplitRow}
+                                          className="flex items-center gap-2"
+                                        >
+                                          <Scissors className="h-3.5 w-3.5" />
+                                          Split transaction
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onSelect={() =>
+                                            handleOpenTransferDialog(
+                                              previewRow,
+                                              idx,
+                                              batchTransferOptions,
+                                              existingTransferOptions ?? [],
+                                              transferAccountId,
+                                            )
+                                          }
+                                          disabled={Boolean(taxEventType)}
+                                          className="flex items-center gap-2"
+                                        >
+                                          <MoveRight className="h-3.5 w-3.5" />
+                                          Manage transfer
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onSelect={() =>
+                                            handleOpenTaxDialog(
+                                              idx,
+                                              taxEventType,
+                                            )
+                                          }
+                                          disabled={Boolean(transferAccountId)}
+                                          className="flex items-center gap-2"
+                                        >
+                                          <Sparkles className="h-3.5 w-3.5" />
+                                          Tax event
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          onSelect={() => {
+                                            commitForm.setValue(
+                                              `rows.${idx}.transfer_account_id`,
+                                              null,
+                                              { shouldDirty: true },
+                                            );
+                                          }}
+                                          disabled={!transferAccountId}
+                                        >
+                                          Clear transfer
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onSelect={() => {
+                                            commitForm.setValue(
+                                              `rows.${idx}.tax_event_type`,
+                                              null,
+                                              { shouldDirty: true },
+                                            );
+                                          }}
+                                          disabled={!taxEventType}
+                                        >
+                                          Clear tax event
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
                                   </TableCell>
                                 </TableRow>
                               );
@@ -1921,7 +1922,7 @@ export const Imports: React.FC = () => {
       </Card>
 
       <Dialog open={splitDialogOpen} onOpenChange={setSplitDialogOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-h-[85vh] max-w-3xl overflow-hidden">
           <DialogHeader>
             <DialogTitle>Split transaction</DialogTitle>
             <DialogDescription>
@@ -1961,99 +1962,133 @@ export const Imports: React.FC = () => {
                 >
                   Remainder: {splitAmounts.remainder.toFixed(2)}
                 </Badge>
+                {splitMode === "percent" ? (
+                  <Badge
+                    variant="secondary"
+                    className="bg-indigo-100 text-indigo-700"
+                  >
+                    Percent remainder applied to last part:{" "}
+                    {(splitAmounts.percentRemainder || 0).toFixed(2)}%
+                  </Badge>
+                ) : null}
               </div>
 
               <div className="space-y-3">
-                {splitDraftItems.map((item, idx) => (
-                  <div
-                    key={item.id}
-                    className="space-y-3 rounded-lg border border-slate-200 bg-white p-3"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
-                          {idx + 1}
-                        </div>
-                        <p className="text-sm font-semibold text-slate-800">
-                          Split part {idx + 1}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 text-xs text-slate-600"
-                        onClick={() => removeSplitItem(item.id)}
-                        disabled={splitDraftItems.length <= 2}
-                      >
-                        Remove
-                      </Button>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-4">
-                      <div className="md:col-span-2">
-                        <Label className="text-xs text-slate-600">
-                          Description
-                        </Label>
-                        <Input
-                          value={item.description}
-                          onChange={(e) =>
-                            updateSplitItem(item.id, {
-                              description: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs text-slate-600">Mode</Label>
-                        <select
-                          className="mt-1 w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-sm"
-                          value={item.method}
-                          onChange={(e) =>
-                            updateSplitItem(item.id, {
-                              method: e.target.value as SplitItem["method"],
-                            })
-                          }
-                        >
-                          <option value="amount">Amount</option>
-                          <option value="percent">Percent</option>
-                        </select>
-                      </div>
-                      <div>
-                        <Label className="text-xs text-slate-600">
-                          {item.method === "percent"
-                            ? "Percent of total"
-                            : "Amount"}
-                        </Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={item.value}
-                          onChange={(e) =>
-                            updateSplitItem(item.id, { value: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="text-sm text-slate-600 md:col-span-4">
-                        Computed amount:{" "}
-                        <span className="font-semibold text-slate-900">
-                          {splitAmounts.computed[idx]?.toFixed(2) ?? "0.00"}
-                        </span>
-                      </div>
-                    </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-slate-800">
+                      Split mode
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      All parts share the same mode. Percentages auto-balance to
+                      100% and rounding is applied to the last part.
+                    </p>
                   </div>
-                ))}
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={splitMode === "percent" ? "default" : "outline"}
+                      onClick={() => changeSplitMode("percent")}
+                    >
+                      Percent
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={splitMode === "amount" ? "default" : "outline"}
+                      onClick={() => changeSplitMode("amount")}
+                    >
+                      Amount
+                    </Button>
+                  </div>
+                </div>
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-9 w-fit"
-                  onClick={addSplitItem}
-                >
-                  Add another part
-                </Button>
+                <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+                  {splitDraftItems.map((item, idx) => (
+                    <div
+                      key={item.id}
+                      className="space-y-3 rounded-lg border border-slate-200 bg-white p-3"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
+                            {idx + 1}
+                          </div>
+                          <p className="text-sm font-semibold text-slate-800">
+                            Split part {idx + 1}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs text-slate-600"
+                          onClick={() => removeSplitItem(item.id)}
+                          disabled={splitDraftItems.length <= 2}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-4">
+                        <div className="md:col-span-2">
+                          <Label className="text-xs text-slate-600">
+                            Description
+                          </Label>
+                          <Input
+                            value={item.description}
+                            onChange={(e) =>
+                              updateSplitItem(item.id, {
+                                description: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs text-slate-600">
+                            {splitMode === "percent"
+                              ? "Percent of total"
+                              : "Amount"}
+                          </Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={item.value}
+                            onChange={(e) =>
+                              updateSplitItem(item.id, {
+                                value: e.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="text-sm text-slate-600 md:col-span-4">
+                          Computed amount:{" "}
+                          <span className="font-semibold text-slate-900">
+                            {splitAmounts.computed[idx]?.toFixed(2) ?? "0.00"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-slate-500">
+                    Add more parts as needed. Scroll within this area to view
+                    all splits.
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9"
+                    onClick={addSplitItem}
+                  >
+                    Add another part
+                  </Button>
+                </div>
               </div>
 
               <DialogFooter className="flex flex-wrap items-center justify-between gap-3">
@@ -2088,6 +2123,356 @@ export const Imports: React.FC = () => {
           ) : (
             <p className="text-sm text-slate-600">
               Select a row in the audit table to start a split.
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={transferDialogOpen}
+        onOpenChange={(open) => {
+          setTransferDialogOpen(open);
+          if (!open) {
+            setTransferDialogState(null);
+            setTransferDraftValue(null);
+            setTransferSearch("");
+            setTransferTab("upload");
+          }
+        }}
+      >
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Manage transfer</DialogTitle>
+            <DialogDescription>
+              Link this row to another transaction or mark it as a transfer
+              between accounts.
+            </DialogDescription>
+          </DialogHeader>
+
+          {transferDialogState ? (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="bg-slate-100">
+                    Current:{" "}
+                    {transferDialogState.value
+                      ? (accounts.find(
+                          (acc) => acc.id === transferDialogState.value,
+                        )?.name ?? "Selected account")
+                      : "Not a transfer"}
+                  </Badge>
+                  <Badge variant="secondary" className="bg-slate-100">
+                    From account:{" "}
+                    {accounts.find(
+                      (acc) => acc.id === transferDialogState.currentAccountId,
+                    )?.name ?? "Unknown"}
+                  </Badge>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setTransferDraftValue(null)}
+                >
+                  Mark as not a transfer
+                </Button>
+              </div>
+
+              <Tabs value={transferTab} onValueChange={setTransferTab}>
+                <TabsList className="grid w-full grid-cols-3">
+                  <TabsTrigger value="upload">This upload</TabsTrigger>
+                  <TabsTrigger value="existing">Existing</TabsTrigger>
+                  <TabsTrigger value="create">New transfer</TabsTrigger>
+                </TabsList>
+                <TabsContent value="upload" className="space-y-3">
+                  <p className="text-sm text-slate-600">
+                    Pair with another row from the same upload.
+                  </p>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {transferDialogState.batchOptions.length ? (
+                      transferDialogState.batchOptions.map((option) => {
+                        const account = accounts.find(
+                          (acc) => acc.id === option.accountId,
+                        );
+                        const selected =
+                          transferDraftValue === option.accountId;
+                        return (
+                          <Button
+                            key={option.key}
+                            variant={selected ? "default" : "outline"}
+                            className="h-auto justify-start gap-3 text-left"
+                            onClick={() =>
+                              setTransferDraftValue(option.accountId)
+                            }
+                          >
+                            <div className="flex h-9 w-9 items-center justify-center rounded bg-slate-100 text-xs font-semibold text-slate-700">
+                              {account?.name?.slice(0, 2).toUpperCase() ?? "AC"}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-semibold text-slate-900">
+                                {option.description || "Transfer row"}
+                              </span>
+                              <span className="text-xs text-slate-500">
+                                {option.occurredAt?.slice(0, 10) ?? "Unknown"} •{" "}
+                                {option.amount ?? ""}{" "}
+                                {option.fileLabel
+                                  ? `• ${option.fileLabel}`
+                                  : ""}
+                              </span>
+                            </div>
+                          </Button>
+                        );
+                      })
+                    ) : (
+                      <p className="text-sm text-slate-500">
+                        No other rows in this upload.
+                      </p>
+                    )}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="existing" className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      placeholder="Search description, category, date…"
+                      value={transferSearch}
+                      onChange={(e) => setTransferSearch(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTransferSearch("")}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                  <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+                    {transferDialogState.existingOptions.length ? (
+                      transferDialogState.existingOptions
+                        .filter((option) => {
+                          if (!transferSearch.trim()) return true;
+                          const haystack =
+                            `${option.description} ${option.categoryName} ${option.occurredAt} ${
+                              accounts.find(
+                                (acc) => acc.id === option.accountId,
+                              )?.name ?? ""
+                            }`
+                              .toLowerCase()
+                              .trim();
+                          return haystack.includes(
+                            transferSearch.toLowerCase().trim(),
+                          );
+                        })
+                        .map((option) => {
+                          const account = accounts.find(
+                            (acc) => acc.id === option.accountId,
+                          );
+                          const selected =
+                            transferDraftValue === option.accountId;
+                          return (
+                            <Button
+                              key={option.key}
+                              variant={selected ? "default" : "ghost"}
+                              className="h-auto w-full justify-start gap-3 text-left"
+                              onClick={() =>
+                                setTransferDraftValue(option.accountId)
+                              }
+                            >
+                              <div className="flex h-9 w-9 items-center justify-center rounded bg-slate-100 text-xs font-semibold text-slate-700">
+                                {account?.name?.slice(0, 2).toUpperCase() ??
+                                  "AC"}
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-sm font-semibold text-slate-900">
+                                  {option.description || "Existing transaction"}
+                                </span>
+                                <span className="text-xs text-slate-500">
+                                  {option.occurredAt?.slice(0, 10) ?? "Unknown"}{" "}
+                                  • {option.categoryName ?? "Uncategorized"} •{" "}
+                                  {account?.name ?? "Account"}
+                                </span>
+                              </div>
+                            </Button>
+                          );
+                        })
+                    ) : (
+                      <p className="text-sm text-slate-500">
+                        No suggested matches yet. Try again after parsing.
+                      </p>
+                    )}
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="create" className="space-y-3">
+                  <p className="text-sm text-slate-600">
+                    Create a transfer to another account.
+                  </p>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    {accounts
+                      .filter(
+                        (acc) =>
+                          acc.id !== transferDialogState.currentAccountId,
+                      )
+                      .map((acc) => {
+                        const selected = transferDraftValue === acc.id;
+                        return (
+                          <Button
+                            key={acc.id}
+                            variant={selected ? "default" : "outline"}
+                            className="h-auto justify-start gap-3 text-left"
+                            onClick={() => setTransferDraftValue(acc.id)}
+                          >
+                            <div className="flex h-9 w-9 items-center justify-center rounded bg-slate-100 text-xs font-semibold text-slate-700">
+                              {acc.name.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-semibold text-slate-900">
+                                {acc.name}
+                              </span>
+                              <span className="text-xs text-slate-500">
+                                {bankLabel(acc.bank_import_type)}
+                              </span>
+                            </div>
+                          </Button>
+                        );
+                      })}
+                  </div>
+                </TabsContent>
+              </Tabs>
+
+              <DialogFooter className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-slate-600">
+                  Only one transfer target can be active. Applying will clear
+                  category and subscription.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setTransferDraftValue(null);
+                      applyTransferSelection(null);
+                    }}
+                  >
+                    Clear transfer
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => applyTransferSelection(transferDraftValue)}
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </DialogFooter>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600">
+              Select a row in the audit table to manage transfer options.
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={taxDialogOpen}
+        onOpenChange={(open) => {
+          setTaxDialogOpen(open);
+          if (!open) {
+            setTaxDialogState(null);
+            setTaxDraftValue(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Mark as tax event</DialogTitle>
+            <DialogDescription>
+              Choose whether this transaction is a tax payment or refund. Tax
+              events cannot also be transfers.
+            </DialogDescription>
+          </DialogHeader>
+          {taxDialogState ? (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                Amount:{" "}
+                {commitForm.watch(`rows.${taxDialogState.commitIndex}.amount`)}{" "}
+                • Description:{" "}
+                {commitForm.watch(
+                  `rows.${taxDialogState.commitIndex}.description`,
+                )}
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Button
+                  type="button"
+                  variant={
+                    taxDraftValue === TaxEventTypeEnum.PAYMENT
+                      ? "default"
+                      : "outline"
+                  }
+                  className="h-auto justify-start gap-2 text-left"
+                  onClick={() => setTaxDraftValue(TaxEventTypeEnum.PAYMENT)}
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded bg-amber-100 text-xs font-semibold text-amber-800">
+                    PAY
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      Tax payment
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      Outgoing tax payment for this period.
+                    </p>
+                  </div>
+                </Button>
+                <Button
+                  type="button"
+                  variant={
+                    taxDraftValue === TaxEventTypeEnum.REFUND
+                      ? "default"
+                      : "outline"
+                  }
+                  className="h-auto justify-start gap-2 text-left"
+                  onClick={() => setTaxDraftValue(TaxEventTypeEnum.REFUND)}
+                >
+                  <div className="flex h-9 w-9 items-center justify-center rounded bg-emerald-100 text-xs font-semibold text-emerald-800">
+                    REF
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900">
+                      Tax refund
+                    </p>
+                    <p className="text-xs text-slate-600">
+                      Incoming tax refund for this period.
+                    </p>
+                  </div>
+                </Button>
+              </div>
+              <DialogFooter className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-slate-600">
+                  Switching tax event will clear any transfer selection.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => applyTaxSelection(null)}
+                  >
+                    Clear
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => applyTaxSelection(taxDraftValue)}
+                    disabled={!taxDraftValue}
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </DialogFooter>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-600">
+              Select a row in the audit table to mark as a tax event.
             </p>
           )}
         </DialogContent>
