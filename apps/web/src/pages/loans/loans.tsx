@@ -22,6 +22,7 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
+import { EmptyState } from "@/components/composed/empty-state";
 import {
   MotionPage,
   StaggerWrap,
@@ -1349,29 +1350,27 @@ export const Loans: React.FC = () => {
                         </div>
                       </div>
                     ) : (
-                      <div className="flex flex-col gap-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
-                        <div className="text-sm font-medium text-slate-900">
-                          No events yet
-                        </div>
-                        <p className="text-sm text-slate-600">
-                          Events appear when transactions post against this loan
-                          (payments, interest accruals, adjustments).
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="outline"
-                            className="border-slate-300 text-slate-800"
-                            onClick={refreshLoanData}
-                          >
-                            Refresh
-                          </Button>
-                          <Button asChild variant="outline">
-                            <Link to={PageRoutes.transactions}>
-                              Open transactions
-                            </Link>
-                          </Button>
-                        </div>
-                      </div>
+                      <EmptyState
+                        className="rounded-lg"
+                        title="No events yet."
+                        description="Events appear when transactions post against this loan (payments, interest accruals, adjustments)."
+                        action={
+                          <div className="flex flex-wrap justify-center gap-2">
+                            <Button
+                              variant="outline"
+                              className="border-slate-300 text-slate-800"
+                              onClick={refreshLoanData}
+                            >
+                              Refresh
+                            </Button>
+                            <Button asChild variant="outline">
+                              <Link to={PageRoutes.transactions}>
+                                Open transactions
+                              </Link>
+                            </Button>
+                          </div>
+                        }
+                      />
                     )}
                   </CardContent>
                 </Card>

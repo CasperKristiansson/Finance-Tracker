@@ -1,8 +1,9 @@
 import React, { useMemo } from "react";
 import { ResponsiveContainer, Sankey } from "recharts";
 
+import { EmptyState } from "@/components/composed/empty-state";
+import { LoadingCard } from "@/components/composed/loading-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 export type SankeyCategoryItem = {
@@ -256,11 +257,9 @@ export const MoneyFlowSankeyCard: React.FC<{
       </CardHeader>
       <CardContent className="flex h-[750px] flex-col gap-3">
         {loading ? (
-          <Skeleton className="h-full w-full" />
+          <LoadingCard className="h-full" lines={14} />
         ) : !result ? (
-          <div className="flex h-full items-center justify-center rounded-md border border-slate-100 bg-slate-50 p-6 text-sm text-slate-600">
-            No cashflow data yet.
-          </div>
+          <EmptyState className="h-full" title="No cashflow data yet." />
         ) : (
           <>
             <div className="grid gap-2 md:grid-cols-3">

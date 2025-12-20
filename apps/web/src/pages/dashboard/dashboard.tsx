@@ -31,6 +31,8 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
+import { EmptyState } from "@/components/composed/empty-state";
+import { LoadingCard } from "@/components/composed/loading-card";
 import {
   MotionPage,
   StaggerWrap,
@@ -1556,15 +1558,21 @@ export const Dashboard: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-2">
             {recent.loading ? (
-              <div className="space-y-2">
-                {[...Array(4)].map((_, idx) => (
-                  <Skeleton key={idx} className="h-12 w-full" />
-                ))}
-              </div>
+              <LoadingCard lines={4} />
             ) : filteredRecentTransactions.length === 0 ? (
-              <p className="text-sm text-slate-500">
-                No recent transactions yet.
-              </p>
+              <EmptyState
+                title="No recent transactions yet."
+                description="Import files or add activity to see your latest account movements."
+                action={
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="border-slate-200"
+                  >
+                    <Link to={PageRoutes.transactions}>Open transactions</Link>
+                  </Button>
+                }
+              />
             ) : (
               <div className="space-y-2">
                 {filteredRecentTransactions.map((tx) => (

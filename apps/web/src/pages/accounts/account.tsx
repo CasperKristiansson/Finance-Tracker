@@ -25,7 +25,9 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
+import { EmptyState } from "@/components/composed/empty-state";
 import { InlineError } from "@/components/composed/inline-error";
+import { LoadingCard } from "@/components/composed/loading-card";
 import {
   MotionPage,
   StaggerWrap,
@@ -1357,15 +1359,24 @@ export const AccountDetails: React.FC = () => {
                 {txError ? <InlineError message={txError} /> : null}
 
                 {txLoading && txItems.length === 0 ? (
-                  <div className="space-y-2">
-                    {[...Array(6)].map((_, idx) => (
-                      <Skeleton key={idx} className="h-12 w-full" />
-                    ))}
-                  </div>
+                  <LoadingCard className="rounded-lg" lines={6} />
                 ) : txItems.length === 0 ? (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                    No transactions in this range.
-                  </div>
+                  <EmptyState
+                    className="rounded-lg"
+                    title="No transactions in this range."
+                    description="Adjust the filters or refresh to fetch the latest activity."
+                    action={
+                      <Button
+                        variant="outline"
+                        className="border-slate-300 text-slate-700"
+                        onClick={() => loadTransactions({ reset: true })}
+                        disabled={txLoading}
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Refresh
+                      </Button>
+                    }
+                  />
                 ) : (
                   <div className="space-y-2">
                     <div className="rounded-lg border border-slate-100 bg-white shadow-[0_10px_30px_-28px_rgba(15,23,42,0.25)]">
