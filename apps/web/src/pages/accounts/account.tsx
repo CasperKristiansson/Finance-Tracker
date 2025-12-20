@@ -54,22 +54,16 @@ import {
   useCategoriesApi,
   useInvestmentsApi,
 } from "@/hooks/use-api";
-import { apiFetch } from "@/lib/apiClient";
 import { formatCategoryLabel, renderCategoryIcon } from "@/lib/category-icons";
 import { cn } from "@/lib/utils";
+import { fetchYearlyOverview, fetchYearlyReport } from "@/services/reports";
+import { fetchTransactions } from "@/services/transactions";
 import {
   AccountType,
   TransactionType,
-  type TransactionListResponse,
   type TransactionRead,
-  type YearlyReportEntry,
   type YearlyOverviewResponse,
 } from "@/types/api";
-import {
-  transactionListSchema,
-  yearlyOverviewSchema,
-  yearlyReportSchema,
-} from "@/types/schemas";
 import { AccountModal } from "./children/account-modal";
 
 const formatCurrency = (value: number) =>
@@ -280,10 +274,8 @@ export const AccountDetails: React.FC = () => {
       if (!accountId) return;
       setAvailableYearsLoading(true);
       try {
-        const { data } = await apiFetch<{ results: YearlyReportEntry[] }>({
-          path: "/reports/yearly",
-          schema: yearlyReportSchema,
-          query: { account_ids: accountId },
+        const { data } = await fetchYearlyReport({
+          accountIds: accountId,
           token,
         });
         const years = (data.results ?? [])
@@ -318,10 +310,8 @@ export const AccountDetails: React.FC = () => {
       try {
         const results = await Promise.all(
           years.map(async (year) => {
-            const { data } = await apiFetch<YearlyOverviewResponse>({
-              path: "/reports/yearly-overview",
-              schema: yearlyOverviewSchema,
-              query: { year, account_ids: accountId },
+            const { data } = await fetchYearlyOverview({
+              year,
               token,
             });
             return [year, data] as const;
@@ -646,12 +636,7 @@ export const AccountDetails: React.FC = () => {
         limit: txLimit,
         offset: nextOffset,
       };
-      const { data } = await apiFetch<TransactionListResponse>({
-        path: "/transactions",
-        schema: transactionListSchema,
-        query,
-        token,
-      });
+      const { data } = await fetchTransactions({ token, query });
       const next = reset
         ? data.transactions
         : [...txItems, ...data.transactions];

@@ -1,15 +1,14 @@
 import React, { useEffect, useState } from "react";
 
-import { apiFetch } from "@/lib/apiClient";
+import {
+  fetchCustomReport,
+  fetchTotalOverview,
+  fetchYearlyOverview,
+} from "@/services/reports";
 import type {
   TotalOverviewResponse,
   YearlyOverviewResponse,
 } from "@/types/api";
-import {
-  monthlyReportSchema,
-  totalOverviewSchema,
-  yearlyOverviewSchema,
-} from "@/types/schemas";
 
 import { ReportsOverviewCard } from "../components/reports-overview-card";
 import { TotalAccountsOverviewCard } from "../components/total-accounts-overview-card";
@@ -84,11 +83,7 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
       if (!token) return;
       setTotalOverviewLoading(true);
       try {
-        const { data } = await apiFetch<TotalOverviewResponse>({
-          path: "/reports/total-overview",
-          schema: totalOverviewSchema,
-          token,
-        });
+        const { data } = await fetchTotalOverview({ token });
         setTotalOverview(data);
       } catch (error) {
         console.error(error);
@@ -163,16 +158,8 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
         const source =
           totalDrilldown.kind === "source" ? totalDrilldown.source : undefined;
 
-        const { data } = await apiFetch<{
-          results: Array<{
-            period: string;
-            income: string;
-            expense: string;
-            net: string;
-          }>;
-        }>({
-          path: "/reports/custom",
-          schema: monthlyReportSchema,
+        const { data } = await fetchCustomReport({
+          token,
           query: {
             start_date: totalWindowRange.start,
             end_date: totalWindowRange.end,
@@ -180,7 +167,6 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
             ...(categoryIds ? { category_ids: categoryIds } : {}),
             ...(source ? { source } : {}),
           },
-          token,
         });
 
         setTotalDrilldownSeries(
@@ -213,10 +199,8 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
       setTotalYearDrilldown(null);
 
       try {
-        const { data } = await apiFetch<YearlyOverviewResponse>({
-          path: "/reports/yearly-overview",
-          schema: yearlyOverviewSchema,
-          query: { year: totalDrilldown.year },
+        const { data } = await fetchYearlyOverview({
+          year: totalDrilldown.year,
           token,
         });
         setTotalYearDrilldown(data);

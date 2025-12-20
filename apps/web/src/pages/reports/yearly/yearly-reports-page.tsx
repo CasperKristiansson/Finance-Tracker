@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from "react";
 
-import { apiFetch } from "@/lib/apiClient";
+import {
+  fetchYearlyCategoryDetail,
+  fetchYearlyOverview,
+} from "@/services/reports";
 import type {
   YearlyCategoryDetailResponse,
   YearlyOverviewResponse,
 } from "@/types/api";
-import {
-  yearlyCategoryDetailSchema,
-  yearlyOverviewSchema,
-} from "@/types/schemas";
 import { ReportsOverviewCard } from "../components/reports-overview-card";
 import { YearlyAccountFlowsCard } from "../components/yearly-account-flows-card";
 import { YearlyCategoryBreakdownCard } from "../components/yearly-category-breakdown-card";
@@ -90,12 +89,7 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
       if (!token) return;
       setOverviewLoading(true);
       try {
-        const { data } = await apiFetch<YearlyOverviewResponse>({
-          path: "/reports/yearly-overview",
-          schema: yearlyOverviewSchema,
-          query: { year },
-          token,
-        });
+        const { data } = await fetchYearlyOverview({ year, token });
         setOverview(data);
       } catch (error) {
         console.error(error);
@@ -117,12 +111,7 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
       }
       setPrevOverviewLoading(true);
       try {
-        const { data } = await apiFetch<YearlyOverviewResponse>({
-          path: "/reports/yearly-overview",
-          schema: yearlyOverviewSchema,
-          query: { year: year - 1 },
-          token,
-        });
+        const { data } = await fetchYearlyOverview({ year: year - 1, token });
         setPrevOverview(data);
       } catch (error) {
         console.error(error);
@@ -142,14 +131,10 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
       setCategoryDetailLoading(true);
       setCategoryDetail(null);
       try {
-        const { data } = await apiFetch<YearlyCategoryDetailResponse>({
-          path: "/reports/yearly-category-detail",
-          schema: yearlyCategoryDetailSchema,
-          query: {
-            year,
-            category_id: selectedCategoryId,
-            flow: selectedCategoryFlow,
-          },
+        const { data } = await fetchYearlyCategoryDetail({
+          year,
+          categoryId: selectedCategoryId,
+          flow: selectedCategoryFlow,
           token,
         });
         setCategoryDetail(data);
