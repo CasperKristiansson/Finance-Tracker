@@ -13,6 +13,10 @@ import {
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   Line,
   LineChart,
@@ -96,6 +100,13 @@ const formatPercent = (value: string | null | undefined) => {
   const parsed = Number(value);
   if (Number.isNaN(parsed)) return "—";
   return `${parsed.toFixed(2)}%`;
+};
+
+const toInterestRateDecimal = (value: string | null | undefined) => {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed > 1 ? parsed / 100 : parsed;
 };
 
 const formatDate = (value: string | null | undefined) => {
@@ -319,6 +330,79 @@ export const Loans: React.FC = () => {
           : Math.abs(Number(acc.balance ?? 0));
       return sum + (Number.isFinite(principal) ? principal : 0);
     }, 0);
+  }, [loanAccounts]);
+
+  const totalOriginPrincipal = useMemo(() => {
+    return loanAccounts.reduce((sum, acc) => {
+      const origin = acc.loan?.origin_principal;
+      const fallback =
+        acc.loan?.current_principal !== undefined
+          ? Number(acc.loan.current_principal)
+          : Math.abs(Number(acc.balance ?? 0));
+      const value =
+        origin !== undefined && Number.isFinite(Number(origin))
+          ? Number(origin)
+          : fallback;
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+  }, [loanAccounts]);
+
+  const totalPaidDown = useMemo(
+    () => Math.max(0, totalOriginPrincipal - totalPrincipal),
+    [totalOriginPrincipal, totalPrincipal],
+  );
+
+  const estimatedMonthlyInterest = useMemo(() => {
+    return loanAccounts.reduce((sum, acc) => {
+      const rate = toInterestRateDecimal(acc.loan?.interest_rate_annual);
+      const principal =
+        acc.loan?.current_principal !== undefined
+          ? Number(acc.loan.current_principal)
+          : Math.abs(Number(acc.balance ?? 0));
+      if (!Number.isFinite(principal) || principal <= 0 || rate === null) {
+        return sum;
+      }
+      return sum + (principal * rate) / 12;
+    }, 0);
+  }, [loanAccounts]);
+
+  const portfolioTrendData = useMemo(() => {
+    const startValue = totalOriginPrincipal || totalPrincipal;
+    if (startValue <= 0 && totalPrincipal <= 0) return [];
+    return [
+      { label: "Start", total: startValue },
+      { label: "Now", total: totalPrincipal },
+      { label: "Payoff", total: 0 },
+    ];
+  }, [totalOriginPrincipal, totalPrincipal]);
+
+  const loanProgressData = useMemo(() => {
+    return loanAccounts
+      .map((acc) => {
+        const origin = acc.loan?.origin_principal
+          ? Number(acc.loan.origin_principal)
+          : null;
+        const current = acc.loan?.current_principal
+          ? Number(acc.loan.current_principal)
+          : Math.abs(Number(acc.balance ?? 0));
+        const safeCurrent = Number.isFinite(current) ? current : 0;
+        const baseOrigin =
+          origin !== null && Number.isFinite(origin) && origin > 0
+            ? origin
+            : safeCurrent;
+        const paid = Math.max(0, baseOrigin - safeCurrent);
+        return {
+          name: acc.name,
+          remaining: Math.max(0, safeCurrent),
+          paid,
+        };
+      })
+      .filter(
+        (item) =>
+          Number.isFinite(item.remaining) &&
+          Number.isFinite(item.paid) &&
+          (item.remaining > 0 || item.paid > 0),
+      );
   }, [loanAccounts]);
 
   const nextExpectedPayoff = useMemo(() => {
@@ -663,16 +747,33 @@ export const Loans: React.FC = () => {
         </div>
       ) : null}
 
-      <motion.div variants={fadeInUp} className="grid gap-3 md:grid-cols-3">
+      <motion.div
+        variants={fadeInUp}
+        className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+      >
         <SummaryCard
           label="Total principal"
           value={formatCurrency(totalPrincipal)}
           hint={`${loanAccounts.length} loans`}
         />
         <SummaryCard
-          label="Included accounts"
-          value={includeInactive ? "Active + archived" : "Active only"}
-          hint="Loans are created as debt accounts"
+          label="Principal paid down"
+          value={formatCurrency(totalPaidDown)}
+          hint={
+            totalOriginPrincipal > 0
+              ? `${Math.round(
+                  Math.min(
+                    100,
+                    Math.max(0, (totalPaidDown / totalOriginPrincipal) * 100),
+                  ),
+                )}% of original`
+              : "Based on loan metadata"
+          }
+        />
+        <SummaryCard
+          label="Est. monthly interest"
+          value={formatCurrency(estimatedMonthlyInterest)}
+          hint="Derived from current balances and annual rates"
         />
         <SummaryCard
           label="Next expected payoff"
@@ -683,6 +784,196 @@ export const Loans: React.FC = () => {
               : "Set expected maturity per loan"
           }
         />
+        <SummaryCard
+          label="Included accounts"
+          value={includeInactive ? "Active + archived" : "Active only"}
+          hint="Loans are created as debt accounts"
+        />
+      </motion.div>
+
+      <motion.div variants={fadeInUp} className="grid gap-3 lg:grid-cols-5">
+        <Card className="border-slate-200 shadow-[0_10px_40px_-26px_rgba(15,23,42,0.35)] lg:col-span-3">
+          <CardHeader className="pb-2">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Portfolio trajectory
+                </CardTitle>
+                <p className="mt-1 text-xs text-slate-500">
+                  From original borrowing to today, with a glide path to payoff.
+                </p>
+              </div>
+              <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                {formatCurrency(totalOriginPrincipal || totalPrincipal)} →
+                {formatCurrency(totalPrincipal)}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                {formatCurrency(totalPaidDown)} paid down
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                <span className="h-2 w-2 rounded-full bg-sky-500" />
+                {formatCurrency(estimatedMonthlyInterest)} est. monthly interest
+              </span>
+            </div>
+            <div className="h-48 w-full">
+              {portfolioTrendData.length ? (
+                <ChartContainer
+                  config={{
+                    total: {
+                      label: "Outstanding",
+                      color: "hsl(222.2 47.4% 11.2%)",
+                    },
+                  }}
+                  className="h-full w-full"
+                >
+                  <AreaChart data={portfolioTrendData}>
+                    <defs>
+                      <linearGradient
+                        id="loan-portfolio-gradient"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="var(--color-total)"
+                          stopOpacity={0.25}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="var(--color-total)"
+                          stopOpacity={0.05}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="label"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: "#64748b" }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(value) =>
+                        new Intl.NumberFormat("sv-SE", {
+                          notation: "compact",
+                          maximumFractionDigits: 1,
+                        }).format(value)
+                      }
+                    />
+                    <Tooltip content={<ChartTooltipContent />} />
+                    <Area
+                      type="monotone"
+                      dataKey="total"
+                      stroke="var(--color-total)"
+                      strokeWidth={2}
+                      fill="url(#loan-portfolio-gradient)"
+                    />
+                  </AreaChart>
+                </ChartContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-600">
+                  Add loan metadata to see the payoff trajectory.
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow-[0_10px_40px_-26px_rgba(15,23,42,0.35)] lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold text-slate-900">
+              Principal vs. paid down
+            </CardTitle>
+            <p className="text-xs text-slate-500">
+              How much of each loan remains versus what’s already been paid.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="h-48 w-full">
+              {loanProgressData.length ? (
+                <ChartContainer
+                  config={{
+                    paid: {
+                      label: "Paid down",
+                      color: "hsl(142.1 76.2% 36.3%)",
+                    },
+                    remaining: {
+                      label: "Remaining",
+                      color: "hsl(213.8 93.9% 67.8%)",
+                    },
+                  }}
+                  className="h-full w-full"
+                >
+                  <BarChart
+                    data={loanProgressData}
+                    margin={{ left: -12, right: 4 }}
+                  >
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="name"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: "#64748b" }}
+                    />
+                    <YAxis
+                      tickFormatter={(value) =>
+                        new Intl.NumberFormat("sv-SE", {
+                          notation: "compact",
+                          maximumFractionDigits: 1,
+                        }).format(value)
+                      }
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip
+                      content={
+                        <ChartTooltipContent
+                          formatter={(value, name) => {
+                            if (typeof value !== "number") return null;
+                            return (
+                              <div className="flex w-full items-center justify-between gap-3">
+                                <span className="text-slate-600">{name}</span>
+                                <span className="font-semibold text-slate-900 tabular-nums">
+                                  {formatCurrency(value)}
+                                </span>
+                              </div>
+                            );
+                          }}
+                          hideLabel
+                        />
+                      }
+                    />
+                    <Bar
+                      dataKey="paid"
+                      stackId="progress"
+                      fill="var(--color-paid)"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="remaining"
+                      stackId="progress"
+                      fill="var(--color-remaining)"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ChartContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-600">
+                  Add loans to visualize payoff progress.
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </motion.div>
 
       <div className="grid gap-3 lg:grid-cols-2">
