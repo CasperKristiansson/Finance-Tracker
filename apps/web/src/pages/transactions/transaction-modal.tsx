@@ -9,6 +9,7 @@ import {
   useCategoriesApi,
   useTransactionsApi,
 } from "@/hooks/use-api";
+import { currency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { TransactionRead } from "@/types/api";
 
@@ -274,9 +275,9 @@ export const TransactionModal: React.FC<{
                           ?.name ?? leg.account_id}
                       </div>
                       <div className="text-sm font-semibold text-slate-900 tabular-nums">
-                        {Number(leg.amount).toLocaleString("sv-SE", {
-                          style: "currency",
-                          currency: "SEK",
+                        {currency(Number(leg.amount), {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
                         })}
                       </div>
                       <div />

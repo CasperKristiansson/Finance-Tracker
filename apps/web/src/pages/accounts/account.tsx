@@ -56,6 +56,7 @@ import {
 } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import { formatCategoryLabel, renderCategoryIcon } from "@/lib/category-icons";
+import { compactCurrency, currency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   AccountType,
@@ -72,18 +73,7 @@ import {
 } from "@/types/schemas";
 import { AccountModal } from "./children/account-modal";
 
-const formatCurrency = (value: number) =>
-  value.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: 0,
-  });
-
-const compactCurrency = (value: number) =>
-  new Intl.NumberFormat("sv-SE", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
+const formatCurrency = (value: number) => currency(value);
 
 const formatAccountType = (type: AccountType) => {
   switch (type) {
@@ -101,7 +91,10 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 const monthKeyFromDate = (date: Date) =>
   date.getFullYear() * 12 + date.getMonth();
 const formatMonthLabel = (year: number, monthIndex: number) =>
-  new Date(year, monthIndex, 1).toLocaleString("en-US", { month: "short" });
+  formatDate(new Date(year, monthIndex, 1), {
+    month: "short",
+    locale: "en-US",
+  });
 const formatMonthLabelWithYear = (year: number, monthIndex: number) =>
   `${formatMonthLabel(year, monthIndex)} '${String(year).slice(-2)}`;
 

@@ -19,7 +19,12 @@ import {
 } from "@/components/ui/dialog";
 
 import type { TotalHeatmapDialogState } from "../reports-types";
-import { compactCurrency, currency, percent } from "../reports-utils";
+import {
+  compactCurrency,
+  currency,
+  formatDate,
+  percent,
+} from "../reports-utils";
 
 export const TotalHeatmapDialog: React.FC<{
   open: boolean;
@@ -104,10 +109,9 @@ export const TotalHeatmapDialog: React.FC<{
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={state.yearValues.map((value, idx) => ({
-                    month: new Date(Date.UTC(2000, idx, 1)).toLocaleDateString(
-                      "sv-SE",
-                      { month: "short" },
-                    ),
+                    month: formatDate(Date.UTC(2000, idx, 1), {
+                      month: "short",
+                    }),
                     value,
                   }))}
                 >

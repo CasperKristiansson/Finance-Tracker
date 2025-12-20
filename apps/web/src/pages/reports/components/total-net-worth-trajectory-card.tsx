@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 
-import { compactCurrency } from "../reports-utils";
+import { compactCurrency, formatDate } from "../reports-utils";
 
 export const TotalNetWorthTrajectoryCard: React.FC<{
   loading: boolean;
@@ -78,9 +78,7 @@ export const TotalNetWorthTrajectoryCard: React.FC<{
               <XAxis
                 dataKey="date"
                 tickFormatter={(value) =>
-                  new Date(value).toLocaleDateString("en-US", {
-                    month: "short",
-                  })
+                  formatDate(value, { month: "short", locale: "en-US" })
                 }
                 tickLine={false}
                 axisLine={false}

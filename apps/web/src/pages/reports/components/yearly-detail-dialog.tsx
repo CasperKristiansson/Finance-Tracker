@@ -30,7 +30,12 @@ import {
 } from "@/components/ui/table";
 
 import type { DetailDialogState } from "../reports-types";
-import { compactCurrency, currency, percent } from "../reports-utils";
+import {
+  compactCurrency,
+  currency,
+  formatDate,
+  percent,
+} from "../reports-utils";
 
 export const YearlyDetailDialog: React.FC<{
   open: boolean;
@@ -52,7 +57,7 @@ export const YearlyDetailDialog: React.FC<{
                     As of
                   </p>
                   <p className="font-semibold text-slate-900">
-                    {new Date(detailDialog.asOf).toLocaleDateString("sv-SE")}
+                    {formatDate(detailDialog.asOf)}
                   </p>
                 </div>
                 <div className="rounded-md border border-slate-100 bg-slate-50 p-3">

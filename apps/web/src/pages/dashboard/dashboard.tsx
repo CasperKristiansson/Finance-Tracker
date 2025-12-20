@@ -52,6 +52,7 @@ import {
 } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import { renderCategoryIcon } from "@/lib/category-icons";
+import { compactCurrency, currency } from "@/lib/format";
 import {
   AccountType,
   type MonthlyReportEntry,
@@ -77,19 +78,6 @@ const numberFromString = (value?: string): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
-
-const currency = (value: number) =>
-  value.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: 0,
-  });
-
-const compactCurrency = (value: number) =>
-  new Intl.NumberFormat("sv-SE", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
 
 const formatDelta = (value: number) => {
   const sign = value >= 0 ? "+" : "-";

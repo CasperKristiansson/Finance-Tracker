@@ -2,6 +2,7 @@ import React from "react";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { currency } from "@/lib/format";
 
 interface SummaryItem {
   name: string;
@@ -28,6 +29,9 @@ export const Summary: React.FC = () => {
     0,
   );
 
+  const formatUsd = (value: number) =>
+    currency(value, { locale: "en-US", currency: "USD" });
+
   function getPercentage(amount: number, total: number) {
     if (total === 0) return 0;
     return (amount / total) * 100;
@@ -50,12 +54,7 @@ export const Summary: React.FC = () => {
           <div>
             <h3 className="mb-2 flex items-center justify-between text-sm font-semibold">
               <span>Assets</span>
-              <span className="text-gray-600">
-                {new Intl.NumberFormat("en-US", {
-                  style: "currency",
-                  currency: "USD",
-                }).format(totalAssets)}
-              </span>
+              <span className="text-gray-600">{formatUsd(totalAssets)}</span>
             </h3>
             <StackedBar items={assets} total={totalAssets} />
             <div className="mt-2 space-y-1">
@@ -72,10 +71,7 @@ export const Summary: React.FC = () => {
                     <span>{item.name}</span>
                   </div>
                   <span className="text-gray-700">
-                    {new Intl.NumberFormat("en-US", {
-                      style: "currency",
-                      currency: "USD",
-                    }).format(item.amount)}
+                    {formatUsd(item.amount)}
                   </span>
                 </div>
               ))}
@@ -86,10 +82,7 @@ export const Summary: React.FC = () => {
             <h3 className="mb-2 flex items-center justify-between text-sm font-semibold">
               <span>Liabilities</span>
               <span className="text-gray-600">
-                {new Intl.NumberFormat("en-US", {
-                  style: "currency",
-                  currency: "USD",
-                }).format(totalLiabilities)}
+                {formatUsd(totalLiabilities)}
               </span>
             </h3>
             <StackedBar items={liabilities} total={totalLiabilities} />
@@ -107,10 +100,7 @@ export const Summary: React.FC = () => {
                     <span>{item.name}</span>
                   </div>
                   <span className="text-gray-700">
-                    {new Intl.NumberFormat("en-US", {
-                      style: "currency",
-                      currency: "USD",
-                    }).format(item.amount)}
+                    {formatUsd(item.amount)}
                   </span>
                 </div>
               ))}
@@ -121,12 +111,7 @@ export const Summary: React.FC = () => {
           <div>
             <h3 className="mb-2 flex items-center justify-between text-sm font-semibold">
               <span>Assets</span>
-              <span className="text-gray-600">
-                {new Intl.NumberFormat("en-US", {
-                  style: "currency",
-                  currency: "USD",
-                }).format(totalAssets)}
-              </span>
+              <span className="text-gray-600">{formatUsd(totalAssets)}</span>
             </h3>
             <StackedBar items={assets} total={totalAssets} />
             <div className="mt-2 space-y-1">
@@ -155,10 +140,7 @@ export const Summary: React.FC = () => {
             <h3 className="mb-2 flex items-center justify-between text-sm font-semibold">
               <span>Liabilities</span>
               <span className="text-gray-600">
-                {new Intl.NumberFormat("en-US", {
-                  style: "currency",
-                  currency: "USD",
-                }).format(totalLiabilities)}
+                {formatUsd(totalLiabilities)}
               </span>
             </h3>
             <StackedBar items={liabilities} total={totalLiabilities} />
