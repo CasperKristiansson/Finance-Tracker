@@ -824,6 +824,7 @@ export const importPreviewResponseSchema = z.object({
           .array(
             z.object({
               id: z.string(),
+              account_id: z.string(),
               occurred_at: z.string(),
               description: z.string(),
               category_id: nullableString,
@@ -835,6 +836,7 @@ export const importPreviewResponseSchema = z.object({
           .array(
             z.object({
               id: z.string(),
+              account_id: z.string(),
               occurred_at: z.string(),
               description: z.string(),
               category_id: nullableString,
