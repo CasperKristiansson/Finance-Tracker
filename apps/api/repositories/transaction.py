@@ -17,7 +17,7 @@ from ..shared import (
     LoanEventType,
     TransactionType,
     coerce_decimal,
-    ensure_balanced_legs,
+    validate_transaction_legs,
 )
 
 
@@ -131,20 +131,6 @@ class TransactionRepository:
         transactions = list(result.unique().all())
         return transactions
 
-    def _validate_legs(self, legs: List[TransactionLeg]) -> None:
-        if len(legs) < 2:
-            raise ValueError("Transactions require at least two legs")
-
-        zero_amount = Decimal("0")
-        for leg in legs:
-            if leg.account_id is None:  # pragma: no cover - defensive
-                raise ValueError("Transaction legs require an account reference")
-            amount = coerce_decimal(leg.amount)
-            if amount == zero_amount:
-                raise ValueError("Transaction legs must carry a non-zero amount")
-
-        ensure_balanced_legs([leg.amount for leg in legs])
-
     def create(
         self,
         transaction: Transaction,
@@ -153,9 +139,7 @@ class TransactionRepository:
         import_batch: Optional[TransactionImportBatch] = None,
         commit: bool = True,
     ) -> Transaction:
-        if not legs:
-            raise ValueError("Transactions require at least one leg")
-        self._validate_legs(legs)
+        validate_transaction_legs(transaction.transaction_type, legs)
 
         if import_batch:
             transaction.import_batch_id = import_batch.id

@@ -95,6 +95,20 @@ def test_repository_rejects_unbalanced_transaction(repo, session):
         repo.create(tx, legs)
 
 
+def test_repository_rejects_zero_amount_leg(repo, session):
+    asset = _create_account(session)
+    counter = _create_account(session)
+    tx = _build_transaction("Zero leg")
+
+    legs = [
+        TransactionLeg(account_id=asset.id, amount=Decimal("0")),
+        TransactionLeg(account_id=counter.id, amount=Decimal("10")),
+    ]
+
+    with pytest.raises(ValueError, match="non-zero amount"):
+        repo.create(tx, legs)
+
+
 def test_set_and_clear_subscription(repo, session):
     asset = _create_account(session)
     counter = _create_account(session)
@@ -139,6 +153,62 @@ def test_service_rejects_transfer_without_distinct_accounts(session):
     ]
 
     with pytest.raises(ValueError):
+        service.create_transaction(tx, legs)
+
+
+@pytest.mark.parametrize(
+    ("legs_builder", "error_match"),
+    [
+        (
+            lambda asset, counter: [TransactionLeg(account_id=asset.id, amount=Decimal("25"))],
+            "at least two legs",
+        ),
+        (
+            lambda asset, counter: [
+                TransactionLeg(account_id=asset.id, amount=Decimal("0")),
+                TransactionLeg(account_id=counter.id, amount=Decimal("10")),
+            ],
+            "non-zero amount",
+        ),
+        (
+            lambda asset, counter: [
+                TransactionLeg(account_id=asset.id, amount=Decimal("-10")),
+                TransactionLeg(account_id=counter.id, amount=Decimal("5")),
+            ],
+            "imbalanced",
+        ),
+        (
+            lambda asset, counter: [
+                TransactionLeg(account_id=asset.id, amount=Decimal("100")),
+                TransactionLeg(account_id=asset.id, amount=Decimal("-100")),
+            ],
+            "distinct accounts",
+        ),
+        (
+            lambda asset, counter: [
+                TransactionLeg(account_id=asset.id, amount=Decimal("25")),
+                TransactionLeg(account_id=counter.id, amount=Decimal("75")),
+            ],
+            "positive and negative",
+        ),
+        (
+            lambda asset, counter: [
+                TransactionLeg(account_id=asset.id, amount=Decimal("-25")),
+                TransactionLeg(account_id=counter.id, amount=Decimal("-75")),
+            ],
+            "positive and negative",
+        ),
+    ],
+)
+def test_transaction_creation_validation_rules(session, legs_builder, error_match):
+    service = TransactionService(session)
+    asset = _create_account(session)
+    counter = _create_account(session)
+
+    tx = _build_transaction("Invalid transaction")
+    legs = legs_builder(asset, counter)
+
+    with pytest.raises(ValueError, match=error_match):
         service.create_transaction(tx, legs)
 
 
