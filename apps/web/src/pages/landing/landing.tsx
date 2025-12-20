@@ -1,5 +1,6 @@
 import { ShaderGradient, ShaderGradientCanvas } from "@shadergradient/react";
 import { motion, useReducedMotion } from "framer-motion";
+import { Github } from "lucide-react";
 import React from "react";
 import { Link } from "react-router-dom";
 import { buttonVariants } from "@/components/ui/button";
@@ -97,6 +98,19 @@ export const Landing: React.FC = () => {
             Try demo
           </Link>
         </div>
+
+        <a
+          href="https://github.com/casperKristiansson/Finance-Tracker"
+          target="_blank"
+          rel="noreferrer"
+          className={cn(
+            buttonVariants({ variant: "ghost" }),
+            "h-auto gap-2 px-3 text-white/80 hover:bg-white/10 hover:text-white",
+          )}
+        >
+          <Github className="h-4 w-4" />
+          View on GitHub
+        </a>
       </motion.div>
     </div>
   );
