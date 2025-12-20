@@ -4,13 +4,25 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Callable, Iterable, Protocol, TypeVar, Union
+from typing import TYPE_CHECKING, Callable, Iterable, Protocol, Sequence, TypeVar, Union
+from uuid import UUID
+
+from .enums import TransactionType
+from .finance import coerce_decimal
+
+if TYPE_CHECKING:  # pragma: no cover
+    from apps.api.models import TransactionLeg
 
 Number = Union[int, float, Decimal]
 T = TypeVar("T")
 
 
 class SupportsAmount(Protocol):
+    amount: Number
+
+
+class SupportsTransactionLeg(Protocol):
+    account_id: UUID | None
     amount: Number
 
 
@@ -55,4 +67,50 @@ def ensure_balanced_legs(
         raise ValueError(f"Transaction legs are imbalanced by {total}")
 
 
-__all__ = ["ensure_balanced_legs"]
+def validate_transaction_legs(
+    transaction_type: TransactionType,
+    legs: Sequence[SupportsTransactionLeg | "TransactionLeg"],
+) -> None:
+    """Validate transactional legs for consistency and correctness.
+
+    Ensures a transaction has at least two legs, each with non-zero amounts,
+    a balanced total, and both positive and negative entries. Transfer
+    transactions additionally require legs to reference at least two distinct
+    accounts.
+    """
+
+    if len(legs) < 2:
+        raise ValueError("Transactions require at least two legs")
+
+    zero_amount = Decimal("0")
+    has_positive = False
+    has_negative = False
+    unique_accounts: set[UUID] = set()
+    amounts: list[Decimal] = []
+
+    for leg in legs:
+        if leg.account_id is None:
+            raise ValueError("Transaction legs require an account reference")
+
+        amount = coerce_decimal(leg.amount)
+        if amount == zero_amount:
+            raise ValueError("Transaction legs must carry a non-zero amount")
+
+        amounts.append(amount)
+        unique_accounts.add(leg.account_id)
+
+        if amount > zero_amount:
+            has_positive = True
+        elif amount < zero_amount:
+            has_negative = True
+
+    if not (has_positive and has_negative):
+        raise ValueError("Transactions must include positive and negative legs")
+
+    ensure_balanced_legs(amounts)
+
+    if transaction_type == TransactionType.TRANSFER and len(unique_accounts) < 2:
+        raise ValueError("Transfers require at least two distinct accounts")
+
+
+__all__ = ["ensure_balanced_legs", "validate_transaction_legs"]

@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { PageRoutes } from "@/data/routes";
 
 import type { TotalDrilldownState } from "../reports-types";
-import { currency, percent } from "../reports-utils";
+import { currency, formatDate, percent } from "../reports-utils";
 import { ChartCard } from "./chart-card";
 
 export type TotalNetWorthStats = {
@@ -89,8 +89,7 @@ export const TotalNetWorthGrowthCard: React.FC<{
                 onClick={() => onOpenDrilldownDialog({ kind: "netWorth" })}
               >
                 <p className="text-xs tracking-wide text-slate-500 uppercase">
-                  Current (as of{" "}
-                  {new Date(netWorthStats.asOf).toLocaleDateString("sv-SE")})
+                  Current (as of {formatDate(netWorthStats.asOf)})
                 </p>
                 <p className="font-semibold text-slate-900">
                   {currency(netWorthStats.current)}
@@ -167,10 +166,7 @@ export const TotalNetWorthGrowthCard: React.FC<{
                   {currency(netWorthStats.allTimeHigh)}
                 </p>
                 <p className="text-xs text-slate-600">
-                  High:{" "}
-                  {new Date(netWorthStats.allTimeHighDate).toLocaleDateString(
-                    "sv-SE",
-                  )}
+                  High: {formatDate(netWorthStats.allTimeHighDate)}
                 </p>
               </button>
             </div>
@@ -188,8 +184,13 @@ export const TotalNetWorthGrowthCard: React.FC<{
                     Change Attribution
                   </p>
                   <p className="text-xs text-slate-500">
-                    {new Date(netWorthAttribution.windowStart).getFullYear()}–
-                    {new Date(netWorthAttribution.windowEnd).getFullYear()}
+                    {formatDate(netWorthAttribution.windowStart, {
+                      year: "numeric",
+                    })}
+                    –
+                    {formatDate(netWorthAttribution.windowEnd, {
+                      year: "numeric",
+                    })}
                   </p>
                 </div>
                 <p className="text-sm font-semibold text-slate-900">

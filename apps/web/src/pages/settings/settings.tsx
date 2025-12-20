@@ -11,9 +11,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSettings } from "@/hooks/use-api";
 
+const currencyCodeSchema = z
+  .string()
+  .trim()
+  .transform((value) => value.toUpperCase())
+  .refine(
+    (value) => value === "" || /^[A-Z]{3}$/.test(value),
+    "Use a 3-letter currency code (e.g. SEK, USD).",
+  );
+
 const profileSchema = z.object({
   first_name: z.string().min(1, "First name required").trim(),
   last_name: z.string().min(1, "Last name required").trim(),
+  currency_code: currencyCodeSchema,
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
@@ -31,6 +41,7 @@ export const Settings: React.FC = () => {
   const {
     firstName,
     lastName,
+    currencyCode,
     loading,
     saving,
     error,
@@ -38,12 +49,14 @@ export const Settings: React.FC = () => {
     saveSettings,
     changeFirstName,
     changeLastName,
+    changeCurrencyCode,
   } = useSettings();
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
       first_name: firstName ?? "",
       last_name: lastName ?? "",
+      currency_code: currencyCode ?? "SEK",
     },
   });
 
@@ -54,6 +67,7 @@ export const Settings: React.FC = () => {
   const handleProfileSubmit = profileForm.handleSubmit((values) => {
     changeFirstName(values.first_name);
     changeLastName(values.last_name);
+    changeCurrencyCode(values.currency_code || undefined);
     saveSettings();
   });
 
@@ -61,8 +75,9 @@ export const Settings: React.FC = () => {
     profileForm.reset({
       first_name: firstName ?? "",
       last_name: lastName ?? "",
+      currency_code: currencyCode ?? "SEK",
     });
-  }, [firstName, lastName, profileForm]);
+  }, [currencyCode, firstName, lastName, profileForm]);
 
   const headerStatus = useMemo(() => {
     if (saving) return "Saving";
@@ -115,6 +130,23 @@ export const Settings: React.FC = () => {
               {profileForm.formState.errors.first_name ? (
                 <p className="text-xs text-rose-600">
                   {profileForm.formState.errors.first_name.message}
+                </p>
+              ) : null}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="currency-code">Currency</Label>
+              <Input
+                id="currency-code"
+                placeholder="SEK"
+                autoComplete="off"
+                {...profileForm.register("currency_code")}
+              />
+              <p className="text-xs text-slate-500">
+                3-letter ISO code used for default currency formatting.
+              </p>
+              {profileForm.formState.errors.currency_code ? (
+                <p className="text-xs text-rose-600">
+                  {profileForm.formState.errors.currency_code.message}
                 </p>
               ) : null}
             </div>

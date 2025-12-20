@@ -40,6 +40,7 @@ import {
   useTransactionsApi,
 } from "@/hooks/use-api";
 import { formatCategoryLabel } from "@/lib/category-icons";
+import { currency, formatDate as formatDateLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { TransactionType, type CategoryRead } from "@/types/api";
 import TransactionModal from "./transaction-modal";
@@ -89,20 +90,11 @@ const columnWidthClass: Partial<Record<ColumnKey, string>> = {
 };
 
 const formatCurrency = (value: number) =>
-  value.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  currency(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 const formatDate = (iso?: string) =>
   iso
-    ? new Date(iso).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
+    ? formatDateLabel(iso, { month: "short", day: "numeric", year: "numeric" })
     : "—";
 
 const normalizeMerchantKey = (value?: string | null) =>

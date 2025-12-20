@@ -72,6 +72,11 @@ import { PageRoutes } from "@/data/routes";
 import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useLoansApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
+import {
+  currency,
+  formatDate as formatDateLocale,
+  formatDateTime as formatDateTimeLocale,
+} from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { AccountWithBalance } from "@/types/api";
 import { AccountType, InterestCompound, LoanEventType } from "@/types/api";
@@ -84,12 +89,7 @@ import {
 const selectLikeInput =
   "flex h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: 0,
-  }).format(value);
+const formatCurrency = (value: number) => currency(value);
 
 const formatPercent = (value: string | null | undefined) => {
   if (!value) return "—";
@@ -102,7 +102,7 @@ const formatDate = (value: string | null | undefined) => {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("sv-SE", {
+  return formatDateLocale(date, {
     year: "numeric",
     month: "short",
     day: "2-digit",
@@ -113,7 +113,7 @@ const formatDateTime = (value: string | null | undefined) => {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("sv-SE", {
+  return formatDateTimeLocale(date, {
     year: "numeric",
     month: "short",
     day: "2-digit",

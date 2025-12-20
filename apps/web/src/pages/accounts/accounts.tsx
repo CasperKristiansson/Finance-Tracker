@@ -47,7 +47,6 @@ import {
 } from "./utils";
 
 type SortKey = "name" | "type" | "status" | "balance";
-
 export const Accounts: React.FC = () => {
   const {
     items,

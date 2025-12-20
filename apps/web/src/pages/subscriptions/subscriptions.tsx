@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { selectToken } from "@/features/auth/authSlice";
 import { useCategoriesApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
+import { currency } from "@/lib/format";
 import {
   categorySchema,
   subscriptionSchema,
@@ -59,12 +60,10 @@ const numberValue = (value: string | number | null | undefined) =>
   value === null || value === undefined ? 0 : Number(value);
 
 const formatAmount = (value: string | number | null | undefined) =>
-  new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: "SEK",
+  currency(numberValue(value), {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
-  }).format(numberValue(value));
+  });
 
 const toNumberOrNull = (value: string | number | null | undefined) => {
   if (value === undefined || value === null || value === "") return null;

@@ -1226,6 +1226,7 @@ export const goalUpdateRequestSchema = goalCreateRequestSchema.partial();
 export const settingsPayloadSchema = z.object({
   first_name: nullableString,
   last_name: nullableString,
+  currency_code: nullableString,
 });
 
 export const settingsResponseSchema = z.object({
