@@ -40,6 +40,7 @@ class TransactionCreate(BaseModel):
     occurred_at: datetime
     posted_at: Optional[datetime] = None
     transaction_type: TransactionType = TransactionType.TRANSFER
+    return_parent_id: Optional[UUID] = None
     legs: List[TransactionLegCreate]
 
     @model_validator(mode="after")
@@ -48,6 +49,8 @@ class TransactionCreate(BaseModel):
             raise ValueError("Transactions require at least two legs")
         if self.posted_at is None:
             self.posted_at = self.occurred_at
+        if self.transaction_type is TransactionType.RETURN and self.return_parent_id is None:
+            raise ValueError("return_parent_id is required for return transactions")
         return self
 
 
@@ -65,6 +68,7 @@ class TransactionRead(BaseModel):
     external_id: Optional[str] = None
     occurred_at: datetime
     posted_at: datetime
+    return_parent_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
     legs: List[TransactionLegRead]

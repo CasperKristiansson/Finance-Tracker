@@ -26,6 +26,7 @@ from ..shared import (
     TransactionType,
     coerce_decimal,
     ensure_balanced_legs,
+    get_default_user_id,
 )
 
 
@@ -81,6 +82,9 @@ class TransactionService:
         if transaction.posted_at is None:  # pragma: no cover - safeguard
             transaction.posted_at = transaction.occurred_at
 
+        if transaction.return_parent_id is not None:
+            transaction.transaction_type = TransactionType.RETURN
+
         category = self._get_category(transaction.category_id)
         self._ensure_subscription_exists(transaction.subscription_id)
         transaction.transaction_type = self._infer_transaction_type(
@@ -90,6 +94,12 @@ class TransactionService:
         )
 
         self._validate_transaction_legs(transaction.transaction_type, prepared_legs)
+        if transaction.transaction_type is TransactionType.RETURN:
+            parent = self._resolve_return_parent(transaction.return_parent_id)
+            self._validate_return_transaction(
+                prepared_legs=prepared_legs,
+                parent=parent,
+            )
 
         created = self.repository.create(
             transaction,
@@ -134,6 +144,39 @@ class TransactionService:
         if transaction is None:
             raise LookupError("Transaction not found")
         self.repository.delete(transaction)
+
+    def mark_transaction_as_return(
+        self, transaction_id: UUID, *, return_parent_id: UUID
+    ) -> Transaction:
+        transaction = self.repository.get(transaction_id)
+        if transaction is None:
+            raise LookupError("Transaction not found")
+        current_user = str(self.session.info.get("user_id") or get_default_user_id())
+        if transaction.user_id != current_user:
+            raise LookupError("Transaction not found")
+        if transaction_id == return_parent_id:
+            raise ValueError("A transaction cannot return itself")
+
+        parent = self._resolve_return_parent(return_parent_id)
+        legs = (
+            transaction.legs
+            if getattr(transaction, "legs", None)
+            else list(
+                self.session.exec(
+                    select(TransactionLeg).where(TransactionLeg.transaction_id == transaction.id)
+                ).all()
+            )
+        )
+
+        self._validate_transaction_legs(TransactionType.RETURN, legs)
+        self._validate_return_transaction(prepared_legs=legs, parent=parent)
+
+        transaction.return_parent_id = return_parent_id
+        transaction.transaction_type = TransactionType.RETURN
+        self.session.add(transaction)
+        self.session.commit()
+        self.session.refresh(transaction)
+        return transaction
 
     def add_transaction_leg(self, transaction_id: UUID, leg: TransactionLeg) -> TransactionLeg:
         transaction = self.repository.get(transaction_id)
@@ -194,6 +237,8 @@ class TransactionService:
     ) -> TransactionType:
         if fallback == TransactionType.ADJUSTMENT:
             return TransactionType.ADJUSTMENT
+        if fallback == TransactionType.RETURN:
+            return TransactionType.RETURN
         if category is not None:
             category_mapping = {
                 CategoryType.INCOME: TransactionType.INCOME,
@@ -309,6 +354,56 @@ class TransactionService:
             return LoanEventType.DISBURSEMENT if amount > 0 else LoanEventType.PAYMENT_PRINCIPAL
 
         return None
+
+    def _resolve_return_parent(self, return_parent_id: Optional[UUID]) -> Transaction:
+        if return_parent_id is None:
+            raise ValueError("Return transactions require a parent reference")
+
+        parent = self.repository.get(return_parent_id)
+        if parent is None:
+            raise ValueError("Return parent transaction not found")
+
+        current_user = str(self.session.info.get("user_id") or get_default_user_id())
+        if parent.user_id != current_user:
+            raise ValueError("Return parent must belong to the same user")
+        if parent.transaction_type is TransactionType.RETURN:
+            raise ValueError("Return parent cannot be a return transaction")
+
+        return parent
+
+    def _leg_amounts_by_account(
+        self, legs: Iterable[TransactionLeg]
+    ) -> dict[UUID, Decimal]:  # pragma: no cover - thin mapper
+        totals: dict[UUID, Decimal] = {}
+        for leg in legs:
+            amount = coerce_decimal(leg.amount)
+            totals[leg.account_id] = totals.get(leg.account_id, Decimal("0")) + amount
+        return totals
+
+    def _validate_return_transaction(
+        self,
+        *,
+        prepared_legs: Iterable[TransactionLeg],
+        parent: Transaction,
+    ) -> None:
+        candidate_totals = self._leg_amounts_by_account(prepared_legs)
+
+        if not hasattr(parent, "legs") or not parent.legs:
+            parent_legs = list(
+                self.session.exec(
+                    select(TransactionLeg).where(TransactionLeg.transaction_id == parent.id)
+                ).all()
+            )
+        else:  # pragma: no cover - exercised in handler tests
+            parent_legs = parent.legs
+
+        parent_totals = self._leg_amounts_by_account(parent_legs)
+        if set(candidate_totals.keys()) != set(parent_totals.keys()):
+            raise ValueError("Return transactions must reference the same accounts as the parent")
+
+        for account_id, amount in candidate_totals.items():
+            if amount + parent_totals[account_id] != Decimal("0"):
+                raise ValueError("Return transaction legs must offset parent leg amounts")
 
 
 __all__ = ["TransactionService"]

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from typing import Any, Dict
+from uuid import UUID
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from ..models import Transaction, TransactionLeg
 from ..schemas import (
@@ -29,6 +30,10 @@ from .utils import (
 
 def reset_handler_state() -> None:
     reset_engine_state()
+
+
+class TransactionReturnLink(BaseModel):
+    return_parent_id: UUID
 
 
 def _transaction_to_schema(transaction: Transaction) -> TransactionRead:
@@ -90,6 +95,7 @@ def create_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         external_id=data.external_id,
         occurred_at=data.occurred_at,
         posted_at=data.posted_at or data.occurred_at,
+        return_parent_id=data.return_parent_id,
     )
     legs = [TransactionLeg(account_id=leg.account_id, amount=leg.amount) for leg in data.legs]
 
@@ -107,10 +113,39 @@ def create_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 __all__ = [
     "list_transactions",
     "create_transaction",
+    "mark_transaction_return",
     "update_transaction",
     "delete_transaction",
     "reset_handler_state",
 ]
+
+
+def mark_transaction_return(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    user_id = get_user_id(event)
+    transaction_id = extract_path_uuid(event, param_names=("transaction_id", "transactionId"))
+    if transaction_id is None:
+        return json_response(400, {"error": "Transaction ID missing from path"})
+
+    payload = parse_body(event)
+    try:
+        data = TransactionReturnLink.model_validate(payload)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope(user_id=user_id) as session:
+        service = TransactionService(session)
+        try:
+            updated = service.mark_transaction_as_return(
+                transaction_id, return_parent_id=data.return_parent_id
+            )
+        except LookupError:
+            return json_response(404, {"error": "Transaction not found"})
+        except ValueError as exc:
+            return json_response(400, {"error": str(exc)})
+
+        response = _transaction_to_schema(updated).model_dump(mode="json")
+    return json_response(200, response)
 
 
 def update_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:

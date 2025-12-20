@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Iterator
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy.pool import StaticPool
@@ -14,6 +14,7 @@ from apps.api.handlers import (
     create_transaction,
     delete_transaction,
     list_transactions,
+    mark_transaction_return,
     reset_transaction_handler_state,
     update_transaction,
 )
@@ -94,6 +95,68 @@ def test_create_and_list_transactions():
     assert isinstance(body.get("running_balances"), dict)
 
 
+def test_create_return_transaction_requires_matching_accounts():
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        source = _create_account(session)
+        destination = _create_account(session)
+        source_id = source.id
+        destination_id = destination.id
+
+    occurred = datetime(2024, 2, 1, tzinfo=timezone.utc)
+    parent_payload = {
+        "occurred_at": occurred.isoformat(),
+        "posted_at": occurred.isoformat(),
+        "legs": [
+            {"account_id": str(source_id), "amount": "-50.00"},
+            {"account_id": str(destination_id), "amount": "50.00"},
+        ],
+    }
+    parent_response = create_transaction(
+        {"body": json.dumps(parent_payload), "isBase64Encoded": False},
+        None,
+    )
+    parent_id = _json_body(parent_response)["id"]
+
+    return_payload = {
+        "occurred_at": occurred.isoformat(),
+        "posted_at": occurred.isoformat(),
+        "transaction_type": "return",
+        "return_parent_id": parent_id,
+        "legs": [
+            {"account_id": str(destination_id), "amount": "-50.00"},
+            {"account_id": str(source_id), "amount": "50.00"},
+        ],
+    }
+
+    create_response = create_transaction(
+        {"body": json.dumps(return_payload), "isBase64Encoded": False},
+        None,
+    )
+    created = _json_body(create_response)
+    assert create_response["statusCode"] == 201
+    assert created["return_parent_id"] == parent_id
+    assert created["transaction_type"] == "return"
+
+    mismatched_return_payload = {
+        "occurred_at": occurred.isoformat(),
+        "posted_at": occurred.isoformat(),
+        "transaction_type": "return",
+        "return_parent_id": parent_id,
+        "legs": [
+            {"account_id": str(destination_id), "amount": "-50.00"},
+            {"account_id": str(uuid4()), "amount": "50.00"},
+        ],
+    }
+
+    error_response = create_transaction(
+        {"body": json.dumps(mismatched_return_payload), "isBase64Encoded": False},
+        None,
+    )
+    assert error_response["statusCode"] == 400
+
+
 def test_create_transaction_with_subscription():
     engine = get_engine()
     with Session(engine) as session:
@@ -123,6 +186,59 @@ def test_create_transaction_with_subscription():
     assert response["statusCode"] == 201
     created = _json_body(response)
     assert created["subscription_id"] == str(subscription_id)
+
+
+def test_mark_transaction_as_return_backfills_link():
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        source = _create_account(session)
+        destination = _create_account(session)
+        source_id = source.id
+        destination_id = destination.id
+
+    occurred = datetime(2024, 3, 1, tzinfo=timezone.utc)
+    parent_payload = {
+        "occurred_at": occurred.isoformat(),
+        "posted_at": occurred.isoformat(),
+        "legs": [
+            {"account_id": str(source_id), "amount": "-20.00"},
+            {"account_id": str(destination_id), "amount": "20.00"},
+        ],
+    }
+    parent_response = create_transaction(
+        {"body": json.dumps(parent_payload), "isBase64Encoded": False},
+        None,
+    )
+    parent_id = _json_body(parent_response)["id"]
+
+    existing_payload = {
+        "occurred_at": occurred.isoformat(),
+        "posted_at": occurred.isoformat(),
+        "legs": [
+            {"account_id": str(source_id), "amount": "20.00"},
+            {"account_id": str(destination_id), "amount": "-20.00"},
+        ],
+    }
+    existing_response = create_transaction(
+        {"body": json.dumps(existing_payload), "isBase64Encoded": False},
+        None,
+    )
+    existing_id = _json_body(existing_response)["id"]
+
+    mark_response = mark_transaction_return(
+        {
+            "pathParameters": {"transaction_id": existing_id},
+            "body": json.dumps({"return_parent_id": parent_id}),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+
+    assert mark_response["statusCode"] == 200
+    updated = _json_body(mark_response)
+    assert updated["return_parent_id"] == parent_id
+    assert updated["transaction_type"] == "return"
 
 
 def test_create_transaction_rejects_missing_subscription():

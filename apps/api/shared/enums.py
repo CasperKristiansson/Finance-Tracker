@@ -39,6 +39,7 @@ class TransactionType(StrEnum):
     EXPENSE = "expense"
     TRANSFER = "transfer"
     ADJUSTMENT = "adjustment"
+    RETURN = "return"
     INVESTMENT_EVENT = "investment_event"
 
 

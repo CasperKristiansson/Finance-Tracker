@@ -73,6 +73,7 @@ from .transactions import (
     create_transaction,
     delete_transaction,
     list_transactions,
+    mark_transaction_return,
 )
 from .transactions import reset_handler_state as reset_transaction_handler_state
 from .transactions import (
@@ -108,6 +109,7 @@ __all__ = [
     "save_settings",
     "create_transaction",
     "list_transactions",
+    "mark_transaction_return",
     "update_transaction",
     "delete_transaction",
     "create_tax_event",

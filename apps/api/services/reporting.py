@@ -785,9 +785,12 @@ class ReportingService:
         transfers represent real money in/out for those accounts and should be
         included as income/expense. When not scoped, transfers are excluded to
         avoid double-counting.
+
+        Return transactions are treated as neutral adjustments and excluded
+        from income/expense totals regardless of scope.
         """
 
-        if row.transaction_type == TransactionType.TRANSFER:
+        if row.transaction_type in {TransactionType.TRANSFER, TransactionType.RETURN}:
             return Decimal("0"), Decimal("0")
 
         if account_scoped:

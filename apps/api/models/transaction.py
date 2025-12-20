@@ -84,6 +84,14 @@ class Transaction(
             nullable=True,
         ),
     )
+    return_parent_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("transactions.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
     if TYPE_CHECKING:  # pragma: no cover
         category: Optional["Category"]
         legs: List["TransactionLeg"]
@@ -91,6 +99,8 @@ class Transaction(
         import_batch: Optional["TransactionImportBatch"]
         subscription: Optional["Subscription"]
         tax_event: Optional["TaxEvent"]
+        return_parent: Optional["Transaction"]
+        returns: List["Transaction"]
 
     __table_args__ = (
         UniqueConstraint("user_id", "external_id", name="uq_transaction_external_id"),
@@ -122,6 +132,16 @@ class Transaction(
     tax_event: Optional["TaxEvent"] = Relationship(
         back_populates="transaction",
         sa_relationship=relationship("TaxEvent", back_populates="transaction", uselist=False),
+    )
+    return_parent: Optional["Transaction"] = Relationship(
+        sa_relationship=relationship(
+            "Transaction",
+            back_populates="returns",
+            remote_side="Transaction.id",
+        )
+    )
+    returns: List["Transaction"] = Relationship(
+        sa_relationship=relationship("Transaction", back_populates="return_parent")
     )
 
 
