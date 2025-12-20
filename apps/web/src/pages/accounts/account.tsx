@@ -25,6 +25,7 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
+import { InlineError } from "@/components/composed/inline-error";
 import {
   MotionPage,
   StaggerWrap,
@@ -1353,11 +1354,7 @@ export const AccountDetails: React.FC = () => {
 
                 <Separator className="my-4" />
 
-                {txError ? (
-                  <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-                    {txError}
-                  </div>
-                ) : null}
+                {txError ? <InlineError message={txError} /> : null}
 
                 {txLoading && txItems.length === 0 ? (
                   <div className="space-y-2">

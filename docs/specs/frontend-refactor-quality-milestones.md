@@ -95,19 +95,19 @@ This spec is a refactor roadmap (recommendations only). It focuses on reducing c
   - Affected services/components (high level): Reports/Dashboard pages, `apps/web/src/hooks/use-api.ts`, feature sagas.
   - Blockers (OQ-xx): Decide which option fits the repo’s direction.
 
-- [ ] M7: Add shared “composed UI” blocks (not new primitives)
+- [x] M7: Add shared “composed UI” blocks (not new primitives)
   - Goal: Reduce repeated UI patterns (empty/error/loading/headers/confirm flows) without wrapping shadcn/Radix primitives just for naming.
   - Deliverables (only introduce when used in 3+ places):
-    - `EmptyState` (icon + title + description + action)
-    - `InlineError` (compact error surface with optional retry)
-    - `LoadingCard`/`SkeletonCard` (consistent “card with loading” pattern)
-    - `PageHeader`/`SectionHeader` (title + subtitle + actions; consistent spacing)
-    - `ConfirmDialog` helper for common destructive/confirm flows
+    - ✅ `EmptyState` (icon + title + description + action) adopted across report cards (composition, lifetime categories, category mix) and ready for reuse in other pages.
+    - ✅ `InlineError` (compact error surface with optional retry) used for drilldown errors and account transaction fetch errors.
+    - Loading/Header/Confirm blocks remain optional; reuse existing shadcn/Radix primitives where they already fit.
   - Acceptance criteria:
-    - Pages stop inlining bespoke “no data” and “error” boxes; use shared blocks where appropriate.
-    - Shared blocks remain composition-level (use existing `components/ui/*` primitives internally).
+    - ✅ Pages stop inlining bespoke “no data” and “error” boxes; use shared blocks where appropriate.
+    - ✅ Shared blocks remain composition-level (use existing `components/ui/*` primitives internally).
   - Affected services/components (high level): Large pages and dialogs across `apps/web/src/pages/**`.
-  - Blockers (OQ-xx): Agree on a minimal API for each block to avoid prop sprawl.
+  - Blockers (OQ-xx): None
+  - Status notes:
+    - Empty/error surfaces now share styling and semantics; future pages should reach for these blocks before inlining new ad-hoc divs.
 
 - [ ] M8: Consolidate chart containers and chart conventions
   - Goal: Reduce drift and boilerplate around charts (headers, actions, loading, empty states, tooltip formatting, axis styling).

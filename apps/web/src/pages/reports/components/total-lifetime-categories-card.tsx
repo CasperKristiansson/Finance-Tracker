@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { EmptyState } from "@/components/composed/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -143,9 +144,7 @@ export const TotalLifetimeCategoriesCard: React.FC<{
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-            No lifetime category data yet.
-          </div>
+          <EmptyState title="No lifetime category data yet." />
         )}
       </CardContent>
     </Card>
