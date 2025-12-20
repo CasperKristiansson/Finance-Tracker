@@ -56,6 +56,14 @@ provider:
             - execute-api:ManageConnections
           Resource:
             - Fn::Sub: "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebsocketsApi}/*"
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:AbortMultipartUpload
+            - s3:ListBucket
+          Resource:
+            - arn:aws:s3:::${ssm:/finance-tracker/${self:provider.stage}/backups/bucket}
+            - arn:aws:s3:::${ssm:/finance-tracker/${self:provider.stage}/backups/bucket}/*
   httpApi:
     name: ${self:service}-${self:provider.stage}-http
     cors: true
@@ -82,6 +90,21 @@ custom:
   backendLayerArn: ${cf:finance-tracker-layer-service-${self:provider.stage}.BackendDepsLambdaLayerQualifiedArn}
 
 functions:
+  databaseBackup:
+    handler: apps/api/handlers/backups.run_database_backup
+    timeout: 900
+    memorySize: 1024
+    layers:
+      - ${self:custom.backendLayerArn}
+    environment:
+      BACKUP_BUCKET_NAME: ${ssm:/finance-tracker/${self:provider.stage}/backups/bucket}
+      BACKUP_PREFIX: finance-tracker/${self:provider.stage}/database-backups
+    events:
+      - schedule:
+          rate: cron(0 3 1 * ? *)
+          enabled: true
+          description: Monthly export of database tables to S3
+
   warmDatabase:
     handler: apps/api/handlers/warmup.warm_database
     timeout: 12

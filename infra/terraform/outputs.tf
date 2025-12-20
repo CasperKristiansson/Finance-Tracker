@@ -59,3 +59,10 @@ output "api_domain_configuration" {
     certificate_parameter_arn = module.resources.api_domain_certificate_parameter_name
   }
 }
+
+output "backup_parameter_paths" {
+  description = "SSM parameter names containing backup storage configuration."
+  value = {
+    bucket = module.resources.backup_bucket_parameter_name
+  }
+}
