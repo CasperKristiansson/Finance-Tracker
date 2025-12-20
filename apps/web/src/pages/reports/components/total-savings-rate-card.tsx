@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import type { TotalTimeseriesDialogState } from "../reports-types";
-import { currency, isRecord } from "../reports-utils";
+import { currency, formatDate, isRecord } from "../reports-utils";
 
 export type SavingsRatePoint = {
   date: string;
@@ -130,10 +130,7 @@ export const TotalSavingsRateCard: React.FC<{
                   if (!isRecord(row)) return null;
                   const date = String(row.date ?? "");
                   const label = date
-                    ? new Date(date).toLocaleDateString("sv-SE", {
-                        year: "numeric",
-                        month: "long",
-                      })
+                    ? formatDate(date, { year: "numeric", month: "long" })
                     : "Month";
                   const income = Number(row.income ?? 0);
                   const expense = Number(row.expense ?? 0);

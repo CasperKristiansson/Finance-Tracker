@@ -22,6 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { currency, formatDate } from "@/lib/format";
 
 const data = {
   netWorth: 100000,
@@ -50,10 +51,11 @@ export const NetWorthPerformanceCard: React.FC = () => {
     return `$ ${value}`;
   };
 
-  const formatXAxis = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString("en-US", { month: "short" });
-  };
+  const formatXAxis = (dateStr: string) =>
+    formatDate(dateStr, { month: "short", locale: "en-US" });
+
+  const formatUsd = (value: number) =>
+    currency(value, { locale: "en-US", currency: "USD" });
 
   return (
     <Card>
@@ -62,18 +64,12 @@ export const NetWorthPerformanceCard: React.FC = () => {
         <div className="space-between flex w-full flex-col justify-between gap-4 md:flex-row md:gap-0">
           <div className="flex items-center">
             <CardTitle className="text-2xl font-bold">
-              {data.netWorth.toLocaleString("en-US", {
-                style: "currency",
-                currency: "USD",
-              })}
+              {formatUsd(data.netWorth)}
             </CardTitle>
             <div className="ml-2 flex items-center space-x-1 text-sm">
               <ArrowUp color="oklch(0.627 0.194 149.214)" size={20} />
               <span className="text-green-600">
-                {data.monthlyChange.toLocaleString("en-US", {
-                  style: "currency",
-                  currency: "USD",
-                })}
+                {formatUsd(data.monthlyChange)}
               </span>
               <span className="text-green-600">(12.5%)</span>
               <span className="ml-2 hidden text-gray-500 lg:block">
@@ -134,14 +130,7 @@ export const NetWorthPerformanceCard: React.FC = () => {
               tickLine={false}
               tick={{ fontSize: 12 }}
             />
-            <Tooltip
-              formatter={(value: number) =>
-                value.toLocaleString("en-US", {
-                  style: "currency",
-                  currency: "USD",
-                })
-              }
-            />
+            <Tooltip formatter={(value: number) => formatUsd(Number(value))} />
             <Area
               type="monotone"
               dataKey="netWorth"

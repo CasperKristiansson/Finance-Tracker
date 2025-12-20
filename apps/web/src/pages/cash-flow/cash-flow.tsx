@@ -28,6 +28,7 @@ import { PageRoutes } from "@/data/routes";
 import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useReportsApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
+import { compactCurrency, currency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type {
   CashflowForecastResponse,
@@ -48,20 +49,13 @@ const coerceMoney = (value: unknown): number => {
 };
 
 const formatSek = (value: number, digits = 0) =>
-  value.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: digits,
+  currency(value, {
     minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
   });
 
 const formatSekCompact = (value: number) =>
-  value.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    notation: "compact",
-    maximumFractionDigits: 0,
-  });
+  compactCurrency(value, { maximumFractionDigits: 0 });
 
 type Granularity = "monthly" | "quarterly";
 

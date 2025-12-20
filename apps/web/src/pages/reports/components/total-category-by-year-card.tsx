@@ -42,6 +42,9 @@ export const TotalCategoryByYearCard: React.FC<{
     value: number;
   } | null>(null);
 
+  const baseColor = flow === "income" ? "16,185,129" : "239,68,68";
+  const fallbackColor = flow === "income" ? "#10b981" : "#ef4444";
+
   const yearTotalByYear = useMemo(() => {
     const map = new Map<number, number>();
     yearlyTotals.forEach((entry) => {
@@ -50,8 +53,61 @@ export const TotalCategoryByYearCard: React.FC<{
     return map;
   }, [flow, yearlyTotals]);
 
-  const baseColor = flow === "income" ? "16,185,129" : "239,68,68";
-  const fallbackColor = flow === "income" ? "#10b981" : "#ef4444";
+  type CategoryByYearCell = {
+    year: number;
+    value: number;
+    yearTotal: number | null;
+    sharePct: number | null;
+    yoyDelta: number | null;
+    yoyDeltaPct: number | null;
+  };
+
+  type CategoryByYearRow = {
+    categoryId: string | null;
+    name: string;
+    color: string;
+    totals: number[];
+    cells: CategoryByYearCell[];
+  };
+
+  const categoryRows = useMemo<CategoryByYearRow[]>(() => {
+    if (!heatmap) return [];
+
+    return heatmap.rows.map((row) => {
+      const resolvedColor = row.color ?? fallbackColor;
+      const cells: CategoryByYearCell[] = heatmap.years.map((yr, idx) => {
+        const value = row.totals[idx] ?? 0;
+        const yearTotal = yearTotalByYear.get(yr);
+        const prevValue = idx > 0 ? (row.totals[idx - 1] ?? null) : null;
+        const yoyDelta = prevValue === null ? null : value - prevValue;
+        const yoyDeltaPct =
+          prevValue === null || prevValue === 0
+            ? null
+            : ((value - prevValue) / prevValue) * 100;
+        const sharePct =
+          typeof yearTotal === "number" && yearTotal > 0
+            ? (value / yearTotal) * 100
+            : null;
+
+        return {
+          year: yr,
+          value,
+          yearTotal: typeof yearTotal === "number" ? yearTotal : null,
+          sharePct,
+          yoyDelta,
+          yoyDeltaPct,
+        };
+      });
+
+      return {
+        categoryId: row.categoryId,
+        name: row.name,
+        color: resolvedColor,
+        totals: row.totals,
+        cells,
+      };
+    });
+  }, [fallbackColor, heatmap, yearTotalByYear]);
 
   return (
     <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
@@ -93,7 +149,7 @@ export const TotalCategoryByYearCard: React.FC<{
                   </span>
                 </div>
               ))}
-              {heatmap.rows.map((row) => (
+              {categoryRows.map((row) => (
                 <React.Fragment key={row.name}>
                   <div
                     className={
@@ -108,21 +164,20 @@ export const TotalCategoryByYearCard: React.FC<{
                         flow,
                         categoryId: row.categoryId,
                         name: row.name,
-                        color: row.color ?? fallbackColor,
+                        color: row.color,
                       });
                     }}
                   >
                     {row.name}
                   </div>
-                  {heatmap.years.map((yr, idx) => {
-                    const value = row.totals[idx] ?? 0;
-                    const yearTotal = yearTotalByYear.get(yr);
+                  {row.cells.map((cell, idx) => {
+                    const { year, value } = cell;
                     return (
                       <button
                         type="button"
-                        key={`${row.name}-${yr}`}
-                        title={`${row.name} • ${yr}: ${currency(value)}`}
-                        aria-label={`${row.name} ${yr} ${flow} ${currency(value)}`}
+                        key={`${row.name}-${year}`}
+                        title={`${row.name} • ${year}: ${currency(value)}`}
+                        aria-label={`${row.name} ${year} ${flow} ${currency(value)}`}
                         className="h-5 rounded-sm border border-slate-100 transition hover:ring-1 hover:ring-slate-300 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:outline-none"
                         style={{
                           backgroundColor: heatColor(
@@ -132,37 +187,27 @@ export const TotalCategoryByYearCard: React.FC<{
                           ),
                         }}
                         onMouseEnter={() =>
-                          setHover({ year: yr, categoryName: row.name, value })
+                          setHover({ year, categoryName: row.name, value })
                         }
                         onFocus={() =>
-                          setHover({ year: yr, categoryName: row.name, value })
+                          setHover({ year, categoryName: row.name, value })
                         }
                         onClick={() => {
-                          const prevValue =
-                            idx > 0 ? (row.totals[idx - 1] ?? 0) : null;
-                          const yoyDelta =
-                            prevValue === null ? null : value - prevValue;
-                          const yoyDeltaPct =
-                            prevValue === null || prevValue === 0
-                              ? null
-                              : ((value - prevValue) / prevValue) * 100;
+                          const { yearTotal, sharePct, yoyDelta, yoyDeltaPct } =
+                            row.cells[idx];
                           onOpenHeatmapDialog({
                             kind: "categoryByYear",
                             flow,
-                            year: yr,
+                            year,
                             categoryId: row.categoryId,
                             categoryName: row.name,
-                            color: row.color ?? fallbackColor,
+                            color: row.color,
                             value,
                             years: heatmap.years,
                             totals: row.totals,
                             max: heatmap.max,
-                            yearTotal:
-                              typeof yearTotal === "number" ? yearTotal : null,
-                            sharePct:
-                              typeof yearTotal === "number" && yearTotal > 0
-                                ? (value / yearTotal) * 100
-                                : null,
+                            yearTotal,
+                            sharePct,
                             yoyDelta,
                             yoyDeltaPct,
                           });

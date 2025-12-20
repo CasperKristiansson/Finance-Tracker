@@ -106,8 +106,10 @@ import {
   selectSettingsLoading,
   selectSettingsSaving,
   selectSettingsState,
+  selectCurrencyCode,
   setFirstName,
   setLastName,
+  setCurrencyCode,
 } from "@/features/settings/settingsSlice";
 import {
   FetchRecentTransactions,
@@ -562,6 +564,7 @@ export const useSettings = () => {
   const state = useAppSelector(selectSettingsState);
   const firstName = useAppSelector(selectFirstName);
   const lastName = useAppSelector(selectLastName);
+  const currencyCode = useAppSelector(selectCurrencyCode);
   const loading = useAppSelector(selectSettingsLoading);
   const saving = useAppSelector(selectSettingsSaving);
   const error = useAppSelector(selectSettingsError);
@@ -585,10 +588,16 @@ export const useSettings = () => {
     [dispatch],
   );
 
+  const changeCurrencyCode = useCallback(
+    (value: string | undefined) => dispatch(setCurrencyCode(value)),
+    [dispatch],
+  );
+
   return {
     ...state,
     firstName,
     lastName,
+    currencyCode,
     loading,
     saving,
     error,
@@ -597,5 +606,6 @@ export const useSettings = () => {
     saveSettings,
     changeFirstName,
     changeLastName,
+    changeCurrencyCode,
   };
 };

@@ -29,6 +29,7 @@ import type { DetailDialogState } from "../reports-types";
 import {
   compactCurrency,
   currency,
+  formatDate,
   monthLabel,
   percent,
 } from "../reports-utils";
@@ -141,9 +142,7 @@ export const YearlyInvestmentsSummaryCard: React.FC<{
                   As of
                 </p>
                 <p className="font-semibold text-slate-900">
-                  {new Date(investmentsSummary.asOf).toLocaleDateString(
-                    "sv-SE",
-                  )}
+                  {formatDate(investmentsSummary.asOf)}
                 </p>
               </div>
               <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
