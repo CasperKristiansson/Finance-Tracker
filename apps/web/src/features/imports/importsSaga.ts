@@ -25,6 +25,7 @@ import type {
   ImportPreviewRequest,
   ImportPreviewResponse,
 } from "@/types/api";
+import type { BankImportType } from "@/types/enums";
 import {
   importCommitRequestSchema,
   importCommitResponseSchema,
@@ -181,6 +182,16 @@ function buildSuggestPayload(
     is_archived?: boolean;
   }>,
 ) {
+  const bankImportTypeByAccount = new Map<string, BankImportType | null>();
+  (preview.files ?? []).forEach((file) => {
+    if (!bankImportTypeByAccount.has(file.account_id)) {
+      bankImportTypeByAccount.set(
+        file.account_id,
+        file.bank_import_type ?? null,
+      );
+    }
+  });
+
   const contexts = preview.accounts ?? [];
   const rowsByAccount = new Map<string, typeof preview.rows>();
   preview.rows.forEach((row) => {
@@ -196,9 +207,18 @@ function buildSuggestPayload(
 
   for (const ctx of contexts) {
     const accountRows = rowsByAccount.get(ctx.account_id) ?? [];
+    const bankImportType = bankImportTypeByAccount.get(ctx.account_id);
+    const isSwedbankAccount = bankImportType === "swedbank";
+
     const transactions: ImportCategorySuggestRequest["transactions"] = [];
     for (const row of accountRows) {
       if (row.rule_applied) continue;
+      if (
+        isSwedbankAccount &&
+        row.description.toLowerCase().includes("swish")
+      ) {
+        continue;
+      }
       transactions.push({
         id: row.id,
         description: row.description,
