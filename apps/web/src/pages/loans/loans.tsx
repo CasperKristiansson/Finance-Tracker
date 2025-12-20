@@ -22,6 +22,7 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
+import { EmptyState } from "@/components/composed/empty-state";
 import {
   MotionPage,
   StaggerWrap,
@@ -71,6 +72,11 @@ import { PageRoutes } from "@/data/routes";
 import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useLoansApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
+import {
+  currency,
+  formatDate as formatDateLocale,
+  formatDateTime as formatDateTimeLocale,
+} from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { AccountWithBalance } from "@/types/api";
 import { AccountType, InterestCompound, LoanEventType } from "@/types/api";
@@ -83,12 +89,7 @@ import {
 const selectLikeInput =
   "flex h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: 0,
-  }).format(value);
+const formatCurrency = (value: number) => currency(value);
 
 const formatPercent = (value: string | null | undefined) => {
   if (!value) return "—";
@@ -101,7 +102,7 @@ const formatDate = (value: string | null | undefined) => {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("sv-SE", {
+  return formatDateLocale(date, {
     year: "numeric",
     month: "short",
     day: "2-digit",
@@ -112,7 +113,7 @@ const formatDateTime = (value: string | null | undefined) => {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("sv-SE", {
+  return formatDateTimeLocale(date, {
     year: "numeric",
     month: "short",
     day: "2-digit",
@@ -1349,29 +1350,27 @@ export const Loans: React.FC = () => {
                         </div>
                       </div>
                     ) : (
-                      <div className="flex flex-col gap-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4">
-                        <div className="text-sm font-medium text-slate-900">
-                          No events yet
-                        </div>
-                        <p className="text-sm text-slate-600">
-                          Events appear when transactions post against this loan
-                          (payments, interest accruals, adjustments).
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="outline"
-                            className="border-slate-300 text-slate-800"
-                            onClick={refreshLoanData}
-                          >
-                            Refresh
-                          </Button>
-                          <Button asChild variant="outline">
-                            <Link to={PageRoutes.transactions}>
-                              Open transactions
-                            </Link>
-                          </Button>
-                        </div>
-                      </div>
+                      <EmptyState
+                        className="rounded-lg"
+                        title="No events yet."
+                        description="Events appear when transactions post against this loan (payments, interest accruals, adjustments)."
+                        action={
+                          <div className="flex flex-wrap justify-center gap-2">
+                            <Button
+                              variant="outline"
+                              className="border-slate-300 text-slate-800"
+                              onClick={refreshLoanData}
+                            >
+                              Refresh
+                            </Button>
+                            <Button asChild variant="outline">
+                              <Link to={PageRoutes.transactions}>
+                                Open transactions
+                              </Link>
+                            </Button>
+                          </div>
+                        }
+                      />
                     )}
                   </CardContent>
                 </Card>

@@ -12,7 +12,7 @@ import {
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import type { YearlyOverviewResponse } from "@/types/api";
 
-import { compactCurrency } from "../reports-utils";
+import { compactCurrency, formatDate } from "../reports-utils";
 import { ChartCard } from "./chart-card";
 
 export const YearlyNetWorthGrowthCard: React.FC<{
@@ -89,7 +89,7 @@ export const YearlyNetWorthGrowthCard: React.FC<{
           <XAxis
             dataKey="date"
             tickFormatter={(value) =>
-              new Date(value).toLocaleDateString("en-US", { month: "short" })
+              formatDate(value, { month: "short", locale: "en-US" })
             }
             tickLine={false}
             axisLine={false}

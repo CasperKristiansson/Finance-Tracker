@@ -41,6 +41,7 @@ const persistLocalSettings = (
   const payload: Partial<SettingsState> = {
     firstName: state.firstName,
     lastName: state.lastName,
+    currencyCode: state.currencyCode,
     lastSavedAt: overrideTimestamp ?? state.lastSavedAt,
   };
   localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
@@ -75,6 +76,7 @@ function* handleLoadSettings() {
         const payload: Partial<SettingsState> = {
           firstName: response.settings.first_name || undefined,
           lastName: response.settings.last_name || undefined,
+          currencyCode: response.settings.currency_code || undefined,
         };
         yield put(hydrateSettings(payload));
         const currentState: SettingsState =
@@ -112,6 +114,7 @@ function* handleSaveSettings() {
       const payload: SettingsPayload = settingsPayloadSchema.parse({
         first_name: state.firstName,
         last_name: state.lastName,
+        currency_code: state.currencyCode,
       });
       yield call(
         callApiWithAuth,

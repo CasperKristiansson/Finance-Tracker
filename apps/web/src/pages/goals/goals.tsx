@@ -14,6 +14,7 @@ import { Progress } from "@/components/ui/progress";
 import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useCategoriesApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
+import { currency, formatDate as formatDateLabel } from "@/lib/format";
 import { type GoalRead, type GoalListResponse } from "@/types/api";
 import { goalListSchema } from "@/types/schemas";
 
@@ -30,8 +31,8 @@ const goalFormSchema = z.object({
 type GoalFormValues = z.infer<typeof goalFormSchema>;
 
 const formatCurrency = (value: string | number) =>
-  Number(value || 0).toLocaleString("en-US", {
-    style: "currency",
+  currency(Number(value || 0), {
+    locale: "en-US",
     currency: "USD",
     maximumFractionDigits: 0,
   });
@@ -39,7 +40,7 @@ const formatCurrency = (value: string | number) =>
 const formatDate = (value?: string | null) => {
   if (!value) return "No target date";
   const date = new Date(value);
-  return date.toLocaleDateString(undefined, {
+  return formatDateLabel(date, {
     month: "short",
     day: "numeric",
     year: "numeric",

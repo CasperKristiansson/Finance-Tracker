@@ -1,26 +1,13 @@
-export const currency = (value: number) =>
-  value.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: 0,
-  });
-
-export const compactCurrency = (value: number) =>
-  new Intl.NumberFormat("sv-SE", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
-
-export const monthLabel = (dateString: string) =>
-  new Date(dateString).toLocaleDateString("sv-SE", { month: "short" });
-
-export const monthName = (year: number, month: number) =>
-  new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("sv-SE", {
-    month: "long",
-  });
-
-export const percent = (value: number) =>
-  `${value.toLocaleString("sv-SE", { maximumFractionDigits: 0 })}%`;
+export {
+  compactCurrency,
+  currency,
+  formatDate,
+  formatDateTime,
+  monthAndYear,
+  monthLabel,
+  monthName,
+  percent,
+} from "@/lib/format";
 
 export const median = (values: number[]) => {
   if (!values.length) return 0;

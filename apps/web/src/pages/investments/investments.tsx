@@ -48,20 +48,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageRoutes } from "@/data/routes";
 import { useInvestmentsApi } from "@/hooks/use-api";
+import { compactCurrency, currency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-const formatSek = (value: number) =>
-  value.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: 0,
-  });
+const formatSek = (value: number) => currency(value);
 
-const formatCompact = (value: number) =>
-  new Intl.NumberFormat("sv-SE", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
+const formatCompact = (value: number) => compactCurrency(value);
 
 const formatSignedSek = (value: number) =>
   `${value >= 0 ? "+" : "-"}${formatSek(Math.abs(value))}`;

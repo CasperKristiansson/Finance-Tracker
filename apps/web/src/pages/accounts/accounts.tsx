@@ -1,14 +1,5 @@
 import { motion } from "framer-motion";
-import {
-  AlertCircle,
-  Archive,
-  Loader2,
-  Plus,
-  RefreshCw,
-  Undo,
-} from "lucide-react";
-import * as LucideIcons from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { Archive, Loader2, Undo } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -41,76 +32,21 @@ import { apiFetch } from "@/lib/apiClient";
 import { AccountType, type YearlyOverviewResponse } from "@/types/api";
 import { yearlyOverviewSchema } from "@/types/schemas";
 import { AccountModal } from "./children/account-modal";
+import {
+  AccountHealthCard,
+  type AccountHealth,
+} from "./components/account-health-card";
+import { AccountsHeader } from "./components/accounts-header";
+import { ReconcileBanner } from "./components/reconcile-banner";
+import {
+  formatAccountType,
+  formatCurrency,
+  normalizeKey,
+  renderAccountIcon,
+  sparklinePath,
+} from "./utils";
 
 type SortKey = "name" | "type" | "status" | "balance";
-
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: 0,
-  }).format(value);
-
-const formatAccountType = (type: AccountType) => {
-  switch (type) {
-    case AccountType.DEBT:
-      return "Debt";
-    case AccountType.INVESTMENT:
-      return "Investment";
-    default:
-      return "Cash";
-  }
-};
-
-const renderAccountIcon = (icon: string | null | undefined, name: string) => {
-  if (icon?.startsWith("lucide:")) {
-    const key = icon.slice("lucide:".length);
-    const IconComp = (
-      LucideIcons as unknown as Record<string, LucideIcon | undefined>
-    )[key];
-    if (IconComp) {
-      const Icon = IconComp as LucideIcon;
-      return (
-        <Icon className="h-8 w-8 rounded-full border border-slate-100 bg-white p-1 text-slate-700" />
-      );
-    }
-  }
-  if (icon) {
-    return (
-      <img
-        src={`/${icon}`}
-        alt={name}
-        className="h-8 w-8 rounded-full border border-slate-100 bg-white object-contain p-1"
-      />
-    );
-  }
-  return (
-    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
-      {name.charAt(0)}
-    </div>
-  );
-};
-
-const sparklinePath = (values: number[], width: number, height: number) => {
-  if (values.length < 2) return "";
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = max - min || 1;
-  const pad = 2;
-  const xStep = (width - pad * 2) / (values.length - 1);
-
-  return values
-    .map((value, idx) => {
-      const x = pad + idx * xStep;
-      const y = pad + (1 - (value - min) / range) * (height - pad * 2);
-      return `${idx === 0 ? "M" : "L"}${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(" ");
-};
-
-const normalizeKey = (value: string) =>
-  value.toLowerCase().replace(/[^a-z0-9]+/g, "");
-
 export const Accounts: React.FC = () => {
   const {
     items,
@@ -180,7 +116,7 @@ export const Accounts: React.FC = () => {
     void loadYearlyOverview();
   }, [asOfDate, token]);
 
-  const accountHealth = useMemo(() => {
+  const accountHealth = useMemo<AccountHealth>(() => {
     const balances = items.map((acc) => ({
       type: acc.account_type,
       balance: Number(acc.balance) || 0,
@@ -357,76 +293,27 @@ export const Accounts: React.FC = () => {
 
   return (
     <MotionPage className="space-y-4">
-      <StaggerWrap className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <StaggerWrap>
         <motion.div variants={fadeInUp}>
-          <p className="text-xs tracking-wide text-slate-500 uppercase">
-            Accounts
-          </p>
-          <h1 className="text-2xl font-semibold text-slate-900">
-            Balances and debt overview
-          </h1>
-          <p className="text-sm text-slate-500">
-            Live balances with as-of filtering and archive controls.
-          </p>
-        </motion.div>
-        <motion.div variants={fadeInUp} className="flex flex-wrap gap-2">
-          <Button variant="default" className="gap-2" onClick={openCreate}>
-            <Plus className="h-4 w-4" />
-            Add account
-          </Button>
-          <Button
-            variant="outline"
-            className="gap-2 border-slate-300 text-slate-800"
-            onClick={() => setReconcileOpen(true)}
-            disabled={reconcileLoading}
-          >
-            {reconcileLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <AlertCircle className="h-4 w-4" />
-            )}
-            Reconcile
-          </Button>
-          <Button
-            variant="outline"
-            className="gap-2 border-slate-300 text-slate-800"
-            onClick={() =>
+          <AccountsHeader
+            onAddAccount={openCreate}
+            onReconcile={() => setReconcileOpen(true)}
+            onRefresh={() =>
               fetchAccounts({
                 includeInactive: showInactive,
                 asOfDate: asOfInput,
               })
             }
-          >
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
+            reconcileLoading={reconcileLoading}
+          />
         </motion.div>
       </StaggerWrap>
 
-      {needsReconcile ? (
-        <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 shadow-[0_8px_24px_-20px_rgba(146,64,14,0.45)]">
-          <AlertCircle className="mt-0.5 h-5 w-5" />
-          <div className="flex-1">
-            <div className="font-semibold">Accounts need reconciliation</div>
-            <p className="text-amber-800">
-              Balances may be stale. Reconcile to keep running balances
-              accurate.
-            </p>
-          </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-9 gap-2 border-amber-200 bg-white text-amber-900 hover:bg-amber-100"
-            onClick={() => setReconcileOpen(true)}
-            disabled={reconcileLoading}
-          >
-            {reconcileLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : null}
-            Reconcile
-          </Button>
-        </div>
-      ) : null}
+      <ReconcileBanner
+        visible={needsReconcile}
+        reconcileLoading={reconcileLoading}
+        onReconcile={() => setReconcileOpen(true)}
+      />
 
       <ReconcileAccountsDialog
         open={reconcileOpen}
@@ -447,70 +334,12 @@ export const Accounts: React.FC = () => {
       />
 
       <motion.div variants={fadeInUp} {...subtleHover}>
-        <Card className="border-slate-200 shadow-[0_10px_40px_-24px_rgba(15,23,42,0.4)]">
-          <CardHeader className="flex flex-row items-start justify-between space-y-0">
-            <div>
-              <CardTitle className="text-sm text-slate-500">
-                Account health
-              </CardTitle>
-              <p className="text-xs text-slate-500">
-                {asOfDate ? `As of ${asOfDate}` : "As of today"}
-                {includeInactive ? " (including inactive)" : ""}
-              </p>
-            </div>
-            {yearlyOverviewLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-            ) : null}
-          </CardHeader>
-          <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-lg border border-slate-100 bg-white px-4 py-3 shadow-[0_10px_30px_-28px_rgba(14,116,144,0.45)]">
-              <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
-                Cash
-              </p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">
-                <span className="text-sky-700">
-                  {formatCurrency(accountHealth.cash)}
-                </span>
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-100 bg-white px-4 py-3 shadow-[0_10px_30px_-28px_rgba(88,28,135,0.45)]">
-              <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
-                Investments
-              </p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">
-                <span className="text-violet-700">
-                  {formatCurrency(accountHealth.investments)}
-                </span>
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-100 bg-white px-4 py-3 shadow-[0_10px_30px_-28px_rgba(190,18,60,0.45)]">
-              <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
-                Debt
-              </p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">
-                <span className="text-rose-700">
-                  {formatCurrency(accountHealth.debt)}
-                </span>
-              </p>
-            </div>
-            <div className="rounded-lg border border-slate-100 bg-white px-4 py-3 shadow-[0_10px_30px_-28px_rgba(30,64,175,0.45)]">
-              <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
-                Net worth
-              </p>
-              <p className="mt-1 text-2xl font-semibold text-slate-900">
-                <span
-                  className={
-                    accountHealth.netWorth >= 0
-                      ? "text-emerald-700"
-                      : "text-rose-700"
-                  }
-                >
-                  {formatCurrency(accountHealth.netWorth)}
-                </span>
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        <AccountHealthCard
+          asOfDate={asOfDate}
+          includeInactive={includeInactive}
+          loading={yearlyOverviewLoading}
+          health={accountHealth}
+        />
       </motion.div>
 
       <StaggerWrap className="grid gap-3 md:grid-cols-2">

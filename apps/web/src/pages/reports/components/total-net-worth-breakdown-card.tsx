@@ -18,7 +18,12 @@ import type {
   TotalDrilldownState,
   TotalTimeseriesDialogState,
 } from "../reports-types";
-import { compactCurrency, currency, isRecord } from "../reports-utils";
+import {
+  compactCurrency,
+  currency,
+  formatDate,
+  isRecord,
+} from "../reports-utils";
 
 type Point = {
   date: string;
@@ -184,10 +189,7 @@ export const TotalNetWorthBreakdownCard: React.FC<{
                 if (!isRecord(row)) return null;
                 const date = String(row.date ?? "");
                 const label = date
-                  ? new Date(date).toLocaleDateString("sv-SE", {
-                      year: "numeric",
-                      month: "long",
-                    })
+                  ? formatDate(date, { year: "numeric", month: "long" })
                   : "Month";
                 const cash = Number(row.cash ?? 0);
                 const inv = Number(row.investments ?? 0);

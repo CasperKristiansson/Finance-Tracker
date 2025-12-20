@@ -1,7 +1,8 @@
 import React from "react";
 
+import { EmptyState } from "@/components/composed/empty-state";
+import { LoadingCard } from "@/components/composed/loading-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -46,7 +47,7 @@ export const TotalCategoryChangesCard: React.FC<{
       </CardHeader>
       <CardContent className="max-h-[26rem] overflow-auto">
         {!hasOverview ? (
-          <Skeleton className="h-56 w-full" />
+          <LoadingCard className="h-56" lines={9} />
         ) : rows.length ? (
           <Table>
             <TableHeader>
@@ -97,9 +98,7 @@ export const TotalCategoryChangesCard: React.FC<{
             </TableBody>
           </Table>
         ) : (
-          <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-            No change data yet.
-          </div>
+          <EmptyState className="h-56" title="No change data yet." />
         )}
       </CardContent>
     </Card>
