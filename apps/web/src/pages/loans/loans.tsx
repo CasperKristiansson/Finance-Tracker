@@ -315,6 +315,52 @@ export const Loans: React.FC = () => {
     return accounts.find((acc) => acc.id === accountId) ?? null;
   }, [accountId, accounts]);
 
+  const selectedLoan = selectedAccount?.loan;
+  const selectedOriginPrincipal = useMemo(() => {
+    if (!selectedLoan) return null;
+    const origin = selectedLoan.origin_principal;
+    const fallback =
+      selectedLoan.current_principal ?? selectedAccount?.balance ?? null;
+    const value =
+      origin !== undefined && Number.isFinite(Number(origin))
+        ? Number(origin)
+        : Number(fallback ?? 0);
+    return Number.isFinite(value) ? value : null;
+  }, [selectedAccount?.balance, selectedLoan]);
+  const selectedCurrentPrincipal = useMemo(() => {
+    if (!selectedLoan) return null;
+    const value =
+      selectedLoan.current_principal ?? selectedAccount?.balance ?? null;
+    const num = Number(value ?? 0);
+    return Number.isFinite(num) ? num : null;
+  }, [selectedAccount?.balance, selectedLoan]);
+  const selectedPaidDown = useMemo(() => {
+    if (selectedOriginPrincipal === null || selectedCurrentPrincipal === null) {
+      return null;
+    }
+    return Math.max(0, selectedOriginPrincipal - selectedCurrentPrincipal);
+  }, [selectedCurrentPrincipal, selectedOriginPrincipal]);
+  const selectedPaidDownPct = useMemo(() => {
+    if (
+      selectedPaidDown === null ||
+      selectedOriginPrincipal === null ||
+      selectedOriginPrincipal <= 0
+    ) {
+      return null;
+    }
+    return Math.min(
+      100,
+      Math.max(0, (selectedPaidDown / selectedOriginPrincipal) * 100),
+    );
+  }, [selectedOriginPrincipal, selectedPaidDown]);
+  const selectedEstimatedMonthlyInterest = useMemo(() => {
+    if (!selectedLoan || selectedCurrentPrincipal === null) return null;
+    const rate = toInterestRateDecimal(selectedLoan.interest_rate_annual);
+    if (!Number.isFinite(selectedCurrentPrincipal) || rate === null)
+      return null;
+    return (selectedCurrentPrincipal * rate) / 12;
+  }, [selectedCurrentPrincipal, selectedLoan]);
+
   const schedule = accountId ? schedules[accountId] : undefined;
   const accountEvents = accountId ? events[accountId] : undefined;
   const scheduleLoading = accountId
@@ -1288,17 +1334,24 @@ export const Loans: React.FC = () => {
           </Card>
         ) : (
           <>
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
               <SummaryCard
                 label="Current principal"
                 value={
-                  selectedAccount.loan?.current_principal
-                    ? formatCurrency(
-                        Number(selectedAccount.loan.current_principal),
-                      )
+                  selectedCurrentPrincipal !== null
+                    ? formatCurrency(selectedCurrentPrincipal)
                     : "—"
                 }
                 hint="From loan metadata"
+              />
+              <SummaryCard
+                label="Original principal"
+                value={
+                  selectedOriginPrincipal !== null
+                    ? formatCurrency(selectedOriginPrincipal)
+                    : "—"
+                }
+                hint="Baseline for payoff progress"
               />
               <SummaryCard
                 label="Interest rate"
@@ -1306,6 +1359,28 @@ export const Loans: React.FC = () => {
                   selectedAccount.loan?.interest_rate_annual,
                 )}
                 hint="Annual rate"
+              />
+              <SummaryCard
+                label="Paid down"
+                value={
+                  selectedPaidDown !== null
+                    ? formatCurrency(selectedPaidDown)
+                    : "—"
+                }
+                hint={
+                  selectedPaidDownPct !== null
+                    ? `${Math.round(selectedPaidDownPct)}% of original`
+                    : "Based on original vs. current principal"
+                }
+              />
+              <SummaryCard
+                label="Est. monthly interest"
+                value={
+                  selectedEstimatedMonthlyInterest !== null
+                    ? formatCurrency(selectedEstimatedMonthlyInterest)
+                    : "—"
+                }
+                hint="Derived from current principal and annual rate"
               />
               <SummaryCard
                 label="Minimum payment"
@@ -1324,6 +1399,96 @@ export const Loans: React.FC = () => {
                 hint="From generated schedule"
               />
             </div>
+
+            <Card className="border-slate-200 shadow-[0_10px_40px_-26px_rgba(15,23,42,0.35)]">
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-base font-semibold text-slate-900">
+                      Loan insight
+                    </CardTitle>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Quick snapshot of progress and expected interest this
+                      month.
+                    </p>
+                  </div>
+                  {selectedPaidDownPct !== null ? (
+                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                      {Math.round(selectedPaidDownPct)}% paid
+                    </span>
+                  ) : null}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="text-xs text-slate-500">
+                      Current vs. original
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-slate-900 tabular-nums">
+                      {formatCurrency(selectedCurrentPrincipal ?? 0)} /{" "}
+                      {selectedOriginPrincipal !== null
+                        ? formatCurrency(selectedOriginPrincipal)
+                        : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="text-xs text-slate-500">
+                      Estimated monthly interest
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-slate-900 tabular-nums">
+                      {selectedEstimatedMonthlyInterest !== null
+                        ? formatCurrency(selectedEstimatedMonthlyInterest)
+                        : "—"}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Based on current principal and annual rate
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="text-xs text-slate-500">Payoff target</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-900">
+                      {payoffDate ? formatDate(payoffDate) : "Not set"}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      From the latest amortization schedule
+                    </p>
+                  </div>
+                </div>
+
+                {selectedPaidDownPct !== null ? (
+                  <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between text-xs text-slate-600">
+                      <span>Paydown progress</span>
+                      <span className="font-medium tabular-nums">
+                        {Math.round(selectedPaidDownPct)}%
+                      </span>
+                    </div>
+                    <Progress
+                      value={selectedPaidDownPct}
+                      className="mt-2 h-2"
+                    />
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+                      <span className="tabular-nums">
+                        {formatCurrency(selectedPaidDown ?? 0)} paid toward
+                        principal
+                      </span>
+                      <span className="tabular-nums">
+                        {formatCurrency(
+                          Math.max(0, selectedCurrentPrincipal ?? 0),
+                        )}{" "}
+                        remaining
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-white p-3 text-sm text-slate-600">
+                    Add an original principal to track paydown progress over
+                    time.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {(accountsError || error) && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
