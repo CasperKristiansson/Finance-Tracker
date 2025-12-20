@@ -27,9 +27,23 @@ export const Redirect = (): JSX.Element => {
   useEffect(() => {
     if (!initialLoad) return;
 
-    if (isAuthenticated && location.pathname === PageRoutes.login) {
-      navigate(PageRoutes.home);
-    } else if (!isAuthenticated && location.pathname !== PageRoutes.login) {
+    const publicRoutes = [
+      PageRoutes.login,
+      PageRoutes.landing,
+      PageRoutes.cover,
+    ];
+
+    if (isAuthenticated) {
+      if (
+        location.pathname === PageRoutes.login ||
+        location.pathname === PageRoutes.landing
+      ) {
+        navigate(PageRoutes.home);
+      }
+      return;
+    }
+
+    if (!publicRoutes.includes(location.pathname)) {
       navigate(PageRoutes.login);
     }
   }, [initialLoad, location, isAuthenticated, navigate]);
