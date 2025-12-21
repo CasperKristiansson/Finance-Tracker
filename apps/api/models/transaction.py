@@ -26,7 +26,7 @@ from ..shared import (
 if TYPE_CHECKING:  # pragma: no cover
     from .account import Account, Loan
     from .category import Category
-    from .imports import TransactionImportBatch
+    from .imports import ImportFile, TransactionImportBatch
     from .subscription import Subscription
     from .tax import TaxEvent
 
@@ -76,6 +76,14 @@ class Transaction(
             nullable=True,
         ),
     )
+    import_file_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("import_files.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
     subscription_id: Optional[UUID] = Field(
         default=None,
         sa_column=Column(
@@ -89,6 +97,7 @@ class Transaction(
         legs: List["TransactionLeg"]
         loan_events: List["LoanEvent"]
         import_batch: Optional["TransactionImportBatch"]
+        import_file: Optional["ImportFile"]
         subscription: Optional["Subscription"]
         tax_event: Optional["TaxEvent"]
 
@@ -118,6 +127,9 @@ class Transaction(
     subscription: Optional["Subscription"] = Relationship(
         back_populates="transactions",
         sa_relationship=relationship("Subscription", back_populates="transactions"),
+    )
+    import_file: Optional["ImportFile"] = Relationship(
+        sa_relationship=relationship("ImportFile", back_populates="transactions")
     )
     tax_event: Optional["TaxEvent"] = Relationship(
         back_populates="transaction",

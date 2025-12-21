@@ -859,6 +859,7 @@ export const importPreviewResponseSchema = z.object({
 
 export const importCommitRowSchema = z.object({
   id: z.string(),
+  file_id: nullableString,
   account_id: z.string(),
   occurred_at: z.string(),
   amount: z.string(),
@@ -873,11 +874,49 @@ export const importCommitRowSchema = z.object({
 export const importCommitRequestSchema = z.object({
   note: z.string().optional(),
   rows: z.array(importCommitRowSchema),
+  files: z
+    .array(
+      z.object({
+        id: z.string(),
+        filename: z.string(),
+        account_id: z.string(),
+        row_count: numeric,
+        error_count: numeric,
+        bank_import_type: bankImportTypeSchema.nullable().optional(),
+        content_base64: z.string(),
+        content_type: z.string().nullable().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const importCommitResponseSchema = z.object({
   import_batch_id: z.string(),
   transaction_ids: z.array(z.string()),
+});
+
+export const importFileSchema = z.object({
+  id: z.string(),
+  filename: z.string(),
+  account_id: z.string().nullable(),
+  account_name: z.string().nullable(),
+  bank_import_type: bankImportTypeSchema.nullable().optional(),
+  row_count: numeric,
+  error_count: numeric,
+  transaction_ids: z.array(z.string()).default([]),
+  import_batch_id: z.string(),
+  size_bytes: numeric.nullable().optional(),
+  content_type: z.string().nullable().optional(),
+  uploaded_at: z.string(),
+  status: z.string(),
+});
+
+export const importFileListResponseSchema = z.object({
+  files: z.array(importFileSchema),
+});
+
+export const importFileDownloadResponseSchema = z.object({
+  url: z.string(),
 });
 
 export const importCategoryOptionSchema = z.object({
@@ -1355,6 +1394,13 @@ export type ImportPreviewResponse = z.infer<typeof importPreviewResponseSchema>;
 export type ImportCommitRow = z.infer<typeof importCommitRowSchema>;
 export type ImportCommitRequest = z.infer<typeof importCommitRequestSchema>;
 export type ImportCommitResponse = z.infer<typeof importCommitResponseSchema>;
+export type ImportFileRead = z.infer<typeof importFileSchema>;
+export type ImportFileListResponse = z.infer<
+  typeof importFileListResponseSchema
+>;
+export type ImportFileDownloadResponse = z.infer<
+  typeof importFileDownloadResponseSchema
+>;
 export type ImportCategoryOption = z.infer<typeof importCategoryOptionSchema>;
 export type ImportCategoryHistoryItem = z.infer<
   typeof importCategoryHistoryItemSchema

@@ -18,6 +18,9 @@ provider:
     DB_USER: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/user}
     DB_PASSWORD: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/password}
     AWS_BEARER_TOKEN_BEDROCK: ${aws:ssm:/finance-tracker/${self:provider.stage}/bedrock/bearer_token}
+    IMPORT_FILES_BUCKET: ${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/bucket}
+    IMPORT_FILES_PREFIX: ${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/prefix}
+    IMPORT_FILES_URL_EXPIRES_SECONDS: ${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/url_expires_seconds}
   iam:
     role:
       statements:
@@ -31,6 +34,11 @@ provider:
             - ssm:GetParameter
             - ssm:GetParameters
           Resource: arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/finance-tracker/${self:provider.stage}/bedrock/*
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+            - ssm:GetParameters
+          Resource: arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/finance-tracker/${self:provider.stage}/imports/files/*
         - Effect: Allow
           Action:
             - bedrock:InvokeModel
@@ -56,6 +64,12 @@ provider:
             - execute-api:ManageConnections
           Resource:
             - Fn::Sub: "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebsocketsApi}/*"
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+          Resource:
+            - arn:aws:s3:::${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/bucket}/*
   httpApi:
     name: ${self:service}-${self:provider.stage}-http
     cors: true
@@ -163,6 +177,30 @@ functions:
     events:
       - httpApi:
           path: /imports/commit
+          method: POST
+          authorizer: cognitoJwt
+
+  listImportFiles:
+    handler: apps/api/handlers/import_files.list_import_files
+    memorySize: 512
+    timeout: 29
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /import-files
+          method: GET
+          authorizer: cognitoJwt
+
+  downloadImportFile:
+    handler: apps/api/handlers/import_files.download_import_file
+    memorySize: 512
+    timeout: 29
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /import-files/download
           method: POST
           authorizer: cognitoJwt
 

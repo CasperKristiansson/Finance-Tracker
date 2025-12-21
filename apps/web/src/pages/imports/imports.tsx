@@ -74,6 +74,9 @@ type LocalFile = {
   file: File;
   filename: string;
   accountId: string | null;
+  contentBase64?: string;
+  contentType?: string | null;
+  previewFileId?: string | null;
 };
 
 type PreviewFile = ImportPreviewResponse["files"][number];
@@ -372,6 +375,7 @@ type SplitPreviewRow = ImportPreviewResponse["rows"][number] & {
 
 const commitRowSchema = z.object({
   id: z.string(),
+  file_id: z.string().nullable().optional(),
   account_id: z.string(),
   occurred_at: z.string(),
   amount: z.string(),
@@ -497,6 +501,7 @@ export const Imports: React.FC = () => {
     if (commitRows.length) return;
     const defaults: CommitFormValues["rows"] = preview.rows.map((row) => ({
       id: row.id,
+      file_id: row.file_id ?? null,
       account_id: row.account_id,
       occurred_at: row.occurred_at,
       amount: row.amount,
@@ -512,6 +517,25 @@ export const Imports: React.FC = () => {
     replaceCommitRows(defaults);
     commitForm.reset({ rows: defaults });
   }, [preview, commitRows.length, commitForm, replaceCommitRows]);
+
+  useEffect(() => {
+    if (!preview) return;
+    setFiles((current) =>
+      current.map((file) => {
+        const matched =
+          preview.files.find(
+            (previewFile) =>
+              previewFile.filename === file.filename &&
+              previewFile.account_id === file.accountId,
+          ) ??
+          preview.files.find(
+            (previewFile) => previewFile.account_id === file.accountId,
+          );
+        if (!matched) return file;
+        return { ...file, previewFileId: matched.id };
+      }),
+    );
+  }, [preview]);
 
   useEffect(() => {
     if (!commitTriggered) return;
@@ -764,12 +788,34 @@ export const Imports: React.FC = () => {
     if (!mappedFilesReady) return;
 
     setSuggestionsRequested(false);
-    const filesPayload: ImportPreviewRequest["files"] = await Promise.all(
-      files.map(async (f) => ({
-        filename: f.filename,
-        content_base64: await toBase64(f.file),
-        account_id: f.accountId!,
-      })),
+    const prepared = await Promise.all(
+      files.map(async (f) => {
+        const contentBase64 = await toBase64(f.file);
+        return {
+          localId: f.id,
+          contentBase64,
+          contentType: f.file.type || null,
+          payload: {
+            filename: f.filename,
+            content_base64: contentBase64,
+            account_id: f.accountId!,
+          },
+        };
+      }),
+    );
+    const filesPayload: ImportPreviewRequest["files"] = prepared.map(
+      (item) => item.payload,
+    );
+    setFiles((prev) =>
+      prev.map((file) => {
+        const match = prepared.find((p) => p.localId === file.id);
+        if (!match) return file;
+        return {
+          ...file,
+          contentBase64: match.contentBase64,
+          contentType: match.contentType,
+        };
+      }),
     );
     previewImports({ files: filesPayload });
   }, [files, mappedFilesReady, previewImports, token]);
@@ -1010,9 +1056,33 @@ export const Imports: React.FC = () => {
       toast.error("Missing session", { description: "Please sign in again." });
       return;
     }
+    const commitFiles =
+      preview?.files
+        .map((file) => {
+          const local =
+            files.find((item) => item.previewFileId === file.id) ??
+            files.find(
+              (item) =>
+                item.filename === file.filename &&
+                item.accountId === file.account_id,
+            );
+          if (!local?.contentBase64) return null;
+          return {
+            id: file.id,
+            filename: file.filename,
+            account_id: file.account_id,
+            row_count: file.row_count,
+            error_count: file.error_count,
+            bank_import_type: file.bank_import_type ?? null,
+            content_base64: local.contentBase64,
+            content_type: local.contentType ?? undefined,
+          };
+        })
+        .filter(Boolean) ?? [];
     const payload: ImportCommitRequest = {
       rows: values.rows.map((row) => ({
         id: row.id,
+        file_id: row.file_id ?? null,
         account_id: row.account_id,
         occurred_at: row.occurred_at,
         amount: row.amount,
@@ -1025,6 +1095,9 @@ export const Imports: React.FC = () => {
         delete: Boolean(row.delete),
       })),
     };
+    if (commitFiles.length) {
+      payload.files = commitFiles as NonNullable<ImportCommitRequest["files"]>;
+    }
     commitImports(payload);
     setCommitTriggered(true);
   });
@@ -1757,8 +1830,8 @@ export const Imports: React.FC = () => {
                                         categories={categories}
                                         disabled={Boolean(
                                           taxEventType ||
-                                            transferAccountId ||
-                                            isDeleted,
+                                          transferAccountId ||
+                                          isDeleted,
                                         )}
                                         missing={isMissingCategory}
                                         suggesting={

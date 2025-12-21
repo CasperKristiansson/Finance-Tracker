@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime
 from typing import Any, List, Optional
 from uuid import UUID
 
@@ -123,6 +124,7 @@ class ImportCommitRow(BaseModel):
     """Single draft transaction row submitted for commit."""
 
     id: UUID
+    file_id: Optional[UUID] = None
     account_id: UUID
     occurred_at: str
     amount: str
@@ -134,11 +136,36 @@ class ImportCommitRow(BaseModel):
     delete: bool = False
 
 
+class ImportCommitFile(BaseModel):
+    """Metadata about the files included in a commit."""
+
+    id: UUID
+    filename: str
+    account_id: UUID
+    row_count: int
+    error_count: int
+    bank_import_type: Optional[BankImportType] = None
+    content_base64: str
+    content_type: Optional[str] = None
+
+    @field_validator("content_base64")
+    @classmethod
+    def validate_commit_base64(cls, value: str) -> str:
+        try:
+            base64.b64decode(value, validate=True)
+        except Exception as exc:  # pragma: no cover - defensive
+            raise PydanticCustomError(
+                "invalid_base64", "content_base64 must be valid base64"
+            ) from exc
+        return value
+
+
 class ImportCommitRequest(BaseModel):
     """Payload to commit a previewed import (persists transactions)."""
 
     note: Optional[str] = Field(default=None, max_length=255)
     rows: List[ImportCommitRow]
+    files: Optional[List[ImportCommitFile]] = None
 
 
 class ImportCommitResponse(BaseModel):
@@ -210,6 +237,36 @@ class ImportCategorySuggestJobResponse(BaseModel):
     job_id: UUID
 
 
+class ImportFileRead(BaseModel):
+    """Metadata for a stored import file."""
+
+    id: UUID
+    filename: str
+    account_id: Optional[UUID] = None
+    account_name: Optional[str] = None
+    bank_import_type: Optional[BankImportType] = None
+    row_count: int
+    error_count: int
+    transaction_ids: List[UUID] = Field(default_factory=list)
+    import_batch_id: UUID
+    size_bytes: Optional[int] = None
+    content_type: Optional[str] = None
+    uploaded_at: datetime
+    status: str
+
+
+class ImportFileListResponse(BaseModel):
+    """List response for stored import files."""
+
+    files: List[ImportFileRead]
+
+
+class ImportFileDownloadResponse(BaseModel):
+    """Presigned download URL for a stored import file."""
+
+    url: str
+
+
 __all__ = [
     "ImportErrorRead",
     "ImportPreviewFile",
@@ -221,6 +278,7 @@ __all__ = [
     "ImportPreviewRowRead",
     "ImportPreviewResponse",
     "ImportCommitRow",
+    "ImportCommitFile",
     "ImportCommitRequest",
     "ImportCommitResponse",
     "ImportCategoryOption",
@@ -231,4 +289,7 @@ __all__ = [
     "ImportCategorySuggestResponse",
     "ImportCategorySuggestJobRequest",
     "ImportCategorySuggestJobResponse",
+    "ImportFileRead",
+    "ImportFileListResponse",
+    "ImportFileDownloadResponse",
 ]

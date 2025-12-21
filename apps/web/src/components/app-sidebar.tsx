@@ -11,6 +11,7 @@ import {
   Upload,
   Layers,
   Receipt,
+  Archive,
 } from "lucide-react";
 import * as React from "react";
 import { useAppSelector } from "@/app/hooks";
@@ -55,6 +56,11 @@ const data = {
       title: "Imports",
       url: PageRoutes.imports,
       icon: Upload,
+    },
+    {
+      title: "Import files",
+      url: PageRoutes.importFiles,
+      icon: Archive,
     },
     {
       title: "Subscriptions",
