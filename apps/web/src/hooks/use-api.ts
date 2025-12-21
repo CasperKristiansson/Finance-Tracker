@@ -70,11 +70,16 @@ import {
   selectInvestmentMetrics,
   selectInvestmentOverview,
 } from "@/features/investments/investmentsSlice";
-import { FetchLoanEvents, FetchLoanSchedule } from "@/features/loans/loansSaga";
+import {
+  FetchLoanEvents,
+  FetchLoanPortfolioSeries,
+  FetchLoanSchedule,
+} from "@/features/loans/loansSaga";
 import {
   selectLoanError,
   selectLoanEvents,
   selectLoanLoading,
+  selectLoanPortfolioSeries,
   selectLoanSchedule,
 } from "@/features/loans/loansSlice";
 import {
@@ -446,6 +451,7 @@ export const useLoansApi = () => {
   const dispatch = useAppDispatch();
   const schedules = useAppSelector(selectLoanSchedule);
   const events = useAppSelector(selectLoanEvents);
+  const portfolioSeries = useAppSelector(selectLoanPortfolioSeries);
   const loading = useAppSelector(selectLoanLoading);
   const error = useAppSelector(selectLoanError);
 
@@ -463,13 +469,22 @@ export const useLoansApi = () => {
     [dispatch],
   );
 
+  const fetchLoanPortfolioSeries = useCallback(
+    (params: { startDate?: string; endDate?: string } = {}) => {
+      dispatch(FetchLoanPortfolioSeries(params));
+    },
+    [dispatch],
+  );
+
   return {
     schedules,
     events,
+    portfolioSeries,
     loading,
     error,
     fetchLoanSchedule,
     fetchLoanEvents,
+    fetchLoanPortfolioSeries,
   };
 };
 

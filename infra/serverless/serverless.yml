@@ -596,6 +596,18 @@ functions:
           method: GET
           authorizer: cognitoJwt
 
+  listLoanPortfolioSeries:
+    handler: apps/api/handlers/loans.list_loan_portfolio_series
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /loans/events/series
+          method: GET
+          authorizer: cognitoJwt
+
   getLoanSchedule:
     handler: apps/api/handlers/loans.get_loan_schedule
     timeout: 29

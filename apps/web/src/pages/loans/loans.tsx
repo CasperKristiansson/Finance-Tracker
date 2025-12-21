@@ -250,10 +250,12 @@ export const Loans: React.FC = () => {
   const {
     schedules,
     events,
+    portfolioSeries,
     loading,
     error,
     fetchLoanSchedule,
     fetchLoanEvents,
+    fetchLoanPortfolioSeries,
   } = useLoansApi();
 
   const [asOfDate, setAsOfDate] = useState("");
@@ -300,6 +302,11 @@ export const Loans: React.FC = () => {
     fetchAccounts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (accountId) return;
+    fetchLoanPortfolioSeries();
+  }, [accountId, fetchLoanPortfolioSeries]);
 
   useEffect(() => {
     if (!accountId) return;
@@ -419,57 +426,42 @@ export const Loans: React.FC = () => {
     }, 0);
   }, [loanAccounts]);
 
-  const loanValueTrendData = useMemo(() => {
-    const entries = loanAccounts
-      .map((acc) => {
-        const createdAt = acc.created_at;
-        const parsedDate = createdAt ? new Date(createdAt) : null;
-        if (!parsedDate || Number.isNaN(parsedDate.getTime())) return null;
-        const origin = acc.loan?.origin_principal;
-        const fallback =
-          acc.loan?.current_principal !== undefined
-            ? Number(acc.loan.current_principal)
-            : Math.abs(Number(acc.balance ?? 0));
-        const value =
-          origin !== undefined && Number.isFinite(Number(origin))
-            ? Number(origin)
-            : fallback;
-        const amount = Number.isFinite(value) ? Math.max(0, value) : 0;
-        if (amount <= 0) return null;
-        return { date: parsedDate, amount };
-      })
-      .filter((item): item is { date: Date; amount: number } => item !== null);
+  const loanPortfolioTrendData = useMemo(() => {
+    if (!portfolioSeries.length) return [];
 
-    if (!entries.length) return [];
-
-    const totalsByDate = new Map<string, number>();
-    for (const entry of entries) {
-      const key = entry.date.toISOString().slice(0, 10);
-      totalsByDate.set(key, (totalsByDate.get(key) ?? 0) + entry.amount);
-    }
-
-    const sortedDates = Array.from(totalsByDate.entries())
-      .map(([date, amount]) => ({
-        date,
-        amount,
-        ts: Date.parse(date),
+    const sortedSeries = portfolioSeries
+      .map((point) => ({
+        date: point.date,
+        total: Number(point.total),
+        ts: Date.parse(point.date),
       }))
-      .filter((item) => Number.isFinite(item.ts))
+      .filter(
+        (point) => Number.isFinite(point.ts) && Number.isFinite(point.total),
+      )
       .sort((a, b) => a.ts - b.ts);
 
-    if (!sortedDates.length) return [];
+    if (!sortedSeries.length) return [];
 
-    const startDate = new Date(sortedDates[0].date);
-    startDate.setDate(startDate.getDate() - 1);
-    const series: Array<{ date: string; total: number }> = [
-      { date: startDate.toISOString().slice(0, 10), total: 0 },
-    ];
-
-    let runningTotal = 0;
-    for (const point of sortedDates) {
-      runningTotal += point.amount;
-      series.push({ date: point.date, total: runningTotal });
+    const baselineDate = new Date(sortedSeries[0].date);
+    const baseline = Number.isNaN(baselineDate.getTime())
+      ? null
+      : new Date(baselineDate);
+    if (baseline) {
+      baseline.setDate(baseline.getDate() - 1);
     }
+
+    const series: Array<{ date: string; total: number }> = [
+      {
+        date: baseline
+          ? baseline.toISOString().slice(0, 10)
+          : sortedSeries[0].date,
+        total: 0,
+      },
+      ...sortedSeries.map((point) => ({
+        date: point.date,
+        total: point.total,
+      })),
+    ];
 
     const todayKey = new Date().toISOString().slice(0, 10);
     const lastPoint = series[series.length - 1];
@@ -482,7 +474,14 @@ export const Loans: React.FC = () => {
     }
 
     return series;
-  }, [loanAccounts]);
+  }, [portfolioSeries]);
+
+  const loanPortfolioLatestTotal = useMemo(() => {
+    if (!loanPortfolioTrendData.length) return 0;
+    return loanPortfolioTrendData[loanPortfolioTrendData.length - 1].total;
+  }, [loanPortfolioTrendData]);
+
+  const portfolioSeriesLoading = loading["loan-portfolio-series"] ?? false;
 
   const loanProgressData = useMemo(() => {
     return loanAccounts
@@ -912,8 +911,7 @@ export const Loans: React.FC = () => {
                 </p>
               </div>
               <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                {formatCurrency(0)} →{" "}
-                {formatCurrency(totalOriginPrincipal || totalPrincipal)}
+                {formatCurrency(0)} → {formatCurrency(loanPortfolioLatestTotal)}
               </div>
             </div>
           </CardHeader>
@@ -929,7 +927,9 @@ export const Loans: React.FC = () => {
               </span>
             </div>
             <div className="h-48 w-full">
-              {loanValueTrendData.length ? (
+              {portfolioSeriesLoading ? (
+                <Skeleton className="h-full w-full" />
+              ) : loanPortfolioTrendData.length ? (
                 <ChartContainer
                   config={{
                     total: {
@@ -939,7 +939,7 @@ export const Loans: React.FC = () => {
                   }}
                   className="h-full w-full"
                 >
-                  <AreaChart data={loanValueTrendData}>
+                  <AreaChart data={loanPortfolioTrendData}>
                     <defs>
                       <linearGradient
                         id="loan-value-gradient"

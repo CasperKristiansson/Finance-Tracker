@@ -95,6 +95,26 @@ class LoanEventListQuery(BaseModel):
     offset: int = Field(default=0, ge=0)
 
 
+class LoanPortfolioSeriesQuery(BaseModel):
+    """Query parameters accepted by the loan portfolio series endpoint."""
+
+    start_date: Optional[date] = Field(default=None, alias="start_date")
+    end_date: Optional[date] = Field(default=None, alias="end_date")
+
+
+class LoanPortfolioSeriesPoint(BaseModel):
+    """Daily total of cumulative loan balance."""
+
+    date: str
+    total: Decimal
+
+
+class LoanPortfolioSeriesRead(BaseModel):
+    """Cumulative loan balance series derived from loan events."""
+
+    series: List[LoanPortfolioSeriesPoint]
+
+
 __all__ = [
     "LoanCreateRequest",
     "LoanUpdate",
@@ -103,4 +123,7 @@ __all__ = [
     "LoanScheduleRead",
     "LoanEventRead",
     "LoanEventListQuery",
+    "LoanPortfolioSeriesQuery",
+    "LoanPortfolioSeriesPoint",
+    "LoanPortfolioSeriesRead",
 ]

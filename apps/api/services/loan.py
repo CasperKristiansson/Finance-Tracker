@@ -13,8 +13,8 @@ from ..models import Loan, LoanEvent
 from ..repositories.account import AccountRepository
 from ..repositories.loan import LoanRepository
 from ..repositories.transaction import TransactionRepository
-from ..schemas.loan import LoanScheduleEntry
-from ..shared import AccountType, InterestCompound
+from ..schemas.loan import LoanPortfolioSeriesPoint, LoanScheduleEntry
+from ..shared import AccountType, InterestCompound, LoanEventType
 
 _CENT = Decimal("0.01")
 
@@ -68,6 +68,52 @@ class LoanService:
     ) -> List[LoanEvent]:
         loan = self.get_loan(account_id)
         return self.loan_repository.list_events(loan.id, limit=limit, offset=offset)
+
+    def portfolio_series(
+        self,
+        *,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> List[LoanPortfolioSeriesPoint]:
+        events = self.loan_repository.list_all_events(
+            start_date=start_date,
+            end_date=end_date,
+        )
+        if not events:
+            return []
+
+        running_total = Decimal("0")
+        daily_delta = Decimal("0")
+        current_date: Optional[date] = None
+        series: List[LoanPortfolioSeriesPoint] = []
+
+        for event in events:
+            event_date = event.occurred_at.date()
+            if current_date is None:
+                current_date = event_date
+            elif event_date != current_date:
+                running_total += daily_delta
+                series.append(
+                    LoanPortfolioSeriesPoint(
+                        date=current_date.isoformat(),
+                        total=running_total,
+                    )
+                )
+                current_date = event_date
+                daily_delta = Decimal("0")
+
+            daily_delta += self._event_delta(event)
+
+        if current_date is not None:
+            running_total += daily_delta
+            series.append(
+                LoanPortfolioSeriesPoint(
+                    date=current_date.isoformat(),
+                    total=running_total,
+                )
+            )
+
+        return series
 
     def generate_schedule(
         self,
@@ -153,6 +199,20 @@ class LoanService:
             payment = numerator / denominator if denominator != 0 else loan.current_principal
 
         return payment.quantize(_CENT, rounding=ROUND_HALF_UP)
+
+    def _event_delta(self, event: LoanEvent) -> Decimal:
+        if event.event_type in {
+            LoanEventType.DISBURSEMENT,
+            LoanEventType.INTEREST_ACCRUAL,
+            LoanEventType.FEE,
+        }:
+            return event.amount
+        if event.event_type in {
+            LoanEventType.PAYMENT_PRINCIPAL,
+            LoanEventType.PAYMENT_INTEREST,
+        }:
+            return -event.amount
+        return Decimal("0")
 
     def _add_months(self, start: date, months: int) -> date:
         year = start.year + (start.month - 1 + months) // 12

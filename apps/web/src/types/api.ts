@@ -60,6 +60,8 @@ export type {
   InvestmentTransactionListResponse,
   InvestmentTransactionRead,
   LoanEventRead,
+  LoanPortfolioSeriesPoint,
+  LoanPortfolioSeriesResponse,
   LoanCreateRequest,
   LoanRead,
   LoanUpdateRequest,

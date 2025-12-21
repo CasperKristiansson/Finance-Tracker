@@ -1697,8 +1697,8 @@ export const Imports: React.FC = () => {
                                         categories={categories}
                                         disabled={Boolean(
                                           taxEventType ||
-                                          transferAccountId ||
-                                          isDeleted,
+                                            transferAccountId ||
+                                            isDeleted,
                                         )}
                                         missing={isMissingCategory}
                                         suggesting={

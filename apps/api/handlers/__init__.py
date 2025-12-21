@@ -30,6 +30,7 @@ from .loans import (
     create_loan,
     get_loan_schedule,
     list_loan_events,
+    list_loan_portfolio_series,
 )
 from .loans import reset_handler_state as reset_loan_handler_state
 from .loans import (
@@ -91,6 +92,7 @@ __all__ = [
     "create_loan",
     "update_loan",
     "list_loan_events",
+    "list_loan_portfolio_series",
     "get_loan_schedule",
     "monthly_report",
     "quarterly_report",

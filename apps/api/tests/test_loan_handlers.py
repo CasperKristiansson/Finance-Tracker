@@ -14,6 +14,7 @@ from apps.api.handlers import (
     create_loan,
     get_loan_schedule,
     list_loan_events,
+    list_loan_portfolio_series,
     reset_loan_handler_state,
     update_loan,
 )
@@ -217,6 +218,82 @@ def test_list_loan_events_returns_recent_activity():
     events = body["events"]
     assert len(events) == 1
     assert events[0]["event_type"] in {"payment_principal", "disbursement"}
+
+
+def test_list_loan_portfolio_series_aggregates_events():
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        debt_account = _create_account(session)
+        second_debt = _create_account(session)
+        funding_account = _create_account(session, AccountType.NORMAL)
+        loans = [
+            Loan(
+                account_id=debt_account.id,
+                origin_principal=Decimal("1500"),
+                current_principal=Decimal("1500"),
+                interest_rate_annual=Decimal("0.05"),
+                interest_compound=InterestCompound.MONTHLY,
+            ),
+            Loan(
+                account_id=second_debt.id,
+                origin_principal=Decimal("2000"),
+                current_principal=Decimal("2000"),
+                interest_rate_annual=Decimal("0.05"),
+                interest_compound=InterestCompound.MONTHLY,
+            ),
+        ]
+        session.add_all(loans)
+        session.commit()
+
+        service = TransactionService(session)
+        occurred = datetime(2024, 1, 1, tzinfo=timezone.utc)
+        service.create_transaction(
+            Transaction(
+                transaction_type=TransactionType.TRANSFER,
+                occurred_at=occurred,
+                posted_at=occurred,
+            ),
+            [
+                TransactionLeg(account_id=funding_account.id, amount=Decimal("-100.00")),
+                TransactionLeg(account_id=debt_account.id, amount=Decimal("100.00")),
+            ],
+        )
+
+        occurred_payment = datetime(2024, 1, 15, tzinfo=timezone.utc)
+        service.create_transaction(
+            Transaction(
+                transaction_type=TransactionType.TRANSFER,
+                occurred_at=occurred_payment,
+                posted_at=occurred_payment,
+            ),
+            [
+                TransactionLeg(account_id=debt_account.id, amount=Decimal("-40.00")),
+                TransactionLeg(account_id=funding_account.id, amount=Decimal("40.00")),
+            ],
+        )
+
+        occurred_second = datetime(2024, 2, 1, tzinfo=timezone.utc)
+        service.create_transaction(
+            Transaction(
+                transaction_type=TransactionType.TRANSFER,
+                occurred_at=occurred_second,
+                posted_at=occurred_second,
+            ),
+            [
+                TransactionLeg(account_id=funding_account.id, amount=Decimal("-200.00")),
+                TransactionLeg(account_id=second_debt.id, amount=Decimal("200.00")),
+            ],
+        )
+
+    response = list_loan_portfolio_series({"queryStringParameters": None}, None)
+    assert response["statusCode"] == 200
+    series = _json_body(response)["series"]
+    assert series == [
+        {"date": "2024-01-01", "total": "100.00"},
+        {"date": "2024-01-15", "total": "60.00"},
+        {"date": "2024-02-01", "total": "260.00"},
+    ]
 
 
 def test_endpoints_return_404_for_missing_loan():
