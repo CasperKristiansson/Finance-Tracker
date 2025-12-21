@@ -120,6 +120,13 @@ const formatDate = (value: string | null | undefined) => {
   });
 };
 
+const formatChartDate = (value: string | null | undefined) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return formatDateLocale(date, { month: "short", year: "numeric" });
+};
+
 const formatDateTime = (value: string | null | undefined) => {
   if (!value) return "—";
   const date = new Date(value);
@@ -412,15 +419,70 @@ export const Loans: React.FC = () => {
     }, 0);
   }, [loanAccounts]);
 
-  const portfolioTrendData = useMemo(() => {
-    const startValue = totalOriginPrincipal || totalPrincipal;
-    if (startValue <= 0 && totalPrincipal <= 0) return [];
-    return [
-      { label: "Start", total: startValue },
-      { label: "Now", total: totalPrincipal },
-      { label: "Payoff", total: 0 },
+  const loanValueTrendData = useMemo(() => {
+    const entries = loanAccounts
+      .map((acc) => {
+        const createdAt = acc.created_at;
+        const parsedDate = createdAt ? new Date(createdAt) : null;
+        if (!parsedDate || Number.isNaN(parsedDate.getTime())) return null;
+        const origin = acc.loan?.origin_principal;
+        const fallback =
+          acc.loan?.current_principal !== undefined
+            ? Number(acc.loan.current_principal)
+            : Math.abs(Number(acc.balance ?? 0));
+        const value =
+          origin !== undefined && Number.isFinite(Number(origin))
+            ? Number(origin)
+            : fallback;
+        const amount = Number.isFinite(value) ? Math.max(0, value) : 0;
+        if (amount <= 0) return null;
+        return { date: parsedDate, amount };
+      })
+      .filter((item): item is { date: Date; amount: number } => item !== null);
+
+    if (!entries.length) return [];
+
+    const totalsByDate = new Map<string, number>();
+    for (const entry of entries) {
+      const key = entry.date.toISOString().slice(0, 10);
+      totalsByDate.set(key, (totalsByDate.get(key) ?? 0) + entry.amount);
+    }
+
+    const sortedDates = Array.from(totalsByDate.entries())
+      .map(([date, amount]) => ({
+        date,
+        amount,
+        ts: Date.parse(date),
+      }))
+      .filter((item) => Number.isFinite(item.ts))
+      .sort((a, b) => a.ts - b.ts);
+
+    if (!sortedDates.length) return [];
+
+    const startDate = new Date(sortedDates[0].date);
+    startDate.setDate(startDate.getDate() - 1);
+    const series: Array<{ date: string; total: number }> = [
+      { date: startDate.toISOString().slice(0, 10), total: 0 },
     ];
-  }, [totalOriginPrincipal, totalPrincipal]);
+
+    let runningTotal = 0;
+    for (const point of sortedDates) {
+      runningTotal += point.amount;
+      series.push({ date: point.date, total: runningTotal });
+    }
+
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const lastPoint = series[series.length - 1];
+    if (
+      lastPoint &&
+      lastPoint.date !== todayKey &&
+      Date.parse(todayKey) > Date.parse(lastPoint.date)
+    ) {
+      series.push({ date: todayKey, total: lastPoint.total });
+    }
+
+    return series;
+  }, [loanAccounts]);
 
   const loanProgressData = useMemo(() => {
     return loanAccounts
@@ -843,15 +905,15 @@ export const Loans: React.FC = () => {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <CardTitle className="text-base font-semibold text-slate-900">
-                  Portfolio trajectory
+                  Loan value trajectory
                 </CardTitle>
                 <p className="mt-1 text-xs text-slate-500">
-                  From original borrowing to today, with a glide path to payoff.
+                  Cumulative loan value as new debt accounts are added.
                 </p>
               </div>
               <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                {formatCurrency(totalOriginPrincipal || totalPrincipal)} →
-                {formatCurrency(totalPrincipal)}
+                {formatCurrency(0)} →{" "}
+                {formatCurrency(totalOriginPrincipal || totalPrincipal)}
               </div>
             </div>
           </CardHeader>
@@ -867,20 +929,20 @@ export const Loans: React.FC = () => {
               </span>
             </div>
             <div className="h-48 w-full">
-              {portfolioTrendData.length ? (
+              {loanValueTrendData.length ? (
                 <ChartContainer
                   config={{
                     total: {
-                      label: "Outstanding",
-                      color: "hsl(222.2 47.4% 11.2%)",
+                      label: "Loan value",
+                      color: "hsl(221.2 83.2% 53.3%)",
                     },
                   }}
                   className="h-full w-full"
                 >
-                  <AreaChart data={portfolioTrendData}>
+                  <AreaChart data={loanValueTrendData}>
                     <defs>
                       <linearGradient
-                        id="loan-portfolio-gradient"
+                        id="loan-value-gradient"
                         x1="0"
                         y1="0"
                         x2="0"
@@ -900,7 +962,8 @@ export const Loans: React.FC = () => {
                     </defs>
                     <CartesianGrid vertical={false} strokeDasharray="3 3" />
                     <XAxis
-                      dataKey="label"
+                      dataKey="date"
+                      tickFormatter={(value) => formatChartDate(value)}
                       tickLine={false}
                       axisLine={false}
                       tick={{ fill: "#64748b" }}
@@ -917,17 +980,17 @@ export const Loans: React.FC = () => {
                     />
                     <Tooltip content={<ChartTooltipContent />} />
                     <Area
-                      type="monotone"
+                      type="monotoneX"
                       dataKey="total"
                       stroke="var(--color-total)"
                       strokeWidth={2}
-                      fill="url(#loan-portfolio-gradient)"
+                      fill="url(#loan-value-gradient)"
                     />
                   </AreaChart>
                 </ChartContainer>
               ) : (
                 <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-600">
-                  Add loan metadata to see the payoff trajectory.
+                  Add loans to see cumulative value over time.
                 </div>
               )}
             </div>
@@ -1392,11 +1455,6 @@ export const Loans: React.FC = () => {
                     : "—"
                 }
                 hint="If configured"
-              />
-              <SummaryCard
-                label="Estimated payoff"
-                value={payoffDate ? formatDate(payoffDate) : "—"}
-                hint="From generated schedule"
               />
             </div>
 
