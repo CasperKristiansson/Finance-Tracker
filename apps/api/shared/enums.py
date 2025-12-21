@@ -43,6 +43,11 @@ class TransactionType(StrEnum):
     INVESTMENT_EVENT = "investment_event"
 
 
+class ReturnStatus(StrEnum):
+    PENDING = "pending"
+    PROCESSED = "processed"
+
+
 class SystemAccountCode(StrEnum):
     RETAINED_EARNINGS = "retained_earnings"
     INTEREST_EXPENSE = "interest_expense"
@@ -94,6 +99,7 @@ __all__ = [
     "AccountType",
     "CategoryType",
     "TransactionType",
+    "ReturnStatus",
     "SystemAccountCode",
     "InterestCompound",
     "LoanEventType",

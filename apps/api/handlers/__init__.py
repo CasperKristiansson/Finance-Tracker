@@ -52,6 +52,7 @@ from .reporting import (
     yearly_overview,
     yearly_report,
 )
+from .returns import list_returns, update_return
 from .settings import get_settings
 from .settings import reset_handler_state as reset_settings_handler_state
 from .settings import save_settings
@@ -105,6 +106,8 @@ __all__ = [
     "net_worth_projection",
     "yearly_overview",
     "yearly_category_detail",
+    "list_returns",
+    "update_return",
     "get_settings",
     "save_settings",
     "create_transaction",

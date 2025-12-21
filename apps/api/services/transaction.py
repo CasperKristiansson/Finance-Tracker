@@ -8,6 +8,7 @@ from decimal import Decimal
 from typing import Any, Iterable, List, Optional, Sequence, cast
 from uuid import UUID
 
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from ..models import (
@@ -20,9 +21,11 @@ from ..models import (
     TransactionLeg,
 )
 from ..repositories.transaction import TransactionRepository
+from ..schemas import ReturnSummary
 from ..shared import (
     CategoryType,
     LoanEventType,
+    ReturnStatus,
     TransactionType,
     coerce_decimal,
     ensure_balanced_legs,
@@ -84,6 +87,8 @@ class TransactionService:
 
         if transaction.return_parent_id is not None:
             transaction.transaction_type = TransactionType.RETURN
+            if transaction.return_status is None:
+                transaction.return_status = ReturnStatus.PENDING
 
         category = self._get_category(transaction.category_id)
         self._ensure_subscription_exists(transaction.subscription_id)
@@ -92,6 +97,9 @@ class TransactionService:
             category,
             transaction.transaction_type,
         )
+        if transaction.transaction_type is not TransactionType.RETURN:
+            transaction.return_parent_id = None
+            transaction.return_status = None
 
         self._validate_transaction_legs(transaction.transaction_type, prepared_legs)
         if transaction.transaction_type is TransactionType.RETURN:
@@ -173,6 +181,7 @@ class TransactionService:
 
         transaction.return_parent_id = return_parent_id
         transaction.transaction_type = TransactionType.RETURN
+        transaction.return_status = ReturnStatus.PENDING
         self.session.add(transaction)
         self.session.commit()
         self.session.refresh(transaction)
@@ -404,6 +413,99 @@ class TransactionService:
         for account_id, amount in candidate_totals.items():
             if amount + parent_totals[account_id] != Decimal("0"):
                 raise ValueError("Return transaction legs must offset parent leg amounts")
+
+    def _largest_leg_amount(self, legs: Iterable[TransactionLeg]) -> Decimal:
+        return max(
+            (coerce_decimal(leg.amount).copy_abs() for leg in legs),
+            default=Decimal("0"),
+        )
+
+    def _load_legs(self, transaction: Transaction) -> list[TransactionLeg]:
+        if getattr(transaction, "legs", None):
+            return list(transaction.legs)
+        statement = (
+            select(TransactionLeg)
+            .where(TransactionLeg.transaction_id == transaction.id)
+            .options(selectinload(TransactionLeg.account))  # type: ignore[arg-type]
+        )
+        return list(self.session.exec(statement).all())
+
+    def _build_return_summary(self, transaction: Transaction, parent: Transaction) -> ReturnSummary:
+        return_legs = self._load_legs(transaction)
+        parent_legs = self._load_legs(parent)
+        accounts = {
+            getattr(leg.account, "name", None)
+            for leg in parent_legs
+            if getattr(leg, "account", None) is not None
+        }
+
+        return ReturnSummary(
+            return_id=transaction.id,
+            return_status=transaction.return_status or ReturnStatus.PENDING,
+            return_occurred_at=transaction.occurred_at,
+            return_amount=str(self._largest_leg_amount(return_legs)),
+            parent_id=parent.id,
+            parent_description=parent.description,
+            parent_occurred_at=parent.occurred_at,
+            parent_amount=str(self._largest_leg_amount(parent_legs)),
+            accounts=sorted(filter(None, accounts)),
+        )
+
+    def build_return_summary(self, transaction: Transaction, parent: Transaction) -> ReturnSummary:
+        return self._build_return_summary(transaction, parent)
+
+    def list_returns(self) -> list[ReturnSummary]:
+        returns = list(
+            self.session.exec(
+                select(Transaction).where(cast(Any, Transaction.return_parent_id).is_not(None))
+            ).all()
+        )
+        parent_ids = {tx.return_parent_id for tx in returns if tx.return_parent_id}
+        parents = {}
+        if parent_ids:
+            parents = {
+                tx.id: tx
+                for tx in self.session.exec(
+                    select(Transaction).where(cast(Any, Transaction.id).in_(parent_ids))
+                ).all()
+            }
+
+        summaries: list[ReturnSummary] = []
+        for transaction in returns:
+            parent_id = transaction.return_parent_id
+            if parent_id is None:
+                continue
+            parent = parents.get(parent_id)
+            if parent is None:
+                continue
+            summaries.append(self.build_return_summary(transaction, parent))
+        return summaries
+
+    def update_return(
+        self, *, transaction_id: UUID, action: str
+    ) -> tuple[Transaction, Optional[Transaction]]:
+        transaction = self.repository.get(transaction_id)
+        if transaction is None or transaction.return_parent_id is None:
+            raise LookupError("Return not found")
+        if transaction.transaction_type is not TransactionType.RETURN:
+            raise ValueError("Transaction is not a return")
+
+        parent: Optional[Transaction] = None
+        if transaction.return_parent_id is not None:
+            parent = self._resolve_return_parent(transaction.return_parent_id)
+
+        if action == "mark_processed":
+            transaction.return_status = ReturnStatus.PROCESSED
+        elif action == "detach":
+            transaction.return_parent_id = None
+            transaction.return_status = None
+        else:
+            raise ValueError("Unsupported return action")
+
+        self.session.add(transaction)
+        self.session.commit()
+        self.session.refresh(transaction)
+        return transaction, parent
 
 
 __all__ = ["TransactionService"]

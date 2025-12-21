@@ -5,6 +5,7 @@ import {
   CategoryType,
   InterestCompound,
   LoanEventType,
+  ReturnStatus,
   TaxEventType,
   TransactionType,
 } from "./enums";
@@ -237,6 +238,8 @@ export const transactionCreateSchema = z.object({
   occurred_at: dateString,
   posted_at: z.string().nullable().optional(),
   transaction_type: z.enum(TransactionType).optional(),
+  return_parent_id: z.string().nullable().optional(),
+  return_status: z.enum(ReturnStatus).nullable().optional(),
   legs: z.array(transactionLegCreateSchema),
 });
 
@@ -259,6 +262,8 @@ export const transactionSchema = z.object({
   external_id: nullableString,
   occurred_at: dateString,
   posted_at: dateString,
+  return_parent_id: z.string().nullable().optional(),
+  return_status: z.enum(ReturnStatus).nullable().optional(),
   created_at: dateString,
   updated_at: dateString,
   legs: z.array(transactionLegSchema),
@@ -267,6 +272,27 @@ export const transactionSchema = z.object({
 export const transactionListSchema = z.object({
   transactions: z.array(transactionSchema),
   running_balances: z.record(z.string(), z.string()).default({}),
+});
+
+export const returnSummarySchema = z.object({
+  return_id: z.string(),
+  return_status: z.enum(ReturnStatus),
+  return_occurred_at: dateString,
+  return_amount: z.string(),
+  parent_id: z.string(),
+  parent_description: nullableString,
+  parent_occurred_at: dateString,
+  parent_amount: z.string(),
+  accounts: z.array(z.string()).default([]),
+});
+
+export const returnListSchema = z.object({
+  returns: z.array(returnSummarySchema),
+});
+
+export const returnActionRequestSchema = z.object({
+  transaction_id: z.string(),
+  action: z.enum(["mark_processed", "detach"]),
 });
 
 export const monthlyReportSchema = z.object({
@@ -1319,6 +1345,9 @@ export type TransactionUpdateRequest = z.infer<
 >;
 export type TransactionRead = z.infer<typeof transactionSchema>;
 export type TransactionListResponse = z.infer<typeof transactionListSchema>;
+export type ReturnSummary = z.infer<typeof returnSummarySchema>;
+export type ReturnListResponse = z.infer<typeof returnListSchema>;
+export type ReturnActionRequest = z.infer<typeof returnActionRequestSchema>;
 export type MonthlyReportEntry = z.infer<
   typeof monthlyReportSchema
 >["results"][number];

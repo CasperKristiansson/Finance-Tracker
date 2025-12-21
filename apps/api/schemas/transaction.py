@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
-from ..shared import TransactionType
+from ..shared import ReturnStatus, TransactionType
 
 
 class TransactionLegCreate(BaseModel):
@@ -41,6 +41,7 @@ class TransactionCreate(BaseModel):
     posted_at: Optional[datetime] = None
     transaction_type: TransactionType = TransactionType.TRANSFER
     return_parent_id: Optional[UUID] = None
+    return_status: Optional["ReturnStatus"] = None
     legs: List[TransactionLegCreate]
 
     @model_validator(mode="after")
@@ -69,6 +70,7 @@ class TransactionRead(BaseModel):
     occurred_at: datetime
     posted_at: datetime
     return_parent_id: Optional[UUID] = None
+    return_status: Optional["ReturnStatus"] = None
     created_at: datetime
     updated_at: datetime
     legs: List[TransactionLegRead]

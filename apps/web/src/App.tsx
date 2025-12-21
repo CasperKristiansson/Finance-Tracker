@@ -31,6 +31,7 @@ import { Navigation } from "./pages/navigation/navigation.tsx";
 import { NotFound } from "./pages/notFound/notFound.tsx";
 import { Redirect } from "./pages/redirect/redirect.tsx";
 import { Reports } from "./pages/reports/reports.tsx";
+import { Returns } from "./pages/returns/returns.tsx";
 import { Settings } from "./pages/settings/settings.tsx";
 import { Subscriptions } from "./pages/subscriptions/subscriptions.tsx";
 import { Taxes } from "./pages/taxes/taxes.tsx";
@@ -160,6 +161,14 @@ export const App: React.FC = () => {
           element={
             <NavigationWrapper title="Transactions">
               <Transactions />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.returns}
+          element={
+            <NavigationWrapper title="Returns">
+              <Returns />
             </NavigationWrapper>
           }
         />

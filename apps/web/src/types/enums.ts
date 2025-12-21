@@ -17,7 +17,13 @@ export enum TransactionType {
   EXPENSE = "expense",
   TRANSFER = "transfer",
   ADJUSTMENT = "adjustment",
+  RETURN = "return",
   INVESTMENT_EVENT = "investment_event",
+}
+
+export enum ReturnStatus {
+  PENDING = "pending",
+  PROCESSED = "processed",
 }
 
 export enum BudgetPeriod {

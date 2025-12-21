@@ -9,6 +9,7 @@ import { ImportsReducer } from "@/features/imports/importsSlice";
 import { InvestmentsReducer } from "@/features/investments/investmentsSlice";
 import { LoansReducer } from "@/features/loans/loansSlice";
 import { ReportsReducer } from "@/features/reports/reportsSlice";
+import { ReturnsReducer } from "@/features/returns/returnsSlice";
 import { SettingsReducer } from "@/features/settings/settingsSlice";
 import { TransactionsReducer } from "@/features/transactions/transactionsSlice";
 import { WarmupReducer } from "@/features/warmup/warmupSlice";
@@ -30,6 +31,7 @@ export const Store = configureStore({
     investments: InvestmentsReducer,
     budgets: BudgetsReducer,
     settings: SettingsReducer,
+    returns: ReturnsReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

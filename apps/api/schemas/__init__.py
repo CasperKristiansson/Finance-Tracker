@@ -112,6 +112,7 @@ from .reporting import (
     YearlyReportQuery,
     YearlyReportResponse,
 )
+from .returns import ReturnActionRequest, ReturnListResponse, ReturnSummary
 from .settings import SettingsPayload, SettingsRequest, SettingsResponse
 from .subscription import (
     AttachSubscriptionRequest,
@@ -258,6 +259,9 @@ __all__ = [
     "SubscriptionSummaryRead",
     "SubscriptionSummaryResponse",
     "AttachSubscriptionRequest",
+    "ReturnSummary",
+    "ReturnListResponse",
+    "ReturnActionRequest",
     "GoalCreate",
     "GoalUpdate",
     "GoalRead",

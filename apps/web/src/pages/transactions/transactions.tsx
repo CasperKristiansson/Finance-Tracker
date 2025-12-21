@@ -135,6 +135,7 @@ const typeTone: Record<TransactionType, string> = {
   [TransactionType.EXPENSE]: "bg-rose-100 text-rose-800",
   [TransactionType.TRANSFER]: "bg-slate-100 text-slate-700",
   [TransactionType.ADJUSTMENT]: "bg-amber-100 text-amber-800",
+  [TransactionType.RETURN]: "bg-blue-100 text-blue-800",
   [TransactionType.INVESTMENT_EVENT]: "bg-indigo-100 text-indigo-800",
 };
 
@@ -143,6 +144,7 @@ const typeLabel: Record<TransactionType, string> = {
   [TransactionType.EXPENSE]: "Expense",
   [TransactionType.TRANSFER]: "Transfer",
   [TransactionType.ADJUSTMENT]: "Adjustment",
+  [TransactionType.RETURN]: "Return",
   [TransactionType.INVESTMENT_EVENT]: "Investment",
 };
 

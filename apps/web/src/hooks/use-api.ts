@@ -97,6 +97,14 @@ import {
   selectYearlyReport,
   type ReportFilters,
 } from "@/features/reports/reportsSlice";
+import {
+  FetchReturns,
+  UpdateReturn as UpdateReturnAction,
+} from "@/features/returns/returnsSaga";
+import {
+  selectReturnsState,
+  type ReturnAction,
+} from "@/features/returns/returnsSlice";
 import { LoadSettings, SaveSettings } from "@/features/settings/settingsSaga";
 import {
   selectFirstName,
@@ -137,6 +145,7 @@ import type {
   TransactionCreate,
   TransactionUpdateRequest,
   NordnetSnapshotCreateRequest,
+  ReturnStatus,
 } from "@/types/api";
 
 export const useAccountsApi = () => {
@@ -291,6 +300,29 @@ export const useTransactionsApi = () => {
     createTransaction,
     updateTransaction,
     deleteTransaction,
+  };
+};
+
+export const useReturnsApi = () => {
+  const dispatch = useAppDispatch();
+  const state = useAppSelector(selectReturnsState);
+
+  const fetchReturns = useCallback(
+    (status?: ReturnStatus | "all") =>
+      dispatch(FetchReturns(status ? { status } : undefined)),
+    [dispatch],
+  );
+
+  const updateReturn = useCallback(
+    (transactionId: string, action: ReturnAction) =>
+      dispatch(UpdateReturnAction({ transactionId, action })),
+    [dispatch],
+  );
+
+  return {
+    ...state,
+    fetchReturns,
+    updateReturn,
   };
 };
 

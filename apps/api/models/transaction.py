@@ -17,6 +17,7 @@ from sqlmodel import Field, Relationship, SQLModel
 from ..shared import (
     AuditSourceMixin,
     LoanEventType,
+    ReturnStatus,
     TimestampMixin,
     TransactionType,
     UserOwnedMixin,
@@ -91,6 +92,10 @@ class Transaction(
             ForeignKey("transactions.id", ondelete="SET NULL"),
             nullable=True,
         ),
+    )
+    return_status: Optional[ReturnStatus] = Field(
+        default=None,
+        sa_column=Column(SAEnum(ReturnStatus), nullable=True),
     )
     if TYPE_CHECKING:  # pragma: no cover
         category: Optional["Category"]

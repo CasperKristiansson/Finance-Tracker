@@ -11,6 +11,7 @@ import {
   Upload,
   Layers,
   Receipt,
+  RotateCcw,
 } from "lucide-react";
 import * as React from "react";
 import { useAppSelector } from "@/app/hooks";
@@ -65,6 +66,11 @@ const data = {
       title: "Transactions",
       url: PageRoutes.transactions,
       icon: BookOpen,
+    },
+    {
+      title: "Returns",
+      url: PageRoutes.returns,
+      icon: RotateCcw,
     },
   ],
   navExtra: [
