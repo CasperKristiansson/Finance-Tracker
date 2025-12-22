@@ -1,12 +1,14 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Check,
+  CheckSquare,
   ChevronLeft,
   ChevronRight,
   Link2,
   Loader2,
   MoveRight,
   Scissors,
+  Square,
   Sparkles,
   Trash2,
   UploadCloud,
@@ -31,7 +33,6 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuCheckboxItem,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -309,6 +310,10 @@ export const Imports: React.FC = () => {
   const [transferDialogState, setTransferDialogState] =
     useState<TransferDialogState | null>(null);
   const [transferSearch, setTransferSearch] = useState("");
+  const [transferStartDate, setTransferStartDate] = useState("");
+  const [transferEndDate, setTransferEndDate] = useState("");
+  const [transferAccountFilter, setTransferAccountFilter] = useState("");
+  const [transferCategoryFilter, setTransferCategoryFilter] = useState("");
   const [transferTab, setTransferTab] = useState("upload");
   const [reimbursementDialogOpen, setReimbursementDialogOpen] = useState(false);
   const [reimbursementDialogState, setReimbursementDialogState] =
@@ -951,6 +956,10 @@ export const Imports: React.FC = () => {
     });
     setTransferDraftValue(currentValue);
     setTransferSearch("");
+    setTransferStartDate("");
+    setTransferEndDate("");
+    setTransferAccountFilter("");
+    setTransferCategoryFilter("");
     setTransferTab(batchOptions.length ? "upload" : "existing");
     setTransferDialogOpen(true);
   };
@@ -1844,15 +1853,26 @@ export const Imports: React.FC = () => {
                                           <MoveRight className="h-3.5 w-3.5" />
                                           Manage transfer
                                         </DropdownMenuItem>
-                                        <DropdownMenuCheckboxItem
-                                          checked={Boolean(taxEventType)}
-                                          onCheckedChange={(checked) =>
-                                            handleToggleTaxEvent(idx, checked)
+                                        <DropdownMenuItem
+                                          onSelect={() =>
+                                            handleToggleTaxEvent(
+                                              idx,
+                                              !taxEventType,
+                                            )
                                           }
                                           disabled={Boolean(transferAccountId)}
+                                          className="flex items-center justify-between gap-2"
                                         >
-                                          Tax event
-                                        </DropdownMenuCheckboxItem>
+                                          <div className="flex items-center gap-2">
+                                            <Sparkles className="h-3.5 w-3.5" />
+                                            <span>Tax event</span>
+                                          </div>
+                                          {taxEventType ? (
+                                            <CheckSquare className="h-4 w-4 text-slate-700" />
+                                          ) : (
+                                            <Square className="h-4 w-4 text-slate-400" />
+                                          )}
+                                        </DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
                                           onSelect={() => {
@@ -2153,6 +2173,10 @@ export const Imports: React.FC = () => {
             setTransferDialogState(null);
             setTransferDraftValue(null);
             setTransferSearch("");
+            setTransferStartDate("");
+            setTransferEndDate("");
+            setTransferAccountFilter("");
+            setTransferCategoryFilter("");
             setTransferTab("upload");
           }
         }}
@@ -2207,8 +2231,8 @@ export const Imports: React.FC = () => {
                   </p>
                   <div className="rounded-lg border border-slate-200">
                     {transferDialogState.batchOptions.length ? (
-                      <div className="max-h-[360px] overflow-y-auto">
-                        <Table>
+                      <div className="max-h-[360px] overflow-auto">
+                        <Table className="min-w-[720px]">
                           <TableHeader>
                             <TableRow>
                               <TableHead>Description</TableHead>
@@ -2292,10 +2316,51 @@ export const Imports: React.FC = () => {
                       Clear
                     </Button>
                   </div>
+                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-2 text-[13px] shadow-[0_6px_16px_-12px_rgba(15,23,42,0.3)]">
+                    <input
+                      type="date"
+                      className="h-8 rounded border border-slate-200 px-2 text-slate-800"
+                      value={transferStartDate}
+                      onChange={(e) => setTransferStartDate(e.target.value)}
+                    />
+                    <span className="text-slate-500">to</span>
+                    <input
+                      type="date"
+                      className="h-8 rounded border border-slate-200 px-2 text-slate-800"
+                      value={transferEndDate}
+                      onChange={(e) => setTransferEndDate(e.target.value)}
+                    />
+                    <select
+                      className="h-8 rounded border border-slate-200 bg-white px-2 text-slate-800"
+                      value={transferAccountFilter}
+                      onChange={(e) => setTransferAccountFilter(e.target.value)}
+                    >
+                      <option value="">All accounts</option>
+                      {accounts.map((acc) => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      className="h-8 rounded border border-slate-200 bg-white px-2 text-slate-800"
+                      value={transferCategoryFilter}
+                      onChange={(e) =>
+                        setTransferCategoryFilter(e.target.value)
+                      }
+                    >
+                      <option value="">All categories</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.name}>
+                          {cat.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <div className="rounded-lg border border-slate-200">
                     {transferDialogState.existingOptions.length ? (
-                      <div className="max-h-[360px] overflow-y-auto">
-                        <Table>
+                      <div className="max-h-[360px] overflow-auto">
+                        <Table className="min-w-[720px]">
                           <TableHeader>
                             <TableRow>
                               <TableHead>Description</TableHead>
@@ -2310,6 +2375,41 @@ export const Imports: React.FC = () => {
                           <TableBody>
                             {transferDialogState.existingOptions
                               .filter((option) => {
+                                if (
+                                  transferAccountFilter &&
+                                  option.accountId !== transferAccountFilter
+                                ) {
+                                  return false;
+                                }
+                                if (
+                                  transferCategoryFilter &&
+                                  option.categoryName !== transferCategoryFilter
+                                ) {
+                                  return false;
+                                }
+                                const optionDate = toDateInputValue(
+                                  option.occurredAt,
+                                );
+                                if (
+                                  (transferStartDate || transferEndDate) &&
+                                  !optionDate
+                                ) {
+                                  return false;
+                                }
+                                if (
+                                  transferStartDate &&
+                                  optionDate &&
+                                  optionDate < transferStartDate
+                                ) {
+                                  return false;
+                                }
+                                if (
+                                  transferEndDate &&
+                                  optionDate &&
+                                  optionDate > transferEndDate
+                                ) {
+                                  return false;
+                                }
                                 if (!transferSearch.trim()) return true;
                                 const haystack =
                                   `${option.description} ${option.categoryName} ${option.occurredAt} ${
