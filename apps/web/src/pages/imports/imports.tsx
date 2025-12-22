@@ -2351,14 +2351,6 @@ export const Imports: React.FC = () => {
                     )?.name ?? "Unknown"}
                   </Badge>
                 </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setTransferDraftValue(null)}
-                >
-                  Mark as not a transfer
-                </Button>
               </div>
 
               <Tabs value={transferTab} onValueChange={setTransferTab}>
