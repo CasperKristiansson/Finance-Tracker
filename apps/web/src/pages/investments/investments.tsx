@@ -119,6 +119,11 @@ const MetricRow: React.FC<{
 );
 
 type PortfolioPoint = { date: string; value: number; year: number };
+type ContributionPoint = {
+  period: string;
+  contributions: number;
+  marketGrowth: number | null;
+};
 
 const valueAtIsoDate = (series: PortfolioPoint[], isoDate: string) => {
   if (!series.length) return null;
@@ -142,6 +147,56 @@ const endOfMonthIso = (monthIso: string) => {
   return end.toISOString().slice(0, 10);
 };
 
+const groupContributionPoints = (
+  points: ContributionPoint[],
+  grouping: "month" | "quarter" | "year",
+) => {
+  if (grouping === "month") return points;
+
+  const buckets = new Map<
+    string,
+    {
+      period: string;
+      contributions: number;
+      marketGrowth: number;
+      marketGrowthCount: number;
+    }
+  >();
+
+  for (const point of points) {
+    const dt = new Date(`${point.period}T00:00:00Z`);
+    if (Number.isNaN(dt.getTime())) continue;
+    const year = dt.getUTCFullYear();
+    const key =
+      grouping === "year"
+        ? `${year}-01-01`
+        : `${year}-${String(Math.floor(dt.getUTCMonth() / 3) * 3 + 1).padStart(
+            2,
+            "0",
+          )}-01`;
+    const bucket = buckets.get(key) ?? {
+      period: key,
+      contributions: 0,
+      marketGrowth: 0,
+      marketGrowthCount: 0,
+    };
+    bucket.contributions += point.contributions;
+    if (typeof point.marketGrowth === "number") {
+      bucket.marketGrowth += point.marketGrowth;
+      bucket.marketGrowthCount += 1;
+    }
+    buckets.set(key, bucket);
+  }
+
+  return Array.from(buckets.values())
+    .map((bucket) => ({
+      period: bucket.period,
+      contributions: bucket.contributions,
+      marketGrowth: bucket.marketGrowthCount ? bucket.marketGrowth : null,
+    }))
+    .sort((a, b) => a.period.localeCompare(b.period));
+};
+
 export const Investments: React.FC = () => {
   const {
     overview,
@@ -155,6 +210,9 @@ export const Investments: React.FC = () => {
   const [portfolioWindow, setPortfolioWindow] = useState<"since" | "12m">(
     "since",
   );
+  const [contributionsGrouping, setContributionsGrouping] = useState<
+    "month" | "quarter" | "year"
+  >("month");
   const [accountWindow, setAccountWindow] = useState<"since" | "12m">("since");
   const [detailsAccountId, setDetailsAccountId] = useState<string | null>(null);
   const [cashflowDetailsMonth, setCashflowDetailsMonth] = useState<
@@ -222,7 +280,7 @@ export const Investments: React.FC = () => {
     };
   }, [portfolioCashflow, portfolioGrowth12m, portfolioGrowthSince]);
 
-  const contributionsVsGrowth = useMemo(() => {
+  const contributionsVsGrowth = useMemo<ContributionPoint[]>(() => {
     const cashflowSeries = overview?.portfolio.cashflow_series ?? [];
     if (!cashflowSeries.length) return [];
     return cashflowSeries
@@ -245,8 +303,42 @@ export const Investments: React.FC = () => {
           marketGrowth: valueChange - netContrib,
         };
       })
-      .filter((row) => Boolean(row.period));
+      .filter((row) => Boolean(row.period))
+      .sort((a, b) => a.period.localeCompare(b.period));
   }, [overview?.portfolio.cashflow_series, portfolioSeries]);
+
+  const contributionsVsGrowthGrouped = useMemo(
+    () => groupContributionPoints(contributionsVsGrowth, contributionsGrouping),
+    [contributionsGrouping, contributionsVsGrowth],
+  );
+
+  const contributionsGroupingLabel = useMemo(() => {
+    switch (contributionsGrouping) {
+      case "year":
+        return "Yearly";
+      case "quarter":
+        return "Quarterly";
+      default:
+        return "Monthly";
+    }
+  }, [contributionsGrouping]);
+
+  const formatContributionsTick = (value: string) => {
+    const dt = new Date(`${value}T00:00:00Z`);
+    if (Number.isNaN(dt.getTime())) return value;
+    if (contributionsGrouping === "year") {
+      return `${dt.getUTCFullYear()}`;
+    }
+    if (contributionsGrouping === "quarter") {
+      const quarter = Math.floor(dt.getUTCMonth() / 3) + 1;
+      const shortYear = String(dt.getUTCFullYear()).slice(2);
+      return `Q${quarter} '${shortYear}`;
+    }
+    return dt.toLocaleDateString("en-US", {
+      month: "short",
+      year: "2-digit",
+    });
+  };
 
   const accountSummaries = useMemo(() => {
     const accounts = overview?.accounts ?? [];
@@ -697,15 +789,6 @@ export const Investments: React.FC = () => {
                               {dateLabel}
                               {row.description ? ` · ${row.description}` : ""}
                             </div>
-                            <Link
-                              to={`${PageRoutes.transactions}?search=${encodeURIComponent(
-                                row.transaction_id,
-                              )}`}
-                              className="mt-1 inline-block truncate font-mono text-[11px] text-slate-500 hover:text-slate-700"
-                              title={row.transaction_id}
-                            >
-                              {row.transaction_id}
-                            </Link>
                           </div>
                           <div
                             className={cn(
@@ -734,18 +817,42 @@ export const Investments: React.FC = () => {
       <StaggerWrap className="grid gap-4 lg:grid-cols-2">
         <motion.div variants={fadeInUp} {...subtleHover}>
           <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold text-slate-900">
-                Contributions vs market growth
-              </CardTitle>
-              <p className="text-xs text-slate-500">
-                Monthly decomposition of value change.
-              </p>
+            <CardHeader className="flex flex-col gap-2 pb-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Contributions vs market growth
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  {contributionsGroupingLabel} decomposition of value change.
+                </p>
+              </div>
+              <Tabs
+                value={contributionsGrouping}
+                onValueChange={(value) =>
+                  setContributionsGrouping(
+                    value as "month" | "quarter" | "year",
+                  )
+                }
+                className="w-full sm:w-auto"
+              >
+                <TabsList className="grid w-full grid-cols-3 bg-slate-100 sm:w-auto">
+                  <TabsTrigger value="month" className="text-xs">
+                    Monthly
+                  </TabsTrigger>
+                  <TabsTrigger value="quarter" className="text-xs">
+                    Quarterly
+                  </TabsTrigger>
+                  <TabsTrigger value="year" className="text-xs">
+                    Yearly
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
             </CardHeader>
             <CardContent className="h-80">
               {isLoading ? (
                 <Skeleton className="h-full w-full" />
-              ) : portfolioSeries.length && contributionsVsGrowth.length ? (
+              ) : portfolioSeries.length &&
+                contributionsVsGrowthGrouped.length ? (
                 <ChartContainer
                   className="h-full w-full"
                   config={{
@@ -757,18 +864,13 @@ export const Investments: React.FC = () => {
                   }}
                 >
                   <BarChart
-                    data={contributionsVsGrowth}
+                    data={contributionsVsGrowthGrouped}
                     margin={{ left: 0, right: 0, top: 10 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis
                       dataKey="period"
-                      tickFormatter={(value) =>
-                        new Date(value).toLocaleDateString("en-US", {
-                          month: "short",
-                          year: "2-digit",
-                        })
-                      }
+                      tickFormatter={(value) => formatContributionsTick(value)}
                       tickLine={false}
                       axisLine={false}
                     />
@@ -801,6 +903,7 @@ export const Investments: React.FC = () => {
                       radius={[4, 4, 0, 0]}
                       isAnimationActive={false}
                       onClick={(data) => {
+                        if (contributionsGrouping !== "month") return;
                         const period = String(data?.payload?.period ?? "");
                         if (!period) return;
                         setCashflowDetailsMonth(period);
@@ -813,6 +916,7 @@ export const Investments: React.FC = () => {
                       radius={[4, 4, 0, 0]}
                       isAnimationActive={false}
                       onClick={(data) => {
+                        if (contributionsGrouping !== "month") return;
                         const period = String(data?.payload?.period ?? "");
                         if (!period) return;
                         setCashflowDetailsMonth(period);
@@ -1309,7 +1413,7 @@ export const Investments: React.FC = () => {
           if (!open) setCashflowsDialogScope(null);
         }}
       >
-        <DialogContent className="bg-white sm:max-w-4xl">
+        <DialogContent className="max-h-[80vh] overflow-y-auto bg-white sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>{cashflowsDialogTitle}</DialogTitle>
             <DialogDescription className="text-slate-600">
@@ -1330,7 +1434,7 @@ export const Investments: React.FC = () => {
               </Link>
             </div>
             {cashflowsDialogItems.length ? (
-              <div className="max-h-[60vh] overflow-auto rounded-md border border-slate-100">
+              <div className="max-h-[60vh] overflow-y-auto rounded-md border border-slate-100">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1339,7 +1443,6 @@ export const Investments: React.FC = () => {
                       <TableHead>Description</TableHead>
                       <TableHead>Direction</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
-                      <TableHead className="text-right">Transaction</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1378,17 +1481,6 @@ export const Investments: React.FC = () => {
                           >
                             {isDeposit ? "+" : "-"}
                             {formatSek(amount)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Link
-                              to={`${PageRoutes.transactions}?search=${encodeURIComponent(
-                                row.transaction_id,
-                              )}`}
-                              className="font-mono text-[11px] text-slate-500 hover:text-slate-700"
-                              title={row.transaction_id}
-                            >
-                              {row.transaction_id}
-                            </Link>
                           </TableCell>
                         </TableRow>
                       );
@@ -1452,15 +1544,6 @@ export const Investments: React.FC = () => {
                           {dateLabel}
                           {row.description ? ` · ${row.description}` : ""}
                         </div>
-                        <Link
-                          to={`${PageRoutes.transactions}?search=${encodeURIComponent(
-                            row.transaction_id,
-                          )}`}
-                          className="mt-1 inline-block truncate font-mono text-[11px] text-slate-500 hover:text-slate-700"
-                          title={row.transaction_id}
-                        >
-                          {row.transaction_id}
-                        </Link>
                       </div>
                       <div
                         className={cn(
