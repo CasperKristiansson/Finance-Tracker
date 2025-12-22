@@ -767,7 +767,7 @@ export const Imports: React.FC = () => {
     });
 
     const rounded = computedRaw.map((value, idx) => {
-      if (idx === computedRaw.length - 1) {
+      if (splitMode === "percent" && idx === computedRaw.length - 1) {
         const previous = computedRaw
           .slice(0, idx)
           .reduce((sum, val) => sum + Number(val.toFixed(2)), 0);
