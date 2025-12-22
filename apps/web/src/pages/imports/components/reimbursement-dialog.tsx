@@ -11,6 +11,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type { AccountWithBalance, ImportPreviewResponse } from "@/types/api";
 import type { CommitFormValues } from "../imports";
@@ -218,12 +226,13 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
           isDeleted: commitForm.watch(`rows.${idx}.delete`) ?? false,
         };
       })
-      .filter(
-        (row) =>
-          row.id !== baseRow.id &&
-          row.amountNumber > 0 &&
-          !splitRowIdsBySource[row.id],
-      );
+      .filter((row) => row.id !== baseRow.id && !splitRowIdsBySource[row.id]);
+
+    const sortedCandidates = [...candidateRows].sort((a, b) => {
+      const aDate = new Date(a.occurredAt ?? "").getTime();
+      const bDate = new Date(b.occurredAt ?? "").getTime();
+      return bDate - aDate;
+    });
 
     const selectedTotal = selections.reduce((sum, id) => {
       const candidate = candidateRows.find((row) => row.id === id);
@@ -292,46 +301,79 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
             ) : null}
           </div>
 
-          <div className="grid gap-2 md:grid-cols-2">
-            {candidateRows.length ? (
-              candidateRows.map((row) => {
-                const selected = selections.includes(row.id);
-                const badgeLabel = row.accountName.slice(0, 2).toUpperCase();
-                return (
-                  <Button
-                    key={row.id}
-                    variant={selected ? "default" : "outline"}
-                    className="h-auto justify-start gap-3 text-left"
-                    onClick={() =>
-                      setSelections((prev) =>
-                        prev.includes(row.id)
-                          ? prev.filter((id) => id !== row.id)
-                          : [...prev, row.id],
-                      )
-                    }
-                  >
-                    <div className="flex h-9 w-9 items-center justify-center rounded bg-slate-100 text-xs font-semibold text-slate-700">
-                      {badgeLabel}
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="text-sm font-semibold text-slate-900">
-                        {row.description || "Reimbursement"}
-                      </span>
-                      <span className="text-xs text-slate-500">
-                        {toDateInputValue(row.occurredAt)} • {row.amountValue} •{" "}
-                        {row.accountName}{" "}
-                        {row.fileLabel ? `• ${row.fileLabel}` : ""}
-                        {row.isDeleted ? " • Marked deleted" : ""}
-                      </span>
-                    </div>
-                  </Button>
-                );
-              })
+          <div className="rounded-lg border border-slate-200">
+            {sortedCandidates.length ? (
+              <div className="max-h-[420px] overflow-y-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Transaction</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Account</TableHead>
+                      <TableHead>File</TableHead>
+                      <TableHead className="text-right">Select</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedCandidates.map((row) => {
+                      const selected = selections.includes(row.id);
+                      return (
+                        <TableRow
+                          key={row.id}
+                          className="cursor-pointer"
+                          data-state={selected ? "selected" : undefined}
+                          onClick={() =>
+                            setSelections((prev) =>
+                              prev.includes(row.id)
+                                ? prev.filter((id) => id !== row.id)
+                                : [...prev, row.id],
+                            )
+                          }
+                        >
+                          <TableCell className="space-y-1 font-semibold text-slate-900">
+                            <div className="flex flex-col gap-1">
+                              <span>{row.description || "Reimbursement"}</span>
+                              <span className="text-[11px] font-normal text-slate-500">
+                                {row.isDeleted ? "Marked deleted • " : ""}
+                                {row.amountNumber >= 0
+                                  ? "Income candidate"
+                                  : "Expense"}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-slate-600">
+                            {toDateInputValue(row.occurredAt)}
+                          </TableCell>
+                          <TableCell className="text-slate-600">
+                            {row.amountValue}
+                          </TableCell>
+                          <TableCell className="text-slate-600">
+                            {row.accountName}
+                          </TableCell>
+                          <TableCell className="text-slate-600">
+                            {row.fileLabel ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={selected ? "default" : "outline"}
+                            >
+                              {selected ? "Selected" : "Select"}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             ) : (
-              <p className="text-sm text-slate-500">
-                No incoming payments found in this upload. Look for positive
-                amounts to offset the expense.
-              </p>
+              <div className="p-3 text-sm text-slate-500">
+                No transactions available yet. Upload files or return after
+                parsing completes to link reimbursements.
+              </div>
             )}
           </div>
         </div>
@@ -365,7 +407,7 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-h-[85vh] max-w-5xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Link reimbursements</DialogTitle>
           <DialogDescription>
