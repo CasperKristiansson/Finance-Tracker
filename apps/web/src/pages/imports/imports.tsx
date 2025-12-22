@@ -1850,26 +1850,8 @@ export const Imports: React.FC = () => {
                                             handleToggleTaxEvent(idx, checked)
                                           }
                                           disabled={Boolean(transferAccountId)}
-                                          className="space-y-1"
                                         >
-                                          <div className="flex items-center gap-2">
-                                            <Sparkles className="h-3.5 w-3.5" />
-                                            <span>Tax event</span>
-                                            <Badge
-                                              variant="secondary"
-                                              className="bg-amber-100 text-amber-800"
-                                            >
-                                              {taxEventType
-                                                ? taxEventType.toLowerCase()
-                                                : inferTaxEventType(
-                                                    amountValue,
-                                                  ).toLowerCase()}
-                                            </Badge>
-                                          </div>
-                                          <p className="text-[11px] text-slate-500">
-                                            Automatically infers payment vs
-                                            refund from the amount.
-                                          </p>
+                                          Tax event
                                         </DropdownMenuCheckboxItem>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem
@@ -2040,7 +2022,7 @@ export const Imports: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="max-h-[55vh] space-y-3 overflow-y-auto pr-1">
+                <div className="space-y-3">
                   {splitDraftItems.map((item, idx) => (
                     <div
                       key={item.id}
@@ -2112,8 +2094,7 @@ export const Imports: React.FC = () => {
 
                 <div className="flex items-center justify-between">
                   <div className="text-xs text-slate-500">
-                    Add more parts as needed. Scroll within this area to view
-                    all splits.
+                    Add more parts as needed.
                   </div>
                   <Button
                     type="button"
