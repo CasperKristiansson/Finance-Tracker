@@ -1,4 +1,4 @@
-alembic==1.16.5
+alembic==1.17.2
 boto3==1.40.45
 mypy==1.18.2
 psycopg2-binary==2.9.10
