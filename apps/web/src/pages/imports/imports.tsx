@@ -3,6 +3,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  Link2,
   Loader2,
   MoveRight,
   Scissors,
@@ -65,6 +66,11 @@ import type {
   TaxEventType,
 } from "@/types/api";
 import { TaxEventType as TaxEventTypeEnum } from "@/types/api";
+import {
+  ReimbursementDialog,
+  type ReimbursementDialogState,
+  type ReimbursementState,
+} from "./components/reimbursement-dialog";
 
 type StepKey = 1 | 2 | 3 | 4;
 
@@ -238,7 +244,7 @@ const commitFormSchema = z.object({
   rows: z.array(commitRowSchema),
 });
 
-type CommitFormValues = z.infer<typeof commitFormSchema>;
+export type CommitFormValues = z.infer<typeof commitFormSchema>;
 
 const steps: Array<{ key: StepKey; label: string; description: string }> = [
   { key: 1, label: "Upload", description: "Choose one or more XLSX files." },
@@ -309,6 +315,12 @@ export const Imports: React.FC = () => {
     useState<TransferDialogState | null>(null);
   const [transferSearch, setTransferSearch] = useState("");
   const [transferTab, setTransferTab] = useState("upload");
+  const [reimbursementDialogOpen, setReimbursementDialogOpen] = useState(false);
+  const [reimbursementDialogState, setReimbursementDialogState] =
+    useState<ReimbursementDialogState | null>(null);
+  const [reimbursementsByRow, setReimbursementsByRow] = useState<
+    Record<string, ReimbursementState>
+  >({});
   const [taxDialogOpen, setTaxDialogOpen] = useState(false);
   const [taxDialogState, setTaxDialogState] = useState<TaxDialogState | null>(
     null,
@@ -355,6 +367,9 @@ export const Imports: React.FC = () => {
     setTransferDialogState(null);
     setTransferSearch("");
     setTransferTab("upload");
+    setReimbursementDialogOpen(false);
+    setReimbursementDialogState(null);
+    setReimbursementsByRow({});
     setTaxDialogOpen(false);
     setTaxDialogState(null);
   }, [preview]);
@@ -972,6 +987,14 @@ export const Imports: React.FC = () => {
     setTransferDialogState(null);
   };
 
+  const handleOpenReimbursementDialog = (
+    row: ImportPreviewResponse["rows"][number],
+    commitIndex: number,
+  ) => {
+    setReimbursementDialogState({ rowId: row.id, commitIndex });
+    setReimbursementDialogOpen(true);
+  };
+
   const [taxDraftValue, setTaxDraftValue] = useState<TaxEventType | null>(null);
 
   const handleOpenTaxDialog = (
@@ -1498,6 +1521,10 @@ export const Imports: React.FC = () => {
                               const firstSimilar = rowSimilarIds.length
                                 ? (contextTxById.get(rowSimilarIds[0]) ?? null)
                                 : null;
+                              const reimbursementLink =
+                                reimbursementsByRow[previewRow.id];
+                              const reimbursementCount =
+                                reimbursementLink?.reimbursementIds.length ?? 0;
 
                               const occurredAt =
                                 commitForm.watch(`rows.${idx}.occurred_at`) ??
@@ -1651,6 +1678,15 @@ export const Imports: React.FC = () => {
                                             Transfer → {transferTarget.name}
                                           </Badge>
                                         ) : null}
+                                        {reimbursementCount ? (
+                                          <Badge className="bg-blue-100 text-blue-800">
+                                            Reimbursed by {reimbursementCount}{" "}
+                                            payment
+                                            {reimbursementCount === 1
+                                              ? ""
+                                              : "s"}
+                                          </Badge>
+                                        ) : null}
                                         {taxEventType ? (
                                           <Badge className="bg-amber-100 text-amber-800">
                                             Tax {taxEventType.toLowerCase()}
@@ -1697,8 +1733,8 @@ export const Imports: React.FC = () => {
                                         categories={categories}
                                         disabled={Boolean(
                                           taxEventType ||
-                                            transferAccountId ||
-                                            isDeleted,
+                                          transferAccountId ||
+                                          isDeleted,
                                         )}
                                         missing={isMissingCategory}
                                         suggesting={
@@ -1793,6 +1829,19 @@ export const Imports: React.FC = () => {
                                         >
                                           <Scissors className="h-3.5 w-3.5" />
                                           Split transaction
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          onSelect={() =>
+                                            handleOpenReimbursementDialog(
+                                              previewRow,
+                                              idx,
+                                            )
+                                          }
+                                          disabled={isDeleted}
+                                          className="flex items-center gap-2"
+                                        >
+                                          <Link2 className="h-3.5 w-3.5" />
+                                          Reimbursement links
                                         </DropdownMenuItem>
                                         <DropdownMenuItem
                                           onSelect={() =>
@@ -2373,6 +2422,27 @@ export const Imports: React.FC = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      <ReimbursementDialog
+        open={reimbursementDialogOpen}
+        onOpenChange={(open) => {
+          setReimbursementDialogOpen(open);
+          if (!open) {
+            setReimbursementDialogState(null);
+          }
+        }}
+        dialogState={reimbursementDialogState}
+        setDialogState={setReimbursementDialogState}
+        reimbursementsByRow={reimbursementsByRow}
+        setReimbursementsByRow={setReimbursementsByRow}
+        commitRows={commitRows}
+        commitForm={commitForm}
+        previewRowById={previewRowById}
+        fileById={fileById}
+        accountById={accountById}
+        splitRowIdsBySource={splitRowIdsBySource}
+        toDateInputValue={toDateInputValue}
+      />
 
       <Dialog
         open={taxDialogOpen}
