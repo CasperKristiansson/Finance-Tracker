@@ -397,9 +397,9 @@ export const Transactions: React.FC = () => {
               setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
             }
           />
-        <Button
-          variant="outline"
-          size="sm"
+          <Button
+            variant="outline"
+            size="sm"
             className="gap-2 border-slate-300 text-slate-700"
             onClick={() =>
               fetchTransactions({ limit: pagination.limit, offset: 0 })

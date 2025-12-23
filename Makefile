@@ -1,6 +1,6 @@
 .PHONY: tf-init tf-plan tf-apply tf-destroy tf-fmt tf-validate tf-write-web-env \
         tf-enable-public-db tf-disable-public-db \
-        type-check format test deploy-layer deploy-api deploy
+        type-check format test deploy-layer deploy-api deploy deployWebsite
 
 TF_DIR ?= infra/terraform
 TF_CMD = terraform -chdir=$(TF_DIR)
@@ -55,3 +55,12 @@ deploy-api:
 	cd infra/serverless && npx serverless deploy
 
 deploy: deploy-layer deploy-api
+
+deployWebsite:
+	@if [ -z "$(STATIC_SITE_BUCKET)" ] || [ -z "$(CLOUDFRONT_DISTRIBUTION_ID)" ]; then \
+		echo "ERROR: Set STATIC_SITE_BUCKET and CLOUDFRONT_DISTRIBUTION_ID before running deployWebsite."; \
+		exit 1; \
+	fi
+	npm run build -w apps/web
+	aws s3 sync apps/web/dist s3://$(STATIC_SITE_BUCKET) --delete --profile "$(AWS_PROFILE)" --region "$(AWS_REGION)"
+	aws cloudfront create-invalidation --distribution-id "$(CLOUDFRONT_DISTRIBUTION_ID)" --paths "/*" --profile "$(AWS_PROFILE)"
