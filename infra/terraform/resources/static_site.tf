@@ -177,6 +177,20 @@ resource "aws_cloudfront_distribution" "static_site" {
     minimum_protocol_version = "TLSv1.2_2021"
   }
 
+  custom_error_response {
+    error_code            = 403
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 0
+  }
+
+  custom_error_response {
+    error_code            = 404
+    response_code         = 200
+    response_page_path    = "/index.html"
+    error_caching_min_ttl = 0
+  }
+
   tags = merge(
     local.common_tags,
     {

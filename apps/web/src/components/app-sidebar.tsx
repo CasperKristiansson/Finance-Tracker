@@ -136,11 +136,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         {showLargeLogo ? (
-          <img src={LogoLarge} alt="Logo" className="mt-2 h-6 px-2" />
+          <img
+            src={LogoLarge}
+            alt="Logo"
+            className="mt-2 h-8 w-auto object-contain px-2"
+          />
         ) : showSmallLogo ? (
-          <img src={LogoSmall} alt="Logo" className="mt-2 h-6 px-1" />
+          <img
+            src={LogoSmall}
+            alt="Logo"
+            className="mt-2 h-7 w-7 object-contain"
+          />
         ) : (
-          <div className="h-6" />
+          <div className="h-8" />
         )}
       </SidebarHeader>
       <SidebarContent>
