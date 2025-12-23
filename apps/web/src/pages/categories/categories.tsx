@@ -39,6 +39,7 @@ import { useCategoriesApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import { formatCategoryLabel, renderCategoryIcon } from "@/lib/category-icons";
 import { currency, formatDate } from "@/lib/format";
+import { getDisplayTransactionType } from "@/lib/transactions";
 import {
   CategoryType,
   TransactionType,
@@ -422,7 +423,7 @@ export const Categories: React.FC = () => {
         if (cancelled) return;
         setDetailsTransactions(
           data.transactions.filter(
-            (tx) => tx.transaction_type !== TransactionType.TRANSFER,
+            (tx) => getDisplayTransactionType(tx) !== TransactionType.TRANSFER,
           ),
         );
       })

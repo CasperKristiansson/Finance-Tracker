@@ -59,6 +59,11 @@ import {
 } from "@/hooks/use-api";
 import { formatCategoryLabel, renderCategoryIcon } from "@/lib/category-icons";
 import { compactCurrency, currency, formatDate } from "@/lib/format";
+import {
+  getDisplayTransactionType,
+  getTransactionBadge,
+  isTaxEvent,
+} from "@/lib/transactions";
 import { cn } from "@/lib/utils";
 import { fetchYearlyOverview, fetchYearlyReport } from "@/services/reports";
 import { fetchTransactions } from "@/services/transactions";
@@ -125,22 +130,6 @@ const renderAccountIcon = (icon: string | null | undefined, name: string) => {
       <Landmark className="h-5 w-5 text-slate-600" />
     </div>
   );
-};
-
-const transactionTypeLabel: Record<TransactionType, string> = {
-  [TransactionType.INCOME]: "Income",
-  [TransactionType.EXPENSE]: "Expense",
-  [TransactionType.TRANSFER]: "Transfer",
-  [TransactionType.ADJUSTMENT]: "Adjustment",
-  [TransactionType.INVESTMENT_EVENT]: "Investment",
-};
-
-const transactionTypeBadgeClass: Record<TransactionType, string> = {
-  [TransactionType.INCOME]: "bg-emerald-100 text-emerald-800",
-  [TransactionType.EXPENSE]: "bg-rose-100 text-rose-800",
-  [TransactionType.TRANSFER]: "bg-slate-100 text-slate-700",
-  [TransactionType.ADJUSTMENT]: "bg-amber-100 text-amber-800",
-  [TransactionType.INVESTMENT_EVENT]: "bg-indigo-100 text-indigo-800",
 };
 
 export const AccountDetails: React.FC = () => {
@@ -1396,6 +1385,10 @@ export const AccountDetails: React.FC = () => {
                             const category = tx.category_id
                               ? (categoryLookup.get(tx.category_id) ?? null)
                               : null;
+                            const displayType = getDisplayTransactionType(tx);
+                            const taxLinked = isTaxEvent(tx);
+                            const { label: typeLabel, toneClass } =
+                              getTransactionBadge(tx);
 
                             const counterpartyNames = tx.legs
                               ?.filter((l) => l.account_id !== accountId)
@@ -1432,17 +1425,14 @@ export const AccountDetails: React.FC = () => {
                                       <span
                                         className={cn(
                                           "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                                          transactionTypeBadgeClass[
-                                            tx.transaction_type
-                                          ],
+                                          toneClass,
                                         )}
                                       >
-                                        {transactionTypeLabel[
-                                          tx.transaction_type
-                                        ] ?? tx.transaction_type}
+                                        {typeLabel}
                                       </span>
-                                      {tx.transaction_type ===
+                                      {displayType ===
                                         TransactionType.TRANSFER &&
+                                      !taxLinked &&
                                       counterparty ? (
                                         <span className="truncate">
                                           {isPositive ? "From" : "To"}{" "}

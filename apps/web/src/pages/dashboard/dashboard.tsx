@@ -55,6 +55,11 @@ import { apiFetch } from "@/lib/apiClient";
 import { renderCategoryIcon } from "@/lib/category-icons";
 import { compactCurrency, currency } from "@/lib/format";
 import {
+  getDisplayTransactionType,
+  getTransactionTypeLabel,
+  isTaxEvent,
+} from "@/lib/transactions";
+import {
   AccountType,
   type MonthlyReportEntry,
   type YearlyOverviewResponse,
@@ -215,8 +220,8 @@ export const Dashboard: React.FC = () => {
       recentTab === "all"
         ? undefined
         : recentTab === "income"
-          ? [TransactionType.INCOME]
-          : [TransactionType.EXPENSE];
+          ? [TransactionType.INCOME, TransactionType.TRANSFER]
+          : [TransactionType.EXPENSE, TransactionType.TRANSFER];
     fetchRecentTransactions({ limit, transactionTypes });
   }, [fetchRecentTransactions, isAuthenticated, recentTab]);
 
@@ -499,9 +504,9 @@ export const Dashboard: React.FC = () => {
     return recent.items.map((tx) => {
       const primaryLeg = tx.legs?.[0];
       const amount = primaryLeg ? Number(primaryLeg.amount) : 0;
-      const txType =
-        tx.transaction_type ||
-        (amount >= 0 ? TransactionType.INCOME : TransactionType.EXPENSE);
+      const txType = getDisplayTransactionType(tx);
+      const taxLinked = isTaxEvent(tx);
+      const typeLabel = getTransactionTypeLabel(tx);
 
       const accountLabel = (() => {
         const legs = tx.legs ?? [];
@@ -545,6 +550,8 @@ export const Dashboard: React.FC = () => {
         accountLabel,
         category,
         type: txType,
+        typeLabel,
+        isTax: taxLinked,
       };
     });
   }, [accountNameById, categoryById, recent.items]);
@@ -1589,11 +1596,7 @@ export const Dashboard: React.FC = () => {
                                 : "bg-rose-50 text-rose-700"
                           }`}
                         >
-                          {tx.type === TransactionType.TRANSFER
-                            ? "Transfer"
-                            : tx.amount >= 0
-                              ? "Income"
-                              : "Expense"}
+                          {tx.typeLabel}
                         </span>
 
                         {tx.type ===

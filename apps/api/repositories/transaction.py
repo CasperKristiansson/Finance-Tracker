@@ -48,7 +48,8 @@ class TransactionRepository:
         offset: Optional[int] = None,
     ) -> List[Transaction]:
         statement = select(Transaction).options(
-            selectinload(Transaction.legs)  # type: ignore[arg-type]
+            selectinload(Transaction.legs),  # type: ignore[arg-type]
+            selectinload(cast(Any, Transaction.tax_event)),
         )
 
         if start_date is not None:
@@ -211,6 +212,10 @@ class TransactionRepository:
     def list_by_account(self, account_id: UUID) -> List[Transaction]:
         statement = (
             select(Transaction)
+            .options(
+                selectinload(Transaction.legs),  # type: ignore[arg-type]
+                selectinload(cast(Any, Transaction.tax_event)),
+            )
             .join(TransactionLeg)
             .where(TransactionLeg.account_id == account_id)
             .order_by(desc(Transaction.occurred_at))  # type: ignore[arg-type]

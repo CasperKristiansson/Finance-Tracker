@@ -41,8 +41,18 @@ import {
 } from "@/hooks/use-api";
 import { formatCategoryLabel } from "@/lib/category-icons";
 import { currency, formatDate as formatDateLabel } from "@/lib/format";
+import {
+  getDisplayTransactionType,
+  getTransactionBadge,
+  isTaxEvent,
+  taxAdjustedAmountHint,
+} from "@/lib/transactions";
 import { cn } from "@/lib/utils";
-import { TransactionType, type CategoryRead } from "@/types/api";
+import {
+  TransactionType,
+  type CategoryRead,
+  type TransactionRead,
+} from "@/types/api";
 import TransactionModal from "./transaction-modal";
 
 type SortKey = "date" | "description" | "amount" | "category" | "type";
@@ -105,49 +115,25 @@ const normalizeMerchantKey = (value?: string | null) =>
     .replace(/\s+/g, " ")
     .trim();
 
-const transactionAmountHint = (tx: {
-  transaction_type: TransactionType;
-  legs: Array<{ amount: string }>;
-}) => {
-  const largest = tx.legs.reduce<null | number>((best, leg) => {
-    const numeric = Number(leg.amount);
-    if (!Number.isFinite(numeric)) return best;
-    if (best === null) return numeric;
-    return Math.abs(numeric) > Math.abs(best) ? numeric : best;
-  }, null);
-  const value = largest ?? 0;
-  if (tx.transaction_type === TransactionType.TRANSFER) return Math.abs(value);
-  if (tx.transaction_type === TransactionType.INCOME) return Math.abs(value);
-  if (tx.transaction_type === TransactionType.EXPENSE) return -Math.abs(value);
-  return value;
-};
+const transactionAmountHint = (
+  tx: Pick<TransactionRead, "transaction_type" | "tax_event" | "legs">,
+) => taxAdjustedAmountHint(tx);
 
-const typeTone: Record<TransactionType, string> = {
-  [TransactionType.INCOME]: "bg-emerald-100 text-emerald-800",
-  [TransactionType.EXPENSE]: "bg-rose-100 text-rose-800",
-  [TransactionType.TRANSFER]: "bg-slate-100 text-slate-700",
-  [TransactionType.ADJUSTMENT]: "bg-amber-100 text-amber-800",
-  [TransactionType.INVESTMENT_EVENT]: "bg-indigo-100 text-indigo-800",
+const typeBadge = (
+  tx: Pick<TransactionRead, "transaction_type" | "tax_event">,
+) => {
+  const { label, toneClass } = getTransactionBadge(tx);
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full px-2 py-1 text-xs leading-none font-medium",
+        toneClass,
+      )}
+    >
+      {label}
+    </span>
+  );
 };
-
-const typeLabel: Record<TransactionType, string> = {
-  [TransactionType.INCOME]: "Income",
-  [TransactionType.EXPENSE]: "Expense",
-  [TransactionType.TRANSFER]: "Transfer",
-  [TransactionType.ADJUSTMENT]: "Adjustment",
-  [TransactionType.INVESTMENT_EVENT]: "Investment",
-};
-
-const typeBadge = (type: TransactionType) => (
-  <span
-    className={cn(
-      "inline-flex items-center rounded-full px-2 py-1 text-xs leading-none font-medium",
-      typeTone[type],
-    )}
-  >
-    {typeLabel[type] ?? type}
-  </span>
-);
 
 const ColumnToggle: React.FC<{
   visibility: Record<ColumnKey, boolean>;
@@ -307,6 +293,12 @@ export const Transactions: React.FC = () => {
       detailsId ? (items.find((tx) => tx.id === detailsId) ?? null) : null,
     [detailsId, items],
   );
+  const selectedDisplayType = selectedTransaction
+    ? getDisplayTransactionType(selectedTransaction)
+    : null;
+  const selectedIsTax = selectedTransaction
+    ? isTaxEvent(selectedTransaction)
+    : false;
 
   const openCreateModal = () => {
     setModalTransaction(null);
@@ -579,6 +571,8 @@ export const Transactions: React.FC = () => {
                 {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                   const row = rows[virtualRow.index];
                   if (!row) return null;
+                  const displayType = getDisplayTransactionType(row);
+                  const taxLinked = isTaxEvent(row);
                   const knownLegs = row.legs.filter((leg) =>
                     Boolean(accountLookup[leg.account_id]),
                   );
@@ -609,7 +603,10 @@ export const Transactions: React.FC = () => {
                   })();
 
                   const accountsLabel = (() => {
-                    if (row.transaction_type === TransactionType.TRANSFER) {
+                    if (
+                      displayType === TransactionType.TRANSFER &&
+                      !taxLinked
+                    ) {
                       const fromLeg =
                         knownLegs.find((leg) => Number(leg.amount) < 0) ??
                         knownLegs[0];
@@ -673,7 +670,7 @@ export const Transactions: React.FC = () => {
                               key={`${row.id}-type`}
                               className={bodyCellClass("type")}
                             >
-                              {typeBadge(row.transaction_type)}
+                              {typeBadge(row)}
                             </td>
                           );
                         }
@@ -715,8 +712,8 @@ export const Transactions: React.FC = () => {
                               )}
                             >
                               <div className="truncate">
-                                {row.transaction_type ===
-                                TransactionType.TRANSFER
+                                {displayType === TransactionType.TRANSFER &&
+                                !taxLinked
                                   ? "—"
                                   : row.category_id
                                     ? categoryLookup.get(row.category_id) ||
@@ -793,8 +790,8 @@ export const Transactions: React.FC = () => {
                     <Calendar className="h-3.5 w-3.5" />
                     {formatDate(selectedTransaction.occurred_at)}
                   </span>
-                  {selectedTransaction.transaction_type !==
-                  TransactionType.TRANSFER ? (
+                  {selectedDisplayType !== TransactionType.TRANSFER ||
+                  selectedIsTax ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
                       <Tag className="h-3.5 w-3.5" />
                       {selectedTransaction.category_id
@@ -824,9 +821,7 @@ export const Transactions: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-lg border border-slate-100 bg-white p-3">
                     <div className="text-xs text-slate-500">Type</div>
-                    <div className="mt-1">
-                      {typeBadge(selectedTransaction.transaction_type)}
-                    </div>
+                    <div className="mt-1">{typeBadge(selectedTransaction)}</div>
                   </div>
                   <div className="rounded-lg border border-slate-100 bg-white p-3 text-right">
                     <div className="text-xs text-slate-500">Amount (hint)</div>
@@ -929,8 +924,7 @@ export const Transactions: React.FC = () => {
 
                   const similarByCategory =
                     selectedTransaction.category_id &&
-                    selectedTransaction.transaction_type !==
-                      TransactionType.TRANSFER
+                    selectedDisplayType !== TransactionType.TRANSFER
                       ? items
                           .filter((tx) => tx.id !== selectedTransaction.id)
                           .filter(

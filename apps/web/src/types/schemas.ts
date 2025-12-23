@@ -270,6 +270,10 @@ export const transactionSchema = z.object({
   posted_at: dateString,
   created_at: dateString,
   updated_at: dateString,
+  tax_event: z
+    .lazy(() => taxEventSchema)
+    .nullable()
+    .optional(),
   legs: z.array(transactionLegSchema),
 });
 

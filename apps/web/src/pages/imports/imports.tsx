@@ -61,6 +61,7 @@ import {
 } from "@/hooks/use-api";
 import { renderCategoryIcon } from "@/lib/category-icons";
 import { currency } from "@/lib/format";
+import { getDisplayTransactionType, isTaxEvent } from "@/lib/transactions";
 import { cn } from "@/lib/utils";
 import type {
   AccountWithBalance,
@@ -2600,6 +2601,8 @@ export const Imports: React.FC = () => {
                           </TableHeader>
                           <TableBody>
                             {transferTransactions.map((tx) => {
+                              const displayType = getDisplayTransactionType(tx);
+                              const taxLinked = isTaxEvent(tx);
                               const targetAccountId =
                                 getTransferTargetAccountId(tx);
                               const selected =
@@ -2626,8 +2629,8 @@ export const Imports: React.FC = () => {
                                     {tx.occurred_at?.slice(0, 10) ?? "Unknown"}
                                   </TableCell>
                                   <TableCell className="text-slate-600">
-                                    {tx.transaction_type ===
-                                    TransactionType.TRANSFER
+                                    {displayType === TransactionType.TRANSFER &&
+                                    !taxLinked
                                       ? "—"
                                       : (categoryLabel ?? "Uncategorized")}
                                   </TableCell>
