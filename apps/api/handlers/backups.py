@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from ..jobs.database_backup import DatabaseBackupJob
 from .utils import ensure_engine, json_response
@@ -37,7 +37,7 @@ def run_database_backup(_event: Dict[str, Any], _context: Any) -> Dict[str, Any]
 
 
 def run_transactions_backup(_event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
-    """HTTP POST /backups/transactions."""
+    """HTTP POST /backups/transactions (full database backup)."""
 
     ensure_engine()
     bucket = os.getenv("BACKUP_BUCKET_NAME")
@@ -47,8 +47,7 @@ def run_transactions_backup(_event: Dict[str, Any], _context: Any) -> Dict[str, 
         logger.error("BACKUP_BUCKET_NAME is not configured; aborting backup run.")
         return json_response(500, {"error": "BACKUP_BUCKET_NAME is not configured"})
 
-    table_names: List[str] = ["transactions", "transaction_legs"]
-    job = DatabaseBackupJob(bucket=bucket, prefix=prefix, table_names=table_names)
+    job = DatabaseBackupJob(bucket=bucket, prefix=prefix)
     result = job.run()
 
     return json_response(200, result)

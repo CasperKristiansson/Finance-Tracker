@@ -20,6 +20,7 @@ import {
   setInitialLoaded,
   setLastUsername,
   setLoginError,
+  setPendingApproval,
   setRememberMe,
 } from "./authSlice";
 
@@ -30,7 +31,7 @@ export const AuthLoginDemo = createAction("auth/loginDemo");
 
 const REMEMBER_KEY = "finance-tracker-remember";
 const REMEMBER_USERNAME_KEY = "finance-tracker-last-username";
-const PENDING_APPROVAL_MESSAGE =
+export const PENDING_APPROVAL_MESSAGE =
   "Your account is pending approval. An admin must approve access before you can sign in.";
 
 const isPendingApprovalError = (error: unknown): boolean =>
@@ -77,6 +78,7 @@ function* handleLoginWithGoogle() {
   } catch (error) {
     if (isPendingApprovalError(error)) {
       yield put(setLoginError(PENDING_APPROVAL_MESSAGE));
+      yield put(setPendingApproval(true));
       toast.error("Account pending approval", {
         description: PENDING_APPROVAL_MESSAGE,
       });
@@ -170,6 +172,7 @@ function* initializeAuth() {
   } catch (error) {
     if (isPendingApprovalError(error)) {
       yield put(setLoginError(PENDING_APPROVAL_MESSAGE));
+      yield put(setPendingApproval(true));
       toast.error("Account pending approval", {
         description: PENDING_APPROVAL_MESSAGE,
       });

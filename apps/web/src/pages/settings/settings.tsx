@@ -209,15 +209,17 @@ export const Settings: React.FC = () => {
 
       <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)]">
         <CardHeader>
-          <CardTitle className="text-sm text-slate-700">Data backups</CardTitle>
+          <CardTitle className="text-sm text-slate-700">
+            Database backups
+          </CardTitle>
           <p className="text-sm text-slate-500">
-            Create a one-click archive of all transactions across every user.
+            Create a one-click archive of all tables across every user.
           </p>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1 text-sm text-slate-600">
-              <p>Run a fresh backup to secure transaction history.</p>
+              <p>Run a fresh backup to secure the full database.</p>
               <p className="text-xs text-slate-500">
                 Progress is not shown here, but data is saved to the backup
                 store.
@@ -235,7 +237,7 @@ export const Settings: React.FC = () => {
               ) : (
                 <ArchiveRestore className="h-4 w-4" />
               )}
-              Run transactions backup
+              Run database backup
             </Button>
           </div>
         </CardContent>

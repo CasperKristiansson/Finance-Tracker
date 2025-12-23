@@ -5,6 +5,7 @@ export interface AuthState {
   isInitialLoaded: boolean;
   isDemo: boolean;
   loginError: string | null;
+  pendingApproval: boolean;
   rememberMe: boolean;
   lastUsername: string;
   user: {
@@ -28,6 +29,7 @@ export const initialState: AuthState = {
   },
   isDemo: false,
   loginError: null,
+  pendingApproval: false,
   rememberMe: false,
   lastUsername: "",
 };
@@ -44,18 +46,23 @@ const authSlice = createSlice({
       state.isDemo = Boolean(action.payload.isDemo);
       state.user = action.payload;
       state.loginError = null;
+      state.pendingApproval = false;
     },
     logoutSuccess: (state) => {
       state.isAuthenticated = false;
       state.user = initialState.user;
       state.isDemo = false;
       state.loginError = null;
+      state.pendingApproval = false;
     },
     setInitialLoaded: (state) => {
       state.isInitialLoaded = true;
     },
     setLoginError: (state, action: PayloadAction<string | null>) => {
       state.loginError = action.payload;
+    },
+    setPendingApproval: (state, action: PayloadAction<boolean>) => {
+      state.pendingApproval = action.payload;
     },
     setRememberMe: (state, action: PayloadAction<boolean>) => {
       state.rememberMe = action.payload;
@@ -74,6 +81,7 @@ const authSlice = createSlice({
     selectLastUsername: (state) => state.lastUsername,
     selectIsDemo: (state) => state.isDemo,
     selectIsApproved: (state) => state.user.approved,
+    selectPendingApproval: (state) => state.pendingApproval,
   },
 });
 
@@ -82,6 +90,7 @@ export const {
   logoutSuccess,
   setInitialLoaded,
   setLoginError,
+  setPendingApproval,
   setRememberMe,
   setLastUsername,
 } = authSlice.actions;
@@ -95,5 +104,6 @@ export const {
   selectLastUsername,
   selectIsDemo,
   selectIsApproved,
+  selectPendingApproval,
 } = authSlice.selectors;
 export const AuthReducer = authSlice.reducer;

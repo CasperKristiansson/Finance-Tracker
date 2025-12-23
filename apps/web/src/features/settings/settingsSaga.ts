@@ -180,7 +180,7 @@ function* handleRunBackup() {
         { loadingKey: "settings", silent: true },
       );
       toast.success("Backup created", {
-        description: "Transactions have been backed up for all users.",
+        description: "Database tables have been backed up for all users.",
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : undefined;
