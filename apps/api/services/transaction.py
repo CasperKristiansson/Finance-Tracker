@@ -205,6 +205,8 @@ class TransactionService:
             mapped = category_mapping.get(category.category_type)
             if mapped is not None:
                 return mapped
+        if fallback in {TransactionType.INCOME, TransactionType.EXPENSE}:
+            return fallback
 
         has_positive = any(coerce_decimal(leg.amount) > 0 for leg in legs)
         has_negative = any(coerce_decimal(leg.amount) < 0 for leg in legs)

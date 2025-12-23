@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from uuid import UUID
 
@@ -109,7 +109,7 @@ def test_list_transactions_filters_by_account(
     assert acc3 in leg_account_ids
 
 
-def test_reconcile_account_posts_adjustment(
+def test_reconcile_account_posts_reconciliation_transaction(
     api_call,
     json_body,
     make_account_event,
@@ -131,6 +131,28 @@ def test_reconcile_account_posts_adjustment(
     assert Decimal(recon_body["delta_posted"]) == Decimal("150.00")
     assert recon_body["transaction_id"] is not None
     assert recon_body["snapshot_id"] is not None
+
+    transactions_resp = api_call("GET", f"/transactions?account_ids={account_id}")
+    assert transactions_resp["statusCode"] == 200
+    transactions = json_body(transactions_resp)["transactions"]
+    posted = next(tx for tx in transactions if tx["id"] == recon_body["transaction_id"])
+    assert posted["transaction_type"] == "income"
+
+    second_payload = {
+        "captured_at": (captured_at + timedelta(days=1)).isoformat(),
+        "reported_balance": "100.00",
+        "description": "Test reconciliation decrease",
+    }
+    second_resp = api_call("POST", f"/accounts/{account_id}/reconcile", second_payload)
+    assert second_resp["statusCode"] == 201
+    second_body = json_body(second_resp)
+    assert Decimal(second_body["delta_posted"]) == Decimal("-50.00")
+
+    transactions_resp = api_call("GET", f"/transactions?account_ids={account_id}")
+    assert transactions_resp["statusCode"] == 200
+    transactions = json_body(transactions_resp)["transactions"]
+    posted = next(tx for tx in transactions if tx["id"] == second_body["transaction_id"])
+    assert posted["transaction_type"] == "expense"
 
     accounts_resp = api_call("GET", "/accounts")
     balances = {

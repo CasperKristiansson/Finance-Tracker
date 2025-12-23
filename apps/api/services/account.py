@@ -123,15 +123,16 @@ class AccountService:
         adjustment_transaction: Transaction | None = None
 
         if delta != 0:
-            # Create an adjustment transaction to bring ledger in sync.
+            # Create a reconciliation transaction to bring ledger in sync.
             offset_account = self._get_or_create_offset_account()
             legs = [
                 TransactionLeg(account_id=account_id, amount=delta),
                 TransactionLeg(account_id=offset_account.id, amount=-delta),
             ]
+            tx_type = TransactionType.INCOME if delta > 0 else TransactionType.EXPENSE
             adjustment_transaction = Transaction(
                 category_id=category_id,
-                transaction_type=TransactionType.ADJUSTMENT,
+                transaction_type=tx_type,
                 description=description or "Balance reconciliation",
                 notes=None,
                 external_id=None,
