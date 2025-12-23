@@ -1345,7 +1345,7 @@ export const Dashboard: React.FC = () => {
                   {currency(cashOnHand)}
                 </div>
               )}
-              <div className="space-y-3">
+              <div className="max-h-96 space-y-3 overflow-y-auto pr-1">
                 {activeAccounts.map((account) => {
                   const delta = accountDeltas[account.id] ?? 0;
                   const isPositive = delta >= 0;
