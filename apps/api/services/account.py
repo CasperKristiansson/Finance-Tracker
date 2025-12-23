@@ -129,10 +129,9 @@ class AccountService:
                 TransactionLeg(account_id=account_id, amount=delta),
                 TransactionLeg(account_id=offset_account.id, amount=-delta),
             ]
-            tx_type = TransactionType.INCOME if delta > 0 else TransactionType.EXPENSE
             adjustment_transaction = Transaction(
                 category_id=category_id,
-                transaction_type=tx_type,
+                transaction_type=TransactionType.ADJUSTMENT,
                 description=description or "Balance reconciliation",
                 notes=None,
                 external_id=None,

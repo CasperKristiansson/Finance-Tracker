@@ -109,7 +109,7 @@ def test_list_transactions_filters_by_account(
     assert acc3 in leg_account_ids
 
 
-def test_reconcile_account_posts_reconciliation_transaction(
+def test_reconcile_account_posts_adjustment(
     api_call,
     json_body,
     make_account_event,
@@ -136,7 +136,7 @@ def test_reconcile_account_posts_reconciliation_transaction(
     assert transactions_resp["statusCode"] == 200
     transactions = json_body(transactions_resp)["transactions"]
     posted = next(tx for tx in transactions if tx["id"] == recon_body["transaction_id"])
-    assert posted["transaction_type"] == "income"
+    assert posted["transaction_type"] == "adjustment"
 
     second_payload = {
         "captured_at": (captured_at + timedelta(days=1)).isoformat(),
@@ -152,7 +152,7 @@ def test_reconcile_account_posts_reconciliation_transaction(
     assert transactions_resp["statusCode"] == 200
     transactions = json_body(transactions_resp)["transactions"]
     posted = next(tx for tx in transactions if tx["id"] == second_body["transaction_id"])
-    assert posted["transaction_type"] == "expense"
+    assert posted["transaction_type"] == "adjustment"
 
     accounts_resp = api_call("GET", "/accounts")
     balances = {
