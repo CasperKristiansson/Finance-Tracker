@@ -10,11 +10,12 @@ resource "aws_vpc_endpoint" "s3_gateway" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowBackupsBucketAccess"
-        Effect = "Allow"
+        Sid       = "AllowBackupsBucketAccess"
+        Effect    = "Allow"
         Principal = "*"
         Action = [
           "s3:PutObject",
+          "s3:GetObject",
           "s3:AbortMultipartUpload",
           "s3:ListBucket",
         ]

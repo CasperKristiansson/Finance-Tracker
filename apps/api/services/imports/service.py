@@ -413,6 +413,9 @@ class ImportService:
                 "content_type": commit_file.content_type,
             }
 
+        if stored_files:
+            self.session.add_all(stored_files.values())
+
         for row in payload.rows:
             if row.delete:
                 continue
@@ -496,9 +499,6 @@ class ImportService:
                     category_id,
                     subscription_id,
                 )
-
-        if stored_files:
-            self.session.add_all(stored_files.values())
 
         if tax_events:
             self.session.add_all(tax_events)
