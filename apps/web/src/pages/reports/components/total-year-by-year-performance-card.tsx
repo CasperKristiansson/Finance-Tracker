@@ -132,9 +132,6 @@ export const TotalYearByYearPerformanceCard: React.FC<{
                         const income = Number(record?.income ?? 0);
                         const expense = Number(record?.expense ?? 0);
                         const net = Number(record?.net ?? 0);
-                        const adjustmentNet = Number(
-                          record?.adjustmentNet ?? 0,
-                        );
                         return (
                           <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
                             <p className="font-semibold text-slate-800">
@@ -145,9 +142,6 @@ export const TotalYearByYearPerformanceCard: React.FC<{
                             </p>
                             <p className="text-slate-600">
                               Expense: {currency(expense)}
-                            </p>
-                            <p className="text-slate-600">
-                              Adjustments: {currency(adjustmentNet)}
                             </p>
                             <p className="text-slate-600">
                               Net: {currency(net)}
@@ -167,13 +161,6 @@ export const TotalYearByYearPerformanceCard: React.FC<{
                       dataKey="expense"
                       name="Expense"
                       fill="#ef4444"
-                      radius={[6, 6, 4, 4]}
-                      barSize={barSize}
-                    />
-                    <Bar
-                      dataKey="adjustmentNet"
-                      name="Adjustments"
-                      fill="#f59e0b"
                       radius={[6, 6, 4, 4]}
                       barSize={barSize}
                     />
