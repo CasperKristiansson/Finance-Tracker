@@ -2,7 +2,7 @@ data "aws_region" "current" {}
 
 resource "aws_vpc_endpoint" "s3_gateway" {
   vpc_id            = aws_vpc.finance_tracker.id
-  service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
+  service_name      = "com.amazonaws.${data.aws_region.current.region}.s3"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = [aws_default_route_table.finance_tracker.id]
 
