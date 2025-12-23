@@ -30,6 +30,7 @@ const iconPresets = [
   { label: "Nordnet", value: "banks/nordnet.jpg" },
   { label: "SEB", value: "banks/seb.png" },
   { label: "Danske Bank", value: "banks/danskebank.png" },
+  { label: "CSN", value: "banks/csn.png" },
   { label: "Circle K", value: "banks/circlek.png" },
 ];
 
@@ -238,6 +239,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
               <option value="banks/nordnet.jpg" />
               <option value="banks/seb.png" />
               <option value="banks/danskebank.png" />
+              <option value="banks/csn.png" />
               <option value="banks/circlek.png" />
             </datalist>
             <div className="flex flex-wrap gap-2">
