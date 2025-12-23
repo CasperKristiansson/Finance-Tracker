@@ -247,6 +247,9 @@ function* handleForceLogout() {
   yield put(resetReports());
   yield put(resetWarmup());
   yield put(setLoading({ key: "logout", isLoading: false }));
+  if (typeof window !== "undefined") {
+    window.location.href = "/login";
+  }
 }
 
 function* initializeAuth() {

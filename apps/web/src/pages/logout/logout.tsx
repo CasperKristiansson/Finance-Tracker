@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { useAppDispatch } from "@/app/hooks";
 import { MotionPage, fadeInUp } from "@/components/motion-presets";
 import { Spinner } from "@/components/spinner";
-import { PageRoutes } from "@/data/routes";
 import { AuthForceLogout } from "@/features/auth/authSaga";
 
 export const Logout: React.FC = () => {
@@ -13,11 +12,6 @@ export const Logout: React.FC = () => {
 
   useEffect(() => {
     dispatch(AuthForceLogout());
-    const timer = window.setTimeout(
-      () => navigate(PageRoutes.login, { replace: true }),
-      200,
-    );
-    return () => window.clearTimeout(timer);
   }, [dispatch, navigate]);
 
   return (
