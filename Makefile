@@ -19,10 +19,16 @@ tf-write-web-env:
 		--aws-profile "$(AWS_PROFILE)"
 
 tf-enable-public-db:
-	$(TF_CMD) apply -var 'enable_public_db_access=true'
+	@set -e; \
+	ACCOUNT_ID=$$(aws sts get-caller-identity --profile "$(AWS_PROFILE)" --query Account --output text); \
+	echo "Using AWS account ID $$ACCOUNT_ID"; \
+	$(TF_CMD) apply -var 'enable_public_db_access=true' -var "account_id=$$ACCOUNT_ID"
 
 tf-disable-public-db:
-	$(TF_CMD) apply -var 'enable_public_db_access=false'
+	@set -e; \
+	ACCOUNT_ID=$$(aws sts get-caller-identity --profile "$(AWS_PROFILE)" --query Account --output text); \
+	echo "Using AWS account ID $$ACCOUNT_ID"; \
+	$(TF_CMD) apply -var 'enable_public_db_access=false' -var "account_id=$$ACCOUNT_ID"
 
 # Quality gates
 
