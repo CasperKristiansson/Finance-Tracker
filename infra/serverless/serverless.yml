@@ -118,7 +118,7 @@ functions:
 
   runTransactionsBackup:
     handler: apps/api/handlers/backups.run_transactions_backup
-    timeout: 300
+    timeout: 29
     memorySize: 1024
     layers:
       - ${self:custom.backendLayerArn}
