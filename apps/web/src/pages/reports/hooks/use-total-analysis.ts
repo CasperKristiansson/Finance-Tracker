@@ -176,13 +176,18 @@ export const useTotalAnalysis = ({
   const totalKpis = useMemo(() => {
     if (!totalOverview) return null;
     const kpis = totalOverview.kpis;
+    const netWorth = Number(kpis.net_worth);
+    const cashBalance = Number(kpis.cash_balance);
+    const debtTotal = Number(kpis.debt_total);
+    const investmentsValue = kpis.investments_value
+      ? Number(kpis.investments_value)
+      : null;
     return {
-      netWorth: Number(kpis.net_worth),
-      cashBalance: Number(kpis.cash_balance),
-      debtTotal: Number(kpis.debt_total),
-      investmentsValue: kpis.investments_value
-        ? Number(kpis.investments_value)
-        : null,
+      netWorth,
+      cashBalance,
+      debtTotal,
+      investmentsValue,
+      totalMoney: cashBalance + (investmentsValue ?? 0) - debtTotal,
       lifetimeIncome: Number(kpis.lifetime_income),
       lifetimeExpense: Number(kpis.lifetime_expense),
       lifetimeSaved: Number(kpis.lifetime_saved),
@@ -648,6 +653,39 @@ export const useTotalAnalysis = ({
     }));
   }, [totalOverview]);
 
+  const totalDebtSeriesWindowed = useMemo(() => {
+    if (!totalWindowRange) return totalDebtSeries;
+    return totalDebtSeries.filter(
+      (row) =>
+        row.date >= totalWindowRange.start && row.date <= totalWindowRange.end,
+    );
+  }, [totalDebtSeries, totalWindowRange]);
+
+  const totalMoneySeries = useMemo(() => {
+    if (!totalNetWorthSeries.length) return [];
+    const debtByDate = new Map(
+      totalDebtSeriesWindowed.map((row) => [row.date, row.debt]),
+    );
+    return totalNetWorthSeries.map((row) => {
+      const debt = debtByDate.get(row.date);
+      return {
+        date: row.date,
+        totalMoney: row.netWorth,
+        debt: debt ?? null,
+        assets: debt === undefined ? row.netWorth : row.netWorth + debt,
+      };
+    });
+  }, [totalDebtSeriesWindowed, totalNetWorthSeries]);
+
+  const totalMoneySnapshot = useMemo(() => {
+    if (!totalKpis) return null;
+    return {
+      asOf: totalOverview?.as_of ?? null,
+      total: totalKpis.totalMoney,
+      debt: totalKpis.debtTotal,
+    };
+  }, [totalKpis, totalOverview]);
+
   const totalDebtAccounts = useMemo(() => {
     if (!totalOverview) return [];
     return totalOverview.debt.accounts
@@ -765,6 +803,8 @@ export const useTotalAnalysis = ({
     totalExpenseSourceChanges,
     totalAccountsOverview,
     totalDebtSeries,
+    totalMoneySeries,
+    totalMoneySnapshot,
     totalDebtAccounts,
     totalSeasonalityHeatmaps,
     totalExpenseCategoryYearHeatmap,

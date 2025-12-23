@@ -7,6 +7,7 @@ import type { ReportMode } from "../reports-types";
 import { currency, percent } from "../reports-utils";
 
 type TotalKpis = {
+  totalMoney: number;
   netWorth: number;
   cashBalance: number;
   debtTotal: number;
@@ -76,8 +77,14 @@ export const ReportsOverviewCard: React.FC<{
         ))}
       </CardContent>
     ) : routeMode === "total" && totalKpis ? (
-      <CardContent className="grid gap-3 md:grid-cols-6">
+      <CardContent className="grid gap-3 md:grid-cols-7">
         {[
+          {
+            label: "Total money",
+            value: totalKpis.totalMoney,
+            format: "currency" as const,
+            color: "text-slate-900",
+          },
           {
             label: "Net worth",
             value: totalKpis.netWorth,

@@ -21,6 +21,7 @@ import { TotalDrilldownDialog } from "../components/total-drilldown-dialog";
 import { TotalHeatmapDialog } from "../components/total-heatmap-dialog";
 import { TotalInvestmentsSnapshotCard } from "../components/total-investments-snapshot-card";
 import { TotalLifetimeCategoriesCard } from "../components/total-lifetime-categories-card";
+import { TotalMoneyPositionCard } from "../components/total-money-position-card";
 import { TotalNetWorthGrowthCard } from "../components/total-net-worth-growth-card";
 import { TotalNetWorthTrajectoryCard } from "../components/total-net-worth-trajectory-card";
 import { TotalSeasonalityCard } from "../components/total-seasonality-card";
@@ -134,6 +135,8 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
     totalExpenseSourceChanges,
     totalAccountsOverview,
     totalDebtSeries,
+    totalMoneySeries,
+    totalMoneySnapshot,
     totalDebtAccounts,
     totalSeasonalityHeatmaps,
     totalExpenseCategoryYearHeatmap,
@@ -286,6 +289,12 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
           loading={totalOverviewLoading}
           data={totalNetWorthTrajectoryData}
           domain={totalNetWorthTrajectoryDomain}
+        />
+
+        <TotalMoneyPositionCard
+          loading={totalOverviewLoading}
+          series={totalMoneySeries}
+          snapshot={totalMoneySnapshot}
         />
 
         <TotalNetWorthGrowthCard
