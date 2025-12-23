@@ -583,8 +583,12 @@ def import_transactions(
         category_type: Optional[CategoryType],
         fallback: TransactionType,
     ) -> TransactionType:
-        if fallback == TransactionType.ADJUSTMENT:
-            return TransactionType.ADJUSTMENT
+        if fallback in {
+            TransactionType.ADJUSTMENT,
+            TransactionType.INCOME,
+            TransactionType.EXPENSE,
+        }:
+            return fallback
         if category_type is not None:
             mapping = {
                 CategoryType.INCOME: TransactionType.INCOME,
