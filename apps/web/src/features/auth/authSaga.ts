@@ -240,7 +240,6 @@ function* handleForceLogout() {
     yield call(() => authService.signOut());
   } catch {
     // Best-effort sign-out for forced logout.
-    console.log("Forced logout: sign-out failed, proceeding anyway.");
   }
   window.location.href = "/login";
 }

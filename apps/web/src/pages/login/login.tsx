@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import React from "react";
+import { useLocation } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { MotionPage, fadeInUp } from "@/components/motion-presets";
 import { Spinner } from "@/components/spinner";
@@ -7,21 +8,25 @@ import { selectLoading } from "@/features/app/appSlice";
 import {
   AuthLoginDemo,
   AuthLoginGoogle,
-  AuthLogout,
   PENDING_APPROVAL_MESSAGE,
 } from "@/features/auth/authSaga";
 import {
   selectLoginError,
+  selectIsAuthenticated,
   selectPendingApproval,
   setLoginError,
 } from "@/features/auth/authSlice";
 
 export const Login: React.FC = () => {
   const dispatch = useAppDispatch();
+  const location = useLocation();
   const loadingLogIn = useAppSelector(selectLoading)["login"];
-  const loadingLogout = useAppSelector(selectLoading)["logout"];
   const loginError = useAppSelector(selectLoginError);
+  const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const pendingApproval = useAppSelector(selectPendingApproval);
+  const hasAuthCode = new URLSearchParams(location.search).has("code");
+  const showPendingApproval =
+    pendingApproval || (!isAuthenticated && hasAuthCode);
   const startGoogle = () => {
     dispatch(setLoginError(null));
     dispatch(AuthLoginGoogle());
@@ -30,10 +35,6 @@ export const Login: React.FC = () => {
     dispatch(setLoginError(null));
     dispatch(AuthLoginDemo());
   };
-  const handleLogout = () => {
-    dispatch(AuthLogout());
-  };
-
   return (
     <MotionPage className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
       <motion.div
@@ -43,29 +44,15 @@ export const Login: React.FC = () => {
         animate="show"
       >
         <div className="p-4 sm:p-7">
-          {pendingApproval ? (
+          {showPendingApproval ? (
             <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-1">
                 <div>
                   <p className="font-semibold">{PENDING_APPROVAL_MESSAGE}</p>
                   <p className="text-amber-800">
                     Try using the demo account in the meantime.
                   </p>
                 </div>
-                <motion.button
-                  type="button"
-                  className="inline-flex items-center justify-center gap-2 rounded-md border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-900 shadow-2xs hover:bg-amber-100 focus:bg-amber-100 focus:outline-hidden disabled:pointer-events-none disabled:opacity-50"
-                  onClick={handleLogout}
-                  disabled={loadingLogout}
-                  whileHover={{ y: -1, scale: 1.01 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  {loadingLogout ? (
-                    <Spinner height={16} width={16} color="#78350f" />
-                  ) : (
-                    "Log out"
-                  )}
-                </motion.button>
               </div>
             </div>
           ) : null}
@@ -90,7 +77,7 @@ export const Login: React.FC = () => {
               Or
             </div>
             <div className="space-y-3">
-              {loginError && !pendingApproval ? (
+              {loginError && !showPendingApproval ? (
                 <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
                   {loginError}
                 </div>
