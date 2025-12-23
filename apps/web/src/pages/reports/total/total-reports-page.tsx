@@ -1,15 +1,17 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   fetchCustomReport,
   fetchTotalOverview,
+  fetchYearlyReport,
   fetchYearlyOverview,
 } from "@/services/reports";
 import type {
   TotalOverviewResponse,
+  YearlyReportEntry,
   YearlyOverviewResponse,
 } from "@/types/api";
-
 import { ReportsOverviewCard } from "../components/reports-overview-card";
 import { TotalAccountsOverviewCard } from "../components/total-accounts-overview-card";
 import { TotalCategoryByYearCard } from "../components/total-category-by-year-card";
@@ -77,6 +79,7 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
   const [totalHeatmapDialog, setTotalHeatmapDialog] =
     useState<TotalHeatmapDialogState | null>(null);
   const [totalHeatmapDialogOpen, setTotalHeatmapDialogOpen] = useState(false);
+  const [yearlyReport, setYearlyReport] = useState<YearlyReportEntry[]>([]);
 
   useEffect(() => {
     const loadTotalOverview = async () => {
@@ -95,6 +98,20 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
     void loadTotalOverview();
   }, [token]);
 
+  useEffect(() => {
+    const loadYearlyReport = async () => {
+      if (!token) return;
+      try {
+        const { data } = await fetchYearlyReport({ token });
+        setYearlyReport(data.results ?? []);
+      } catch (error) {
+        console.error(error);
+        setYearlyReport([]);
+      }
+    };
+    void loadYearlyReport();
+  }, [token]);
+
   const {
     totalWindowRange,
     totalKpis,
@@ -104,7 +121,6 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
     totalNetWorthTrajectoryData,
     totalNetWorthTrajectoryDomain,
     totalYearly,
-    totalYearlyTable,
     totalExpenseMix,
     totalIncomeMix,
     totalInvestments,
@@ -127,6 +143,48 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
     totalOverview,
     totalWindowPreset,
   });
+
+  const yearByYearPerformance = useMemo(() => {
+    const savingsRateByYear = new Map(
+      totalYearly.map((row) => [row.year, row.savingsRate]),
+    );
+
+    const rows =
+      yearlyReport.length > 0
+        ? yearlyReport.map((row) => ({
+            year: row.year,
+            income: Number(row.income),
+            expense: Number(row.expense),
+            adjustmentInflow: Number(row.adjustment_inflow ?? 0),
+            adjustmentOutflow: Number(row.adjustment_outflow ?? 0),
+            adjustmentNet: Number(row.adjustment_net ?? 0),
+            net: Number(row.net),
+            savingsRate: savingsRateByYear.get(row.year) ?? null,
+          }))
+        : totalYearly.map((row) => ({
+            ...row,
+            adjustmentInflow: 0,
+            adjustmentOutflow: 0,
+            adjustmentNet: 0,
+          }));
+
+    const tableData = [...rows].sort((a, b) => b.year - a.year);
+    return { chartData: rows, tableData };
+  }, [totalYearly, yearlyReport]);
+
+  const adjustmentSummary = useMemo(() => {
+    if (!yearlyReport.length) {
+      return { inflow: 0, outflow: 0, net: 0 };
+    }
+    return yearlyReport.reduce(
+      (acc, row) => ({
+        inflow: acc.inflow + Number(row.adjustment_inflow ?? 0),
+        outflow: acc.outflow + Number(row.adjustment_outflow ?? 0),
+        net: acc.net + Number(row.adjustment_net ?? 0),
+      }),
+      { inflow: 0, outflow: 0, net: 0 },
+    );
+  }, [yearlyReport]);
 
   useEffect(() => {
     const loadDrilldown = async () => {
@@ -238,6 +296,46 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
         totalKpis={totalKpis}
       />
 
+      <Card className="border-amber-100 bg-amber-50 shadow-[0_10px_40px_-26px_rgba(217,119,6,0.25)]">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm text-amber-800">
+            Adjustments (all time)
+          </CardTitle>
+          <p className="text-xs text-amber-700/80">
+            Reconciliation adjustments surfaced separately from income/expense.
+          </p>
+        </CardHeader>
+        <CardContent className="grid gap-3 md:grid-cols-3">
+          {[
+            { label: "Inflow", value: adjustmentSummary.inflow },
+            { label: "Outflow", value: -adjustmentSummary.outflow },
+            { label: "Net impact", value: adjustmentSummary.net },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="rounded-md border border-amber-100 bg-white/80 p-3"
+            >
+              <p className="text-xs font-semibold tracking-wide text-amber-700 uppercase">
+                {item.label}
+              </p>
+              <p
+                className={`text-lg font-semibold ${
+                  item.value >= 0 ? "text-emerald-700" : "text-rose-700"
+                }`}
+              >
+                {item.value >= 0 ? "+" : "−"}
+                {Math.abs(item.value).toLocaleString("sv-SE", {
+                  style: "currency",
+                  currency: "SEK",
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                })}
+              </p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-3">
         <TotalNetWorthTrajectoryCard
           loading={totalOverviewLoading}
@@ -265,8 +363,8 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
             totalOverview?.worst_year ? Number(totalOverview.worst_year) : null
           }
           lifetimeSavingsRate={totalKpis?.lifetimeSavingsRate ?? null}
-          chartData={totalYearly}
-          tableData={totalYearlyTable}
+          chartData={yearByYearPerformance.chartData}
+          tableData={yearByYearPerformance.tableData}
           onOpenDrilldownDialog={openTotalDrilldownDialog}
         />
       </div>

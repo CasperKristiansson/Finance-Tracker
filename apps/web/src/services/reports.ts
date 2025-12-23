@@ -83,6 +83,9 @@ export const fetchMonthlyReport = async ({
       period: string;
       income: string;
       expense: string;
+      adjustment_inflow: string;
+      adjustment_outflow: string;
+      adjustment_net: string;
       net: string;
     }>;
   }>({
@@ -106,6 +109,9 @@ export const fetchCustomReport = async ({
       period: string;
       income: string;
       expense: string;
+      adjustment_inflow: string;
+      adjustment_outflow: string;
+      adjustment_net: string;
       net: string;
     }>;
   }>({

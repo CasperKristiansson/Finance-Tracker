@@ -151,20 +151,29 @@ def test_monthly_yearly_and_total_reports(reporting_repo, session):
     assert monthly == [
         MonthlyTotals(
             period=date(2024, 1, 1),
-            income=Decimal("5300.00"),
+            income=Decimal("5000.00"),
             expense=Decimal("200.00"),
+            adjustment_inflow=Decimal("300.00"),
+            adjustment_outflow=Decimal("0"),
+            adjustment_net=Decimal("300.00"),
             net=Decimal("5100.00"),
         ),
         MonthlyTotals(
             period=date(2024, 2, 1),
             income=Decimal("1000.00"),
-            expense=Decimal("150.00"),
+            expense=Decimal("0"),
+            adjustment_inflow=Decimal("0"),
+            adjustment_outflow=Decimal("150.00"),
+            adjustment_net=Decimal("-150.00"),
             net=Decimal("850.00"),
         ),
         MonthlyTotals(
             period=date(2024, 3, 1),
             income=Decimal("0"),
             expense=Decimal("1200.00"),
+            adjustment_inflow=Decimal("0"),
+            adjustment_outflow=Decimal("0"),
+            adjustment_net=Decimal("0"),
             net=Decimal("-1200.00"),
         ),
     ]
@@ -172,17 +181,32 @@ def test_monthly_yearly_and_total_reports(reporting_repo, session):
     yearly = reporting_repo.get_yearly_totals(account_ids=[bank_account.id])
     assert yearly == [
         YearlyTotals(
-            year=2023, income=Decimal("4000.00"), expense=Decimal("0"), net=Decimal("4000.00")
+            year=2023,
+            income=Decimal("4000.00"),
+            expense=Decimal("0"),
+            adjustment_inflow=Decimal("0"),
+            adjustment_outflow=Decimal("0"),
+            adjustment_net=Decimal("0"),
+            net=Decimal("4000.00"),
         ),
         YearlyTotals(
-            year=2024, income=Decimal("6300.00"), expense=Decimal("1550.00"), net=Decimal("4750.00")
+            year=2024,
+            income=Decimal("6000.00"),
+            expense=Decimal("1400.00"),
+            adjustment_inflow=Decimal("300.00"),
+            adjustment_outflow=Decimal("150.00"),
+            adjustment_net=Decimal("150.00"),
+            net=Decimal("4750.00"),
         ),
     ]
 
     totals = reporting_repo.get_total_summary(account_ids=[bank_account.id])
     assert totals == LifetimeTotals(
-        income=Decimal("10300.00"),
-        expense=Decimal("1550.00"),
+        income=Decimal("10000.00"),
+        expense=Decimal("1400.00"),
+        adjustment_inflow=Decimal("300.00"),
+        adjustment_outflow=Decimal("150.00"),
+        adjustment_net=Decimal("150.00"),
         net=Decimal("8750.00"),
     )
 
