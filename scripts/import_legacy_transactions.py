@@ -18,7 +18,7 @@ import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import Dict, Iterable, Optional, Sequence, Tuple
+from typing import Dict, Iterable, Optional, Sequence, Tuple, cast
 from uuid import UUID
 
 import boto3
@@ -170,30 +170,61 @@ def ensure_accounts(session, user_id: str) -> Tuple[Dict[str, str], Dict[str, st
 def ensure_categories(
     session, user_id: str, tx_df: pd.DataFrame
 ) -> Tuple[Dict[str, str], Dict[str, CategoryType]]:
-    def resolve(typeset):
-        if "Income" in typeset and "Expense" in typeset:
-            return CategoryType.ADJUSTMENT
-        if "Income" in typeset:
-            return CategoryType.INCOME
-        if "Expense" in typeset:
-            return CategoryType.EXPENSE
-        return CategoryType.ADJUSTMENT
+    def normalize(value: object) -> Optional[str]:
+        if value is None or pd.isna(value):
+            return None
+        s = str(value).strip()
+        if not s:
+            return None
+        lowered = s.lower()
+        if lowered in {"nan", "undefined", "none"}:
+            return None
+        return s
 
-    cat_map: Dict[str, set] = {}
+    def resolve(stats: Dict[str, Decimal | int]) -> CategoryType:
+        # Keep legacy categories as income/expense; choose the dominant side if mixed.
+        income_total = cast(Decimal, stats.get("income_total", Decimal("0")))
+        expense_total = cast(Decimal, stats.get("expense_total", Decimal("0")))
+        if income_total != expense_total:
+            return CategoryType.INCOME if income_total > expense_total else CategoryType.EXPENSE
+        income_count = int(stats.get("income_count", 0))
+        expense_count = int(stats.get("expense_count", 0))
+        if income_count != expense_count:
+            return CategoryType.INCOME if income_count > expense_count else CategoryType.EXPENSE
+        return CategoryType.EXPENSE
+
+    cat_map: Dict[str, Dict[str, Decimal | int]] = {}
     for _, row in tx_df.iterrows():
-        cat = row["Category"]
-        ttype = row["Type"]
-        if pd.isna(cat):
+        cat = normalize(row["Category"])
+        if not cat or cat in {"Investment", "Bospar", "Tax", "Adjustment"}:
             continue
-        cat = str(cat).strip()
-        if cat in {"Investment", "Bospar", "Tax"}:
+        ttype = normalize(row["Type"])
+        if ttype not in {"Income", "Expense"}:
             continue
-        cat_map.setdefault(cat, set()).add(ttype)
+        try:
+            amount = Decimal(str(row["Amount"]))
+        except Exception:
+            amount = Decimal("0")
+        stats = cat_map.setdefault(
+            cat,
+            {
+                "income_count": 0,
+                "expense_count": 0,
+                "income_total": Decimal("0"),
+                "expense_total": Decimal("0"),
+            },
+        )
+        if ttype == "Income":
+            stats["income_count"] = int(stats["income_count"]) + 1
+            stats["income_total"] = cast(Decimal, stats["income_total"]) + abs(amount)
+        else:
+            stats["expense_count"] = int(stats["expense_count"]) + 1
+            stats["expense_total"] = cast(Decimal, stats["expense_total"]) + abs(amount)
 
     category_ids: Dict[str, str] = {}
     category_types: Dict[str, CategoryType] = {}
-    for cat, typeset in cat_map.items():
-        ctype = resolve(typeset)
+    for cat, stats in cat_map.items():
+        ctype = resolve(stats)
         existing = session.exec(
             select(Category).where(Category.user_id == user_id, Category.name == cat)
         ).one_or_none()
@@ -207,13 +238,6 @@ def ensure_categories(
         session.flush()
         category_ids[cat] = c.id
         category_types[cat] = ctype
-
-    if "Adjustment" not in category_ids:
-        c = Category(name="Adjustment", category_type=CategoryType.ADJUSTMENT)
-        session.add(c)
-        session.flush()
-        category_ids["Adjustment"] = c.id
-        category_types["Adjustment"] = CategoryType.ADJUSTMENT
 
     loan_cat = session.exec(
         select(Category).where(Category.user_id == user_id, Category.name == "CSN Loan")
@@ -619,11 +643,14 @@ def import_transactions(
             continue
 
         category_name = normalize(getattr(row, "Category", None))
+        adjustment_category = bool(category_name and category_name.lower() == "adjustment")
         if category_name in {"Investment", "Bospar"} and str(row.Type) != "Transfer-Out":
             investment_skipped += 1
             progress("Transactions", idx, total)
             continue
 
+        if adjustment_category and str(row.Type) != "Transfer-Out":
+            category_name = None
         category_id = cat_ids.get(category_name) if category_name else None
         note_str = normalize(getattr(row, "Note", None)) or ""
         ttype = str(row.Type)
@@ -707,7 +734,6 @@ def import_transactions(
         elif ttype == "Income":
             if amount < 0:
                 tx_type = TransactionType.ADJUSTMENT
-                category_id = category_id or cat_ids.get("Adjustment")
                 amt = abs(amount).quantize(quantize)
                 legs = [
                     TransactionLeg(account_id=account_id, amount=-amt),
@@ -720,6 +746,8 @@ def import_transactions(
                     TransactionLeg(account_id=account_id, amount=amt),
                     TransactionLeg(account_id=offset_id, amount=-amt),
                 ]
+            if adjustment_category:
+                tx_type = TransactionType.ADJUSTMENT
         else:  # Expense
             tx_type = TransactionType.EXPENSE
             amt = abs(amount).quantize(quantize)
@@ -727,6 +755,8 @@ def import_transactions(
                 TransactionLeg(account_id=account_id, amount=-amt),
                 TransactionLeg(account_id=offset_id, amount=amt),
             ]
+            if adjustment_category:
+                tx_type = TransactionType.ADJUSTMENT
 
         category_type = (
             cat_types.get(category_name) if category_name and ttype != "Transfer-Out" else None
@@ -825,7 +855,15 @@ def main() -> None:
     # Ensure legacy-specific categories don't linger.
     session.exec(
         delete(Category)
-        .where(Category.user_id == args.user, Category.name.in_(["Investment", "Bospar", "Tax"]))
+        .where(
+            Category.user_id == args.user,
+            Category.name.in_(["Investment", "Bospar", "Tax", "Adjustment"]),
+        )
+        .execution_options(include_all_users=True)
+    )
+    session.exec(
+        delete(Category)
+        .where(Category.user_id == args.user, Category.category_type == CategoryType.ADJUSTMENT)
         .execution_options(include_all_users=True)
     )
     session.commit()
