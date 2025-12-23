@@ -59,6 +59,26 @@ from apps.api.shared.session import get_session
 
 TX_PATH = REPO_ROOT / "docs" / "data" / "Transactions Export.xlsx"
 LOAN_PATH = REPO_ROOT / "docs" / "data" / "Loans Export.xlsx"
+CATEGORY_ALIASES = {"present": "Presents"}
+
+
+def normalize_cell(value: object) -> Optional[str]:
+    if value is None or pd.isna(value):
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    lowered = s.lower()
+    if lowered in {"nan", "undefined", "none"}:
+        return None
+    return s
+
+
+def normalize_category(value: object) -> Optional[str]:
+    normalized = normalize_cell(value)
+    if not normalized:
+        return None
+    return CATEGORY_ALIASES.get(normalized.lower(), normalized)
 
 
 def fetch_db_url_from_ssm(stage: str) -> str:
@@ -170,17 +190,6 @@ def ensure_accounts(session, user_id: str) -> Tuple[Dict[str, str], Dict[str, st
 def ensure_categories(
     session, user_id: str, tx_df: pd.DataFrame
 ) -> Tuple[Dict[str, str], Dict[str, CategoryType]]:
-    def normalize(value: object) -> Optional[str]:
-        if value is None or pd.isna(value):
-            return None
-        s = str(value).strip()
-        if not s:
-            return None
-        lowered = s.lower()
-        if lowered in {"nan", "undefined", "none"}:
-            return None
-        return s
-
     def resolve(stats: Dict[str, Decimal | int]) -> CategoryType:
         # Keep legacy categories as income/expense; choose the dominant side if mixed.
         income_total = cast(Decimal, stats.get("income_total", Decimal("0")))
@@ -195,10 +204,10 @@ def ensure_categories(
 
     cat_map: Dict[str, Dict[str, Decimal | int]] = {}
     for _, row in tx_df.iterrows():
-        cat = normalize(row["Category"])
+        cat = normalize_category(row["Category"])
         if not cat or cat in {"Investment", "Bospar", "Tax", "Adjustment"}:
             continue
-        ttype = normalize(row["Type"])
+        ttype = normalize_cell(row["Type"])
         if ttype not in {"Income", "Expense"}:
             continue
         try:
@@ -379,15 +388,7 @@ def import_investment_snapshots_from_legacy(
         return
 
     def normalize(value: object) -> Optional[str]:
-        if value is None or pd.isna(value):
-            return None
-        s = str(value).strip()
-        if not s:
-            return None
-        lowered = s.lower()
-        if lowered in {"nan", "undefined", "none"}:
-            return None
-        return s
+        return normalize_cell(value)
 
     df = tx_df.copy()
     df["Date"] = pd.to_datetime(df["Date"], errors="coerce", format="mixed")
@@ -613,15 +614,7 @@ def import_transactions(
     seen_external: set[str] = set()
 
     def normalize(value: object) -> Optional[str]:
-        if value is None or pd.isna(value):
-            return None
-        s = str(value).strip()
-        if not s:
-            return None
-        lowered = s.lower()
-        if lowered in {"nan", "undefined", "none"}:
-            return None
-        return s
+        return normalize_cell(value)
 
     transactions: list[Transaction] = []
     legs_pending: list[tuple[int, list[TransactionLeg]]] = []
@@ -677,7 +670,7 @@ def import_transactions(
             continue
 
         occurred_at = pd.to_datetime(row.Date).to_pydatetime()
-        acct_raw = normalize(row.Account)
+        acct_raw = normalize_cell(row.Account)
         if not acct_raw:
             skipped += 1
             progress("Transactions", idx, total)
@@ -695,7 +688,7 @@ def import_transactions(
             progress("Transactions", idx, total)
             continue
 
-        category_name = normalize(getattr(row, "Category", None))
+        category_name = normalize_category(getattr(row, "Category", None))
         adjustment_category = bool(category_name and category_name.lower() == "adjustment")
         if category_name in {"Investment", "Bospar"} and str(row.Type) != "Transfer-Out":
             investment_skipped += 1
@@ -705,7 +698,7 @@ def import_transactions(
         if adjustment_category and str(row.Type) != "Transfer-Out":
             category_name = None
         category_id = cat_ids.get(category_name) if category_name else None
-        note_str = normalize(getattr(row, "Note", None)) or ""
+        note_str = normalize_cell(getattr(row, "Note", None)) or ""
         ttype = str(row.Type)
         external_id = make_external_id(
             occurred_at, account_name, amount, category_name, note_str, ttype
@@ -913,7 +906,7 @@ def main() -> None:
         delete(Category)
         .where(
             Category.user_id == args.user,
-            Category.name.in_(["Investment", "Bospar", "Tax", "Adjustment"]),
+            Category.name.in_(["Investment", "Bospar", "Tax", "Adjustment", "Present"]),
         )
         .execution_options(include_all_users=True)
     )

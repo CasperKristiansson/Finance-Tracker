@@ -539,7 +539,7 @@ export const useTotalAnalysis = ({
     return totalOverview.expense_categories_lifetime
       .map((row) => ({
         id: row.category_id ?? null,
-        name: row.name,
+        name: row.category_id ? row.name : "Adjustment",
         total: Number(row.total),
         color: row.color_hex ?? "#ef4444",
         txCount: row.transaction_count,
@@ -552,7 +552,7 @@ export const useTotalAnalysis = ({
     return totalOverview.income_categories_lifetime
       .map((row) => ({
         id: row.category_id ?? null,
-        name: row.name,
+        name: row.category_id ? row.name : "Adjustment",
         total: Number(row.total),
         color: row.color_hex ?? "#10b981",
         txCount: row.transaction_count,
