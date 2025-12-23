@@ -1087,14 +1087,6 @@ export const investmentSnapshotSchema = z.object({
   holdings: z.array(investmentHoldingSchema).nullable().optional(),
 });
 
-export const investmentSnapshotResponseSchema = z.object({
-  snapshot: investmentSnapshotSchema,
-});
-
-export const investmentSnapshotListResponseSchema = z.object({
-  snapshots: z.array(investmentSnapshotSchema),
-});
-
 export const investmentTransactionSchema = z
   .object({
     id: z.string(),
@@ -1215,31 +1207,6 @@ export const investmentOverviewResponseSchema = z.object({
   portfolio: investmentPortfolioOverviewSchema,
   accounts: z.array(investmentAccountOverviewSchema).default([]),
   recent_cashflows: z.array(investmentCashflowEventSchema).default([]),
-});
-
-export const nordnetParseRequestSchema = z.object({
-  raw_text: z.string(),
-  manual_payload: z.record(z.string(), z.unknown()).optional(),
-});
-
-export const nordnetParseResponseSchema = z.object({
-  report_type: nullableString,
-  snapshot_date: nullableString,
-  portfolio_value: nullableMoney,
-  parsed_payload: z.record(z.string(), z.unknown()),
-});
-
-export const nordnetSnapshotCreateRequestSchema = z.object({
-  raw_text: z.string(),
-  parsed_payload: z.record(z.string(), z.unknown()).optional(),
-  manual_payload: z.record(z.string(), z.unknown()).optional(),
-  snapshot_date: z.string().optional(),
-  account_name: nullableString,
-  report_type: nullableString,
-  portfolio_value: nullableMoney,
-  use_bedrock: z.boolean().optional(),
-  bedrock_model_id: z.string().nullable().optional(),
-  bedrock_max_tokens: z.union([z.number(), z.string()]).nullable().optional(),
 });
 
 export const goalSchema = z.object({
@@ -1449,12 +1416,6 @@ export type TaxSummaryResponse = z.infer<typeof taxSummarySchema>;
 export type TaxTotalSummaryResponse = z.infer<typeof taxTotalSummarySchema>;
 export type InvestmentHoldingRead = z.infer<typeof investmentHoldingSchema>;
 export type InvestmentSnapshot = z.infer<typeof investmentSnapshotSchema>;
-export type InvestmentSnapshotResponse = z.infer<
-  typeof investmentSnapshotResponseSchema
->;
-export type InvestmentSnapshotListResponse = z.infer<
-  typeof investmentSnapshotListResponseSchema
->;
 export type InvestmentTransactionRead = z.infer<
   typeof investmentTransactionSchema
 >;
@@ -1481,11 +1442,6 @@ export type InvestmentCashflowEvent = z.infer<
 >;
 export type InvestmentOverviewResponse = z.infer<
   typeof investmentOverviewResponseSchema
->;
-export type NordnetParseRequest = z.infer<typeof nordnetParseRequestSchema>;
-export type NordnetParseResponse = z.infer<typeof nordnetParseResponseSchema>;
-export type NordnetSnapshotCreateRequest = z.infer<
-  typeof nordnetSnapshotCreateRequestSchema
 >;
 export type GoalRead = z.infer<typeof goalSchema>;
 export type GoalListResponse = z.infer<typeof goalListSchema>;

@@ -58,19 +58,12 @@ import {
   selectStoredImportFilesError,
 } from "@/features/imports/importsSlice";
 import {
-  FetchInvestmentSnapshots,
   FetchInvestmentTransactions,
   FetchInvestmentMetrics,
   FetchInvestmentOverview,
-  ParseNordnetExport,
-  SaveNordnetSnapshot,
-  ClearDraft as ClearInvestmentDraft,
 } from "@/features/investments/investmentsSaga";
 import {
   selectInvestmentsState,
-  selectParsedResults,
-  selectParseLoading,
-  selectLastSavedClientId,
   selectInvestmentTransactions,
   selectInvestmentMetrics,
   selectInvestmentOverview,
@@ -148,7 +141,6 @@ import type {
   ImportPreviewResponse,
   TransactionCreate,
   TransactionUpdateRequest,
-  NordnetSnapshotCreateRequest,
 } from "@/types/api";
 
 export const useAccountsApi = () => {
@@ -309,17 +301,9 @@ export const useTransactionsApi = () => {
 export const useInvestmentsApi = () => {
   const dispatch = useAppDispatch();
   const state = useAppSelector(selectInvestmentsState);
-  const parseLoading = useAppSelector(selectParseLoading);
-  const parsedResults = useAppSelector(selectParsedResults);
-  const lastSavedClientId = useAppSelector(selectLastSavedClientId);
   const transactions = useAppSelector(selectInvestmentTransactions);
   const metrics = useAppSelector(selectInvestmentMetrics);
   const overview = useAppSelector(selectInvestmentOverview);
-
-  const fetchSnapshots = useCallback(
-    () => dispatch(FetchInvestmentSnapshots()),
-    [dispatch],
-  );
 
   const fetchTransactions = useCallback(
     () => dispatch(FetchInvestmentTransactions()),
@@ -336,48 +320,14 @@ export const useInvestmentsApi = () => {
     [dispatch],
   );
 
-  const parseExport = useCallback(
-    (
-      clientId: string,
-      raw_text: string,
-      manual_payload?: Record<string, unknown>,
-    ) =>
-      dispatch(
-        ParseNordnetExport({
-          clientId,
-          raw_text,
-          manual_payload,
-        }),
-      ),
-    [dispatch],
-  );
-
-  const saveSnapshot = useCallback(
-    (payload: NordnetSnapshotCreateRequest & { clientId?: string }) =>
-      dispatch(SaveNordnetSnapshot(payload)),
-    [dispatch],
-  );
-
-  const clearDraft = useCallback(
-    (clientId: string) => dispatch(ClearInvestmentDraft({ clientId })),
-    [dispatch],
-  );
-
   return {
     ...state,
-    parseLoading,
-    parsedResults,
-    lastSavedClientId,
     transactions,
     metrics,
     overview,
-    fetchSnapshots,
     fetchTransactions,
     fetchMetrics,
     fetchOverview,
-    parseExport,
-    saveSnapshot,
-    clearDraft,
   };
 };
 

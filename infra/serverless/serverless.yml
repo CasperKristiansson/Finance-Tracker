@@ -822,42 +822,6 @@ functions:
           method: POST
           authorizer: cognitoJwt
 
-  createNordnetSnapshot:
-    handler: apps/api/handlers/investments.create_nordnet_snapshot
-    timeout: 29
-    memorySize: 512
-    layers:
-      - ${self:custom.backendLayerArn}
-    events:
-      - httpApi:
-          path: /investments/nordnet/snapshots
-          method: POST
-          authorizer: cognitoJwt
-
-  listNordnetSnapshots:
-    handler: apps/api/handlers/investments.list_nordnet_snapshots
-    timeout: 29
-    memorySize: 512
-    layers:
-      - ${self:custom.backendLayerArn}
-    events:
-      - httpApi:
-          path: /investments/nordnet/snapshots
-          method: GET
-          authorizer: cognitoJwt
-
-  parseNordnetExport:
-    handler: apps/api/handlers/investments.parse_nordnet_export
-    timeout: 29
-    memorySize: 512
-    layers:
-      - ${self:custom.backendLayerArn}
-    events:
-      - httpApi:
-          path: /investments/nordnet/parse
-          method: POST
-          authorizer: cognitoJwt
-
   listInvestmentTransactions:
     handler: apps/api/handlers/investments.list_investment_transactions
     timeout: 29
