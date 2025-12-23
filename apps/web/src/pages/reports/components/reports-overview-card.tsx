@@ -77,7 +77,7 @@ export const ReportsOverviewCard: React.FC<{
         ))}
       </CardContent>
     ) : routeMode === "total" && totalKpis ? (
-      <CardContent className="grid gap-3 md:grid-cols-7">
+      <CardContent className="grid gap-3 md:grid-cols-6">
         {[
           {
             label: "Total money",
@@ -104,12 +104,6 @@ export const ReportsOverviewCard: React.FC<{
             label: "Savings rate (lifetime)",
             value: totalKpis.lifetimeSavingsRate,
             format: "percent" as const,
-            color: "text-slate-900",
-          },
-          {
-            label: "Cash balance",
-            value: totalKpis.cashBalance,
-            format: "currency" as const,
             color: "text-slate-900",
           },
           {

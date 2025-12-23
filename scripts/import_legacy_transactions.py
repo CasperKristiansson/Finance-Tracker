@@ -520,8 +520,15 @@ def import_loans(
             occurred_at=occurred_at,
             posted_at=occurred_at,
             created_source=CreatedSource.IMPORT,
-            external_id=make_external_id(occurred_at, "CSN", amount, "CSN Loan", "", "Loan"),
+            external_id=None,
         )
+        external_id = make_external_id(occurred_at, "CSN", amount, "CSN Loan", "", "Loan")
+        row_id = row.get("id_incr") if "id_incr" in row else None
+        if row_id is not None and not pd.isna(row_id):
+            external_id = f"{external_id}-{int(row_id)}"
+        else:
+            external_id = f"{external_id}-{idx}"
+        tx.external_id = external_id
         try:
             ts.create_transaction(tx, legs)
             inserted += 1

@@ -187,7 +187,7 @@ export const useTotalAnalysis = ({
       cashBalance,
       debtTotal,
       investmentsValue,
-      totalMoney: cashBalance + (investmentsValue ?? 0) - debtTotal,
+      totalMoney: netWorth + debtTotal,
       lifetimeIncome: Number(kpis.lifetime_income),
       lifetimeExpense: Number(kpis.lifetime_expense),
       lifetimeSaved: Number(kpis.lifetime_saved),
@@ -668,11 +668,12 @@ export const useTotalAnalysis = ({
     );
     return totalNetWorthSeries.map((row) => {
       const debt = debtByDate.get(row.date);
+      const assets = debt === undefined ? row.netWorth : row.netWorth + debt;
       return {
         date: row.date,
-        totalMoney: row.netWorth,
+        totalMoney: assets,
         debt: debt ?? null,
-        assets: debt === undefined ? row.netWorth : row.netWorth + debt,
+        assets,
       };
     });
   }, [totalDebtSeriesWindowed, totalNetWorthSeries]);

@@ -63,8 +63,8 @@ export const TotalMoneyPositionCard: React.FC<{
 
   return (
     <ChartCard
-      title="Total money (after debt)"
-      description="Net position after subtracting debt, with debt plotted as a drag."
+      title="Total money (all accounts)"
+      description="Combined balances across cash and investments; debt shown separately."
       loading={loading}
       contentClassName="h-[26rem]"
     >
@@ -94,13 +94,13 @@ export const TotalMoneyPositionCard: React.FC<{
             </div>
             <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
               <p className="text-xs tracking-wide text-slate-500 uppercase">
-                Debt included
+                Debt outstanding
               </p>
               <p className="font-semibold text-amber-700">
                 {snapshot ? currency(-snapshot.debt) : "—"}
               </p>
               <p className="text-[11px] text-slate-500">
-                Subtracted from total money
+                Shown separately from total money
               </p>
             </div>
             <div className="rounded-md border border-slate-100 bg-slate-50 p-3">
