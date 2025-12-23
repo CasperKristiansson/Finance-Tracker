@@ -2,6 +2,7 @@ export const PageRoutes = {
   landing: "/",
   cover: "/cover",
   login: "/login",
+  logout: "/logout",
   notFound: "*",
   home: "/dashboard",
   accounts: "/accounts",

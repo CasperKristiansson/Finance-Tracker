@@ -29,6 +29,7 @@ import { Investments } from "./pages/investments/investments.tsx";
 import { Landing } from "./pages/landing/landing.tsx";
 import { Loans } from "./pages/loans/loans.tsx";
 import { Login } from "./pages/login/login.tsx";
+import { Logout } from "./pages/logout/logout.tsx";
 import { Navigation } from "./pages/navigation/navigation.tsx";
 import { NotFound } from "./pages/notFound/notFound.tsx";
 import { Redirect } from "./pages/redirect/redirect.tsx";
@@ -115,6 +116,7 @@ export const App: React.FC = () => {
       <Routes>
         <Route path={PageRoutes.landing} element={<Landing />} />
         <Route path={PageRoutes.login} element={<Login />} />
+        <Route path={PageRoutes.logout} element={<Logout />} />
         <Route path={PageRoutes.cover} element={<Cover />} />
         <Route path={PageRoutes.notFound} element={<NotFound />} />
 

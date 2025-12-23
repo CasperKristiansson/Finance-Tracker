@@ -29,6 +29,7 @@ export const Redirect = (): JSX.Element => {
 
     const publicRoutes = [
       PageRoutes.login,
+      PageRoutes.logout,
       PageRoutes.landing,
       PageRoutes.cover,
     ];

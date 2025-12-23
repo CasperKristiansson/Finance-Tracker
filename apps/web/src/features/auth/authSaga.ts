@@ -26,6 +26,7 @@ import {
 
 export const AuthLoginGoogle = createAction("auth/loginGoogle");
 export const AuthLogout = createAction("auth/logout");
+export const AuthForceLogout = createAction("auth/forceLogout");
 export const AuthInitialize = createAction("auth/initialize");
 export const AuthLoginDemo = createAction("auth/loginDemo");
 
@@ -143,6 +144,21 @@ function* handleLogout() {
   yield put(setLoading({ key: "logout", isLoading: false }));
 }
 
+function* handleForceLogout() {
+  yield put(setLoading({ key: "logout", isLoading: true }));
+  try {
+    yield call(() => authService.signOut());
+  } catch {
+    // Best-effort sign-out for forced logout.
+  }
+  yield put(logoutSuccess());
+  yield put(resetAccounts());
+  yield put(resetTransactions());
+  yield put(resetReports());
+  yield put(resetWarmup());
+  yield put(setLoading({ key: "logout", isLoading: false }));
+}
+
 function* initializeAuth() {
   const { remember, username } = hydrateRemembered();
   yield put(setRememberMe(remember));
@@ -226,6 +242,7 @@ export function* AuthSaga() {
   yield all([
     takeLatest(AuthLoginGoogle.type, handleLoginWithGoogle),
     takeLatest(AuthLogout.type, handleLogout),
+    takeLatest(AuthForceLogout.type, handleForceLogout),
     takeLatest(AuthInitialize.type, initializeAuth),
     takeLatest(AuthLoginDemo.type, handleLoginDemo),
   ]);
