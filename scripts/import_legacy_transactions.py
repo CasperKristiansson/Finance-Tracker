@@ -316,6 +316,48 @@ def ensure_loans_for_debt_accounts(session, *, user_id: str) -> None:
         print(f"Ensured loan metadata for {created} debt accounts.")
 
 
+def purge_unknown_accounts(
+    session,
+    *,
+    user_id: str,
+    allowed_names: Sequence[str],
+) -> None:
+    keep_names = set(allowed_names)
+    extras = session.exec(
+        select(Account).where(Account.user_id == user_id, ~Account.name.in_(keep_names))
+    ).all()
+    if not extras:
+        return
+
+    extra_ids = [acc.id for acc in extras]
+    used_ids = set(
+        session.exec(
+            select(TransactionLeg.account_id).where(
+                TransactionLeg.user_id == user_id,
+                TransactionLeg.account_id.in_(extra_ids),
+            )
+        ).all()
+    )
+    deletable = [acc for acc in extras if acc.id not in used_ids]
+    if not deletable:
+        return
+
+    deletable_ids = [acc.id for acc in deletable]
+    session.exec(
+        delete(Loan)
+        .where(Loan.user_id == user_id, Loan.account_id.in_(deletable_ids))
+        .execution_options(include_all_users=True)
+    )
+    session.exec(
+        delete(Account)
+        .where(Account.user_id == user_id, Account.id.in_(deletable_ids))
+        .execution_options(include_all_users=True)
+    )
+    session.commit()
+    removed_names = ", ".join(sorted({acc.name for acc in deletable}))
+    print(f"Removed unused accounts not in import config: {removed_names}")
+
+
 def import_investment_snapshots_from_legacy(
     session,
     *,
@@ -853,6 +895,9 @@ def main() -> None:
     tx_df = adjust_study_grants_with_loans(tx_df, loan_df)
 
     rename_map, account_ids = ensure_accounts(session, args.user)
+    allowed_names = [name for name in account_ids.keys() if name != "_offset"]
+    allowed_names.extend(["Offset", "CSN Loan"])
+    purge_unknown_accounts(session, user_id=args.user, allowed_names=allowed_names)
     purged = purge_all_transactional_data(session)
     print(f"Purged existing transactional rows across all users: {purged}")
 

@@ -178,6 +178,10 @@ export const TotalMoneyPositionCard: React.FC<{
                     />
                   }
                 />
+                <ChartLegend
+                  verticalAlign="top"
+                  content={<ChartLegendContent className="pt-0" />}
+                />
                 <Area
                   type="monotoneX"
                   dataKey="total"
@@ -198,10 +202,6 @@ export const TotalMoneyPositionCard: React.FC<{
                 ) : null}
               </AreaChart>
             </ChartContainer>
-            <ChartLegend
-              verticalAlign="top"
-              content={<ChartLegendContent className="pt-0" />}
-            />
           </div>
         </div>
       )}
