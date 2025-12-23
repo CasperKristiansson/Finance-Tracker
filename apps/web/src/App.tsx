@@ -23,6 +23,7 @@ import { Categories } from "./pages/categories/categories.tsx";
 import { Cover } from "./pages/cover/cover.tsx";
 import { Dashboard } from "./pages/dashboard/dashboard.tsx";
 import { Goals } from "./pages/goals/goals.tsx";
+import { ImportFiles } from "./pages/imports/import-files.tsx";
 import { Imports } from "./pages/imports/imports.tsx";
 import { Investments } from "./pages/investments/investments.tsx";
 import { Landing } from "./pages/landing/landing.tsx";
@@ -170,6 +171,14 @@ export const App: React.FC = () => {
           element={
             <NavigationWrapper title="Imports">
               <Imports />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.importFiles}
+          element={
+            <NavigationWrapper title="Import files">
+              <ImportFiles />
             </NavigationWrapper>
           }
         />

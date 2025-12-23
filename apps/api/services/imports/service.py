@@ -17,6 +17,7 @@ from sqlmodel import Session, select
 from ...models import (
     Account,
     Category,
+    ImportFile,
     ImportRule,
     Subscription,
     TaxEvent,
@@ -39,6 +40,7 @@ from ...shared import (
 )
 from ..transaction import TransactionService
 from .parsers import parse_bank_rows
+from .storage import ImportFileStorage
 from .suggestions import (
     CategorySuggestion,
     RuleMatch,
@@ -53,8 +55,9 @@ from .utils import is_date_like, is_decimal, parse_iso_date, safe_decimal
 class ImportService:
     """Coordinates stateless import preview and atomic commit."""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, *, storage: ImportFileStorage | None = None):
         self.session = session
+        self.storage = storage
 
     def preview_import(self, payload: ImportPreviewRequest) -> dict[str, Any]:
         """Parse files and return draft rows + suggestions without persisting."""
@@ -367,6 +370,48 @@ class ImportService:
 
         created_ids: list[UUID] = []
         tax_events: list[TaxEvent] = []
+        user_id = self.session.info.get("user_id") or ""
+
+        storage = self.storage
+        if payload.files:
+            try:
+                storage = storage or ImportFileStorage.from_env()
+            except RuntimeError as exc:
+                raise ValueError("Import file storage is not configured") from exc
+
+        file_uploads: dict[UUID, dict[str, Any]] = {}
+        stored_files: dict[UUID, ImportFile] = {}
+        for commit_file in payload.files or []:
+            if storage is None:  # pragma: no cover - defensive
+                raise ValueError("Import file storage is not configured")
+            content = self._decode_base64(commit_file.content_base64)
+            file_id = commit_file.id
+            object_key = storage.build_object_key(
+                user_id=str(user_id),
+                batch_id=batch.id,
+                file_id=file_id,
+                filename=commit_file.filename,
+            )
+            stored_files[file_id] = ImportFile(
+                id=file_id,
+                batch_id=batch.id,
+                filename=commit_file.filename,
+                account_id=commit_file.account_id,
+                row_count=commit_file.row_count,
+                error_count=commit_file.error_count,
+                status="stored",
+                bank_type=str(commit_file.bank_import_type or ""),
+                object_key=object_key,
+                content_type=commit_file.content_type,
+                size_bytes=len(content),
+                created_at=now,
+                updated_at=now,
+            )
+            file_uploads[file_id] = {
+                "key": object_key,
+                "content": content,
+                "content_type": commit_file.content_type,
+            }
 
         for row in payload.rows:
             if row.delete:
@@ -421,6 +466,7 @@ class ImportService:
                 subscription_id=subscription_id,
                 created_source=CreatedSource.IMPORT,
                 import_batch_id=batch.id,
+                import_file_id=row.file_id if row.file_id in stored_files else None,
                 created_at=now,
                 updated_at=now,
             )
@@ -451,8 +497,22 @@ class ImportService:
                     subscription_id,
                 )
 
+        if stored_files:
+            self.session.add_all(stored_files.values())
+
         if tax_events:
             self.session.add_all(tax_events)
+
+        # Upload files after DB objects are staged to ensure matching identifiers
+        for file_id, upload in file_uploads.items():
+            try:
+                storage.upload_file(  # type: ignore[union-attr]
+                    key=upload["key"],
+                    content=upload["content"],
+                    content_type=upload["content_type"],
+                )
+            except RuntimeError as exc:
+                raise ValueError("Unable to persist import files") from exc
 
         return ImportCommitResponse(
             import_batch_id=batch.id,

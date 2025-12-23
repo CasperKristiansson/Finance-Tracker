@@ -25,6 +25,7 @@ from sqlmodel import Field, Relationship, SQLModel
 from ..shared import TimestampMixin, UserOwnedMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:  # pragma: no cover
+    from .account import Account
     from .category import Category
     from .subscription import Subscription
     from .transaction import Transaction
@@ -43,11 +44,30 @@ class ImportFile(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, 
         )
     )
     filename: str = Field(sa_column=Column(String(160), nullable=False))
-    account_id: Optional[UUID] = Field(default=None, sa_column=Column(PGUUID(as_uuid=True)))
+    account_id: Optional[UUID] = Field(
+        default=None,
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("accounts.id", ondelete="SET NULL"),
+            nullable=True,
+        ),
+    )
     row_count: int = Field(default=0, sa_column=Column(Integer, nullable=False))
     error_count: int = Field(default=0, sa_column=Column(Integer, nullable=False))
     status: str = Field(default="received", sa_column=Column(String(32), nullable=False))
     bank_type: str = Field(sa_column=Column(String(64), nullable=False))
+    object_key: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(512), nullable=True),
+    )
+    content_type: Optional[str] = Field(
+        default=None,
+        sa_column=Column(String(160), nullable=True),
+    )
+    size_bytes: Optional[int] = Field(
+        default=None,
+        sa_column=Column(Integer, nullable=True),
+    )
     errors: List["ImportErrorRecord"] = Relationship(
         sa_relationship=relationship(
             "ImportErrorRecord",
@@ -60,6 +80,16 @@ class ImportFile(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, 
             "ImportRow",
             primaryjoin="ImportFile.id==ImportRow.file_id",
             cascade="all, delete-orphan",
+        )
+    )
+    account: Optional["Account"] = Relationship(
+        sa_relationship=relationship("Account", primaryjoin="ImportFile.account_id==Account.id")
+    )
+    transactions: List["Transaction"] = Relationship(
+        sa_relationship=relationship(
+            "Transaction",
+            primaryjoin="ImportFile.id==Transaction.import_file_id",
+            back_populates="import_file",
         )
     )
 

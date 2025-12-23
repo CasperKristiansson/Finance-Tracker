@@ -9,6 +9,7 @@ export const PageRoutes = {
   categories: "/categories",
   budgets: "/budgets",
   imports: "/imports",
+  importFiles: "/import-files",
   transactions: "/transactions",
   subscriptions: "/subscriptions",
   reports: "/reports",

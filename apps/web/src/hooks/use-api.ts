@@ -40,6 +40,8 @@ import {
 import {
   CommitImports,
   PreviewImports,
+  FetchStoredImportFiles,
+  DownloadImportFile,
   ResetImports,
   SuggestImportCategories,
 } from "@/features/imports/importsSaga";
@@ -51,6 +53,9 @@ import {
   selectImportsSuggesting,
   selectImportsSuggestionsError,
   selectImportsSaving,
+  selectStoredImportFiles,
+  selectStoredImportFilesLoading,
+  selectStoredImportFilesError,
 } from "@/features/imports/importsSlice";
 import {
   FetchInvestmentSnapshots,
@@ -497,6 +502,9 @@ export const useImportsApi = () => {
   const suggestions = useAppSelector(selectImportSuggestions);
   const suggestionsError = useAppSelector(selectImportsSuggestionsError);
   const error = useAppSelector(selectImportsError);
+  const storedFiles = useAppSelector(selectStoredImportFiles);
+  const storedFilesLoading = useAppSelector(selectStoredImportFilesLoading);
+  const storedFilesError = useAppSelector(selectStoredImportFilesError);
 
   const previewImports = useCallback(
     (payload: ImportPreviewRequest) => dispatch(PreviewImports(payload)),
@@ -516,6 +524,16 @@ export const useImportsApi = () => {
     [dispatch],
   );
 
+  const fetchStoredFiles = useCallback(
+    () => dispatch(FetchStoredImportFiles()),
+    [dispatch],
+  );
+
+  const downloadImportFile = useCallback(
+    (fileId: string) => dispatch(DownloadImportFile({ fileId })),
+    [dispatch],
+  );
+
   return {
     preview,
     loading,
@@ -524,10 +542,15 @@ export const useImportsApi = () => {
     suggestions,
     suggestionsError,
     error,
+    storedFiles,
+    storedFilesLoading,
+    storedFilesError,
     previewImports,
     commitImports,
     suggestCategories,
     resetImports,
+    fetchStoredFiles,
+    downloadImportFile,
   };
 };
 
