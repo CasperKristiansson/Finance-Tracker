@@ -73,6 +73,9 @@ function* handleFetchTransactions(
       ...(serializeAccounts(filters.accountIds)
         ? { account_ids: serializeAccounts(filters.accountIds) }
         : {}),
+      ...(filters.transactionTypes?.length
+        ? { transaction_type: filters.transactionTypes.join(",") }
+        : {}),
       ...(filters.categoryIds?.length
         ? { category_ids: filters.categoryIds.join(",") }
         : {}),

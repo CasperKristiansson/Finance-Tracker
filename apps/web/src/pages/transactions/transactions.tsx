@@ -99,6 +99,14 @@ const columnWidthClass: Partial<Record<ColumnKey, string>> = {
   notes: "w-56",
 };
 
+const transactionTypeOptions: Array<{ value: TransactionType; label: string }> =
+  [
+    { value: TransactionType.INCOME, label: "Income" },
+    { value: TransactionType.EXPENSE, label: "Expense" },
+    { value: TransactionType.TRANSFER, label: "Transfer" },
+    { value: TransactionType.ADJUSTMENT, label: "Adjustment" },
+  ];
+
 const formatCurrency = (value: number) =>
   currency(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -195,6 +203,9 @@ export const Transactions: React.FC = () => {
   });
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [accountFilter, setAccountFilter] = useState<string>("");
+  const [transactionTypeFilter, setTransactionTypeFilter] = useState<
+    TransactionType | ""
+  >("");
   const [search, setSearch] = useState<string>("");
   const [minAmount, setMinAmount] = useState<string>("");
   const [maxAmount, setMaxAmount] = useState<string>("");
@@ -248,6 +259,9 @@ export const Transactions: React.FC = () => {
       fetchTransactions({
         limit: pagination.limit,
         offset: 0,
+        transactionTypes: transactionTypeFilter
+          ? [transactionTypeFilter]
+          : undefined,
         accountIds: accountFilter ? [accountFilter] : undefined,
         categoryIds: categoryFilter ? [categoryFilter] : undefined,
         search: search || undefined,
@@ -264,6 +278,7 @@ export const Transactions: React.FC = () => {
   }, [
     accountFilter,
     categoryFilter,
+    transactionTypeFilter,
     search,
     minAmount,
     maxAmount,
@@ -382,9 +397,9 @@ export const Transactions: React.FC = () => {
               setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
             }
           />
-          <Button
-            variant="outline"
-            size="sm"
+        <Button
+          variant="outline"
+          size="sm"
             className="gap-2 border-slate-300 text-slate-700"
             onClick={() =>
               fetchTransactions({ limit: pagination.limit, offset: 0 })
@@ -438,6 +453,9 @@ export const Transactions: React.FC = () => {
             limit: pagination.limit,
             offset: 0,
             accountIds: accountFilter ? [accountFilter] : undefined,
+            transactionTypes: transactionTypeFilter
+              ? [transactionTypeFilter]
+              : undefined,
             categoryIds: categoryFilter ? [categoryFilter] : undefined,
             search: search || undefined,
             minAmount: minAmount || undefined,
@@ -494,6 +512,22 @@ export const Transactions: React.FC = () => {
                 {categories?.map((cat: CategoryRead) => (
                   <option key={cat.id} value={cat.id}>
                     {cat.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="h-8 rounded border border-slate-200 bg-white px-2 text-slate-800"
+                value={transactionTypeFilter}
+                onChange={(e) =>
+                  setTransactionTypeFilter(
+                    e.target.value as TransactionType | "",
+                  )
+                }
+              >
+                <option value="">All types</option>
+                {transactionTypeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
                   </option>
                 ))}
               </select>

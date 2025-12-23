@@ -1,10 +1,11 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { TransactionRead } from "@/types/api";
+import type { TransactionRead, TransactionType } from "@/types/api";
 
 export interface TransactionFilters {
   startDate?: string | null;
   endDate?: string | null;
   accountIds?: string[];
+  transactionTypes?: TransactionType[];
   limit?: number;
   offset?: number;
   categoryIds?: string[];
