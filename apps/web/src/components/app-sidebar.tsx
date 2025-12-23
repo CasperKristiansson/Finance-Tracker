@@ -139,7 +139,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <img
             src={LogoLarge}
             alt="Logo"
-            className="mt-2 h-8 w-auto object-contain px-2"
+            className="h-12 w-auto object-contain"
           />
         ) : showSmallLogo ? (
           <img
