@@ -6,6 +6,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from typing import Optional
+from urllib.parse import quote
 from uuid import UUID
 
 import boto3
@@ -71,11 +72,12 @@ class ImportFileStorage:
 
     def create_download_url(self, *, key: str) -> str:
         try:
-            return self.client.generate_presigned_url(
+            url = self.client.generate_presigned_url(
                 "get_object",
                 Params={"Bucket": self.bucket, "Key": key},
                 ExpiresIn=self.url_expires_seconds,
             )
+            return quote(url, safe=":/?&=%")
         except (BotoCoreError, ClientError) as exc:
             raise RuntimeError("Unable to generate download URL for import file") from exc
 
