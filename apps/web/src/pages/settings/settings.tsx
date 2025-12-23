@@ -11,14 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSettings } from "@/hooks/use-api";
 
-const currencyCodeSchema = z
-  .string()
-  .trim()
-  .transform((value) => value.toUpperCase())
-  .refine(
-    (value) => value === "" || /^[A-Z]{3}$/.test(value),
-    "Use a 3-letter currency code (e.g. SEK, USD).",
-  );
+const currencyOptions = ["SEK", "EUR", "USD"] as const;
+type CurrencyCode = (typeof currencyOptions)[number];
+const currencyCodeSchema = z.enum(currencyOptions, {
+  message: "Select a supported currency.",
+});
 
 const profileSchema = z.object({
   first_name: z.string().min(1, "First name required").trim(),
@@ -37,6 +34,13 @@ const formatTimestamp = (value?: string) => {
   }
 };
 
+const resolveCurrencyCode = (value?: string): CurrencyCode => {
+  const normalized = value?.toUpperCase() ?? "";
+  return currencyOptions.includes(normalized as CurrencyCode)
+    ? (normalized as CurrencyCode)
+    : "SEK";
+};
+
 export const Settings: React.FC = () => {
   const {
     firstName,
@@ -53,12 +57,16 @@ export const Settings: React.FC = () => {
     changeLastName,
     changeCurrencyCode,
   } = useSettings();
+  const resolvedCurrencyCode = useMemo(
+    () => resolveCurrencyCode(currencyCode),
+    [currencyCode],
+  );
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
       first_name: firstName ?? "",
       last_name: lastName ?? "",
-      currency_code: currencyCode ?? "SEK",
+      currency_code: resolvedCurrencyCode,
     },
   });
 
@@ -77,9 +85,9 @@ export const Settings: React.FC = () => {
     profileForm.reset({
       first_name: firstName ?? "",
       last_name: lastName ?? "",
-      currency_code: currencyCode ?? "SEK",
+      currency_code: resolvedCurrencyCode,
     });
-  }, [currencyCode, firstName, lastName, profileForm]);
+  }, [firstName, lastName, profileForm, resolvedCurrencyCode]);
 
   const headerStatus = useMemo(() => {
     if (saving) return "Saving";
@@ -137,14 +145,22 @@ export const Settings: React.FC = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="currency-code">Currency</Label>
-              <Input
+              <select
                 id="currency-code"
-                placeholder="SEK"
-                autoComplete="off"
+                className="flex h-9 w-full min-w-0 rounded-md border border-input bg-white px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:aria-invalid:ring-destructive/40"
+                aria-invalid={Boolean(
+                  profileForm.formState.errors.currency_code,
+                )}
                 {...profileForm.register("currency_code")}
-              />
+              >
+                {currencyOptions.map((currency) => (
+                  <option key={currency} value={currency}>
+                    {currency}
+                  </option>
+                ))}
+              </select>
               <p className="text-xs text-slate-500">
-                3-letter ISO code used for default currency formatting.
+                Used for default currency formatting across the app.
               </p>
               {profileForm.formState.errors.currency_code ? (
                 <p className="text-xs text-rose-600">
@@ -182,9 +198,7 @@ export const Settings: React.FC = () => {
                 >
                   Incomplete
                 </Badge>
-              ) : (
-                <Badge variant="secondary">Up to date</Badge>
-              )}
+              ) : null}
             </div>
             {error ? (
               <p className="text-sm text-rose-600 md:col-span-2">{error}</p>
