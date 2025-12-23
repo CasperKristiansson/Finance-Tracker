@@ -146,6 +146,15 @@ export const loanEventsResponseSchema = z.object({
   events: z.array(loanEventSchema),
 });
 
+export const loanPortfolioSeriesPointSchema = z.object({
+  date: dateString,
+  total: z.string(),
+});
+
+export const loanPortfolioSeriesResponseSchema = z.object({
+  series: z.array(loanPortfolioSeriesPointSchema),
+});
+
 export const categorySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -1341,6 +1350,12 @@ export type AccountListResponse = z.infer<typeof accountListSchema>;
 export type LoanScheduleEntry = z.infer<typeof loanScheduleEntrySchema>;
 export type LoanScheduleRead = z.infer<typeof loanScheduleSchema>;
 export type LoanEventRead = z.infer<typeof loanEventSchema>;
+export type LoanPortfolioSeriesPoint = z.infer<
+  typeof loanPortfolioSeriesPointSchema
+>;
+export type LoanPortfolioSeriesResponse = z.infer<
+  typeof loanPortfolioSeriesResponseSchema
+>;
 export type CategoryCreateRequest = z.infer<typeof categoryCreateRequestSchema>;
 export type CategoryUpdateRequest = z.infer<typeof categoryUpdateRequestSchema>;
 export type CategoryRead = z.infer<typeof categorySchema>;

@@ -29,7 +29,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
 import { EmptyState } from "@/components/composed/empty-state";
 import { LoadingCard } from "@/components/composed/loading-card";
@@ -575,35 +574,27 @@ export const Dashboard: React.FC = () => {
             Live net worth, cash flow, and savings snapshot.
           </p>
         </motion.div>
-        <motion.div
-          variants={fadeInUp}
-          className="flex flex-wrap gap-2"
-          {...subtleHover}
-        >
-          <Button
-            variant="default"
-            className="gap-2"
-            onClick={() =>
-              toast.info("Add transaction", {
-                description: "Flow coming soon.",
-              })
-            }
-          >
-            <Plus className="h-4 w-4" />
-            Add transaction
-          </Button>
-          <Button
-            variant="outline"
-            className="gap-2 border-slate-300 text-slate-800"
-            onClick={() =>
-              toast.info("Import file", {
-                description: "Upload flow coming soon.",
-              })
-            }
-          >
-            <Upload className="h-4 w-4" />
-            Import file
-          </Button>
+        <motion.div variants={fadeInUp} className="flex flex-wrap gap-2">
+          <motion.div {...subtleHover}>
+            <Button asChild variant="default" className="gap-2">
+              <Link to={PageRoutes.transactions}>
+                <Plus className="h-4 w-4" />
+                Add transaction
+              </Link>
+            </Button>
+          </motion.div>
+          <motion.div {...subtleHover}>
+            <Button
+              asChild
+              variant="outline"
+              className="gap-2 border-slate-300 text-slate-800"
+            >
+              <Link to={PageRoutes.imports}>
+                <Upload className="h-4 w-4" />
+                Import file
+              </Link>
+            </Button>
+          </motion.div>
         </motion.div>
       </StaggerWrap>
 

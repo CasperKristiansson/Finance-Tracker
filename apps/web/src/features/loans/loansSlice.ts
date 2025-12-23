@@ -1,9 +1,14 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { LoanEventRead, LoanScheduleRead } from "@/types/api";
+import type {
+  LoanEventRead,
+  LoanPortfolioSeriesPoint,
+  LoanScheduleRead,
+} from "@/types/api";
 
 export interface LoansState {
   schedules: Record<string, LoanScheduleRead>;
   events: Record<string, LoanEventRead[]>;
+  portfolioSeries: LoanPortfolioSeriesPoint[];
   loading: Record<string, boolean>;
   error?: string;
 }
@@ -11,6 +16,7 @@ export interface LoansState {
 const initialState: LoansState = {
   schedules: {},
   events: {},
+  portfolioSeries: [],
   loading: {},
 };
 
@@ -32,6 +38,13 @@ const loansSlice = createSlice({
       state.events[action.payload.accountId] = action.payload.events;
       state.error = undefined;
     },
+    setLoanPortfolioSeries(
+      state,
+      action: PayloadAction<{ series: LoanPortfolioSeriesPoint[] }>,
+    ) {
+      state.portfolioSeries = action.payload.series;
+      state.error = undefined;
+    },
     setLoanLoading(
       state,
       action: PayloadAction<{ key: string; isLoading: boolean }>,
@@ -46,17 +59,24 @@ const loansSlice = createSlice({
     selectLoanState: (state) => state,
     selectLoanSchedule: (state) => state.schedules,
     selectLoanEvents: (state) => state.events,
+    selectLoanPortfolioSeries: (state) => state.portfolioSeries,
     selectLoanLoading: (state) => state.loading,
     selectLoanError: (state) => state.error,
   },
 });
 
-export const { setLoanSchedule, setLoanEvents, setLoanLoading, setLoanError } =
-  loansSlice.actions;
+export const {
+  setLoanSchedule,
+  setLoanEvents,
+  setLoanPortfolioSeries,
+  setLoanLoading,
+  setLoanError,
+} = loansSlice.actions;
 export const {
   selectLoanState,
   selectLoanSchedule,
   selectLoanEvents,
+  selectLoanPortfolioSeries,
   selectLoanLoading,
   selectLoanError,
 } = loansSlice.selectors;

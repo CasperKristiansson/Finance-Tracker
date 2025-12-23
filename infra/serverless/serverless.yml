@@ -68,8 +68,13 @@ provider:
           Action:
             - s3:PutObject
             - s3:GetObject
+            - s3:AbortMultipartUpload
+            - s3:ListBucket
           Resource:
+            - arn:aws:s3:::${ssm:/finance-tracker/${self:provider.stage}/backups/bucket}
+            - arn:aws:s3:::${ssm:/finance-tracker/${self:provider.stage}/backups/bucket}/*
             - arn:aws:s3:::${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/bucket}/*
+            - arn:aws:s3:::${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/bucket}
   httpApi:
     name: ${self:service}-${self:provider.stage}-http
     cors: true
@@ -96,6 +101,21 @@ custom:
   backendLayerArn: ${cf:finance-tracker-layer-service-${self:provider.stage}.BackendDepsLambdaLayerQualifiedArn}
 
 functions:
+  databaseBackup:
+    handler: apps/api/handlers/backups.run_database_backup
+    timeout: 900
+    memorySize: 1024
+    layers:
+      - ${self:custom.backendLayerArn}
+    environment:
+      BACKUP_BUCKET_NAME: ${ssm:/finance-tracker/${self:provider.stage}/backups/bucket}
+      BACKUP_PREFIX: finance-tracker/${self:provider.stage}/database-backups
+    events:
+      - schedule:
+          rate: cron(0 3 1 * ? *)
+          enabled: true
+          description: Monthly export of database tables to S3
+
   warmDatabase:
     handler: apps/api/handlers/warmup.warm_database
     timeout: 12
@@ -631,6 +651,18 @@ functions:
     events:
       - httpApi:
           path: /loans/{accountId}/events
+          method: GET
+          authorizer: cognitoJwt
+
+  listLoanPortfolioSeries:
+    handler: apps/api/handlers/loans.list_loan_portfolio_series
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /loans/events/series
           method: GET
           authorizer: cognitoJwt
 

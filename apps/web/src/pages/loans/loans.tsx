@@ -13,6 +13,10 @@ import {
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
   CartesianGrid,
   Line,
   LineChart,
@@ -98,6 +102,13 @@ const formatPercent = (value: string | null | undefined) => {
   return `${parsed.toFixed(2)}%`;
 };
 
+const toInterestRateDecimal = (value: string | null | undefined) => {
+  if (!value) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed > 1 ? parsed / 100 : parsed;
+};
+
 const formatDate = (value: string | null | undefined) => {
   if (!value) return "—";
   const date = new Date(value);
@@ -107,6 +118,13 @@ const formatDate = (value: string | null | undefined) => {
     month: "short",
     day: "2-digit",
   });
+};
+
+const formatChartDate = (value: string | null | undefined) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return formatDateLocale(date, { month: "short", year: "numeric" });
 };
 
 const formatDateTime = (value: string | null | undefined) => {
@@ -232,10 +250,12 @@ export const Loans: React.FC = () => {
   const {
     schedules,
     events,
+    portfolioSeries,
     loading,
     error,
     fetchLoanSchedule,
     fetchLoanEvents,
+    fetchLoanPortfolioSeries,
   } = useLoansApi();
 
   const [asOfDate, setAsOfDate] = useState("");
@@ -284,6 +304,11 @@ export const Loans: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (accountId) return;
+    fetchLoanPortfolioSeries();
+  }, [accountId, fetchLoanPortfolioSeries]);
+
+  useEffect(() => {
     if (!accountId) return;
     fetchLoanSchedule({ accountId, asOfDate: asOfDate || undefined, periods });
     fetchLoanEvents({ accountId, limit: 50, offset: 0 });
@@ -304,6 +329,52 @@ export const Loans: React.FC = () => {
     return accounts.find((acc) => acc.id === accountId) ?? null;
   }, [accountId, accounts]);
 
+  const selectedLoan = selectedAccount?.loan;
+  const selectedOriginPrincipal = useMemo(() => {
+    if (!selectedLoan) return null;
+    const origin = selectedLoan.origin_principal;
+    const fallback =
+      selectedLoan.current_principal ?? selectedAccount?.balance ?? null;
+    const value =
+      origin !== undefined && Number.isFinite(Number(origin))
+        ? Number(origin)
+        : Number(fallback ?? 0);
+    return Number.isFinite(value) ? value : null;
+  }, [selectedAccount?.balance, selectedLoan]);
+  const selectedCurrentPrincipal = useMemo(() => {
+    if (!selectedLoan) return null;
+    const value =
+      selectedLoan.current_principal ?? selectedAccount?.balance ?? null;
+    const num = Number(value ?? 0);
+    return Number.isFinite(num) ? num : null;
+  }, [selectedAccount?.balance, selectedLoan]);
+  const selectedPaidDown = useMemo(() => {
+    if (selectedOriginPrincipal === null || selectedCurrentPrincipal === null) {
+      return null;
+    }
+    return Math.max(0, selectedOriginPrincipal - selectedCurrentPrincipal);
+  }, [selectedCurrentPrincipal, selectedOriginPrincipal]);
+  const selectedPaidDownPct = useMemo(() => {
+    if (
+      selectedPaidDown === null ||
+      selectedOriginPrincipal === null ||
+      selectedOriginPrincipal <= 0
+    ) {
+      return null;
+    }
+    return Math.min(
+      100,
+      Math.max(0, (selectedPaidDown / selectedOriginPrincipal) * 100),
+    );
+  }, [selectedOriginPrincipal, selectedPaidDown]);
+  const selectedEstimatedMonthlyInterest = useMemo(() => {
+    if (!selectedLoan || selectedCurrentPrincipal === null) return null;
+    const rate = toInterestRateDecimal(selectedLoan.interest_rate_annual);
+    if (!Number.isFinite(selectedCurrentPrincipal) || rate === null)
+      return null;
+    return (selectedCurrentPrincipal * rate) / 12;
+  }, [selectedCurrentPrincipal, selectedLoan]);
+
   const schedule = accountId ? schedules[accountId] : undefined;
   const accountEvents = accountId ? events[accountId] : undefined;
   const scheduleLoading = accountId
@@ -319,6 +390,126 @@ export const Loans: React.FC = () => {
           : Math.abs(Number(acc.balance ?? 0));
       return sum + (Number.isFinite(principal) ? principal : 0);
     }, 0);
+  }, [loanAccounts]);
+
+  const totalOriginPrincipal = useMemo(() => {
+    return loanAccounts.reduce((sum, acc) => {
+      const origin = acc.loan?.origin_principal;
+      const fallback =
+        acc.loan?.current_principal !== undefined
+          ? Number(acc.loan.current_principal)
+          : Math.abs(Number(acc.balance ?? 0));
+      const value =
+        origin !== undefined && Number.isFinite(Number(origin))
+          ? Number(origin)
+          : fallback;
+      return sum + (Number.isFinite(value) ? value : 0);
+    }, 0);
+  }, [loanAccounts]);
+
+  const totalPaidDown = useMemo(
+    () => Math.max(0, totalOriginPrincipal - totalPrincipal),
+    [totalOriginPrincipal, totalPrincipal],
+  );
+
+  const estimatedMonthlyInterest = useMemo(() => {
+    return loanAccounts.reduce((sum, acc) => {
+      const rate = toInterestRateDecimal(acc.loan?.interest_rate_annual);
+      const principal =
+        acc.loan?.current_principal !== undefined
+          ? Number(acc.loan.current_principal)
+          : Math.abs(Number(acc.balance ?? 0));
+      if (!Number.isFinite(principal) || principal <= 0 || rate === null) {
+        return sum;
+      }
+      return sum + (principal * rate) / 12;
+    }, 0);
+  }, [loanAccounts]);
+
+  const loanPortfolioTrendData = useMemo(() => {
+    if (!portfolioSeries.length) return [];
+
+    const sortedSeries = portfolioSeries
+      .map((point) => ({
+        date: point.date,
+        total: Number(point.total),
+        ts: Date.parse(point.date),
+      }))
+      .filter(
+        (point) => Number.isFinite(point.ts) && Number.isFinite(point.total),
+      )
+      .sort((a, b) => a.ts - b.ts);
+
+    if (!sortedSeries.length) return [];
+
+    const baselineDate = new Date(sortedSeries[0].date);
+    const baseline = Number.isNaN(baselineDate.getTime())
+      ? null
+      : new Date(baselineDate);
+    if (baseline) {
+      baseline.setDate(baseline.getDate() - 1);
+    }
+
+    const series: Array<{ date: string; total: number }> = [
+      {
+        date: baseline
+          ? baseline.toISOString().slice(0, 10)
+          : sortedSeries[0].date,
+        total: 0,
+      },
+      ...sortedSeries.map((point) => ({
+        date: point.date,
+        total: point.total,
+      })),
+    ];
+
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const lastPoint = series[series.length - 1];
+    if (
+      lastPoint &&
+      lastPoint.date !== todayKey &&
+      Date.parse(todayKey) > Date.parse(lastPoint.date)
+    ) {
+      series.push({ date: todayKey, total: lastPoint.total });
+    }
+
+    return series;
+  }, [portfolioSeries]);
+
+  const loanPortfolioLatestTotal = useMemo(() => {
+    if (!loanPortfolioTrendData.length) return 0;
+    return loanPortfolioTrendData[loanPortfolioTrendData.length - 1].total;
+  }, [loanPortfolioTrendData]);
+
+  const portfolioSeriesLoading = loading["loan-portfolio-series"] ?? false;
+
+  const loanProgressData = useMemo(() => {
+    return loanAccounts
+      .map((acc) => {
+        const origin = acc.loan?.origin_principal
+          ? Number(acc.loan.origin_principal)
+          : null;
+        const current = acc.loan?.current_principal
+          ? Number(acc.loan.current_principal)
+          : Math.abs(Number(acc.balance ?? 0));
+        const safeCurrent = Number.isFinite(current) ? current : 0;
+        const baseOrigin =
+          origin !== null && Number.isFinite(origin) && origin > 0
+            ? origin
+            : safeCurrent;
+        const paid = Math.max(0, baseOrigin - safeCurrent);
+        return {
+          name: acc.name,
+          remaining: Math.max(0, safeCurrent),
+          paid,
+        };
+      })
+      .filter(
+        (item) =>
+          Number.isFinite(item.remaining) &&
+          Number.isFinite(item.paid) &&
+          (item.remaining > 0 || item.paid > 0),
+      );
   }, [loanAccounts]);
 
   const nextExpectedPayoff = useMemo(() => {
@@ -663,16 +854,33 @@ export const Loans: React.FC = () => {
         </div>
       ) : null}
 
-      <motion.div variants={fadeInUp} className="grid gap-3 md:grid-cols-3">
+      <motion.div
+        variants={fadeInUp}
+        className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+      >
         <SummaryCard
           label="Total principal"
           value={formatCurrency(totalPrincipal)}
           hint={`${loanAccounts.length} loans`}
         />
         <SummaryCard
-          label="Included accounts"
-          value={includeInactive ? "Active + archived" : "Active only"}
-          hint="Loans are created as debt accounts"
+          label="Principal paid down"
+          value={formatCurrency(totalPaidDown)}
+          hint={
+            totalOriginPrincipal > 0
+              ? `${Math.round(
+                  Math.min(
+                    100,
+                    Math.max(0, (totalPaidDown / totalOriginPrincipal) * 100),
+                  ),
+                )}% of original`
+              : "Based on loan metadata"
+          }
+        />
+        <SummaryCard
+          label="Est. monthly interest"
+          value={formatCurrency(estimatedMonthlyInterest)}
+          hint="Derived from current balances and annual rates"
         />
         <SummaryCard
           label="Next expected payoff"
@@ -683,6 +891,198 @@ export const Loans: React.FC = () => {
               : "Set expected maturity per loan"
           }
         />
+        <SummaryCard
+          label="Included accounts"
+          value={includeInactive ? "Active + archived" : "Active only"}
+          hint="Loans are created as debt accounts"
+        />
+      </motion.div>
+
+      <motion.div variants={fadeInUp} className="grid gap-3 lg:grid-cols-5">
+        <Card className="border-slate-200 shadow-[0_10px_40px_-26px_rgba(15,23,42,0.35)] lg:col-span-3">
+          <CardHeader className="pb-2">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Loan value trajectory
+                </CardTitle>
+                <p className="mt-1 text-xs text-slate-500">
+                  Cumulative loan value as new debt accounts are added.
+                </p>
+              </div>
+              <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                {formatCurrency(0)} → {formatCurrency(loanPortfolioLatestTotal)}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                {formatCurrency(totalPaidDown)} paid down
+              </span>
+              <span className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
+                <span className="h-2 w-2 rounded-full bg-sky-500" />
+                {formatCurrency(estimatedMonthlyInterest)} est. monthly interest
+              </span>
+            </div>
+            <div className="h-48 w-full">
+              {portfolioSeriesLoading ? (
+                <Skeleton className="h-full w-full" />
+              ) : loanPortfolioTrendData.length ? (
+                <ChartContainer
+                  config={{
+                    total: {
+                      label: "Loan value",
+                      color: "hsl(221.2 83.2% 53.3%)",
+                    },
+                  }}
+                  className="h-full w-full"
+                >
+                  <AreaChart data={loanPortfolioTrendData}>
+                    <defs>
+                      <linearGradient
+                        id="loan-value-gradient"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="5%"
+                          stopColor="var(--color-total)"
+                          stopOpacity={0.25}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="var(--color-total)"
+                          stopOpacity={0.05}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(value) => formatChartDate(value)}
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: "#64748b" }}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={(value) =>
+                        new Intl.NumberFormat("sv-SE", {
+                          notation: "compact",
+                          maximumFractionDigits: 1,
+                        }).format(value)
+                      }
+                    />
+                    <Tooltip content={<ChartTooltipContent />} />
+                    <Area
+                      type="monotoneX"
+                      dataKey="total"
+                      stroke="var(--color-total)"
+                      strokeWidth={2}
+                      fill="url(#loan-value-gradient)"
+                    />
+                  </AreaChart>
+                </ChartContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-600">
+                  Add loans to see cumulative value over time.
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200 shadow-[0_10px_40px_-26px_rgba(15,23,42,0.35)] lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base font-semibold text-slate-900">
+              Principal vs. paid down
+            </CardTitle>
+            <p className="text-xs text-slate-500">
+              How much of each loan remains versus what’s already been paid.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="h-48 w-full">
+              {loanProgressData.length ? (
+                <ChartContainer
+                  config={{
+                    paid: {
+                      label: "Paid down",
+                      color: "hsl(142.1 76.2% 36.3%)",
+                    },
+                    remaining: {
+                      label: "Remaining",
+                      color: "hsl(213.8 93.9% 67.8%)",
+                    },
+                  }}
+                  className="h-full w-full"
+                >
+                  <BarChart
+                    data={loanProgressData}
+                    margin={{ left: -12, right: 4 }}
+                  >
+                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="name"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fill: "#64748b" }}
+                    />
+                    <YAxis
+                      tickFormatter={(value) =>
+                        new Intl.NumberFormat("sv-SE", {
+                          notation: "compact",
+                          maximumFractionDigits: 1,
+                        }).format(value)
+                      }
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <Tooltip
+                      content={
+                        <ChartTooltipContent
+                          formatter={(value, name) => {
+                            if (typeof value !== "number") return null;
+                            return (
+                              <div className="flex w-full items-center justify-between gap-3">
+                                <span className="text-slate-600">{name}</span>
+                                <span className="font-semibold text-slate-900 tabular-nums">
+                                  {formatCurrency(value)}
+                                </span>
+                              </div>
+                            );
+                          }}
+                          hideLabel
+                        />
+                      }
+                    />
+                    <Bar
+                      dataKey="paid"
+                      stackId="progress"
+                      fill="var(--color-paid)"
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="remaining"
+                      stackId="progress"
+                      fill="var(--color-remaining)"
+                      radius={[4, 4, 0, 0]}
+                    />
+                  </BarChart>
+                </ChartContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-600">
+                  Add loans to visualize payoff progress.
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </motion.div>
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -997,17 +1397,24 @@ export const Loans: React.FC = () => {
           </Card>
         ) : (
           <>
-            <div className="grid gap-3 md:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
               <SummaryCard
                 label="Current principal"
                 value={
-                  selectedAccount.loan?.current_principal
-                    ? formatCurrency(
-                        Number(selectedAccount.loan.current_principal),
-                      )
+                  selectedCurrentPrincipal !== null
+                    ? formatCurrency(selectedCurrentPrincipal)
                     : "—"
                 }
                 hint="From loan metadata"
+              />
+              <SummaryCard
+                label="Original principal"
+                value={
+                  selectedOriginPrincipal !== null
+                    ? formatCurrency(selectedOriginPrincipal)
+                    : "—"
+                }
+                hint="Baseline for payoff progress"
               />
               <SummaryCard
                 label="Interest rate"
@@ -1015,6 +1422,28 @@ export const Loans: React.FC = () => {
                   selectedAccount.loan?.interest_rate_annual,
                 )}
                 hint="Annual rate"
+              />
+              <SummaryCard
+                label="Paid down"
+                value={
+                  selectedPaidDown !== null
+                    ? formatCurrency(selectedPaidDown)
+                    : "—"
+                }
+                hint={
+                  selectedPaidDownPct !== null
+                    ? `${Math.round(selectedPaidDownPct)}% of original`
+                    : "Based on original vs. current principal"
+                }
+              />
+              <SummaryCard
+                label="Est. monthly interest"
+                value={
+                  selectedEstimatedMonthlyInterest !== null
+                    ? formatCurrency(selectedEstimatedMonthlyInterest)
+                    : "—"
+                }
+                hint="Derived from current principal and annual rate"
               />
               <SummaryCard
                 label="Minimum payment"
@@ -1027,12 +1456,97 @@ export const Loans: React.FC = () => {
                 }
                 hint="If configured"
               />
-              <SummaryCard
-                label="Estimated payoff"
-                value={payoffDate ? formatDate(payoffDate) : "—"}
-                hint="From generated schedule"
-              />
             </div>
+
+            <Card className="border-slate-200 shadow-[0_10px_40px_-26px_rgba(15,23,42,0.35)]">
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-base font-semibold text-slate-900">
+                      Loan insight
+                    </CardTitle>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Quick snapshot of progress and expected interest this
+                      month.
+                    </p>
+                  </div>
+                  {selectedPaidDownPct !== null ? (
+                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                      {Math.round(selectedPaidDownPct)}% paid
+                    </span>
+                  ) : null}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="text-xs text-slate-500">
+                      Current vs. original
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-slate-900 tabular-nums">
+                      {formatCurrency(selectedCurrentPrincipal ?? 0)} /{" "}
+                      {selectedOriginPrincipal !== null
+                        ? formatCurrency(selectedOriginPrincipal)
+                        : "—"}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="text-xs text-slate-500">
+                      Estimated monthly interest
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-slate-900 tabular-nums">
+                      {selectedEstimatedMonthlyInterest !== null
+                        ? formatCurrency(selectedEstimatedMonthlyInterest)
+                        : "—"}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Based on current principal and annual rate
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div className="text-xs text-slate-500">Payoff target</div>
+                    <div className="mt-1 text-lg font-semibold text-slate-900">
+                      {payoffDate ? formatDate(payoffDate) : "Not set"}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">
+                      From the latest amortization schedule
+                    </p>
+                  </div>
+                </div>
+
+                {selectedPaidDownPct !== null ? (
+                  <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between text-xs text-slate-600">
+                      <span>Paydown progress</span>
+                      <span className="font-medium tabular-nums">
+                        {Math.round(selectedPaidDownPct)}%
+                      </span>
+                    </div>
+                    <Progress
+                      value={selectedPaidDownPct}
+                      className="mt-2 h-2"
+                    />
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
+                      <span className="tabular-nums">
+                        {formatCurrency(selectedPaidDown ?? 0)} paid toward
+                        principal
+                      </span>
+                      <span className="tabular-nums">
+                        {formatCurrency(
+                          Math.max(0, selectedCurrentPrincipal ?? 0),
+                        )}{" "}
+                        remaining
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-white p-3 text-sm text-slate-600">
+                    Add an original principal to track paydown progress over
+                    time.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {(accountsError || error) && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">

@@ -83,6 +83,19 @@ class LoanRepository:
         )
         return list(self.session.exec(statement).all())
 
+    def list_all_events(
+        self,
+        *,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+    ) -> List[LoanEvent]:
+        statement = select(LoanEvent).order_by(cast(Any, LoanEvent.occurred_at).asc())
+        if start_date:
+            statement = statement.where(LoanEvent.occurred_at >= start_date)
+        if end_date:
+            statement = statement.where(LoanEvent.occurred_at <= end_date)
+        return list(self.session.exec(statement).all())
+
     def validate_account_can_have_loan(self, account: Account) -> None:
         if account.account_type != AccountType.DEBT:
             raise ValueError("Loans can only be attached to debt accounts")
