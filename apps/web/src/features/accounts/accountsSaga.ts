@@ -1,5 +1,6 @@
 import { createAction } from "@reduxjs/toolkit";
 import { call, put, select, takeLatest } from "redux-saga/effects";
+import { demoAccounts } from "@/data/demoPayloads";
 import {
   setAccountCreateLoading,
   setAccountMutationError,
@@ -11,9 +12,11 @@ import {
   setAccountsFilters,
   setAccountsLoading,
   selectAccountsState,
+  selectAccounts,
   type AccountsState,
 } from "@/features/accounts/accountsSlice";
 import { callApiWithAuth } from "@/features/api/apiSaga";
+import { selectIsDemo } from "@/features/auth/authSlice";
 import type {
   AccountCreateRequest,
   AccountListResponse,
@@ -69,23 +72,28 @@ function* handleFetchAccounts(action: ReturnType<typeof FetchAccounts>) {
       asOfDate: stored.asOfDate,
     } satisfies Partial<Pick<AccountsState, "includeInactive" | "asOfDate">>);
   yield put(setAccountsLoading(true));
+  const isDemo: boolean = yield select(selectIsDemo);
   if (action.payload) {
     yield put(setAccountsFilters(action.payload));
   }
 
   try {
-    const query = {
-      include_inactive: filters.includeInactive ?? false,
-      ...(filters.asOfDate ? { as_of_date: filters.asOfDate } : {}),
-    };
+    if (isDemo) {
+      yield put(setAccounts(demoAccounts.accounts));
+    } else {
+      const query = {
+        include_inactive: filters.includeInactive ?? false,
+        ...(filters.asOfDate ? { as_of_date: filters.asOfDate } : {}),
+      };
 
-    const response: AccountListResponse = yield call(
-      callApiWithAuth,
-      { path: "/accounts", query, schema: accountListSchema },
-      { loadingKey: "accounts" },
-    );
+      const response: AccountListResponse = yield call(
+        callApiWithAuth,
+        { path: "/accounts", query, schema: accountListSchema },
+        { loadingKey: "accounts" },
+      );
 
-    yield put(setAccounts(response.accounts));
+      yield put(setAccounts(response.accounts));
+    }
   } catch (error) {
     yield put(
       setAccountsError(
@@ -100,8 +108,44 @@ function* handleFetchAccounts(action: ReturnType<typeof FetchAccounts>) {
 function* handleCreateAccount(action: ReturnType<typeof CreateAccount>) {
   yield put(setAccountCreateLoading(true));
   yield put(setAccountMutationError(undefined));
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
     const body = accountCreateRequestSchema.parse(action.payload);
+    if (isDemo) {
+      const existing = (yield select(selectAccounts)) as AccountsState["items"];
+      const now = new Date().toISOString();
+      const newAccount = {
+        id: `demo-account-${Date.now()}`,
+        name: body.name,
+        account_type: body.account_type,
+        is_active: body.is_active ?? true,
+        icon: body.icon ?? null,
+        bank_import_type: body.bank_import_type ?? null,
+        created_at: now,
+        updated_at: now,
+        balance: "0",
+        last_reconciled_at: null,
+        reconciliation_gap: "0",
+        needs_reconciliation: false,
+        loan: body.loan
+          ? {
+              id: `demo-loan-${Date.now()}`,
+              account_id: `demo-account-${Date.now()}`,
+              origin_principal: body.loan.origin_principal,
+              current_principal: body.loan.current_principal,
+              interest_rate_annual: body.loan.interest_rate_annual,
+              interest_compound: body.loan.interest_compound,
+              minimum_payment: body.loan.minimum_payment ?? null,
+              expected_maturity_date: body.loan.expected_maturity_date ?? null,
+              created_at: now,
+              updated_at: now,
+            }
+          : null,
+      };
+      yield put(setAccounts([...existing, newAccount]));
+      return;
+    }
+
     yield call(
       callApiWithAuth,
       { path: "/accounts", method: "POST", body },
@@ -123,8 +167,24 @@ function* handleUpdateAccount(action: ReturnType<typeof UpdateAccount>) {
   const { accountId, data } = action.payload;
   yield put(setAccountUpdateLoading(true));
   yield put(setAccountMutationError(undefined));
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
     const body = accountUpdateRequestSchema.parse(data);
+    if (isDemo) {
+      const existing = (yield select(selectAccounts)) as AccountsState["items"];
+      const updated = existing.map((acct) =>
+        acct.id === accountId
+          ? {
+              ...acct,
+              ...body,
+              updated_at: new Date().toISOString(),
+            }
+          : acct,
+      );
+      yield put(setAccounts(updated));
+      return;
+    }
+
     yield call(
       callApiWithAuth,
       { path: `/accounts/${accountId}`, method: "PATCH", body },
@@ -155,8 +215,36 @@ function* handleAttachLoan(action: ReturnType<typeof AttachLoan>) {
   const { account_id, ...loanData } = action.payload;
   yield put(setAccountUpdateLoading(true));
   yield put(setAccountMutationError(undefined));
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
     const body = loanCreateRequestSchema.parse({ account_id, ...loanData });
+    if (isDemo) {
+      const existing = (yield select(selectAccounts)) as AccountsState["items"];
+      const now = new Date().toISOString();
+      const updated = existing.map((acct) =>
+        acct.id === account_id
+          ? {
+              ...acct,
+              loan: {
+                id: `demo-loan-${Date.now()}`,
+                account_id,
+                origin_principal: body.origin_principal,
+                current_principal: body.current_principal,
+                interest_rate_annual: body.interest_rate_annual,
+                interest_compound: body.interest_compound,
+                minimum_payment: body.minimum_payment ?? null,
+                expected_maturity_date: body.expected_maturity_date ?? null,
+                created_at: now,
+                updated_at: now,
+              },
+              updated_at: now,
+            }
+          : acct,
+      );
+      yield put(setAccounts(updated));
+      return;
+    }
+
     yield call(
       callApiWithAuth,
       { path: "/loans", method: "POST", body },
@@ -178,8 +266,37 @@ function* handleUpdateLoan(action: ReturnType<typeof UpdateLoan>) {
   const { accountId, data } = action.payload;
   yield put(setAccountUpdateLoading(true));
   yield put(setAccountMutationError(undefined));
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
     const body = loanUpdateRequestSchema.parse(data);
+    if (isDemo) {
+      const existing = (yield select(selectAccounts)) as AccountsState["items"];
+      const now = new Date().toISOString();
+      const updated = existing.map((acct) =>
+        acct.id === accountId && acct.loan
+          ? {
+              ...acct,
+              loan: {
+                ...acct.loan,
+                ...body,
+                minimum_payment:
+                  body.minimum_payment !== undefined
+                    ? body.minimum_payment
+                    : acct.loan.minimum_payment,
+                expected_maturity_date:
+                  body.expected_maturity_date !== undefined
+                    ? body.expected_maturity_date
+                    : acct.loan.expected_maturity_date,
+                updated_at: now,
+              },
+              updated_at: now,
+            }
+          : acct,
+      );
+      yield put(setAccounts(updated));
+      return;
+    }
+
     yield call(
       callApiWithAuth,
       { path: `/accounts/${accountId}/loan`, method: "PATCH", body },
@@ -202,7 +319,28 @@ function* handleReconcileAccounts(
 ) {
   yield put(setAccountReconcileLoading(true));
   yield put(setAccountReconcileError(undefined));
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
+    if (isDemo) {
+      const existing = (yield select(selectAccounts)) as AccountsState["items"];
+      const updated = existing.map((acct) => {
+        const match = action.payload.items.find(
+          (item) => item.accountId === acct.id,
+        );
+        if (!match) return acct;
+        return {
+          ...acct,
+          balance: match.reportedBalance,
+          last_reconciled_at: match.capturedAt,
+          reconciliation_gap: "0",
+          needs_reconciliation: false,
+          updated_at: match.capturedAt,
+        };
+      });
+      yield put(setAccounts(updated));
+      return;
+    }
+
     for (const item of action.payload.items) {
       const body = reconcileAccountRequestSchema.parse({
         captured_at: item.capturedAt,

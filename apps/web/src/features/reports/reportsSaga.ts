@@ -1,6 +1,8 @@
 import { createAction } from "@reduxjs/toolkit";
-import { call, put, takeLatest } from "redux-saga/effects";
+import { call, put, select, takeLatest } from "redux-saga/effects";
+import { demoReportPayloads } from "@/data/demoPayloads";
 import { callApiWithAuth } from "@/features/api/apiSaga";
+import { selectIsDemo } from "@/features/auth/authSlice";
 import {
   setMonthlyError,
   setMonthlyCurrentKey,
@@ -89,6 +91,7 @@ function* handleFetchMonthly(action: ReturnType<typeof FetchMonthlyReport>) {
   const key = buildReportKey(filters);
   yield put(setMonthlyCurrentKey(key));
   yield put(setMonthlyLoading(true));
+  const isDemo: boolean = yield select(selectIsDemo);
 
   try {
     const query = {
@@ -104,13 +107,17 @@ function* handleFetchMonthly(action: ReturnType<typeof FetchMonthlyReport>) {
         : {}),
     };
 
-    const response: { results: MonthlyReportEntry[] } = yield call(
-      callApiWithAuth,
-      { path: "/reports/monthly", query, schema: monthlyReportSchema },
-      { loadingKey: "report-monthly" },
-    );
+    if (isDemo) {
+      yield put(setMonthlyReport({ key, data: demoReportPayloads.monthly }));
+    } else {
+      const response: { results: MonthlyReportEntry[] } = yield call(
+        callApiWithAuth,
+        { path: "/reports/monthly", query, schema: monthlyReportSchema },
+        { loadingKey: "report-monthly" },
+      );
 
-    yield put(setMonthlyReport({ key, data: response.results }));
+      yield put(setMonthlyReport({ key, data: response.results }));
+    }
   } catch (error) {
     yield put(
       setMonthlyError(
@@ -129,6 +136,7 @@ function* handleFetchYearly(action: ReturnType<typeof FetchYearlyReport>) {
   const key = buildReportKey(filters);
   yield put(setYearlyCurrentKey(key));
   yield put(setYearlyLoading(true));
+  const isDemo: boolean = yield select(selectIsDemo);
 
   try {
     const query = {
@@ -143,13 +151,17 @@ function* handleFetchYearly(action: ReturnType<typeof FetchYearlyReport>) {
         : {}),
     };
 
-    const response: { results: YearlyReportEntry[] } = yield call(
-      callApiWithAuth,
-      { path: "/reports/yearly", query, schema: yearlyReportSchema },
-      { loadingKey: "report-yearly" },
-    );
+    if (isDemo) {
+      yield put(setYearlyReport({ key, data: demoReportPayloads.yearly }));
+    } else {
+      const response: { results: YearlyReportEntry[] } = yield call(
+        callApiWithAuth,
+        { path: "/reports/yearly", query, schema: yearlyReportSchema },
+        { loadingKey: "report-yearly" },
+      );
 
-    yield put(setYearlyReport({ key, data: response.results }));
+      yield put(setYearlyReport({ key, data: response.results }));
+    }
   } catch (error) {
     yield put(
       setYearlyError(
@@ -166,6 +178,7 @@ function* handleFetchTotal(action: ReturnType<typeof FetchTotalReport>) {
   const key = buildReportKey(filters);
   yield put(setTotalCurrentKey(key));
   yield put(setTotalLoading(true));
+  const isDemo: boolean = yield select(selectIsDemo);
 
   try {
     const query = {
@@ -180,13 +193,17 @@ function* handleFetchTotal(action: ReturnType<typeof FetchTotalReport>) {
         : {}),
     };
 
-    const response: TotalReportRead = yield call(
-      callApiWithAuth,
-      { path: "/reports/total", query, schema: totalReportSchema },
-      { loadingKey: "report-total" },
-    );
+    if (isDemo) {
+      yield put(setTotalReport({ key, data: demoReportPayloads.total }));
+    } else {
+      const response: TotalReportRead = yield call(
+        callApiWithAuth,
+        { path: "/reports/total", query, schema: totalReportSchema },
+        { loadingKey: "report-total" },
+      );
 
-    yield put(setTotalReport({ key, data: response }));
+      yield put(setTotalReport({ key, data: response }));
+    }
   } catch (error) {
     yield put(
       setTotalError(
@@ -203,6 +220,7 @@ function* handleFetchNetWorth(action: ReturnType<typeof FetchNetWorthHistory>) {
   const key = buildReportKey(filters);
   yield put(setNetWorthCurrentKey(key));
   yield put(setNetWorthLoading(true));
+  const isDemo: boolean = yield select(selectIsDemo);
 
   try {
     const query = {
@@ -214,13 +232,19 @@ function* handleFetchNetWorth(action: ReturnType<typeof FetchNetWorthHistory>) {
         : {}),
     };
 
-    const response: NetWorthHistoryResponse = yield call(
-      callApiWithAuth,
-      { path: "/reports/net-worth", query, schema: netWorthHistorySchema },
-      { loadingKey: "report-net-worth" },
-    );
+    if (isDemo) {
+      yield put(
+        setNetWorthHistory({ key, data: demoReportPayloads.netWorth.points }),
+      );
+    } else {
+      const response: NetWorthHistoryResponse = yield call(
+        callApiWithAuth,
+        { path: "/reports/net-worth", query, schema: netWorthHistorySchema },
+        { loadingKey: "report-net-worth" },
+      );
 
-    yield put(setNetWorthHistory({ key, data: response.points }));
+      yield put(setNetWorthHistory({ key, data: response.points }));
+    }
   } catch (error) {
     yield put(
       setNetWorthError(
@@ -241,6 +265,7 @@ function* handleFetchQuarterly(
   const key = buildReportKey(filters);
   yield put(setQuarterlyCurrentKey(key));
   yield put(setQuarterlyLoading(true));
+  const isDemo: boolean = yield select(selectIsDemo);
 
   try {
     const query = {
@@ -252,12 +277,18 @@ function* handleFetchQuarterly(
         ? { category_ids: toCsv(filters.categoryIds) }
         : {}),
     };
-    const response: { results: QuarterlyReportEntry[] } = yield call(
-      callApiWithAuth,
-      { path: "/reports/quarterly", query, schema: quarterlyReportSchema },
-      { loadingKey: "report-quarterly" },
-    );
-    yield put(setQuarterlyReport({ key, data: response.results }));
+    if (isDemo) {
+      yield put(
+        setQuarterlyReport({ key, data: demoReportPayloads.quarterly }),
+      );
+    } else {
+      const response: { results: QuarterlyReportEntry[] } = yield call(
+        callApiWithAuth,
+        { path: "/reports/quarterly", query, schema: quarterlyReportSchema },
+        { loadingKey: "report-quarterly" },
+      );
+      yield put(setQuarterlyReport({ key, data: response.results }));
+    }
   } catch (error) {
     yield put(
       setQuarterlyError(
@@ -276,6 +307,7 @@ function* handleFetchCustom(action: ReturnType<typeof FetchCustomReport>) {
   const key = JSON.stringify(params);
   yield put(setCustomCurrentKey(key));
   yield put(setCustomLoading(true));
+  const isDemo: boolean = yield select(selectIsDemo);
 
   try {
     const query = {
@@ -291,12 +323,16 @@ function* handleFetchCustom(action: ReturnType<typeof FetchCustomReport>) {
         ? { subscription_ids: toCsv(params.subscriptionIds) }
         : {}),
     };
-    const response: { results: MonthlyReportEntry[] } = yield call(
-      callApiWithAuth,
-      { path: "/reports/custom", query },
-      { loadingKey: "report-custom" },
-    );
-    yield put(setCustomReport({ key, data: response.results }));
+    if (isDemo) {
+      yield put(setCustomReport({ key, data: demoReportPayloads.monthly }));
+    } else {
+      const response: { results: MonthlyReportEntry[] } = yield call(
+        callApiWithAuth,
+        { path: "/reports/custom", query },
+        { loadingKey: "report-custom" },
+      );
+      yield put(setCustomReport({ key, data: response.results }));
+    }
   } catch (error) {
     yield put(
       setCustomError(
@@ -310,6 +346,7 @@ function* handleFetchCustom(action: ReturnType<typeof FetchCustomReport>) {
 
 function* handleExportReport(action: ReturnType<typeof ExportReport>) {
   yield put(setExportLoading(true));
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
     const payload = {
       granularity: action.payload.granularity,
@@ -327,19 +364,23 @@ function* handleExportReport(action: ReturnType<typeof ExportReport>) {
         ? { subscription_ids: toCsv(action.payload.subscriptionIds) }
         : {}),
     };
-    const response: {
-      filename: string;
-      content_type: string;
-      data_base64: string;
-    } = yield call(
-      callApiWithAuth,
-      { path: "/reports/export", method: "POST", body: payload },
-      { loadingKey: "report-export" },
-    );
-    const link = document.createElement("a");
-    link.href = `data:${response.content_type};base64,${response.data_base64}`;
-    link.download = response.filename;
-    link.click();
+    if (isDemo) {
+      yield put(setExportError("Export is not available in demo mode."));
+    } else {
+      const response: {
+        filename: string;
+        content_type: string;
+        data_base64: string;
+      } = yield call(
+        callApiWithAuth,
+        { path: "/reports/export", method: "POST", body: payload },
+        { loadingKey: "report-export" },
+      );
+      const link = document.createElement("a");
+      link.href = `data:${response.content_type};base64,${response.data_base64}`;
+      link.download = response.filename;
+      link.click();
+    }
   } catch (error) {
     yield put(
       setExportError(

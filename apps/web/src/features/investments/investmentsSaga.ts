@@ -1,7 +1,14 @@
 import { createAction } from "@reduxjs/toolkit";
-import { call, put, takeLatest } from "redux-saga/effects";
+import { call, put, select, takeLatest } from "redux-saga/effects";
 import { toast } from "sonner";
+import {
+  demoInvestmentMetrics,
+  demoInvestmentOverview,
+  demoInvestmentSnapshots,
+  demoInvestmentTransactions,
+} from "@/data/demoPayloads";
 import { callApiWithAuth } from "@/features/api/apiSaga";
+import { selectIsDemo } from "@/features/auth/authSlice";
 import {
   clearParseResult,
   setInvestmentsError,
@@ -57,17 +64,22 @@ export const ClearDraft = createAction<{ clientId: string }>(
 
 function* handleFetchSnapshots(): Generator {
   yield put(setInvestmentsLoading(true));
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
-    const response: InvestmentSnapshotListResponse = yield call(
-      callApiWithAuth,
-      {
-        path: "/investments/nordnet/snapshots",
-        schema: investmentSnapshotListResponseSchema,
-      },
-      { loadingKey: "investments", silent: true },
-    );
-    if (response?.snapshots) {
-      yield put(setSnapshots(response.snapshots));
+    if (isDemo) {
+      yield put(setSnapshots(demoInvestmentSnapshots.snapshots));
+    } else {
+      const response: InvestmentSnapshotListResponse = yield call(
+        callApiWithAuth,
+        {
+          path: "/investments/nordnet/snapshots",
+          schema: investmentSnapshotListResponseSchema,
+        },
+        { loadingKey: "investments", silent: true },
+      );
+      if (response?.snapshots) {
+        yield put(setSnapshots(response.snapshots));
+      }
     }
   } catch (error) {
     yield put(
@@ -83,7 +95,13 @@ function* handleFetchSnapshots(): Generator {
 }
 
 function* handleFetchTransactions(): Generator {
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
+    if (isDemo) {
+      yield put(setTransactions(demoInvestmentTransactions.transactions));
+      return;
+    }
+
     const response: InvestmentTransactionListResponse = yield call(
       callApiWithAuth,
       {
@@ -108,19 +126,26 @@ function* handleFetchTransactions(): Generator {
 }
 
 function* handleFetchMetrics(): Generator {
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
-    const response: InvestmentMetricsResponse = yield call(
-      callApiWithAuth,
-      {
-        path: "/investments/metrics",
-        schema: investmentMetricsResponseSchema,
-      },
-      { loadingKey: "investments", silent: true },
-    );
-    yield put(setMetrics(response.performance));
-    yield put(setSnapshots(response.snapshots));
-    // holdings already embedded in snapshots; no-op
-    yield put(setTransactions(response.transactions));
+    if (isDemo) {
+      yield put(setMetrics(demoInvestmentMetrics.performance));
+      yield put(setSnapshots(demoInvestmentMetrics.snapshots));
+      yield put(setTransactions(demoInvestmentMetrics.transactions));
+    } else {
+      const response: InvestmentMetricsResponse = yield call(
+        callApiWithAuth,
+        {
+          path: "/investments/metrics",
+          schema: investmentMetricsResponseSchema,
+        },
+        { loadingKey: "investments", silent: true },
+      );
+      yield put(setMetrics(response.performance));
+      yield put(setSnapshots(response.snapshots));
+      // holdings already embedded in snapshots; no-op
+      yield put(setTransactions(response.transactions));
+    }
   } catch (error) {
     yield put(
       setInvestmentsError(
@@ -132,16 +157,21 @@ function* handleFetchMetrics(): Generator {
 
 function* handleFetchOverview(): Generator {
   yield put(setInvestmentsLoading(true));
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
-    const response: InvestmentOverviewResponse = yield call(
-      callApiWithAuth,
-      {
-        path: "/investments/overview",
-        schema: investmentOverviewResponseSchema,
-      },
-      { loadingKey: "investments", silent: true },
-    );
-    yield put(setOverview(response));
+    if (isDemo) {
+      yield put(setOverview(demoInvestmentOverview));
+    } else {
+      const response: InvestmentOverviewResponse = yield call(
+        callApiWithAuth,
+        {
+          path: "/investments/overview",
+          schema: investmentOverviewResponseSchema,
+        },
+        { loadingKey: "investments", silent: true },
+      );
+      yield put(setOverview(response));
+    }
   } catch (error) {
     yield put(
       setInvestmentsError(
@@ -161,7 +191,22 @@ function* handleParseNordnetExport(
   const { clientId, ...rawBody } = action.payload;
   const body = nordnetParseRequestSchema.parse(rawBody);
   yield put(setParseLoading({ clientId, loading: true }));
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
+    if (isDemo) {
+      const mock: NordnetParseResponse = {
+        report_type: "positions",
+        snapshot_date: new Date().toISOString(),
+        portfolio_value: "45500.00",
+        parsed_payload: { preview: "demo" },
+      };
+      yield put(setParseResult({ clientId, result: mock }));
+      toast.success("Parsed export", {
+        description: "Review holdings and save when ready.",
+      });
+      return;
+    }
+
     const response: NordnetParseResponse = yield call(
       callApiWithAuth,
       {
@@ -192,28 +237,58 @@ function* handleParseNordnetExport(
 
 function* handleSaveSnapshot(action: ReturnType<typeof SaveNordnetSnapshot>) {
   yield put(setInvestmentsSaving(true));
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
     const { clientId, ...rawBody } = action.payload;
     const body = nordnetSnapshotCreateRequestSchema.parse(rawBody);
-    const response: InvestmentSnapshotResponse = yield call(
-      callApiWithAuth,
-      {
-        path: "/investments/nordnet/snapshots",
-        method: "POST",
-        body,
-        schema: investmentSnapshotResponseSchema,
-      },
-      { loadingKey: "investments" },
-    );
-    if (response?.snapshot) {
-      yield put(upsertSnapshot(response.snapshot));
+    if (isDemo) {
+      const now = new Date().toISOString();
+      const snapshot =
+        demoInvestmentSnapshots.snapshots[0] ??
+        ({
+          id: `demo-snapshot-${Date.now()}`,
+          provider: "nordnet",
+          report_type: body.report_type ?? "positions",
+          account_name: body.account_name ?? "Demo Account",
+          snapshot_date: body.snapshot_date ?? now,
+          portfolio_value: body.portfolio_value ?? "0",
+          raw_text: body.raw_text ?? "Demo snapshot",
+          parsed_payload: body.parsed_payload ?? {},
+          cleaned_payload: body.manual_payload ?? null,
+          bedrock_metadata: null,
+          created_at: now,
+          updated_at: now,
+          holdings: [],
+        } satisfies InvestmentSnapshotResponse["snapshot"]);
+      yield put(upsertSnapshot(snapshot));
       toast.success("Snapshot saved", {
         description: "Portfolio snapshot stored successfully.",
       });
-    }
-    if (clientId) {
-      yield put(setLastSavedClientId(clientId));
-      yield put(clearParseResult(clientId));
+      if (clientId) {
+        yield put(setLastSavedClientId(clientId));
+        yield put(clearParseResult(clientId));
+      }
+    } else {
+      const response: InvestmentSnapshotResponse = yield call(
+        callApiWithAuth,
+        {
+          path: "/investments/nordnet/snapshots",
+          method: "POST",
+          body,
+          schema: investmentSnapshotResponseSchema,
+        },
+        { loadingKey: "investments" },
+      );
+      if (response?.snapshot) {
+        yield put(upsertSnapshot(response.snapshot));
+        toast.success("Snapshot saved", {
+          description: "Portfolio snapshot stored successfully.",
+        });
+      }
+      if (clientId) {
+        yield put(setLastSavedClientId(clientId));
+        yield put(clearParseResult(clientId));
+      }
     }
   } catch (error) {
     yield put(
