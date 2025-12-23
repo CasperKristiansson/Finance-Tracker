@@ -5,6 +5,7 @@
 - Nordnet snapshot ingestion endpoints and client flows were removed. There are no remaining write paths into `investment_snapshots` / `investment_holdings` from the API.
 - Read paths still exist: `apps/api/handlers/investments.investment_metrics` (and `investment_overview`) load snapshots and holdings for analytics, and `apps/api/services/reporting_total.py` queries `InvestmentSnapshot` for totals. Any cleanup must account for these consumers.
 - Legacy rows may remain in the `investment_snapshots`, `investment_holdings`, and `investment_transactions` tables and could be stale now that ingestion is gone.
+- The `/investments/sync-ledger` endpoint was removed; ledger entries now originate from the primary transaction flows rather than snapshot-derived mirroring.
 
 ## Recommended migration steps
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Dict, Optional
-from uuid import UUID
 
 from ..schemas import (
     InvestmentOverviewResponse,
@@ -18,7 +17,6 @@ from .utils import (
     get_query_params,
     get_user_id,
     json_response,
-    parse_body,
     reset_engine_state,
 )
 
@@ -58,18 +56,6 @@ def list_investment_transactions(event: Dict[str, Any], _context: Any) -> Dict[s
     return json_response(200, response)
 
 
-def sync_investment_ledger(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
-    ensure_engine()
-    user_id = get_user_id(event)
-    parsed = parse_body(event) if event.get("body") else {}
-    category_id_raw = parsed.get("category_id") if isinstance(parsed, dict) else None
-    category_id = UUID(str(category_id_raw)) if category_id_raw else None
-    with session_scope(user_id=user_id) as session:
-        service = InvestmentSnapshotService(session)
-        count = service.sync_transactions_to_ledger(default_category_id=category_id)
-    return json_response(200, {"synced": count})
-
-
 def investment_overview(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
     user_id = get_user_id(event)
@@ -86,5 +72,4 @@ __all__ = [
     "list_investment_transactions",
     "reset_handler_state",
     "investment_overview",
-    "sync_investment_ledger",
 ]

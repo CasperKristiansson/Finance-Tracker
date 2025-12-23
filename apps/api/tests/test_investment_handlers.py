@@ -11,7 +11,6 @@ from apps.api.handlers.investments import (
     investment_overview,
     list_investment_transactions,
     reset_handler_state,
-    sync_investment_ledger,
 )
 from apps.api.shared import configure_engine, get_engine
 
@@ -42,13 +41,6 @@ def test_list_investment_transactions_empty() -> None:
     assert response["statusCode"] == 200
     body = _json_body(response)
     assert body["transactions"] == []
-
-
-def test_sync_investment_ledger_no_transactions() -> None:
-    response = sync_investment_ledger({"body": json.dumps({})}, None)
-    assert response["statusCode"] == 200
-    body = _json_body(response)
-    assert body["synced"] == 0
 
 
 def test_investment_overview_empty_state() -> None:

@@ -1,4 +1,4 @@
-"""Service layer for investment analytics and ledger sync."""
+"""Service layer for investment analytics."""
 
 # pylint: disable=broad-exception-caught,too-many-lines
 
@@ -16,18 +16,16 @@ from sqlmodel import Session, select
 from ..models import Account, InvestmentSnapshot, InvestmentTransaction, Transaction, TransactionLeg
 from ..repositories.investment_snapshots import InvestmentSnapshotRepository
 from ..repositories.investment_transactions import InvestmentTransactionRepository
-from ..services.transaction import TransactionService
 from ..shared import AccountType, TransactionType
 
 
 class InvestmentSnapshotService:
-    """Investment analytics and ledger-sync utilities."""
+    """Investment analytics utilities."""
 
     def __init__(self, session: Session):
         self.session = session
         self.repository = InvestmentSnapshotRepository(session)
         self.tx_repository = InvestmentTransactionRepository(session)
-        self._account_cache: dict[str, Account] = {}
 
     def list_snapshots(self, limit: Optional[int] = None) -> list[InvestmentSnapshot]:
         return self.repository.list_snapshots(limit=limit)
@@ -616,94 +614,6 @@ class InvestmentSnapshotService:
             "accounts": accounts_payload,
             "recent_cashflows": recent_cashflows,
         }
-
-    def sync_transactions_to_ledger(
-        self,
-        *,
-        default_category_id: UUID | None = None,
-    ) -> int:
-        """Convert investment transactions into ledger entries.
-
-        Best-effort: maps to a hidden investment account and offset account to keep
-        double-entry balanced. Skips rows already linked.
-        """
-
-        unsynced = self.tx_repository.list_unsynced(limit=500)
-        if not unsynced:
-            return 0
-
-        investment_account = self._get_or_create_investment_account()
-        offset_account = self._get_or_create_offset_account()
-        txn_service = TransactionService(self.session)
-        created = 0
-
-        for tx in unsynced:
-            amount = Decimal(tx.amount_sek)
-            fee = Decimal(tx.fee_sek or 0)
-            legs = [
-                TransactionLeg(account_id=investment_account.id, amount=amount),
-                TransactionLeg(account_id=offset_account.id, amount=-amount),
-            ]
-            if fee:
-                legs.append(TransactionLeg(account_id=offset_account.id, amount=-fee))
-                legs.append(TransactionLeg(account_id=investment_account.id, amount=fee))
-
-            transaction = Transaction(
-                category_id=default_category_id,
-                transaction_type=TransactionType.INVESTMENT_EVENT,
-                description=tx.description or tx.transaction_type,
-                notes=tx.notes,
-                external_id=f"invtx:{tx.id}",
-                occurred_at=tx.occurred_at,
-                posted_at=tx.occurred_at,
-            )
-            saved = txn_service.create_transaction(transaction, legs)
-            self.tx_repository.mark_linked(str(tx.id), str(saved.id))
-            created += 1
-
-        return created
-
-    def _get_or_create_offset_account(self) -> Account:
-        key = "offset"
-        if key in self._account_cache:
-            return self._account_cache[key]
-        account = self.session.exec(
-            select(Account).where(cast(Any, Account.is_active).is_(False), Account.name == "Offset")
-        ).one_or_none()
-        if account is None:
-            account = Account(
-                name="Offset",
-                account_type=AccountType.NORMAL,
-                is_active=False,
-            )
-            self.session.add(account)
-            self.session.commit()
-            self.session.refresh(account)
-        else:
-            account.name = account.name or "Offset"
-        self._account_cache[key] = account
-        return account
-
-    def _get_or_create_investment_account(self) -> Account:
-        key = "investment"
-        if key in self._account_cache:
-            return self._account_cache[key]
-        account = self.session.exec(
-            select(Account).where(Account.account_type == AccountType.INVESTMENT)
-        ).first()
-        if account is None:
-            account = Account(
-                name="Investments",
-                account_type=AccountType.INVESTMENT,
-                is_active=False,
-            )
-            self.session.add(account)
-            self.session.commit()
-            self.session.refresh(account)
-        else:
-            account.name = account.name or "Investments"
-        self._account_cache[key] = account
-        return account
 
     def _coerce_decimal(self, value: Any) -> Optional[Decimal]:
         if value is None or value == "":

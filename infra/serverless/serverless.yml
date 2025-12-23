@@ -845,15 +845,3 @@ functions:
           path: /investments/overview
           method: GET
           authorizer: cognitoJwt
-
-  syncInvestmentLedger:
-    handler: apps/api/handlers/investments.sync_investment_ledger
-    timeout: 29
-    memorySize: 512
-    layers:
-      - ${self:custom.backendLayerArn}
-    events:
-      - httpApi:
-          path: /investments/sync-ledger
-          method: POST
-          authorizer: cognitoJwt
