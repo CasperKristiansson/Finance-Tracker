@@ -26,10 +26,10 @@ export const Logout: React.FC = () => {
           <Spinner height={32} width={32} color="#2563eb" />
           <div>
             <h1 className="text-lg font-semibold text-gray-800">
-              Logging you out
+              {"Logging you out"}
             </h1>
             <p className="mt-1 text-sm text-gray-500">
-              Clearing session data and returning to sign in.
+              {"Clearing session data and returning to sign in."}
             </p>
           </div>
         </div>

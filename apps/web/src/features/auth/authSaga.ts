@@ -240,16 +240,9 @@ function* handleForceLogout() {
     yield call(() => authService.signOut());
   } catch {
     // Best-effort sign-out for forced logout.
+    console.log("Forced logout: sign-out failed, proceeding anyway.");
   }
-  yield put(logoutSuccess());
-  yield put(resetAccounts());
-  yield put(resetTransactions());
-  yield put(resetReports());
-  yield put(resetWarmup());
-  yield put(setLoading({ key: "logout", isLoading: false }));
-  if (typeof window !== "undefined") {
-    window.location.href = "/login";
-  }
+  window.location.href = "/login";
 }
 
 function* initializeAuth() {
