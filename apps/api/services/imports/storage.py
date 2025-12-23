@@ -20,6 +20,19 @@ IMPORT_FILES_URL_EXPIRES_ENV = "IMPORT_FILES_URL_EXPIRES_SECONDS"
 _DEFAULT_EXPIRES_SECONDS = 900
 
 
+def _resolve_region() -> Optional[str]:
+    return os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION") or "eu-north-1"
+
+
+def _build_s3_client(region: Optional[str] = None) -> BaseClient:
+    resolved_region = region or _resolve_region()
+    return boto3.client(
+        "s3",
+        region_name=resolved_region,
+        endpoint_url=f"https://s3.{resolved_region}.amazonaws.com",
+    )
+
+
 @dataclass(slots=True)
 class ImportFileStorage:
     """Utility for uploading and serving import files from S3."""
@@ -27,9 +40,7 @@ class ImportFileStorage:
     bucket: str
     prefix: str = ""
     url_expires_seconds: int = _DEFAULT_EXPIRES_SECONDS
-    client: BaseClient = field(
-        default_factory=lambda: boto3.client("s3", region_name=_resolve_region())
-    )
+    client: BaseClient = field(default_factory=_build_s3_client)
 
     @classmethod
     def from_env(cls, *, client: Optional[BaseClient] = None) -> "ImportFileStorage":
@@ -51,7 +62,7 @@ class ImportFileStorage:
             bucket=bucket,
             prefix=prefix,
             url_expires_seconds=expires,
-            client=client or boto3.client("s3", region_name=region),
+            client=client or _build_s3_client(region),
         )
 
     def build_object_key(
@@ -91,7 +102,3 @@ __all__ = [
     "IMPORT_FILES_PREFIX_ENV",
     "IMPORT_FILES_URL_EXPIRES_ENV",
 ]
-
-
-def _resolve_region() -> Optional[str]:
-    return os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
