@@ -6,7 +6,6 @@ TF_DIR ?= infra/terraform
 TF_CMD = terraform -chdir=$(TF_DIR)
 AWS_PROFILE ?= Personal
 AWS_REGION  ?= eu-north-1
-ROOT_DOMAIN_NAME ?= casperkristiansson.com
 PYTHON ?= python3
 PYLINTHOME ?= $(CURDIR)/.cache/pylint
 
@@ -59,25 +58,12 @@ deploy: deploy-layer deploy-api
 
 deployWebsite:
 	@set -e; \
-	ROOT_DOMAIN_NAME="$${ROOT_DOMAIN_NAME:-$(ROOT_DOMAIN_NAME)}"; \
-	ACCOUNT_ID="$${ACCOUNT_ID:-$$(aws sts get-caller-identity --profile "$(AWS_PROFILE)" --query Account --output text)}"; \
-	STATIC_SITE_DOMAIN="finance-tracker.$$ROOT_DOMAIN_NAME"; \
-	if [ -z "$(STATIC_SITE_BUCKET)" ]; then \
-		STATIC_SITE_BUCKET="$$(printf '%s' "$$STATIC_SITE_DOMAIN" | tr '.' '-')-$$ACCOUNT_ID"; \
-	else \
-		STATIC_SITE_BUCKET="$(STATIC_SITE_BUCKET)"; \
-	fi; \
-	if [ -z "$(CLOUDFRONT_DISTRIBUTION_ID)" ]; then \
-		CLOUDFRONT_DISTRIBUTION_ID="$$(aws cloudfront list-distributions --profile "$(AWS_PROFILE)" --query "DistributionList.Items[?Aliases.Items && contains(Aliases.Items, '$$STATIC_SITE_DOMAIN')].Id | [0]" --output text)"; \
-	else \
-		CLOUDFRONT_DISTRIBUTION_ID="$(CLOUDFRONT_DISTRIBUTION_ID)"; \
-	fi; \
-	if [ -z "$$STATIC_SITE_BUCKET" ] || [ "$$STATIC_SITE_BUCKET" = "None" ]; then \
-		echo "ERROR: Unable to resolve STATIC_SITE_BUCKET. Set STATIC_SITE_BUCKET manually or check account/ROOT_DOMAIN_NAME."; \
-		exit 1; \
-	fi; \
+	ACCOUNT_ID="$$(aws sts get-caller-identity --profile "$(AWS_PROFILE)" --query Account --output text)"; \
+	STATIC_SITE_DOMAIN="finance-tracker.casperkristiansson.com"; \
+	STATIC_SITE_BUCKET="$$(printf '%s' "$$STATIC_SITE_DOMAIN" | tr '.' '-')-$$ACCOUNT_ID"; \
+	CLOUDFRONT_DISTRIBUTION_ID="$$(aws cloudfront list-distributions --profile "$(AWS_PROFILE)" --query "DistributionList.Items[?Aliases.Items && contains(Aliases.Items, '$$STATIC_SITE_DOMAIN')].Id | [0]" --output text)"; \
 	if [ -z "$$CLOUDFRONT_DISTRIBUTION_ID" ] || [ "$$CLOUDFRONT_DISTRIBUTION_ID" = "None" ]; then \
-		echo "ERROR: Unable to resolve CLOUDFRONT_DISTRIBUTION_ID. Set CLOUDFRONT_DISTRIBUTION_ID manually or check CloudFront alias $$STATIC_SITE_DOMAIN."; \
+		echo "ERROR: Unable to resolve CloudFront distribution for $$STATIC_SITE_DOMAIN."; \
 		exit 1; \
 	fi; \
 	echo "Deploying to s3://$$STATIC_SITE_BUCKET (CloudFront $$CLOUDFRONT_DISTRIBUTION_ID)"; \

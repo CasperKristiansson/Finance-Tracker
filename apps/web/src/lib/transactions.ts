@@ -33,14 +33,13 @@ export const getDisplayTransactionType = (tx: TaxAware): TransactionType => {
 
 export const getTransactionTypeLabel = (tx: TaxAware): string => {
   const eventType = tx.tax_event?.event_type;
-  if (eventType === TaxEventType.REFUND) return "Tax refund";
-  if (eventType === TaxEventType.PAYMENT) return "Tax payment";
   if (eventType) return "Tax";
   const displayType = getDisplayTransactionType(tx);
   return baseTypeLabel[displayType] ?? tx.transaction_type;
 };
 
 export const getTransactionTone = (tx: TaxAware): string => {
+  if (tx.tax_event) return "bg-yellow-100 text-yellow-800";
   const displayType = getDisplayTransactionType(tx);
   return typeTone[displayType];
 };
