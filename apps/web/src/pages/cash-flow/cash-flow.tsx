@@ -29,7 +29,7 @@ import { PageRoutes } from "@/data/routes";
 import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useReportsApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
-import { compactCurrency, currency } from "@/lib/format";
+import { compactCurrency, currency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type {
   CashflowForecastResponse,
@@ -237,7 +237,7 @@ export const CashFlow: React.FC = () => {
 
     if (granularity === "monthly") {
       return monthly.data.map((row) => ({
-        label: new Date(row.period).toLocaleString("sv-SE", { month: "short" }),
+        label: formatDate(row.period, { month: "short", locale: "sv-SE" }),
         ...mapRow(row),
       }));
     }

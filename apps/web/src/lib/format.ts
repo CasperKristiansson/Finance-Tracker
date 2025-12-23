@@ -82,8 +82,18 @@ export type DateFormatOptions = Intl.DateTimeFormatOptions & {
   locale?: string;
 };
 
-const toDate = (value: string | number | Date) =>
-  value instanceof Date ? value : new Date(value);
+const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+const toDate = (value: string | number | Date) => {
+  if (value instanceof Date) return value;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (DATE_ONLY_REGEX.test(trimmed)) {
+      return new Date(`${trimmed}T00:00:00`);
+    }
+  }
+  return new Date(value);
+};
 
 export const formatDate = (
   value: string | number | Date,
