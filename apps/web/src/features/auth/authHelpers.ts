@@ -45,6 +45,14 @@ let lastConfiguredAuth: {
 
 const isBrowser = () => typeof window !== "undefined";
 
+const isPendingApprovalMessage = (message: string): boolean => {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("user_not_approved") ||
+    normalized.includes("pending approval")
+  );
+};
+
 const normalizeCognitoDomain = (
   domain: string | undefined,
   region: string,
@@ -152,11 +160,90 @@ const isUnauthenticatedError = (error: unknown): boolean => {
   if (!(error instanceof Error)) return false;
   const name = "name" in error ? (error as { name?: string }).name : undefined;
   const message = error.message ?? "";
+  if (isPendingApprovalMessage(message)) return false;
   return (
     name === "UserNotAuthenticatedException" ||
     name === "NotAuthorizedException" ||
     message.includes("authenticated")
   );
+};
+
+const safeStringify = (value: unknown): string => {
+  const seen = new WeakSet<object>();
+  try {
+    return (
+      JSON.stringify(value, (_, candidate) => {
+        if (typeof candidate === "object" && candidate !== null) {
+          if (seen.has(candidate)) return undefined;
+          seen.add(candidate);
+        }
+        return candidate;
+      }) ?? ""
+    );
+  } catch {
+    return "";
+  }
+};
+
+const readResponseText = async (value: unknown): Promise<string> => {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (typeof Response !== "undefined" && value instanceof Response) {
+    try {
+      return await value.clone().text();
+    } catch {
+      return "";
+    }
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (typeof record.body === "string") return record.body;
+    if (typeof record.data === "string") return record.data;
+    if (record.body && typeof record.body === "object") {
+      return safeStringify(record.body);
+    }
+    if (record.data && typeof record.data === "object") {
+      return safeStringify(record.data);
+    }
+  }
+  return "";
+};
+
+const isPendingApprovalError = async (error: unknown): Promise<boolean> => {
+  if (error instanceof PendingApprovalError) return true;
+  if (error instanceof Error && isPendingApprovalMessage(error.message)) {
+    return true;
+  }
+  if (typeof error === "string" && isPendingApprovalMessage(error)) {
+    return true;
+  }
+  if (!error || typeof error !== "object") return false;
+
+  const record = error as Record<string, unknown>;
+  if (
+    typeof record.message === "string" &&
+    isPendingApprovalMessage(record.message)
+  ) {
+    return true;
+  }
+  if (
+    typeof record.error === "string" &&
+    isPendingApprovalMessage(record.error)
+  ) {
+    return true;
+  }
+
+  const responseText = await readResponseText(
+    record.response ?? record.body ?? record.data,
+  );
+  if (isPendingApprovalMessage(responseText)) return true;
+
+  if ("cause" in record) {
+    const causeText = await readResponseText(record.cause);
+    if (isPendingApprovalMessage(causeText)) return true;
+  }
+
+  return false;
 };
 
 const toAuthTokens = (
@@ -241,6 +328,12 @@ class AmplifyAuthService {
         ...tokens,
       };
     } catch (error) {
+      if (await isPendingApprovalError(error)) {
+        if (error instanceof PendingApprovalError) {
+          throw error;
+        }
+        throw new PendingApprovalError();
+      }
       if (isUnauthenticatedError(error)) {
         return null;
       }
@@ -279,6 +372,12 @@ class AmplifyAuthService {
     try {
       await amplifyFetchAuthSession();
     } catch (error) {
+      if (await isPendingApprovalError(error)) {
+        if (error instanceof PendingApprovalError) {
+          throw error;
+        }
+        throw new PendingApprovalError();
+      }
       if (!isUnauthenticatedError(error)) {
         throw error;
       }

@@ -35,41 +35,100 @@ const REMEMBER_USERNAME_KEY = "finance-tracker-last-username";
 export const PENDING_APPROVAL_MESSAGE =
   "Your account is pending approval. An admin must approve access before you can sign in.";
 
-const extractErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  if (!error || typeof error !== "object") return "";
-
-  const withMessage = error as {
-    message?: unknown;
-    error?: unknown;
-    cause?: unknown;
-  };
-  if (typeof withMessage.message === "string") return withMessage.message;
-  if (typeof withMessage.error === "string") return withMessage.error;
-  if (typeof withMessage.cause === "string") return withMessage.cause;
-  if (withMessage.cause && typeof withMessage.cause === "object") {
-    const nested = withMessage.cause as { message?: unknown; error?: unknown };
-    if (typeof nested.message === "string") return nested.message;
-    if (typeof nested.error === "string") return nested.error;
-  }
-
+const safeStringify = (value: unknown): string => {
+  const seen = new WeakSet<object>();
   try {
-    return JSON.stringify(error);
+    return (
+      JSON.stringify(value, (_, candidate) => {
+        if (typeof candidate === "object" && candidate !== null) {
+          if (seen.has(candidate)) return undefined;
+          seen.add(candidate);
+        }
+        return candidate;
+      }) ?? ""
+    );
   } catch {
     return "";
   }
 };
 
+const collectErrorStrings = (error: unknown): string[] => {
+  const strings: string[] = [];
+  const queue: Array<{ value: unknown; depth: number }> = [
+    { value: error, depth: 0 },
+  ];
+  const seen = new WeakSet<object>();
+  const maxDepth = 3;
+
+  const addString = (value: unknown) => {
+    if (typeof value !== "string") return;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === "[object Object]") return;
+    strings.push(trimmed);
+  };
+
+  while (queue.length) {
+    const item = queue.shift();
+    if (!item) break;
+    const { value, depth } = item;
+    if (!value) continue;
+
+    if (typeof value === "string") {
+      addString(value);
+      continue;
+    }
+
+    if (value instanceof Error) {
+      addString(value.message);
+      addString(value.name);
+      const cause = (value as { cause?: unknown }).cause;
+      if (cause) {
+        queue.push({ value: cause, depth: depth + 1 });
+      }
+      continue;
+    }
+
+    if (typeof value !== "object") {
+      addString(String(value));
+      continue;
+    }
+
+    if (seen.has(value)) continue;
+    seen.add(value);
+    if (depth >= maxDepth) continue;
+
+    const record = value as Record<string, unknown>;
+    Object.values(record).forEach((child) => {
+      queue.push({ value: child, depth: depth + 1 });
+    });
+  }
+
+  const serialized = safeStringify(error);
+  addString(serialized);
+  addString(String(error));
+
+  return Array.from(new Set(strings));
+};
+
+const extractErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  const candidates = collectErrorStrings(error);
+  return candidates[0] ?? "";
+};
+
 const isPendingApprovalError = (error: unknown): boolean => {
   if (error instanceof PendingApprovalError) return true;
-  const message = extractErrorMessage(error);
-  if (!message) return false;
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes("user_not_approved") ||
-    normalized.includes("pending approval")
-  );
+  const tokens = [
+    "user_not_approved",
+    "pending approval",
+    "userlambdavalidationexception",
+    "pretokengeneration failed",
+  ];
+  return collectErrorStrings(error).some((text) => {
+    const normalized = text.toLowerCase();
+    return tokens.some((token) => normalized.includes(token));
+  });
 };
 
 const persistRememberMe = (remember: boolean, username?: string) => {

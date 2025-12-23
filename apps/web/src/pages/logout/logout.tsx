@@ -7,54 +7,12 @@ import { Spinner } from "@/components/spinner";
 import { PageRoutes } from "@/data/routes";
 import { AuthForceLogout } from "@/features/auth/authSaga";
 
-const clearBrowserStorage = async () => {
-  try {
-    localStorage.clear();
-    sessionStorage.clear();
-  } catch {
-    // Storage access can fail in hardened browser modes.
-  }
-
-  if ("caches" in window) {
-    try {
-      const keys = await caches.keys();
-      await Promise.all(keys.map((key) => caches.delete(key)));
-    } catch {
-      // Cache clearing is best-effort.
-    }
-  }
-
-  if ("indexedDB" in window && "databases" in indexedDB) {
-    try {
-      const databases = await indexedDB.databases();
-      await Promise.all(
-        databases.map(
-          (database) =>
-            new Promise<void>((resolve) => {
-              if (!database.name) {
-                resolve();
-                return;
-              }
-              const request = indexedDB.deleteDatabase(database.name);
-              request.onsuccess = () => resolve();
-              request.onerror = () => resolve();
-              request.onblocked = () => resolve();
-            }),
-        ),
-      );
-    } catch {
-      // IndexedDB clearing is best-effort.
-    }
-  }
-};
-
 export const Logout: React.FC = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
   useEffect(() => {
     dispatch(AuthForceLogout());
-    void clearBrowserStorage();
     const timer = window.setTimeout(
       () => navigate(PageRoutes.login, { replace: true }),
       200,
