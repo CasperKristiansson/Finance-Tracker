@@ -11,33 +11,12 @@ PYLINTHOME ?= $(CURDIR)/.cache/pylint
 
 # Terraform helpers
 
-tf-init:
-	$(TF_CMD) init
-
-tf-plan:
-	$(TF_CMD) plan
-
-tf-apply:
-	$(TF_CMD) apply
-	$(MAKE) tf-write-web-env
-
-tf-destroy:
-	$(TF_CMD) destroy
-
-tf-fmt:
-	$(TF_CMD) fmt -recursive
-
-tf-validate:
-	$(TF_CMD) validate
-
 tf-write-web-env:
 	@$(PYTHON) scripts/write_web_env.py \
 		--tf-dir "$(TF_DIR)" \
 		--env-path "apps/web/.env" \
 		--aws-region "$(AWS_REGION)" \
 		--aws-profile "$(AWS_PROFILE)"
-
-# Toggle public database exposure (for local development)
 
 tf-enable-public-db:
 	$(TF_CMD) apply -var 'enable_public_db_access=true'
@@ -70,6 +49,3 @@ deploy-api:
 	cd infra/serverless && npx serverless deploy
 
 deploy: deploy-layer deploy-api
-
-startdev:
-	npm run dev -w apps/web
