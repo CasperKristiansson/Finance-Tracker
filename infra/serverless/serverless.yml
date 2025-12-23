@@ -116,6 +116,21 @@ functions:
           enabled: true
           description: Monthly export of database tables to S3
 
+  runTransactionsBackup:
+    handler: apps/api/handlers/backups.run_transactions_backup
+    timeout: 300
+    memorySize: 1024
+    layers:
+      - ${self:custom.backendLayerArn}
+    environment:
+      BACKUP_BUCKET_NAME: ${ssm:/finance-tracker/${self:provider.stage}/backups/bucket}
+      BACKUP_PREFIX: finance-tracker/${self:provider.stage}/database-backups
+    events:
+      - httpApi:
+          path: /backups/transactions
+          method: POST
+          authorizer: cognitoJwt
+
   warmDatabase:
     handler: apps/api/handlers/warmup.warm_database
     timeout: 12

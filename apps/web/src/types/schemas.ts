@@ -1230,6 +1230,18 @@ export const settingsResponseSchema = z.object({
   settings: settingsPayloadSchema,
 });
 
+export const backupTableSchema = z.object({
+  table: z.string(),
+  row_count: z.number(),
+  s3_key: z.string(),
+});
+
+export const backupRunResponseSchema = z.object({
+  bucket: z.string(),
+  manifest_key: z.string(),
+  tables: z.array(backupTableSchema),
+});
+
 export const warmupResponseSchema = z.object({
   status: z.enum(["ready", "starting", "error"]),
   message: nullableString,
@@ -1423,6 +1435,7 @@ export type GoalRead = z.infer<typeof goalSchema>;
 export type GoalListResponse = z.infer<typeof goalListSchema>;
 export type GoalCreateRequest = z.infer<typeof goalCreateRequestSchema>;
 export type GoalUpdateRequest = z.infer<typeof goalUpdateRequestSchema>;
+export type BackupRunResponse = z.infer<typeof backupRunResponseSchema>;
 export type SettingsPayload = z.infer<typeof settingsPayloadSchema>;
 export type SettingsResponse = z.infer<typeof settingsResponseSchema>;
 export type WarmupResponse = z.infer<typeof warmupResponseSchema>;

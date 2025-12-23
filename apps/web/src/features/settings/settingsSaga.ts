@@ -4,12 +4,21 @@ import { toast } from "sonner";
 import { TypedSelect } from "@/app/rootSaga";
 import { callApiWithAuth } from "@/features/api/apiSaga";
 import { ApiError } from "@/lib/apiClient";
-import type { SettingsPayload, SettingsResponse } from "@/types/api";
-import { settingsPayloadSchema, settingsResponseSchema } from "@/types/schemas";
+import type {
+  BackupRunResponse,
+  SettingsPayload,
+  SettingsResponse,
+} from "@/types/api";
+import {
+  backupRunResponseSchema,
+  settingsPayloadSchema,
+  settingsResponseSchema,
+} from "@/types/schemas";
 import { selectIsDemo, selectToken } from "../auth/authSlice";
 import {
   SETTINGS_STORAGE_KEY,
   hydrateSettings,
+  setBackingUp,
   selectSettingsState,
   setLastSavedAt,
   setSettingsError,
@@ -20,6 +29,7 @@ import {
 
 export const LoadSettings = createAction("settings/load");
 export const SaveSettings = createAction("settings/save");
+export const RunBackup = createAction("settings/run-backup");
 
 const readCachedSettings = (): Partial<SettingsState> | undefined => {
   if (typeof window === "undefined") return undefined;
@@ -146,7 +156,43 @@ function* handleSaveSettings() {
   }
 }
 
+function* handleRunBackup() {
+  yield put(setBackingUp(true));
+  try {
+    const token: string | undefined = yield* TypedSelect(selectToken);
+    const isDemo: boolean = yield* TypedSelect(selectIsDemo);
+
+    if (!token || isDemo) {
+      toast.error("Backups unavailable", {
+        description: "Sign in with a full account to run backups.",
+      });
+      return;
+    }
+
+    try {
+      yield call(
+        callApiWithAuth<BackupRunResponse>,
+        {
+          path: "/backups/transactions",
+          method: "POST",
+          schema: backupRunResponseSchema,
+        },
+        { loadingKey: "settings", silent: true },
+      );
+      toast.success("Backup created", {
+        description: "Transactions have been backed up for all users.",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error("Could not run backup", { description: message });
+    }
+  } finally {
+    yield put(setBackingUp(false));
+  }
+}
+
 export function* SettingsSaga() {
   yield takeLatest(LoadSettings.type, handleLoadSettings);
   yield takeLatest(SaveSettings.type, handleSaveSettings);
+  yield takeLatest(RunBackup.type, handleRunBackup);
 }

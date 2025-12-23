@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Save } from "lucide-react";
+import { ArchiveRestore, Loader2, Save } from "lucide-react";
 import React, { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -44,9 +44,11 @@ export const Settings: React.FC = () => {
     currencyCode,
     loading,
     saving,
+    backingUp,
     error,
     lastSavedAt,
     saveSettings,
+    runBackup,
     changeFirstName,
     changeLastName,
     changeCurrencyCode,
@@ -188,6 +190,40 @@ export const Settings: React.FC = () => {
               <p className="text-sm text-rose-600 md:col-span-2">{error}</p>
             ) : null}
           </form>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)]">
+        <CardHeader>
+          <CardTitle className="text-sm text-slate-700">Data backups</CardTitle>
+          <p className="text-sm text-slate-500">
+            Create a one-click archive of all transactions across every user.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1 text-sm text-slate-600">
+              <p>Run a fresh backup to secure transaction history.</p>
+              <p className="text-xs text-slate-500">
+                Progress is not shown here, but data is saved to the backup
+                store.
+              </p>
+            </div>
+            <Button
+              type="button"
+              onClick={runBackup}
+              disabled={backingUp}
+              className="gap-2"
+              variant="secondary"
+            >
+              {backingUp ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArchiveRestore className="h-4 w-4" />
+              )}
+              Run transactions backup
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </MotionPage>

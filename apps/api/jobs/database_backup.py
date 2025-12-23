@@ -7,7 +7,7 @@ import json
 import logging
 from datetime import date, datetime, timezone
 from decimal import Decimal
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List, Set
 from uuid import UUID
 
 import boto3
@@ -43,11 +43,13 @@ class DatabaseBackupJob:
         prefix: str,
         s3_client=None,
         now: datetime | None = None,
+        table_names: Iterable[str] | None = None,
     ) -> None:
         self.bucket = bucket
         self.prefix = prefix.strip("/")
         self.now = now or datetime.now(timezone.utc)
         self._s3 = s3_client or boto3.client("s3")
+        self._table_names = set(table_names or [])
 
     @property
     def base_prefix(self) -> str:
@@ -56,14 +58,15 @@ class DatabaseBackupJob:
         parts = [self.prefix, dated_prefix, run_prefix]
         return "/".join(part for part in parts if part)
 
-    def run(self) -> Dict[str, Any]:
-        """Backup every mapped SQLModel table into the configured S3 bucket."""
+    def run(self, table_names: Iterable[str] | None = None) -> Dict[str, Any]:
+        """Backup mapped SQLModel tables into the configured S3 bucket."""
 
         session = get_session()
         manifest: List[Dict[str, Any]] = []
 
         try:
-            for table in SQLModel.metadata.sorted_tables:
+            tables = self._select_tables(table_names)
+            for table in tables:
                 key = self._table_key(table.name)
                 rows = self._fetch_table_rows(session, table)
                 self._upload_json(key, rows)
@@ -110,6 +113,25 @@ class DatabaseBackupJob:
 
     def _table_key(self, table_name: str) -> str:
         return f"{self.base_prefix}/{table_name}.json"
+
+    def _select_tables(self, override_names: Iterable[str] | None) -> List[Table]:
+        requested: Set[str] | None = None
+        if override_names is not None:
+            requested = set(override_names)
+        elif self._table_names:
+            requested = set(self._table_names)
+
+        tables = list(SQLModel.metadata.sorted_tables)
+        if not requested:
+            return tables
+
+        filtered = [table for table in tables if table.name in requested]
+        missing = requested - {table.name for table in filtered}
+        if missing:
+            logger.warning(
+                "Skipping unknown tables in backup request: %s", ", ".join(sorted(missing))
+            )
+        return filtered
 
 
 __all__ = ["DatabaseBackupJob"]

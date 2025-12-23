@@ -6,6 +6,7 @@ export interface SettingsState {
   currencyCode?: string;
   loading: boolean;
   saving: boolean;
+  backingUp: boolean;
   error?: string;
   lastSavedAt?: string;
 }
@@ -32,6 +33,7 @@ const initialState: SettingsState = {
   currencyCode: cachedSettings?.currencyCode,
   loading: false,
   saving: false,
+  backingUp: false,
   error: undefined,
   lastSavedAt: cachedSettings?.lastSavedAt,
 };
@@ -56,6 +58,9 @@ const settingsSlice = createSlice({
     },
     setSettingsSaving(state, action: PayloadAction<boolean>) {
       state.saving = action.payload;
+    },
+    setBackingUp(state, action: PayloadAction<boolean>) {
+      state.backingUp = action.payload;
     },
     setSettingsError(state, action: PayloadAction<string | undefined>) {
       state.error = action.payload;
@@ -82,6 +87,7 @@ const settingsSlice = createSlice({
     selectSettingsError: (state) => state.error,
     selectSettingsLastSavedAt: (state) => state.lastSavedAt,
     selectCurrencyCode: (state) => state.currencyCode,
+    selectBackingUp: (state) => state.backingUp,
   },
 });
 
@@ -89,6 +95,7 @@ export const {
   hydrateSettings,
   setSettingsLoading,
   setSettingsSaving,
+  setBackingUp,
   setSettingsError,
   setLastSavedAt,
   setFirstName,
@@ -105,6 +112,7 @@ export const {
   selectSettingsError,
   selectSettingsLastSavedAt,
   selectCurrencyCode,
+  selectBackingUp,
 } = settingsSlice.selectors;
 
 export const SettingsReducer = settingsSlice.reducer;

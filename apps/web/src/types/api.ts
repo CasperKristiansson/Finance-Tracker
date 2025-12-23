@@ -72,6 +72,7 @@ export type {
   NetWorthProjectionPoint,
   NetWorthProjectionResponse,
   QuarterlyReportEntry,
+  BackupRunResponse,
   SettingsPayload,
   SettingsResponse,
   SubscriptionListResponse,

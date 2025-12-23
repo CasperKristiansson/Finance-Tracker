@@ -3,6 +3,7 @@
 from .accounts import create_account, list_accounts, reconcile_account
 from .accounts import reset_handler_state as reset_account_handler_state
 from .accounts import update_account
+from .backups import run_transactions_backup
 from .budgets import (
     create_budget,
     delete_budget,
@@ -129,6 +130,7 @@ __all__ = [
     "attach_subscription",
     "detach_subscription",
     "list_subscription_summaries",
+    "run_transactions_backup",
     "reset_account_handler_state",
     "reset_category_handler_state",
     "reset_loan_handler_state",

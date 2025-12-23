@@ -98,7 +98,11 @@ import {
   selectYearlyReport,
   type ReportFilters,
 } from "@/features/reports/reportsSlice";
-import { LoadSettings, SaveSettings } from "@/features/settings/settingsSaga";
+import {
+  LoadSettings,
+  RunBackup,
+  SaveSettings,
+} from "@/features/settings/settingsSaga";
 import {
   selectFirstName,
   selectLastName,
@@ -108,6 +112,7 @@ import {
   selectSettingsSaving,
   selectSettingsState,
   selectCurrencyCode,
+  selectBackingUp,
   setFirstName,
   setLastName,
   setCurrencyCode,
@@ -545,6 +550,7 @@ export const useSettings = () => {
   const currencyCode = useAppSelector(selectCurrencyCode);
   const loading = useAppSelector(selectSettingsLoading);
   const saving = useAppSelector(selectSettingsSaving);
+  const backingUp = useAppSelector(selectBackingUp);
   const error = useAppSelector(selectSettingsError);
   const lastSavedAt = useAppSelector(selectSettingsLastSavedAt);
 
@@ -571,6 +577,10 @@ export const useSettings = () => {
     [dispatch],
   );
 
+  const runBackup = useCallback(() => {
+    dispatch(RunBackup());
+  }, [dispatch]);
+
   return {
     ...state,
     firstName,
@@ -578,10 +588,12 @@ export const useSettings = () => {
     currencyCode,
     loading,
     saving,
+    backingUp,
     error,
     lastSavedAt,
     loadSettings,
     saveSettings,
+    runBackup,
     changeFirstName,
     changeLastName,
     changeCurrencyCode,
