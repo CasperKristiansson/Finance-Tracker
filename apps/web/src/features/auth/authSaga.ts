@@ -35,11 +35,42 @@ const REMEMBER_USERNAME_KEY = "finance-tracker-last-username";
 export const PENDING_APPROVAL_MESSAGE =
   "Your account is pending approval. An admin must approve access before you can sign in.";
 
-const isPendingApprovalError = (error: unknown): boolean =>
-  error instanceof PendingApprovalError ||
-  (error instanceof Error &&
-    (error.message?.includes("USER_NOT_APPROVED") ||
-      error.message?.includes("pending approval")));
+const extractErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  if (!error || typeof error !== "object") return "";
+
+  const withMessage = error as {
+    message?: unknown;
+    error?: unknown;
+    cause?: unknown;
+  };
+  if (typeof withMessage.message === "string") return withMessage.message;
+  if (typeof withMessage.error === "string") return withMessage.error;
+  if (typeof withMessage.cause === "string") return withMessage.cause;
+  if (withMessage.cause && typeof withMessage.cause === "object") {
+    const nested = withMessage.cause as { message?: unknown; error?: unknown };
+    if (typeof nested.message === "string") return nested.message;
+    if (typeof nested.error === "string") return nested.error;
+  }
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "";
+  }
+};
+
+const isPendingApprovalError = (error: unknown): boolean => {
+  if (error instanceof PendingApprovalError) return true;
+  const message = extractErrorMessage(error);
+  if (!message) return false;
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("user_not_approved") ||
+    normalized.includes("pending approval")
+  );
+};
 
 const persistRememberMe = (remember: boolean, username?: string) => {
   if (remember) {
@@ -93,7 +124,7 @@ function* handleLoginWithGoogle() {
     }
 
     const message =
-      error instanceof Error ? error.message : "Failed to start Google sign-in";
+      extractErrorMessage(error) || "Failed to start Google sign-in";
     const alreadySignedIn = message.toLowerCase().includes("signed in user");
 
     if (alreadySignedIn) {

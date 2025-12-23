@@ -133,7 +133,7 @@ functions:
 
   warmDatabase:
     handler: apps/api/handlers/warmup.warm_database
-    timeout: 12
+    timeout: 29
     memorySize: 256
     layers:
       - ${self:custom.backendLayerArn}
