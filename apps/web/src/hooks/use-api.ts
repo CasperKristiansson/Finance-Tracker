@@ -59,13 +59,11 @@ import {
 } from "@/features/imports/importsSlice";
 import {
   FetchInvestmentTransactions,
-  FetchInvestmentMetrics,
   FetchInvestmentOverview,
 } from "@/features/investments/investmentsSaga";
 import {
   selectInvestmentsState,
   selectInvestmentTransactions,
-  selectInvestmentMetrics,
   selectInvestmentOverview,
 } from "@/features/investments/investmentsSlice";
 import {
@@ -302,16 +300,10 @@ export const useInvestmentsApi = () => {
   const dispatch = useAppDispatch();
   const state = useAppSelector(selectInvestmentsState);
   const transactions = useAppSelector(selectInvestmentTransactions);
-  const metrics = useAppSelector(selectInvestmentMetrics);
   const overview = useAppSelector(selectInvestmentOverview);
 
   const fetchTransactions = useCallback(
     () => dispatch(FetchInvestmentTransactions()),
-    [dispatch],
-  );
-
-  const fetchMetrics = useCallback(
-    () => dispatch(FetchInvestmentMetrics()),
     [dispatch],
   );
 
@@ -323,10 +315,8 @@ export const useInvestmentsApi = () => {
   return {
     ...state,
     transactions,
-    metrics,
     overview,
     fetchTransactions,
-    fetchMetrics,
     fetchOverview,
   };
 };

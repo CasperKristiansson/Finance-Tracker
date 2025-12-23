@@ -1,13 +1,11 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type {
   InvestmentTransactionRead,
-  InvestmentMetricsResponse,
   InvestmentOverviewResponse,
 } from "@/types/api";
 
 export interface InvestmentsState {
   transactions: InvestmentTransactionRead[];
-  metrics?: InvestmentMetricsResponse["performance"];
   overview?: InvestmentOverviewResponse;
   loading: boolean;
   error?: string;
@@ -27,14 +25,6 @@ const investmentsSlice = createSlice({
       state.transactions = action.payload;
       state.error = undefined;
     },
-    setMetrics(
-      state,
-      action: PayloadAction<
-        InvestmentMetricsResponse["performance"] | undefined
-      >,
-    ) {
-      state.metrics = action.payload;
-    },
     setOverview(state, action: PayloadAction<InvestmentOverviewResponse>) {
       state.overview = action.payload;
       state.error = undefined;
@@ -49,7 +39,6 @@ const investmentsSlice = createSlice({
   selectors: {
     selectInvestmentsState: (state) => state,
     selectInvestmentTransactions: (state) => state.transactions,
-    selectInvestmentMetrics: (state) => state.metrics,
     selectInvestmentOverview: (state) => state.overview,
     selectInvestmentsLoading: (state) => state.loading,
     selectInvestmentsError: (state) => state.error,
@@ -58,7 +47,6 @@ const investmentsSlice = createSlice({
 
 export const {
   setTransactions,
-  setMetrics,
   setOverview,
   setInvestmentsLoading,
   setInvestmentsError,
@@ -67,7 +55,6 @@ export const {
 export const {
   selectInvestmentsState,
   selectInvestmentTransactions,
-  selectInvestmentMetrics,
   selectInvestmentOverview,
   selectInvestmentsLoading,
   selectInvestmentsError,

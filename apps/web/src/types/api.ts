@@ -49,8 +49,6 @@ export type {
   TaxTotalSummaryResponse,
   InvestmentHoldingRead,
   InvestmentOverviewResponse,
-  InvestmentMetricsResponse,
-  InvestmentPerformance,
   InvestmentPortfolioOverview,
   InvestmentAccountOverview,
   InvestmentCashflowEvent,

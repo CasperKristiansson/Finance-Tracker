@@ -8,15 +8,6 @@ def test_list_investment_transactions(api_call, json_body) -> None:
     assert "transactions" in body
 
 
-def test_investment_metrics(api_call, json_body) -> None:
-    resp = api_call("GET", "/investments/metrics")
-    assert resp["statusCode"] == 200
-    body = json_body(resp)
-    assert "performance" in body
-    assert "holdings" in body
-    assert "snapshots" in body
-
-
 def test_sync_investment_ledger(api_call, json_body) -> None:
     resp = api_call("POST", "/investments/sync-ledger", {})
     assert resp["statusCode"] == 200

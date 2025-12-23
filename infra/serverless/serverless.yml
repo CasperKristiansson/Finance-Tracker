@@ -834,18 +834,6 @@ functions:
           method: GET
           authorizer: cognitoJwt
 
-  investmentMetrics:
-    handler: apps/api/handlers/investments.investment_metrics
-    timeout: 29
-    memorySize: 512
-    layers:
-      - ${self:custom.backendLayerArn}
-    events:
-      - httpApi:
-          path: /investments/metrics
-          method: GET
-          authorizer: cognitoJwt
-
   investmentOverview:
     handler: apps/api/handlers/investments.investment_overview
     timeout: 29

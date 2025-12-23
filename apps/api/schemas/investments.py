@@ -4,49 +4,10 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Literal, Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
-
-
-class NordnetSnapshotRead(BaseModel):
-    """Representation of a persisted snapshot."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
-    provider: str
-    report_type: Optional[str] = None
-    account_name: Optional[str] = None
-    snapshot_date: date
-    portfolio_value: Optional[Decimal] = None
-    raw_text: str
-    parsed_payload: dict[str, Any]
-    cleaned_payload: Optional[dict[str, Any]] = None
-    bedrock_metadata: Optional[dict[str, Any]] = None
-    created_at: datetime
-    updated_at: datetime
-    holdings: Optional[list["InvestmentHoldingRead"]] = None
-
-
-class InvestmentHoldingRead(BaseModel):
-    """Holding row from a snapshot."""
-
-    model_config = ConfigDict(from_attributes=True)
-
-    id: UUID
-    snapshot_id: UUID
-    snapshot_date: date
-    account_name: Optional[str] = None
-    name: str
-    isin: Optional[str] = None
-    holding_type: Optional[str] = None
-    currency: Optional[str] = None
-    quantity: Optional[Decimal] = None
-    price: Optional[Decimal] = None
-    value_sek: Optional[Decimal] = None
-    notes: Optional[str] = None
 
 
 class InvestmentTransactionRead(BaseModel):
@@ -72,39 +33,6 @@ class InvestmentTransactionRead(BaseModel):
 class InvestmentTransactionListResponse(BaseModel):
     """Response for listing investment transactions."""
 
-    transactions: list[InvestmentTransactionRead]
-
-
-class InvestmentPerformanceRead(BaseModel):
-    """Aggregated performance metrics."""
-
-    total_value: Decimal
-    invested: Decimal
-    realized_pl: Decimal
-    unrealized_pl: Decimal
-    twr: Optional[float] = None
-    irr: Optional[float] = None
-    as_of: date
-    benchmarks: list["BenchmarkRead"] = Field(default_factory=list)
-
-
-class BenchmarkRead(BaseModel):
-    """Benchmark comparison."""
-
-    symbol: str
-    change_pct: Optional[float] = None
-    series: list[tuple[str, float]] = Field(
-        default_factory=list,
-        description="List of (date, close) tuples",
-    )
-
-
-class InvestmentMetricsResponse(BaseModel):
-    """Performance payload with holdings and totals."""
-
-    performance: InvestmentPerformanceRead
-    holdings: list[InvestmentHoldingRead]
-    snapshots: list[NordnetSnapshotRead]
     transactions: list[InvestmentTransactionRead]
 
 
@@ -201,13 +129,8 @@ class InvestmentOverviewResponse(BaseModel):
 
 
 __all__ = [
-    "NordnetSnapshotRead",
-    "InvestmentHoldingRead",
     "InvestmentTransactionRead",
     "InvestmentTransactionListResponse",
-    "InvestmentPerformanceRead",
-    "BenchmarkRead",
-    "InvestmentMetricsResponse",
     "InvestmentValuePointRead",
     "InvestmentCashflowPointRead",
     "InvestmentCashflowSummaryRead",

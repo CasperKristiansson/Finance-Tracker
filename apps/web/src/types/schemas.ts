@@ -1109,30 +1109,6 @@ export const investmentTransactionListSchema = z.object({
   transactions: z.array(investmentTransactionSchema),
 });
 
-const benchmarkSchema = z.object({
-  symbol: z.string(),
-  change_pct: nullableNumeric,
-  series: z.array(z.tuple([z.string(), z.number()])).default([]),
-});
-
-export const investmentPerformanceSchema = z.object({
-  total_value: money,
-  invested: money,
-  realized_pl: money,
-  unrealized_pl: money,
-  twr: nullableNumeric,
-  irr: nullableNumeric,
-  as_of: dateString,
-  benchmarks: z.array(benchmarkSchema).default([]),
-});
-
-export const investmentMetricsResponseSchema = z.object({
-  performance: investmentPerformanceSchema,
-  snapshots: z.array(investmentSnapshotSchema).default([]),
-  holdings: z.array(investmentHoldingSchema).default([]),
-  transactions: z.array(investmentTransactionSchema).default([]),
-});
-
 export const investmentValuePointSchema = z.object({
   date: dateString,
   value: money,
@@ -1421,10 +1397,6 @@ export type InvestmentTransactionRead = z.infer<
 >;
 export type InvestmentTransactionListResponse = z.infer<
   typeof investmentTransactionListSchema
->;
-export type InvestmentPerformance = z.infer<typeof investmentPerformanceSchema>;
-export type InvestmentMetricsResponse = z.infer<
-  typeof investmentMetricsResponseSchema
 >;
 export type InvestmentValuePoint = z.infer<typeof investmentValuePointSchema>;
 export type InvestmentCashflowSummary = z.infer<

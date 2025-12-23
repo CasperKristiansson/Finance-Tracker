@@ -4,9 +4,6 @@
 
 from __future__ import annotations
 
-import json
-import urllib.error
-import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Optional, cast
@@ -619,54 +616,6 @@ class InvestmentSnapshotService:
             "accounts": accounts_payload,
             "recent_cashflows": recent_cashflows,
         }
-
-    def benchmark_change_pct(
-        self, symbol: str, start_date: date, end_date: date, return_series: bool = False
-    ) -> tuple[Optional[float], Optional[list[tuple[str, float]]]]:
-        """Fetch benchmark percentage change (and optional series) from Yahoo."""
-        try:
-            delta_days = max(1, (end_date - start_date).days)
-            range_param = "1mo"
-            if delta_days > 365:
-                range_param = "2y"
-            elif delta_days > 180:
-                range_param = "1y"
-            elif delta_days > 90:
-                range_param = "6mo"
-            elif delta_days > 30:
-                range_param = "3mo"
-
-            url = (
-                f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-                f"?range={range_param}&interval=1d"
-            )
-            with urllib.request.urlopen(url, timeout=5) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-            result = (
-                data.get("chart", {})
-                .get("result", [{}])[0]
-                .get("indicators", {})
-                .get("quote", [{}])[0]
-                .get("close", [])
-            )
-            timestamps = data.get("chart", {}).get("result", [{}])[0].get("timestamp", []) or []
-            closes = [v for v in result if isinstance(v, (int, float))]
-            if len(closes) < 2:
-                return None, None
-            # Align to date range
-            series: list[tuple[str, float]] = []
-            for ts, close in zip(timestamps, closes):
-                dt = datetime.utcfromtimestamp(ts).date()
-                if dt < start_date or dt > end_date:
-                    continue
-                series.append((dt.isoformat(), float(close)))
-            start_price, end_price = closes[0], closes[-1]
-            if start_price == 0:
-                return None, series if return_series else None
-            change = float((end_price - start_price) / start_price)
-            return (change, series) if return_series else (change, None)
-        except Exception:
-            return (None, None)
 
     def sync_transactions_to_ledger(
         self,
