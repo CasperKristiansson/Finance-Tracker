@@ -90,6 +90,31 @@ const formatDelta = (value: number) => {
   return `${sign}${currency(Math.abs(value))}`;
 };
 
+const MONTH_LABELS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+const parsePeriodDate = (period: string) => {
+  const normalized = period.includes("T") ? period : `${period}T00:00:00`;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
+const getPeriodYear = (period: string) => parsePeriodDate(period).getFullYear();
+const getPeriodMonthIndex = (period: string) =>
+  parsePeriodDate(period).getMonth();
+
 const renderAccountIcon = (icon: string | null | undefined, name: string) => {
   if (icon?.startsWith("lucide:")) {
     const key = icon.slice("lucide:".length);
@@ -312,7 +337,7 @@ export const Dashboard: React.FC = () => {
       ? filteredMonthly
       : monthly.data || [];
     const ytd = ytdSrc.filter(
-      (entry) => new Date(entry.period).getFullYear() === currentYear,
+      (entry) => getPeriodYear(entry.period) === currentYear,
     );
     const ytdIncome = ytd.reduce((sum, entry) => sum + Number(entry.income), 0);
     const ytdExpense = ytd.reduce(
@@ -351,7 +376,6 @@ export const Dashboard: React.FC = () => {
 
   const incomeExpenseChart = useMemo(() => {
     const src = filteredMonthly.length ? filteredMonthly : monthly.data || [];
-    const year = src.length ? new Date(src[0].period).getFullYear() : undefined;
     const byMonth = new Map<
       number,
       {
@@ -361,18 +385,16 @@ export const Dashboard: React.FC = () => {
     >();
 
     src.forEach((entry) => {
-      const date = new Date(entry.period);
-      byMonth.set(date.getMonth(), {
+      byMonth.set(getPeriodMonthIndex(entry.period), {
         income: Number(entry.income),
         expense: Number(entry.expense),
       });
     });
 
     return Array.from({ length: 12 }, (_, monthIndex) => {
-      const month = new Date(year ?? new Date().getFullYear(), monthIndex, 1);
       const entry = byMonth.get(monthIndex);
       return {
-        month: month.toLocaleString("en-US", { month: "short" }),
+        month: MONTH_LABELS[monthIndex] ?? "",
         monthIndex,
         income: entry?.income ?? null,
         expense: entry?.expense ?? null,
@@ -409,10 +431,9 @@ export const Dashboard: React.FC = () => {
       const expense = Number(entry.expense);
       const rate =
         income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
+      const monthIndex = getPeriodMonthIndex(entry.period);
       return {
-        month: new Date(entry.period).toLocaleString("en-US", {
-          month: "short",
-        }),
+        month: MONTH_LABELS[monthIndex] ?? "",
         rate,
       };
     });
@@ -423,7 +444,7 @@ export const Dashboard: React.FC = () => {
     return points.map((point) => ({
       date: point.period,
       net: Number(point.net_worth),
-      year: new Date(point.period).getFullYear(),
+      year: getPeriodYear(point.period),
     }));
   }, [netWorth.data]);
 
@@ -463,7 +484,9 @@ export const Dashboard: React.FC = () => {
     }
 
     const sorted = entries.sort(
-      (a, b) => new Date(a.period).getTime() - new Date(b.period).getTime(),
+      (a, b) =>
+        parsePeriodDate(a.period).getTime() -
+        parsePeriodDate(b.period).getTime(),
     );
 
     const avgBurn =
@@ -487,10 +510,9 @@ export const Dashboard: React.FC = () => {
     let running = 0;
     const sparkline = sorted.slice(-6).map((entry) => {
       running += Number(entry.income) - Number(entry.expense);
+      const monthIndex = getPeriodMonthIndex(entry.period);
       return {
-        month: new Date(entry.period).toLocaleString("en-US", {
-          month: "short",
-        }),
+        month: MONTH_LABELS[monthIndex] ?? "",
         balance: running,
       };
     });
