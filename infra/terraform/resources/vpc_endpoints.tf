@@ -23,6 +23,21 @@ resource "aws_vpc_endpoint" "s3_gateway" {
           aws_s3_bucket.database_backups.arn,
           "${aws_s3_bucket.database_backups.arn}/*",
         ]
+      },
+      {
+        Sid       = "AllowImportFilesBucketAccess"
+        Effect    = "Allow"
+        Principal = "*"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:AbortMultipartUpload",
+          "s3:ListBucket",
+        ]
+        Resource = [
+          aws_s3_bucket.import_files.arn,
+          "${aws_s3_bucket.import_files.arn}/*",
+        ]
       }
     ]
   })
