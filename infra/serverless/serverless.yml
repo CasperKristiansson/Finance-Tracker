@@ -513,6 +513,30 @@ functions:
           method: POST
           authorizer: cognitoJwt
 
+  updateTransaction:
+    handler: apps/api/handlers/transactions.update_transaction
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /transactions/{transactionId}
+          method: PATCH
+          authorizer: cognitoJwt
+
+  deleteTransaction:
+    handler: apps/api/handlers/transactions.delete_transaction
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /transactions/{transactionId}
+          method: DELETE
+          authorizer: cognitoJwt
+
   listTaxEvents:
     handler: apps/api/handlers/tax.list_tax_events
     timeout: 29
