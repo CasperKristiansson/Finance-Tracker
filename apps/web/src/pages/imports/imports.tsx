@@ -72,7 +72,11 @@ import type {
   TaxEventType,
   TransactionRead,
 } from "@/types/api";
-import { TaxEventType as TaxEventTypeEnum, TransactionType } from "@/types/api";
+import {
+  CategoryType,
+  TaxEventType as TaxEventTypeEnum,
+  TransactionType,
+} from "@/types/api";
 import {
   ReimbursementDialog,
   type ReimbursementDialogState,
@@ -122,8 +126,19 @@ const inferTaxEventType = (amount: string | null | undefined): TaxEventType => {
   return numeric > 0 ? TaxEventTypeEnum.REFUND : TaxEventTypeEnum.PAYMENT;
 };
 
+const getCategoriesForAmount = (
+  categories: CategoryRead[],
+  amount: string | null | undefined,
+) => {
+  const numeric = Number(amount ?? "");
+  if (!Number.isFinite(numeric) || numeric === 0) return categories;
+  const desired = numeric < 0 ? CategoryType.EXPENSE : CategoryType.INCOME;
+  return categories.filter((category) => category.category_type === desired);
+};
+
 type CategoryPickerProps = {
   value: string | null | undefined;
+  selectedCategory?: CategoryRead | null;
   categories: CategoryRead[];
   disabled?: boolean;
   missing?: boolean;
@@ -133,13 +148,16 @@ type CategoryPickerProps = {
 
 const CategoryPicker: React.FC<CategoryPickerProps> = ({
   value,
+  selectedCategory,
   categories,
   disabled,
   missing,
   suggesting,
   onChange,
 }) => {
-  const selected = value ? categories.find((cat) => cat.id === value) : null;
+  const selected =
+    selectedCategory ??
+    (value ? categories.find((cat) => cat.id === value) : null);
   const label = selected?.name ?? (suggesting ? "Suggesting…" : "No category");
 
   return (
@@ -1743,6 +1761,10 @@ export const Imports: React.FC = () => {
                               const currentCategoryId =
                                 commitForm.watch(`rows.${idx}.category_id`) ??
                                 null;
+                              const rowCategories = getCategoriesForAmount(
+                                categories,
+                                amountValue,
+                              );
                               const taxEventType =
                                 commitForm.watch(
                                   `rows.${idx}.tax_event_type`,
@@ -1938,11 +1960,18 @@ export const Imports: React.FC = () => {
                                     <div className="space-y-1">
                                       <CategoryPicker
                                         value={currentCategoryId}
-                                        categories={categories}
+                                        selectedCategory={
+                                          currentCategoryId
+                                            ? (categoriesById.get(
+                                                currentCategoryId,
+                                              ) ?? null)
+                                            : null
+                                        }
+                                        categories={rowCategories}
                                         disabled={Boolean(
                                           taxEventType ||
-                                            transferAccountId ||
-                                            isDeleted,
+                                          transferAccountId ||
+                                          isDeleted,
                                         )}
                                         missing={isMissingCategory}
                                         suggesting={
