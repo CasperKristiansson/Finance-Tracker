@@ -1,17 +1,26 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { X, Plus, Trash2 } from "lucide-react";
-import React, { useEffect } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { ChevronDown, Plus, Trash2, X } from "lucide-react";
+import React, { useEffect, useMemo } from "react";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   useAccountsApi,
   useCategoriesApi,
   useTransactionsApi,
 } from "@/hooks/use-api";
+import { renderCategoryIcon } from "@/lib/category-icons";
 import { currency } from "@/lib/format";
+import { taxAdjustedAmountHint } from "@/lib/transactions";
 import { cn } from "@/lib/utils";
-import type { TransactionRead } from "@/types/api";
+import { CategoryType, type TransactionRead } from "@/types/api";
 
 const legSchema = z.object({
   account_id: z.string().min(1, "Pick an account"),
@@ -67,6 +76,7 @@ export const TransactionModal: React.FC<{
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
@@ -87,6 +97,23 @@ export const TransactionModal: React.FC<{
     control,
     name: "legs",
   });
+
+  const selectedCategoryId = useWatch({ control, name: "category_id" });
+  const selectedCategory = useMemo(
+    () => categories.find((cat) => cat.id === selectedCategoryId) ?? null,
+    [categories, selectedCategoryId],
+  );
+  const categoryAmountHint = useMemo(
+    () => (transaction ? taxAdjustedAmountHint(transaction) : null),
+    [transaction],
+  );
+  const visibleCategories = useMemo(() => {
+    if (!transaction) return categories;
+    if (!categoryAmountHint) return categories;
+    const desiredType =
+      categoryAmountHint < 0 ? CategoryType.EXPENSE : CategoryType.INCOME;
+    return categories.filter((cat) => cat.category_type === desiredType);
+  }, [categories, categoryAmountHint, transaction]);
 
   useEffect(() => {
     if (open) {
@@ -236,17 +263,103 @@ export const TransactionModal: React.FC<{
             <div className="grid grid-cols-2 gap-3">
               <label className="flex flex-col gap-1 text-sm text-slate-700">
                 Category
-                <select
-                  className="rounded border border-slate-200 px-3 py-2"
-                  {...register("category_id")}
-                >
-                  <option value="">Unassigned</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
+                <input type="hidden" {...register("category_id")} />
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between rounded border border-slate-200 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-slate-300"
+                    >
+                      <span className="flex items-center gap-2">
+                        {selectedCategory ? (
+                          <>
+                            <span
+                              className={cn(
+                                "flex h-6 w-6 items-center justify-center rounded-full border",
+                                selectedCategory.color_hex
+                                  ? "border-transparent text-white"
+                                  : "border-slate-200 bg-slate-100 text-slate-700",
+                              )}
+                              style={
+                                selectedCategory.color_hex
+                                  ? {
+                                      backgroundColor:
+                                        selectedCategory.color_hex,
+                                    }
+                                  : undefined
+                              }
+                            >
+                              {renderCategoryIcon(
+                                selectedCategory.icon,
+                                selectedCategory.name,
+                                selectedCategory.color_hex
+                                  ? "h-4 w-4 text-white"
+                                  : "h-4 w-4 text-slate-700",
+                              )}
+                            </span>
+                            <span>{selectedCategory.name}</span>
+                          </>
+                        ) : (
+                          <span className="text-slate-500">Unassigned</span>
+                        )}
+                      </span>
+                      <ChevronDown className="h-4 w-4 text-slate-500" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-64">
+                    <DropdownMenuItem
+                      onSelect={() =>
+                        setValue("category_id", "", {
+                          shouldDirty: true,
+                          shouldValidate: true,
+                        })
+                      }
+                    >
+                      <span className="text-slate-500">Unassigned</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    {visibleCategories.length ? (
+                      visibleCategories.map((cat) => (
+                        <DropdownMenuItem
+                          key={cat.id}
+                          onSelect={() =>
+                            setValue("category_id", cat.id, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                          }
+                        >
+                          <span
+                            className={cn(
+                              "flex h-6 w-6 items-center justify-center rounded-full border",
+                              cat.color_hex
+                                ? "border-transparent text-white"
+                                : "border-slate-200 bg-slate-100 text-slate-700",
+                            )}
+                            style={
+                              cat.color_hex
+                                ? { backgroundColor: cat.color_hex }
+                                : undefined
+                            }
+                          >
+                            {renderCategoryIcon(
+                              cat.icon,
+                              cat.name,
+                              cat.color_hex
+                                ? "h-4 w-4 text-white"
+                                : "h-4 w-4 text-slate-700",
+                            )}
+                          </span>
+                          <span>{cat.name}</span>
+                        </DropdownMenuItem>
+                      ))
+                    ) : (
+                      <DropdownMenuItem disabled>
+                        No matching categories
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </label>
             </div>
           </div>
