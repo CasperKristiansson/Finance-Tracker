@@ -421,15 +421,13 @@ export const Imports: React.FC = () => {
       fetchTransferTransactions({
         limit: transferTransactionsPagination.limit,
         offset: 0,
-        search: transferSearch.trim() || undefined,
-        accountIds: transferAccountFilter ? [transferAccountFilter] : undefined,
-        categoryIds: transferCategoryFilter
-          ? [transferCategoryFilter]
-          : undefined,
-        startDate: transferStartDate || undefined,
-        endDate: transferEndDate || undefined,
-        minAmount: transferMinAmount || undefined,
-        maxAmount: transferMaxAmount || undefined,
+        search: transferSearch.trim(),
+        accountIds: transferAccountFilter ? [transferAccountFilter] : [],
+        categoryIds: transferCategoryFilter ? [transferCategoryFilter] : [],
+        startDate: transferStartDate,
+        endDate: transferEndDate,
+        minAmount: transferMinAmount,
+        maxAmount: transferMaxAmount,
         sortBy: "occurred_at",
         sortDir: "desc",
       });
@@ -1141,6 +1139,9 @@ export const Imports: React.FC = () => {
   const [transferDraftValue, setTransferDraftValue] = useState<string | null>(
     null,
   );
+  const [transferDraftSelectionKey, setTransferDraftSelectionKey] = useState<
+    string | null
+  >(null);
 
   const handleOpenTransferDialog = (
     row: ImportPreviewResponse["rows"][number],
@@ -1158,6 +1159,7 @@ export const Imports: React.FC = () => {
       existingOptions,
     });
     setTransferDraftValue(currentValue);
+    setTransferDraftSelectionKey(null);
     setTransferSearch("");
     setTransferStartDate("");
     setTransferEndDate("");
@@ -1188,6 +1190,7 @@ export const Imports: React.FC = () => {
     }
     setTransferDialogOpen(false);
     setTransferDialogState(null);
+    setTransferDraftSelectionKey(null);
   };
 
   const handleOpenReimbursementDialog = (
@@ -2415,6 +2418,7 @@ export const Imports: React.FC = () => {
           if (!open) {
             setTransferDialogState(null);
             setTransferDraftValue(null);
+            setTransferDraftSelectionKey(null);
             setTransferSearch("");
             setTransferStartDate("");
             setTransferEndDate("");
@@ -2488,15 +2492,16 @@ export const Imports: React.FC = () => {
                                 (acc) => acc.id === option.accountId,
                               );
                               const selected =
-                                transferDraftValue === option.accountId;
+                                transferDraftSelectionKey === option.key;
                               return (
                                 <TableRow
                                   key={option.key}
                                   className="cursor-pointer"
                                   data-state={selected ? "selected" : undefined}
-                                  onClick={() =>
-                                    setTransferDraftValue(option.accountId)
-                                  }
+                                  onClick={() => {
+                                    setTransferDraftSelectionKey(option.key);
+                                    setTransferDraftValue(option.accountId);
+                                  }}
                                 >
                                   <TableCell className="font-semibold text-slate-900">
                                     {option.description || "Transfer row"}
@@ -2635,8 +2640,7 @@ export const Imports: React.FC = () => {
                               const targetAccountId =
                                 getTransferTargetAccountId(tx);
                               const selected =
-                                Boolean(targetAccountId) &&
-                                transferDraftValue === targetAccountId;
+                                transferDraftSelectionKey === tx.id;
                               const categoryLabel = tx.category_id
                                 ? categoriesById.get(tx.category_id)?.name
                                 : null;
@@ -2645,11 +2649,11 @@ export const Imports: React.FC = () => {
                                   key={tx.id}
                                   className="cursor-pointer"
                                   data-state={selected ? "selected" : undefined}
-                                  onClick={() =>
-                                    targetAccountId
-                                      ? setTransferDraftValue(targetAccountId)
-                                      : null
-                                  }
+                                  onClick={() => {
+                                    if (!targetAccountId) return;
+                                    setTransferDraftSelectionKey(tx.id);
+                                    setTransferDraftValue(targetAccountId);
+                                  }}
                                 >
                                   <TableCell className="font-semibold text-slate-900">
                                     {tx.description || "Existing transaction"}
@@ -2773,6 +2777,7 @@ export const Imports: React.FC = () => {
                     variant="outline"
                     onClick={() => {
                       setTransferDraftValue(null);
+                      setTransferDraftSelectionKey(null);
                       applyTransferSelection(null);
                     }}
                   >
