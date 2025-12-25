@@ -51,6 +51,23 @@ const MIX_FALLBACK_PALETTE_INCOME = [
   "#ec4899",
 ] as const;
 
+const average = (values: number[]) => {
+  const filtered = values.filter((value) => Number.isFinite(value));
+  if (!filtered.length) return null;
+  return filtered.reduce((sum, value) => sum + value, 0) / filtered.length;
+};
+
+const addMonthsUtc = (value: Date, months: number) => {
+  const next = new Date(
+    Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + months, 1),
+  );
+  const daysInMonth = new Date(
+    Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0),
+  ).getUTCDate();
+  next.setUTCDate(Math.min(value.getUTCDate(), daysInMonth));
+  return next;
+};
+
 const shouldUseProvidedCategoryColor = (
   colorHex: string | null | undefined,
 ) => {
@@ -364,6 +381,95 @@ export const useTotalAnalysis = ({
     const upperPad = Math.abs(max) * 0.05 || 1;
     return [min, max + upperPad];
   }, [totalNetWorthTrajectoryData]);
+
+  const totalNetWorthForecast = useMemo(() => {
+    if (totalNetWorthSeries.length < 2) return null;
+    const sortedWorth = [...totalNetWorthSeries].sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+    const recentWorth = sortedWorth.slice(-13);
+    const deltas = recentWorth.slice(1).map((point, idx) => {
+      const prev = recentWorth[idx];
+      return point.netWorth - prev.netWorth;
+    });
+    const netWorthDeltaAvg = average(deltas);
+
+    const cashFlowSeries = totalMonthlyIncomeExpense
+      .map((row) => ({
+        date: row.date,
+        month: row.month,
+        net: row.income - row.expense,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const recentCashFlow = cashFlowSeries.slice(-12);
+    const overallCashFlowAvg = average(recentCashFlow.map((row) => row.net));
+    const baselineChange = average(
+      [netWorthDeltaAvg, overallCashFlowAvg].filter(
+        (value): value is number => value !== null,
+      ),
+    );
+
+    if (baselineChange === null) return null;
+
+    const seasonalWindow = cashFlowSeries.slice(-24);
+    const seasonalByMonth = new Map<number, number[]>();
+    seasonalWindow.forEach((row) => {
+      const bucket = seasonalByMonth.get(row.month) ?? [];
+      bucket.push(row.net);
+      seasonalByMonth.set(row.month, bucket);
+    });
+    const seasonalAvgByMonth = new Map<number, number>();
+    seasonalByMonth.forEach((values, month) => {
+      const value = average(values);
+      if (value !== null) seasonalAvgByMonth.set(month, value);
+    });
+
+    const lastPoint = sortedWorth[sortedWorth.length - 1];
+    const lastDate = new Date(lastPoint.date);
+    const horizonMonths = 6;
+    const projectedPoints: Array<{ date: string; projected: number }> = [];
+    let running = lastPoint.netWorth;
+    for (let idx = 1; idx <= horizonMonths; idx += 1) {
+      const targetDate = addMonthsUtc(lastDate, idx);
+      const targetMonth = targetDate.getUTCMonth() + 1;
+      const seasonal =
+        seasonalAvgByMonth.get(targetMonth) ?? overallCashFlowAvg;
+      const monthlyChange = average(
+        [baselineChange, seasonal].filter(
+          (value): value is number => value !== null,
+        ),
+      );
+      running += monthlyChange ?? baselineChange;
+      projectedPoints.push({
+        date: targetDate.toISOString().slice(0, 10),
+        projected: running,
+      });
+    }
+
+    const actualSeries = sortedWorth.map((row, idx) => ({
+      date: row.date,
+      actual: row.netWorth,
+      projected: idx === sortedWorth.length - 1 ? row.netWorth : null,
+    }));
+
+    const data = [
+      ...actualSeries,
+      ...projectedPoints.map((row) => ({
+        date: row.date,
+        actual: null,
+        projected: row.projected,
+      })),
+    ];
+
+    return {
+      data,
+      horizonMonths,
+      baselineChange,
+      lastActualDate: lastPoint.date,
+      projectedEndDate:
+        projectedPoints[projectedPoints.length - 1]?.date ?? null,
+    };
+  }, [totalMonthlyIncomeExpense, totalNetWorthSeries]);
 
   const totalExpenseComposition = useMemo(() => {
     if (!totalOverview) return null;
@@ -786,6 +892,7 @@ export const useTotalAnalysis = ({
     totalNetWorthAttribution,
     totalNetWorthTrajectoryData,
     totalNetWorthTrajectoryDomain,
+    totalNetWorthForecast,
     totalExpenseComposition,
     totalIncomeComposition,
     totalYearly,

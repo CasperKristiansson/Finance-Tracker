@@ -11,6 +11,7 @@ import type {
   YearlyReportEntry,
   YearlyOverviewResponse,
 } from "@/types/api";
+import { ForecastCard } from "../components/forecast-card";
 import { ReportsOverviewCard } from "../components/reports-overview-card";
 import { TotalAccountsOverviewCard } from "../components/total-accounts-overview-card";
 import { TotalCategoryByYearCard } from "../components/total-category-by-year-card";
@@ -120,6 +121,7 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
     totalNetWorthAttribution,
     totalNetWorthTrajectoryData,
     totalNetWorthTrajectoryDomain,
+    totalNetWorthForecast,
     totalYearly,
     totalExpenseMix,
     totalIncomeMix,
@@ -289,6 +291,11 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
           loading={totalOverviewLoading}
           data={totalNetWorthTrajectoryData}
           domain={totalNetWorthTrajectoryDomain}
+        />
+
+        <ForecastCard
+          loading={totalOverviewLoading}
+          forecast={totalNetWorthForecast}
         />
 
         <TotalMoneyPositionCard
