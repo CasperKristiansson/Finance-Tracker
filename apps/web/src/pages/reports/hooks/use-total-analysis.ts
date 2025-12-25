@@ -2,6 +2,10 @@ import { useMemo } from "react";
 
 import type { TotalOverviewResponse } from "@/types/api";
 
+import type {
+  CashflowVolatilityMetric,
+  CashflowVolatilitySummary,
+} from "../reports-types";
 import { formatDate, monthLabel } from "../reports-utils";
 
 type TotalWindowPreset = "all" | "10" | "5" | "3";
@@ -62,6 +66,19 @@ const shouldUseProvidedCategoryColor = (
 function categoryAbsTotal(category: MixCategory) {
   return Math.abs(Number(category.total));
 }
+
+const volatilityStats = (values: number[]): CashflowVolatilityMetric => {
+  if (!values.length) {
+    return { mean: 0, stdDev: 0, cv: null };
+  }
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance =
+    values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / values.length;
+  const stdDev = Math.sqrt(variance);
+  const meanAbs = Math.abs(mean);
+  const cv = meanAbs > 0 ? stdDev / meanAbs : null;
+  return { mean, stdDev, cv };
+};
 
 const buildComposition = (
   rows: MixYearRow[],
@@ -278,6 +295,92 @@ export const useTotalAnalysis = ({
       };
     });
   }, [totalOverview]);
+
+  const totalCashflowVolatility =
+    useMemo<CashflowVolatilitySummary | null>(() => {
+      if (!totalMonthlyIncomeExpense.length || !totalWindowRange) return null;
+      const series = totalMonthlyIncomeExpense
+        .filter(
+          (row) =>
+            row.date >= totalWindowRange.start &&
+            row.date <= totalWindowRange.end,
+        )
+        .map((row) => ({
+          date: row.date,
+          label: formatDate(row.date, { month: "short", year: "2-digit" }),
+          income: row.income,
+          expense: row.expense,
+          net: row.income - row.expense,
+        }));
+
+      if (!series.length) return null;
+
+      const incomeValues = series.map((row) => row.income);
+      const expenseValues = series.map((row) => row.expense);
+      const netValues = series.map((row) => row.net);
+
+      const income = volatilityStats(incomeValues);
+      const expense = volatilityStats(expenseValues);
+      const net = volatilityStats(netValues);
+
+      const cvValues = [income.cv, expense.cv, net.cv].filter(
+        (value): value is number =>
+          typeof value === "number" && !Number.isNaN(value),
+      );
+      const avgCv =
+        cvValues.length > 0
+          ? cvValues.reduce((sum, value) => sum + value, 0) / cvValues.length
+          : null;
+      const stabilityScore =
+        avgCv === null ? null : Math.max(0, 100 - Math.min(100, avgCv * 100));
+
+      const spikeThreshold = 1.5;
+      const spikes = series
+        .map((row) => {
+          const incomeZ =
+            income.stdDev > 0 ? (row.income - income.mean) / income.stdDev : 0;
+          const expenseZ =
+            expense.stdDev > 0
+              ? (row.expense - expense.mean) / expense.stdDev
+              : 0;
+          const netZ = net.stdDev > 0 ? (row.net - net.mean) / net.stdDev : 0;
+          const absScores = [
+            {
+              kind: "income" as const,
+              value: row.income,
+              score: Math.abs(incomeZ),
+            },
+            {
+              kind: "expense" as const,
+              value: row.expense,
+              score: Math.abs(expenseZ),
+            },
+            { kind: "net" as const, value: row.net, score: Math.abs(netZ) },
+          ];
+          const best = absScores.reduce((top, current) =>
+            current.score > top.score ? current : top,
+          );
+          if (best.score < spikeThreshold) return null;
+          return {
+            date: row.date,
+            label: row.label,
+            kind: best.kind,
+            value: best.value,
+            zScore: best.score,
+          };
+        })
+        .filter((row): row is NonNullable<typeof row> => Boolean(row))
+        .sort((a, b) => b.zScore - a.zScore)
+        .slice(0, 6);
+
+      return {
+        income,
+        expense,
+        net,
+        stabilityScore,
+        spikes,
+      };
+    }, [totalMonthlyIncomeExpense, totalWindowRange]);
 
   const totalNetWorthAttribution = useMemo(() => {
     if (!totalOverview) return null;
@@ -783,6 +886,7 @@ export const useTotalAnalysis = ({
     totalNetWorthSeries,
     totalNetWorthStats,
     totalMonthlyIncomeExpense,
+    totalCashflowVolatility,
     totalNetWorthAttribution,
     totalNetWorthTrajectoryData,
     totalNetWorthTrajectoryDomain,
