@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ChevronDown, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, X } from "lucide-react";
 import React, { useEffect, useMemo } from "react";
-import { useFieldArray, useForm, useWatch } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,44 +17,61 @@ import {
   useTransactionsApi,
 } from "@/hooks/use-api";
 import { renderCategoryIcon } from "@/lib/category-icons";
-import { currency } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { taxAdjustedAmountHint } from "@/lib/transactions";
 import { cn } from "@/lib/utils";
-import { CategoryType, type TransactionRead } from "@/types/api";
-
-const legSchema = z.object({
-  account_id: z.string().min(1, "Pick an account"),
-  amount: z.string().min(1, "Add an amount"),
-});
+import {
+  CategoryType,
+  TransactionType,
+  type TransactionRead,
+} from "@/types/api";
 
 const transactionFormSchema = z
   .object({
+    transaction_type: z.enum(TransactionType),
+    account_id: z.string().min(1, "Pick an account"),
+    transfer_account_id: z.string().optional(),
+    amount: z.string().min(1, "Add an amount"),
     description: z.string().min(1, "Description required").trim(),
     notes: z.string().optional(),
     category_id: z.string().optional(),
     occurred_at: z.string().min(1, "Occurred date required"),
     posted_at: z.string().optional(),
-    legs: z.array(legSchema).min(2, "Add at least two legs"),
   })
   .superRefine((val, ctx) => {
-    const amounts = val.legs.map((leg) => Number(leg.amount));
-    if (amounts.some((amt) => Number.isNaN(amt))) {
+    const amount = Number(val.amount);
+    if (Number.isNaN(amount)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["legs"],
-        message: "Amounts must be numeric",
+        path: ["amount"],
+        message: "Amount must be numeric",
       });
     }
-    const total = amounts.reduce(
-      (sum, amt) => sum + (Number.isNaN(amt) ? 0 : amt),
-      0,
-    );
-    if (Math.abs(total) > 0.0001) {
+    if (!Number.isNaN(amount) && Math.abs(amount) < 0.0001) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ["legs"],
-        message: "Legs must balance to zero",
+        path: ["amount"],
+        message: "Amount must be non-zero",
       });
+    }
+    if (val.transaction_type === TransactionType.TRANSFER) {
+      if (!val.transfer_account_id) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["transfer_account_id"],
+          message: "Pick a transfer account",
+        });
+      }
+      if (
+        val.transfer_account_id &&
+        val.transfer_account_id === val.account_id
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["transfer_account_id"],
+          message: "Transfer accounts must be different",
+        });
+      }
     }
   });
 
@@ -77,59 +94,94 @@ export const TransactionModal: React.FC<{
     handleSubmit,
     reset,
     setValue,
+    setError,
     formState: { errors, isSubmitting },
   } = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
     defaultValues: {
+      transaction_type: TransactionType.EXPENSE,
+      account_id: "",
+      transfer_account_id: "",
+      amount: "",
       description: "",
       notes: "",
       category_id: "",
       occurred_at: today,
       posted_at: today,
-      legs: [
-        { account_id: "", amount: "" },
-        { account_id: "", amount: "" },
-      ],
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
-    control,
-    name: "legs",
-  });
-
   const selectedCategoryId = useWatch({ control, name: "category_id" });
+  const selectedTransactionType = useWatch({
+    control,
+    name: "transaction_type",
+  });
+  const enteredAmount = useWatch({ control, name: "amount" });
+  const selectedAccountId = useWatch({ control, name: "account_id" });
   const selectedCategory = useMemo(
     () => categories.find((cat) => cat.id === selectedCategoryId) ?? null,
     [categories, selectedCategoryId],
   );
-  const categoryAmountHint = useMemo(
-    () => (transaction ? taxAdjustedAmountHint(transaction) : null),
-    [transaction],
+  const categoryAmountHint = useMemo(() => {
+    if (transaction) return taxAdjustedAmountHint(transaction);
+    const numeric = Number(enteredAmount);
+    if (Number.isNaN(numeric)) return null;
+    return numeric;
+  }, [enteredAmount, transaction]);
+  const activeAccounts = useMemo(
+    () =>
+      accounts.filter(
+        (account) => account.is_active !== false && account.name !== "Offset",
+      ),
+    [accounts],
   );
+  const offsetAccount = useMemo(
+    () => accounts.find((account) => account.name === "Offset") ?? null,
+    [accounts],
+  );
+  const categoryTypeFilter = useMemo(() => {
+    if (transaction) {
+      if (transaction.transaction_type === TransactionType.ADJUSTMENT) {
+        return CategoryType.ADJUSTMENT;
+      }
+      if (transaction.transaction_type === TransactionType.TRANSFER) {
+        return null;
+      }
+      if (categoryAmountHint === null) return null;
+      return categoryAmountHint < 0
+        ? CategoryType.EXPENSE
+        : CategoryType.INCOME;
+    }
+    if (selectedTransactionType === TransactionType.TRANSFER) return null;
+    if (selectedTransactionType === TransactionType.ADJUSTMENT)
+      return CategoryType.ADJUSTMENT;
+    if (categoryAmountHint === null) {
+      return selectedTransactionType === TransactionType.EXPENSE
+        ? CategoryType.EXPENSE
+        : CategoryType.INCOME;
+    }
+    return categoryAmountHint < 0 ? CategoryType.EXPENSE : CategoryType.INCOME;
+  }, [categoryAmountHint, selectedTransactionType, transaction]);
   const visibleCategories = useMemo(() => {
-    if (!transaction) return categories;
-    if (!categoryAmountHint) return categories;
-    const desiredType =
-      categoryAmountHint < 0 ? CategoryType.EXPENSE : CategoryType.INCOME;
-    return categories.filter((cat) => cat.category_type === desiredType);
-  }, [categories, categoryAmountHint, transaction]);
+    if (!categoryTypeFilter) return categories;
+    return categories.filter((cat) => cat.category_type === categoryTypeFilter);
+  }, [categories, categoryTypeFilter]);
 
   useEffect(() => {
     if (open) {
-      fetchAccounts({});
+      fetchAccounts({ includeInactive: true });
       fetchCategories();
       if (!transaction) {
         reset({
+          transaction_type: TransactionType.EXPENSE,
+          account_id: "",
+          transfer_account_id: "",
+          amount: "",
           description: "",
           notes: "",
           category_id: "",
           occurred_at: today,
           posted_at: today,
-          legs: [
-            { account_id: "", amount: "" },
-            { account_id: "", amount: "" },
-          ],
         });
       }
     }
@@ -139,20 +191,33 @@ export const TransactionModal: React.FC<{
     if (!open) return;
     if (!transaction) return;
 
+    const fallbackLeg = transaction.legs[0];
+    const transferFrom =
+      transaction.legs.find((leg) => Number(leg.amount) < 0) ?? fallbackLeg;
+    const transferTo =
+      transaction.legs.find((leg) => Number(leg.amount) > 0) ??
+      transaction.legs[1];
+
     reset({
+      transaction_type: transaction.transaction_type,
+      account_id: transferFrom?.account_id ?? "",
+      transfer_account_id:
+        transaction.transaction_type === TransactionType.TRANSFER
+          ? (transferTo?.account_id ?? "")
+          : "",
+      amount: categoryAmountHint ? String(categoryAmountHint) : "",
       description: transaction.description ?? "",
       notes: transaction.notes ?? "",
       category_id: transaction.category_id ?? "",
       occurred_at: (transaction.occurred_at ?? today).slice(0, 10),
       posted_at: (transaction.posted_at ?? today).slice(0, 10),
-      legs: transaction.legs.map((leg) => ({
-        account_id: leg.account_id,
-        amount: String(leg.amount),
-      })),
     });
-  }, [open, reset, today, transaction]);
+  }, [categoryAmountHint, open, reset, today, transaction]);
 
-  const onSubmit = handleSubmit(async (values) => {
+  const submitTransaction = async (
+    values: TransactionFormValues,
+    options: { keepOpen: boolean },
+  ) => {
     if (transaction) {
       await updateTransaction(transaction.id, {
         description: values.description,
@@ -164,45 +229,103 @@ export const TransactionModal: React.FC<{
           : null,
         subscription_id: transaction.subscription_id ?? null,
       });
-    } else {
-      await createTransaction({
-        description: values.description,
-        notes: values.notes?.trim() || undefined,
-        category_id: values.category_id || undefined,
-        occurred_at: new Date(values.occurred_at).toISOString(),
-        posted_at: values.posted_at
-          ? new Date(values.posted_at).toISOString()
-          : undefined,
-        legs: values.legs.map((leg) => ({
-          account_id: leg.account_id,
-          amount: leg.amount,
-        })),
-      });
+      onClose();
+      return;
     }
+
+    const rawAmount = Number(values.amount);
+    const safeAmount = Number.isNaN(rawAmount) ? 0 : rawAmount;
+    if (
+      values.transaction_type !== TransactionType.TRANSFER &&
+      !offsetAccount
+    ) {
+      setError("account_id", {
+        message: "Offset account missing. Reconcile an account to create it.",
+      });
+      return;
+    }
+
+    const signedAmount = (() => {
+      if (values.transaction_type === TransactionType.INCOME)
+        return Math.abs(safeAmount);
+      if (values.transaction_type === TransactionType.EXPENSE)
+        return -Math.abs(safeAmount);
+      return safeAmount;
+    })();
+
+    const legs =
+      values.transaction_type === TransactionType.TRANSFER
+        ? [
+            {
+              account_id: values.account_id,
+              amount: String(-Math.abs(safeAmount)),
+            },
+            {
+              account_id: values.transfer_account_id ?? "",
+              amount: String(Math.abs(safeAmount)),
+            },
+          ]
+        : [
+            {
+              account_id: values.account_id,
+              amount: String(signedAmount),
+            },
+            {
+              account_id: offsetAccount?.id ?? "",
+              amount: String(-signedAmount),
+            },
+          ];
+
+    await createTransaction({
+      description: values.description,
+      notes: values.notes?.trim() || undefined,
+      category_id:
+        values.transaction_type === TransactionType.TRANSFER
+          ? undefined
+          : values.category_id || undefined,
+      occurred_at: new Date(values.occurred_at).toISOString(),
+      posted_at: values.posted_at
+        ? new Date(values.posted_at).toISOString()
+        : undefined,
+      transaction_type: values.transaction_type,
+      legs,
+    });
+
+    if (options.keepOpen) {
+      reset({
+        transaction_type: values.transaction_type,
+        account_id: values.account_id,
+        transfer_account_id: "",
+        amount: "",
+        description: "",
+        notes: "",
+        category_id: "",
+        occurred_at: today,
+        posted_at: today,
+      });
+      return;
+    }
+
     reset({
+      transaction_type: TransactionType.EXPENSE,
+      account_id: "",
+      transfer_account_id: "",
+      amount: "",
       description: "",
       notes: "",
       category_id: "",
       occurred_at: today,
       posted_at: today,
-      legs: [
-        { account_id: "", amount: "" },
-        { account_id: "", amount: "" },
-      ],
     });
     onClose();
-  });
-
-  const addLeg = () =>
-    append({
-      account_id: "",
-      amount: "",
-    });
-
-  const removeLeg = (index: number) => {
-    if (fields.length <= 2) return;
-    remove(index);
   };
+
+  const onSubmit = handleSubmit((values) =>
+    submitTransaction(values, { keepOpen: false }),
+  );
+  const onSubmitAndAdd = handleSubmit((values) =>
+    submitTransaction(values, { keepOpen: true }),
+  );
 
   if (!open) return null;
 
@@ -210,10 +333,15 @@ export const TransactionModal: React.FC<{
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
       <div className="w-full max-w-3xl rounded-xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b px-6 py-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-1">
             <h2 className="text-lg font-semibold text-slate-900">
               {transaction ? "Edit transaction" : "Add transaction"}
             </h2>
+            {transaction?.updated_at ? (
+              <span className="text-xs text-slate-500">
+                Updated {formatDateTime(transaction.updated_at)}
+              </span>
+            ) : null}
           </div>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-4 w-4" />
@@ -260,10 +388,91 @@ export const TransactionModal: React.FC<{
                 />
               </label>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+          </div>
+          <div className="space-y-3">
+            <label className="flex flex-col gap-1 text-sm text-slate-700">
+              Transaction type
+              <select
+                className="rounded border border-slate-200 px-2 py-2 text-sm"
+                disabled={isEdit}
+                {...register("transaction_type")}
+              >
+                <option value={TransactionType.INCOME}>Income</option>
+                <option value={TransactionType.EXPENSE}>Expense</option>
+                <option value={TransactionType.ADJUSTMENT}>Adjustment</option>
+                <option value={TransactionType.TRANSFER}>Transfer</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm text-slate-700">
+              {selectedTransactionType === TransactionType.TRANSFER
+                ? "From account"
+                : "Account"}
+              <select
+                className="rounded border border-slate-200 px-2 py-2 text-sm"
+                disabled={isEdit}
+                {...register("account_id")}
+              >
+                <option value="">Select account</option>
+                {activeAccounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.name}
+                  </option>
+                ))}
+              </select>
+              {errors.account_id ? (
+                <span className="text-xs text-rose-600">
+                  {errors.account_id.message}
+                </span>
+              ) : null}
+            </label>
+            {selectedTransactionType === TransactionType.TRANSFER ? (
               <label className="flex flex-col gap-1 text-sm text-slate-700">
-                Category
-                <input type="hidden" {...register("category_id")} />
+                To account
+                <select
+                  className="rounded border border-slate-200 px-2 py-2 text-sm"
+                  disabled={isEdit}
+                  {...register("transfer_account_id")}
+                >
+                  <option value="">Select account</option>
+                  {activeAccounts
+                    .filter((acc) => acc.id !== selectedAccountId)
+                    .map((acc) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name}
+                      </option>
+                    ))}
+                </select>
+                {errors.transfer_account_id ? (
+                  <span className="text-xs text-rose-600">
+                    {errors.transfer_account_id.message}
+                  </span>
+                ) : null}
+              </label>
+            ) : null}
+            <label className="flex flex-col gap-1 text-sm text-slate-700">
+              Balance
+              <input
+                type="number"
+                step="0.01"
+                className="rounded border border-slate-200 px-3 py-2"
+                placeholder="0.00"
+                disabled={isEdit}
+                {...register("amount")}
+              />
+              {errors.amount ? (
+                <span className="text-xs text-rose-600">
+                  {errors.amount.message}
+                </span>
+              ) : null}
+            </label>
+            <label className="flex flex-col gap-1 text-sm text-slate-700">
+              Category
+              <input type="hidden" {...register("category_id")} />
+              {selectedTransactionType === TransactionType.TRANSFER ? (
+                <div className="rounded border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                  Transfers don’t use categories.
+                </div>
+              ) : (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
@@ -360,97 +569,25 @@ export const TransactionModal: React.FC<{
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </label>
-            </div>
-          </div>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-slate-800">Legs</p>
-              {!isEdit ? (
-                <Button size="sm" variant="outline" onClick={addLeg}>
-                  <Plus className="h-4 w-4" /> Add leg
-                </Button>
-              ) : null}
-            </div>
-            <div className="space-y-2">
-              {fields.map((leg, index) => (
-                <div
-                  key={leg.id}
-                  className={cn(
-                    "grid grid-cols-[1.5fr,1fr,auto] items-center gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2",
-                    isEdit && "opacity-90",
-                  )}
-                >
-                  {isEdit ? (
-                    <>
-                      <div className="truncate text-sm text-slate-800">
-                        {accounts.find((acc) => acc.id === leg.account_id)
-                          ?.name ?? leg.account_id}
-                      </div>
-                      <div className="text-sm font-semibold text-slate-900 tabular-nums">
-                        {currency(Number(leg.amount), {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </div>
-                      <div />
-                    </>
-                  ) : (
-                    <>
-                      <select
-                        className="rounded border border-slate-200 px-2 py-1 text-sm"
-                        {...register(`legs.${index}.account_id` as const)}
-                      >
-                        <option value="">Select account</option>
-                        {accounts.map((acc) => (
-                          <option key={acc.id} value={acc.id}>
-                            {acc.name}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="number"
-                        step="0.01"
-                        className="rounded border border-slate-200 px-2 py-1 text-sm"
-                        placeholder="0.00"
-                        {...register(`legs.${index}.amount` as const)}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeLeg(index)}
-                        disabled={fields.length <= 2}
-                      >
-                        <Trash2 className="h-4 w-4 text-slate-500" />
-                      </Button>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-            {errors.legs ? (
-              <div className="text-sm text-rose-600">
-                {errors.legs?.message?.toString() ||
-                  (Array.isArray(errors.legs) &&
-                    errors.legs.find((err) => err?.message)?.message)}
-              </div>
-            ) : null}
+              )}
+            </label>
             {isEdit ? (
               <div className="rounded border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                Editing legs isn’t supported yet (metadata only).
+                Editing amounts and accounts isn’t supported yet (metadata
+                only).
               </div>
-            ) : (
-              <div className="rounded border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                Legs must balance to zero. Debits are negative, credits are
-                positive. Minimum two legs.
-              </div>
-            )}
+            ) : null}
           </div>
         </div>
         <div className="flex items-center justify-end gap-2 border-t px-6 py-4">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
+          {!transaction ? (
+            <Button variant="outline" onClick={onSubmitAndAdd}>
+              Save & add another
+            </Button>
+          ) : null}
           <Button onClick={onSubmit} disabled={isSubmitting}>
             {isSubmitting
               ? "Saving..."
