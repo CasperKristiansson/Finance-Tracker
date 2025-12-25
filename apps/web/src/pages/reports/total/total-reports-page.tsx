@@ -11,6 +11,7 @@ import type {
   YearlyReportEntry,
   YearlyOverviewResponse,
 } from "@/types/api";
+import { CashRunwayCard } from "../components/cash-runway-card";
 import { ReportsOverviewCard } from "../components/reports-overview-card";
 import { TotalAccountsOverviewCard } from "../components/total-accounts-overview-card";
 import { TotalCategoryByYearCard } from "../components/total-category-by-year-card";
@@ -137,6 +138,8 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
     totalDebtSeries,
     totalMoneySeries,
     totalMoneySnapshot,
+    totalAverageMonthlyExpense,
+    totalCashRunwayMonths,
     totalDebtAccounts,
     totalSeasonalityHeatmaps,
     totalExpenseCategoryYearHeatmap,
@@ -295,6 +298,14 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
           loading={totalOverviewLoading}
           series={totalMoneySeries}
           snapshot={totalMoneySnapshot}
+        />
+
+        <CashRunwayCard
+          loading={totalOverviewLoading}
+          windowRange={totalWindowRange}
+          averageExpense={totalAverageMonthlyExpense}
+          cashSnapshot={totalMoneySnapshot}
+          runwayMonths={totalCashRunwayMonths}
         />
 
         <TotalNetWorthGrowthCard
