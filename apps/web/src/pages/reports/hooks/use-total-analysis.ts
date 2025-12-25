@@ -26,6 +26,12 @@ type Composition = {
   data: Array<Record<string, number | string>>;
 };
 
+type TotalAverageExpense = {
+  average: number;
+  months: number;
+  total: number;
+};
+
 const DEFAULT_CHART_COLOR = "#94a3b8";
 const DEFAULT_CATEGORY_COLOR = "#94a3b8";
 
@@ -278,6 +284,21 @@ export const useTotalAnalysis = ({
       };
     });
   }, [totalOverview]);
+
+  const totalAverageMonthlyExpense = useMemo<TotalAverageExpense | null>(() => {
+    if (!totalWindowRange) return null;
+    const windowed = totalMonthlyIncomeExpense.filter(
+      (row) =>
+        row.date >= totalWindowRange.start && row.date <= totalWindowRange.end,
+    );
+    if (!windowed.length) return null;
+    const total = windowed.reduce((sum, row) => sum + row.expense, 0);
+    return {
+      average: total / windowed.length,
+      months: windowed.length,
+      total,
+    };
+  }, [totalMonthlyIncomeExpense, totalWindowRange]);
 
   const totalNetWorthAttribution = useMemo(() => {
     if (!totalOverview) return null;
@@ -684,8 +705,17 @@ export const useTotalAnalysis = ({
       asOf: totalOverview?.as_of ?? null,
       total: totalKpis.totalMoney,
       debt: totalKpis.debtTotal,
+      cash: totalKpis.cashBalance,
     };
   }, [totalKpis, totalOverview]);
+
+  const totalCashRunwayMonths = useMemo(() => {
+    if (!totalAverageMonthlyExpense) return null;
+    if (!totalKpis) return null;
+    const averageExpense = totalAverageMonthlyExpense.average;
+    if (averageExpense <= 0) return null;
+    return totalKpis.cashBalance / averageExpense;
+  }, [totalAverageMonthlyExpense, totalKpis]);
 
   const totalDebtAccounts = useMemo(() => {
     if (!totalOverview) return [];
@@ -806,6 +836,8 @@ export const useTotalAnalysis = ({
     totalDebtSeries,
     totalMoneySeries,
     totalMoneySnapshot,
+    totalAverageMonthlyExpense,
+    totalCashRunwayMonths,
     totalDebtAccounts,
     totalSeasonalityHeatmaps,
     totalExpenseCategoryYearHeatmap,

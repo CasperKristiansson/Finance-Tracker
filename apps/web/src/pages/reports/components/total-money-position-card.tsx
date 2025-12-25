@@ -30,6 +30,7 @@ type TotalMoneySnapshot = {
   asOf: string | null;
   total: number;
   debt: number;
+  cash: number;
 };
 
 export const TotalMoneyPositionCard: React.FC<{
