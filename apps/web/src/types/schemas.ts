@@ -1201,6 +1201,20 @@ export const investmentOverviewResponseSchema = z.object({
   recent_cashflows: z.array(investmentCashflowEventSchema).default([]),
 });
 
+export const investmentSnapshotCreateRequestSchema = z.object({
+  account_id: z.string(),
+  snapshot_date: dateString,
+  balance: money,
+  notes: nullableString,
+});
+
+export const investmentSnapshotCreateResponseSchema = z.object({
+  snapshot_id: z.string(),
+  account_id: z.string(),
+  snapshot_date: dateString,
+  balance: money,
+});
+
 export const goalSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -1442,6 +1456,12 @@ export type InvestmentCashflowEvent = z.infer<
 >;
 export type InvestmentOverviewResponse = z.infer<
   typeof investmentOverviewResponseSchema
+>;
+export type InvestmentSnapshotCreateRequest = z.infer<
+  typeof investmentSnapshotCreateRequestSchema
+>;
+export type InvestmentSnapshotCreateResponse = z.infer<
+  typeof investmentSnapshotCreateResponseSchema
 >;
 export type GoalRead = z.infer<typeof goalSchema>;
 export type GoalListResponse = z.infer<typeof goalListSchema>;
