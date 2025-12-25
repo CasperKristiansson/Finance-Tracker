@@ -64,6 +64,8 @@ from .investments import (
     InvestmentGrowthRead,
     InvestmentOverviewResponse,
     InvestmentPortfolioOverviewRead,
+    InvestmentSnapshotCreateRequest,
+    InvestmentSnapshotCreateResponse,
     InvestmentTransactionListResponse,
     InvestmentTransactionRead,
     InvestmentValuePointRead,
@@ -257,4 +259,6 @@ __all__ = [
     "TaxTotalSummaryResponse",
     "TaxSummaryQuery",
     "TaxSummaryResponse",
+    "InvestmentSnapshotCreateRequest",
+    "InvestmentSnapshotCreateResponse",
 ]

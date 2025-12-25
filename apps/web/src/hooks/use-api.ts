@@ -60,6 +60,7 @@ import {
 import {
   FetchInvestmentTransactions,
   FetchInvestmentOverview,
+  CreateInvestmentSnapshot,
 } from "@/features/investments/investmentsSaga";
 import {
   selectInvestmentsState,
@@ -317,12 +318,19 @@ export const useInvestmentsApi = () => {
     [dispatch],
   );
 
+  const createSnapshot = useCallback(
+    (data: Parameters<typeof CreateInvestmentSnapshot>[0]["data"]) =>
+      dispatch(CreateInvestmentSnapshot({ data })),
+    [dispatch],
+  );
+
   return {
     ...state,
     transactions,
     overview,
     fetchTransactions,
     fetchOverview,
+    createSnapshot,
   };
 };
 

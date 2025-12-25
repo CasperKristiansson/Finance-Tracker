@@ -128,6 +128,24 @@ class InvestmentOverviewResponse(BaseModel):
     recent_cashflows: list[InvestmentCashflowEventRead] = Field(default_factory=list)
 
 
+class InvestmentSnapshotCreateRequest(BaseModel):
+    """Request to create a manual investment snapshot."""
+
+    account_id: UUID
+    snapshot_date: date
+    balance: Decimal
+    notes: Optional[str] = None
+
+
+class InvestmentSnapshotCreateResponse(BaseModel):
+    """Response after creating a manual investment snapshot."""
+
+    snapshot_id: UUID
+    account_id: UUID
+    snapshot_date: date
+    balance: Decimal
+
+
 __all__ = [
     "InvestmentTransactionRead",
     "InvestmentTransactionListResponse",
@@ -139,4 +157,6 @@ __all__ = [
     "InvestmentAccountOverviewRead",
     "InvestmentCashflowEventRead",
     "InvestmentOverviewResponse",
+    "InvestmentSnapshotCreateRequest",
+    "InvestmentSnapshotCreateResponse",
 ]

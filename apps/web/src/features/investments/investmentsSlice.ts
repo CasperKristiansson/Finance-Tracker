@@ -8,13 +8,16 @@ export interface InvestmentsState {
   transactions: InvestmentTransactionRead[];
   overview?: InvestmentOverviewResponse;
   loading: boolean;
+  updateLoading: boolean;
   error?: string;
+  updateError?: string;
 }
 
 const initialState: InvestmentsState = {
   transactions: [],
   overview: undefined,
   loading: false,
+  updateLoading: false,
 };
 
 const investmentsSlice = createSlice({
@@ -35,6 +38,16 @@ const investmentsSlice = createSlice({
     setInvestmentsError(state, action: PayloadAction<string | undefined>) {
       state.error = action.payload ?? "Unable to load investment data.";
     },
+    setInvestmentsUpdateLoading(state, action: PayloadAction<boolean>) {
+      state.updateLoading = action.payload;
+    },
+    setInvestmentsUpdateError(
+      state,
+      action: PayloadAction<string | undefined>,
+    ) {
+      state.updateError =
+        action.payload ?? "Unable to update investment balance.";
+    },
   },
   selectors: {
     selectInvestmentsState: (state) => state,
@@ -42,6 +55,8 @@ const investmentsSlice = createSlice({
     selectInvestmentOverview: (state) => state.overview,
     selectInvestmentsLoading: (state) => state.loading,
     selectInvestmentsError: (state) => state.error,
+    selectInvestmentsUpdateLoading: (state) => state.updateLoading,
+    selectInvestmentsUpdateError: (state) => state.updateError,
   },
 });
 
@@ -50,6 +65,8 @@ export const {
   setOverview,
   setInvestmentsLoading,
   setInvestmentsError,
+  setInvestmentsUpdateLoading,
+  setInvestmentsUpdateError,
 } = investmentsSlice.actions;
 
 export const {
@@ -58,5 +75,7 @@ export const {
   selectInvestmentOverview,
   selectInvestmentsLoading,
   selectInvestmentsError,
+  selectInvestmentsUpdateLoading,
+  selectInvestmentsUpdateError,
 } = investmentsSlice.selectors;
 export const InvestmentsReducer = investmentsSlice.reducer;
