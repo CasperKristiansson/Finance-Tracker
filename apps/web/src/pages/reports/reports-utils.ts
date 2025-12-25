@@ -9,6 +9,58 @@ export {
   percent,
 } from "@/lib/format";
 
+export type CategoryConcentrationInput = {
+  name: string;
+  total: number;
+  color?: string | null;
+};
+
+export type CategoryConcentration = {
+  topSharePct: number;
+  diversityScorePct: number;
+  topCategories: Array<{
+    name: string;
+    sharePct: number;
+    color: string | null;
+  }>;
+};
+
+export const buildCategoryConcentration = (
+  categories: CategoryConcentrationInput[],
+  topN = 3,
+): CategoryConcentration | null => {
+  if (!categories.length) return null;
+  const totals = categories.map((category) => Math.abs(category.total));
+  const total = totals.reduce((sum, value) => sum + value, 0);
+  if (total <= 0) return null;
+
+  const normalized = categories.map((category, idx) => ({
+    ...category,
+    amount: totals[idx],
+  }));
+  const sorted = [...normalized].sort((a, b) => b.amount - a.amount);
+
+  const topCategories = sorted.slice(0, topN).map((category) => ({
+    name: category.name,
+    sharePct: (category.amount / total) * 100,
+    color: category.color ?? null,
+  }));
+
+  const topSharePct = topCategories.reduce(
+    (sum, category) => sum + category.sharePct,
+    0,
+  );
+  const diversityScorePct =
+    (1 -
+      normalized.reduce((sum, category) => {
+        const share = category.amount / total;
+        return sum + share * share;
+      }, 0)) *
+    100;
+
+  return { topSharePct, diversityScorePct, topCategories };
+};
+
 export const median = (values: number[]) => {
   if (!values.length) return 0;
   const sorted = [...values].sort((a, b) => a - b);

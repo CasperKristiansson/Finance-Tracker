@@ -8,6 +8,7 @@ import type {
   YearlyCategoryDetailResponse,
   YearlyOverviewResponse,
 } from "@/types/api";
+import { CategoryConcentrationCard } from "../components/category-concentration-card";
 import { ReportsOverviewCard } from "../components/reports-overview-card";
 import { YearlyAccountFlowsCard } from "../components/yearly-account-flows-card";
 import { YearlyCategoryBreakdownCard } from "../components/yearly-category-breakdown-card";
@@ -78,6 +79,8 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
     yearlyExpenseSourceDeltas,
     yearlyIncomeSourceDeltas,
     yearlySavingsDecomposition,
+    expenseCategoryConcentration,
+    incomeCategoryConcentration,
   } = useYearlyAnalysis({
     overview,
     prevOverview,
@@ -255,46 +258,70 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
         }}
       />
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <YearlyCategoryBreakdownCard
+      <div className="grid gap-3 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <YearlyCategoryBreakdownCard
+            flow="expense"
+            loading={overviewLoading}
+            rows={categoryChartData}
+            onSelectCategory={(categoryId) => {
+              setSelectedCategoryFlow("expense");
+              setSelectedCategoryId(categoryId);
+            }}
+          />
+        </div>
+
+        <CategoryConcentrationCard
           flow="expense"
+          title="Category concentration"
+          description="Top categories and overall balance."
           loading={overviewLoading}
-          rows={categoryChartData}
-          onSelectCategory={(categoryId) => {
-            setSelectedCategoryFlow("expense");
-            setSelectedCategoryId(categoryId);
-          }}
+          concentration={expenseCategoryConcentration}
         />
 
-        <YearlyCategoryHeatmapCard
-          title="Spending heatmap"
-          description="Seasonality by category and month."
-          year={year}
-          hasOverview={Boolean(overview)}
-          heatmap={heatmap}
-          color="expense"
-        />
+        <div className="lg:col-span-3">
+          <YearlyCategoryHeatmapCard
+            title="Spending heatmap"
+            description="Seasonality by category and month."
+            year={year}
+            hasOverview={Boolean(overview)}
+            heatmap={heatmap}
+            color="expense"
+          />
+        </div>
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
-        <YearlyCategoryBreakdownCard
+      <div className="grid gap-3 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <YearlyCategoryBreakdownCard
+            flow="income"
+            loading={overviewLoading}
+            rows={incomeCategoryChartData}
+            onSelectCategory={(categoryId) => {
+              setSelectedCategoryFlow("income");
+              setSelectedCategoryId(categoryId);
+            }}
+          />
+        </div>
+
+        <CategoryConcentrationCard
           flow="income"
+          title="Category concentration"
+          description="Top categories and overall balance."
           loading={overviewLoading}
-          rows={incomeCategoryChartData}
-          onSelectCategory={(categoryId) => {
-            setSelectedCategoryFlow("income");
-            setSelectedCategoryId(categoryId);
-          }}
+          concentration={incomeCategoryConcentration}
         />
 
-        <YearlyCategoryHeatmapCard
-          title="Income heatmap"
-          description="Seasonality by category and month."
-          year={year}
-          hasOverview={Boolean(overview)}
-          heatmap={incomeHeatmap}
-          color="income"
-        />
+        <div className="lg:col-span-3">
+          <YearlyCategoryHeatmapCard
+            title="Income heatmap"
+            description="Seasonality by category and month."
+            year={year}
+            hasOverview={Boolean(overview)}
+            heatmap={incomeHeatmap}
+            color="income"
+          />
+        </div>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-1">
