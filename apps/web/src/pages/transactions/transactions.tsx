@@ -50,6 +50,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   TransactionType,
+  AccountType,
   type CategoryRead,
   type TransactionRead,
 } from "@/types/api";
@@ -217,13 +218,17 @@ export const Transactions: React.FC = () => {
   >(null);
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const [reconcileOpen, setReconcileOpen] = useState(false);
-  const needsReconcile = useMemo(
-    () => accounts.some((acc) => acc.needs_reconciliation),
+  const reconcileEligibleAccounts = useMemo(
+    () => accounts.filter((acc) => acc.account_type === AccountType.NORMAL),
     [accounts],
   );
+  const needsReconcile = useMemo(
+    () => reconcileEligibleAccounts.some((acc) => acc.needs_reconciliation),
+    [reconcileEligibleAccounts],
+  );
   const reconcileTargets = useMemo(
-    () => accounts.filter((acc) => acc.needs_reconciliation),
-    [accounts],
+    () => reconcileEligibleAccounts.filter((acc) => acc.needs_reconciliation),
+    [reconcileEligibleAccounts],
   );
 
   useEffect(() => {

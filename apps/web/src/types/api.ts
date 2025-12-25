@@ -55,6 +55,8 @@ export type {
   InvestmentCashflowSummary,
   InvestmentGrowth,
   InvestmentValuePoint,
+  InvestmentSnapshotCreateRequest,
+  InvestmentSnapshotCreateResponse,
   InvestmentSnapshot,
   InvestmentTransactionListResponse,
   InvestmentTransactionRead,

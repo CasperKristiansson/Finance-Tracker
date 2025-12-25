@@ -29,6 +29,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Sheet,
   SheetContent,
@@ -203,8 +205,11 @@ export const Investments: React.FC = () => {
     transactions,
     loading,
     error,
+    updateLoading,
+    updateError,
     fetchOverview,
     fetchTransactions: fetchInvestmentTransactions,
+    createSnapshot,
   } = useInvestmentsApi();
 
   const [portfolioWindow, setPortfolioWindow] = useState<"since" | "12m">(
@@ -218,6 +223,13 @@ export const Investments: React.FC = () => {
   const [cashflowDetailsMonth, setCashflowDetailsMonth] = useState<
     string | null
   >(null);
+  const [snapshotDialogOpen, setSnapshotDialogOpen] = useState(false);
+  const [snapshotBalance, setSnapshotBalance] = useState("");
+  const [snapshotDate, setSnapshotDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+  const [snapshotNotes, setSnapshotNotes] = useState("");
+  const [snapshotSubmitted, setSnapshotSubmitted] = useState(false);
   const [cashflowsDialogScope, setCashflowsDialogScope] = useState<
     "portfolio" | "account" | null
   >(null);
@@ -470,6 +482,28 @@ export const Investments: React.FC = () => {
     if (transactions.length) return;
     fetchInvestmentTransactions();
   }, [detailsAccountId, fetchInvestmentTransactions, transactions.length]);
+
+  useEffect(() => {
+    if (!snapshotDialogOpen || !selectedAccount) return;
+    setSnapshotBalance(selectedAccount.currentValue.toFixed(2));
+    setSnapshotDate(new Date().toISOString().slice(0, 10));
+    setSnapshotNotes("");
+    setSnapshotSubmitted(false);
+  }, [selectedAccount, snapshotDialogOpen]);
+
+  useEffect(() => {
+    if (!snapshotSubmitted) return;
+    if (updateLoading) return;
+    if (updateError) return;
+    setSnapshotDialogOpen(false);
+    setSnapshotSubmitted(false);
+  }, [snapshotSubmitted, updateError, updateLoading]);
+
+  const snapshotSubmitDisabled =
+    updateLoading ||
+    !selectedAccount ||
+    !snapshotDate ||
+    !snapshotBalance.trim();
 
   return (
     <MotionPage className="space-y-6">
@@ -1066,19 +1100,35 @@ export const Investments: React.FC = () => {
           {selectedAccount ? (
             <>
               <SheetHeader className="border-b border-slate-100">
-                <SheetTitle className="truncate text-lg">
-                  {selectedAccount.accountName}
-                </SheetTitle>
-                <SheetDescription className="mt-1 text-slate-600">
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium",
-                      freshnessBadge(selectedAccount.asOf).className,
-                    )}
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <SheetTitle className="truncate text-lg">
+                      {selectedAccount.accountName}
+                    </SheetTitle>
+                    <SheetDescription className="mt-1 text-slate-600">
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium",
+                          freshnessBadge(selectedAccount.asOf).className,
+                        )}
+                      >
+                        {freshnessBadge(selectedAccount.asOf).label}
+                      </span>
+                      {selectedAccount.startDate ? (
+                        <span className="ml-2 text-xs text-slate-500">
+                          Since {selectedAccount.startDate}
+                        </span>
+                      ) : null}
+                    </SheetDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSnapshotDialogOpen(true)}
                   >
-                    {freshnessBadge(selectedAccount.asOf).label}
-                  </span>
-                </SheetDescription>
+                    Update balance
+                  </Button>
+                </div>
               </SheetHeader>
               <div className="flex-1 space-y-4 overflow-y-auto p-4">
                 <div className="grid grid-cols-2 gap-2">
@@ -1406,6 +1456,88 @@ export const Investments: React.FC = () => {
           )}
         </SheetContent>
       </Sheet>
+
+      <Dialog
+        open={snapshotDialogOpen}
+        onOpenChange={(open) => {
+          if (updateLoading) return;
+          setSnapshotDialogOpen(open);
+        }}
+      >
+        <DialogContent className="bg-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update investment balance</DialogTitle>
+            <DialogDescription className="text-slate-600">
+              Record the latest statement balance for this account.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="snapshot-date">As of date</Label>
+              <Input
+                id="snapshot-date"
+                type="date"
+                value={snapshotDate}
+                onChange={(e) => setSnapshotDate(e.target.value)}
+                disabled={updateLoading}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="snapshot-balance">Reported balance</Label>
+              <Input
+                id="snapshot-balance"
+                inputMode="decimal"
+                value={snapshotBalance}
+                onChange={(e) => setSnapshotBalance(e.target.value)}
+                placeholder={
+                  selectedAccount ? formatSek(selectedAccount.currentValue) : ""
+                }
+                disabled={updateLoading}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="snapshot-notes">Notes (optional)</Label>
+              <Input
+                id="snapshot-notes"
+                value={snapshotNotes}
+                onChange={(e) => setSnapshotNotes(e.target.value)}
+                placeholder="Statement upload, manual update, etc."
+                disabled={updateLoading}
+              />
+            </div>
+            {updateError ? (
+              <div className="text-sm text-rose-600">{updateError}</div>
+            ) : null}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setSnapshotDialogOpen(false)}
+                disabled={updateLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!selectedAccount) return;
+                  createSnapshot({
+                    account_id: selectedAccount.accountId,
+                    snapshot_date: snapshotDate,
+                    balance: snapshotBalance.trim(),
+                    notes: snapshotNotes.trim() || null,
+                  });
+                  setSnapshotSubmitted(true);
+                }}
+                disabled={snapshotSubmitDisabled}
+              >
+                {updateLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
+                Save balance
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={cashflowsDialogScope !== null}
