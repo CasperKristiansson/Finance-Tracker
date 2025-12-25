@@ -2,7 +2,7 @@ import { useMemo } from "react";
 
 import type { YearlyOverviewResponse } from "@/types/api";
 
-import { monthLabel } from "../reports-utils";
+import { buildCategoryConcentration, monthLabel } from "../reports-utils";
 
 export const useYearlyAnalysis = ({
   overview,
@@ -52,6 +52,16 @@ export const useYearlyAnalysis = ({
     );
     return { rows: incomeCategoryChartData, max };
   }, [incomeCategoryChartData]);
+
+  const expenseCategoryConcentration = useMemo(
+    () => buildCategoryConcentration(categoryChartData, 3),
+    [categoryChartData],
+  );
+
+  const incomeCategoryConcentration = useMemo(
+    () => buildCategoryConcentration(incomeCategoryChartData, 3),
+    [incomeCategoryChartData],
+  );
 
   const incomeSourceRows = useMemo(() => {
     if (!overview?.income_sources) return [];
@@ -415,5 +425,7 @@ export const useYearlyAnalysis = ({
     yearlyExpenseSourceDeltas,
     yearlyIncomeSourceDeltas,
     yearlySavingsDecomposition,
+    expenseCategoryConcentration,
+    incomeCategoryConcentration,
   };
 };
