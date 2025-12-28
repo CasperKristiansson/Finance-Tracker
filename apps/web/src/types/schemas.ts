@@ -1228,6 +1228,8 @@ export const goalSchema = z.object({
   updated_at: z.string(),
   current_amount: money,
   progress_pct: numeric,
+  achieved_at: nullableString,
+  achieved_delta_days: nullableNumeric,
 });
 
 export const goalListSchema = z.object({

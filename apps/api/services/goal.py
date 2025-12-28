@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
-from typing import Any, List, cast
+from typing import Any, List, Optional, cast
 from uuid import UUID
 
 from sqlalchemy import func
@@ -11,6 +12,7 @@ from sqlmodel import Session, select
 
 from ..models import Goal, Transaction, TransactionLeg
 from ..repositories.account import AccountRepository
+from ..repositories.reporting import NetWorthPoint, ReportingRepository
 from ..shared import coerce_decimal
 
 
@@ -20,6 +22,8 @@ class GoalService:
     def __init__(self, session: Session):
         self.session = session
         self.account_repository = AccountRepository(session)
+        self.reporting_repository = ReportingRepository(session)
+        self._net_worth_history: Optional[List[NetWorthPoint]] = None
 
     def list(self) -> List[Goal]:
         statement = select(Goal).order_by(cast(Any, Goal.created_at).desc())
@@ -51,20 +55,31 @@ class GoalService:
         self.session.delete(goal)
         self.session.commit()
 
-    def progress(self, goal: Goal) -> tuple[Decimal, float]:
-        """Return (current_amount, pct)."""
+    def progress(self, goal: Goal) -> tuple[Decimal, float, Optional[date], Optional[int]]:
+        """Return (current_amount, pct, achieved_at, achieved_delta_days)."""
         current = Decimal("0")
+        achieved_at = None
+        achieved_delta_days = None
         if goal.account_id:
             current = self.account_repository.calculate_balance(goal.account_id)
         elif goal.category_id:
             current = self._sum_for_category(goal.category_id)
         elif goal.subscription_id:
             current = self._sum_for_subscription(goal.subscription_id)
+        else:
+            history = self._get_net_worth_history()
+            if history:
+                current = history[-1].net_worth
+                achieved_at = self._find_achieved_at(history, goal.target_amount)
 
         pct = float(0)
         if goal.target_amount and goal.target_amount != 0:
             pct = float((current / goal.target_amount) * 100)
-        return current, pct
+
+        if achieved_at and goal.target_date:
+            achieved_delta_days = (achieved_at - goal.target_date).days
+
+        return current, pct, achieved_at, achieved_delta_days
 
     def _sum_for_category(self, category_id: UUID) -> Decimal:
         statement = (
@@ -83,6 +98,18 @@ class GoalService:
         )
         result = cast(Any, self.session.exec(statement)).scalar_one()
         return coerce_decimal(result)
+
+    def _get_net_worth_history(self) -> List[NetWorthPoint]:
+        if self._net_worth_history is None:
+            self._net_worth_history = self.reporting_repository.get_net_worth_history()
+        return self._net_worth_history
+
+    @staticmethod
+    def _find_achieved_at(history: List[NetWorthPoint], target_amount: Decimal) -> Optional[date]:
+        for point in history:
+            if point.net_worth >= target_amount:
+                return point.period
+        return None
 
 
 __all__ = ["GoalService"]

@@ -78,10 +78,12 @@ def delete_goal(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 
 def _to_schema(service: GoalService, goal: Goal) -> GoalRead:
-    current, pct = service.progress(goal)
+    current, pct, achieved_at, achieved_delta_days = service.progress(goal)
     payload = goal.model_dump(mode="python")
     payload["current_amount"] = current
     payload["progress_pct"] = pct
+    payload["achieved_at"] = achieved_at
+    payload["achieved_delta_days"] = achieved_delta_days
     return GoalRead.model_validate(payload)
 
 

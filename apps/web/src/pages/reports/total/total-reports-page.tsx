@@ -128,7 +128,6 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
     totalKpis,
     totalNetWorthSeries,
     totalNetWorthStats,
-    totalCashflowVolatility,
     totalNetWorthAttribution,
     totalNetWorthTrajectoryData,
     totalNetWorthTrajectoryDomain,
