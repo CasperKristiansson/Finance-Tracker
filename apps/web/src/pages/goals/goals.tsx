@@ -7,9 +7,11 @@ import {
   CheckCircle2,
   Goal as GoalIcon,
   Plus,
+  Pencil,
   Sparkles,
   Target,
   Trophy,
+  Trash2,
 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -65,6 +67,21 @@ const goalFormSchema = z.object({
 
 type GoalFormValues = z.infer<typeof goalFormSchema>;
 
+type GoalWithProgress = GoalRead & {
+  computedCurrentAmount: number;
+  computedProgressPct: number;
+  computedAchievedAt: string | null;
+  computedAchievedDeltaDays: number | null;
+  achieved: boolean;
+};
+
+const defaultGoalValues: GoalFormValues = {
+  name: "",
+  target_amount: "",
+  target_date: "",
+  note: "",
+};
+
 const formatCurrency = (value: string | number) =>
   currency(Number(value || 0), {
     maximumFractionDigits: 0,
@@ -95,14 +112,10 @@ export const Goals: React.FC = () => {
   const [totalOverviewLoading, setTotalOverviewLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
+  const [editingGoal, setEditingGoal] = useState<GoalRead | null>(null);
   const goalForm = useForm<GoalFormValues>({
     resolver: zodResolver(goalFormSchema),
-    defaultValues: {
-      name: "",
-      target_amount: "",
-      target_date: "",
-      note: "",
-    },
+    defaultValues: defaultGoalValues,
   });
 
   useEffect(() => {
@@ -110,6 +123,20 @@ export const Goals: React.FC = () => {
     void loadTotalOverview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!isDialogOpen) return;
+    if (editingGoal) {
+      goalForm.reset({
+        name: editingGoal.name ?? "",
+        target_amount: String(editingGoal.target_amount ?? ""),
+        target_date: editingGoal.target_date ?? "",
+        note: editingGoal.note ?? "",
+      });
+      return;
+    }
+    goalForm.reset(defaultGoalValues);
+  }, [editingGoal, goalForm, isDialogOpen]);
 
   const loadTotalOverview = async () => {
     setTotalOverviewLoading(true);
@@ -144,54 +171,141 @@ export const Goals: React.FC = () => {
 
   const submitGoal = goalForm.handleSubmit(async (values) => {
     try {
-      await apiFetch({
-        path: "/goals",
-        method: "POST",
-        token,
-        body: {
-          ...values,
-          target_date: values.target_date || null,
-          note: values.note || null,
-        },
-      });
-      toast.success("Goal added");
-      goalForm.reset({
-        name: "",
-        target_amount: "",
-        target_date: "",
-        note: "",
-      });
+      const payload = {
+        ...values,
+        target_date: values.target_date || null,
+        note: values.note || null,
+      };
+      if (editingGoal) {
+        await apiFetch({
+          path: `/goals/${editingGoal.id}`,
+          method: "PATCH",
+          token,
+          body: payload,
+        });
+        toast.success("Goal updated");
+      } else {
+        await apiFetch({
+          path: "/goals",
+          method: "POST",
+          token,
+          body: payload,
+        });
+        toast.success("Goal added");
+      }
+      goalForm.reset(defaultGoalValues);
       setIsDialogOpen(false);
+      setEditingGoal(null);
       void loadGoals();
     } catch (error) {
-      toast.error("Unable to add goal", {
-        description: error instanceof Error ? error.message : "Try again.",
-      });
+      toast.error(
+        editingGoal ? "Unable to update goal" : "Unable to add goal",
+        {
+          description: error instanceof Error ? error.message : "Try again.",
+        },
+      );
     }
   });
 
-  const goalsWithProgress = useMemo(() => {
+  const deleteGoal = async (goal: GoalRead) => {
+    const confirmed = window.confirm(
+      `Delete "${goal.name}"? This cannot be undone.`,
+    );
+    if (!confirmed) return;
+    try {
+      await apiFetch({
+        path: `/goals/${goal.id}`,
+        method: "DELETE",
+        token,
+      });
+      toast.success("Goal deleted");
+      setSelectedGoalId(null);
+      void loadGoals();
+    } catch (error) {
+      toast.error("Unable to delete goal", {
+        description: error instanceof Error ? error.message : "Try again.",
+      });
+    }
+  };
+
+  const totalMoneySeries = useMemo(() => {
+    if (!totalOverview) return [];
+    const netSeries = [...totalOverview.net_worth_series]
+      .map((row) => ({
+        date: row.date,
+        netWorth: Number(row.net_worth),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    const debtSeries = [...totalOverview.debt.series]
+      .map((row) => ({
+        date: row.date,
+        debt: Number(row.debt),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+    let debtIndex = 0;
+    let lastDebt = 0;
+    return netSeries.map((row) => {
+      while (
+        debtIndex < debtSeries.length &&
+        debtSeries[debtIndex].date <= row.date
+      ) {
+        lastDebt = debtSeries[debtIndex].debt;
+        debtIndex += 1;
+      }
+      return {
+        date: row.date,
+        totalMoney: row.netWorth + lastDebt,
+      };
+    });
+  }, [totalOverview]);
+
+  const goalsWithProgress = useMemo<GoalWithProgress[]>(() => {
     const currentTotalAssets = totalOverview
       ? Number(totalOverview.kpis.net_worth) +
         Number(totalOverview.kpis.debt_total)
       : null;
+    const findAchievedAt = (target: number) =>
+      totalMoneySeries.find((point) => point.totalMoney >= target)?.date ??
+      null;
+    const toUtcDate = (value: string) => new Date(`${value}T00:00:00Z`);
+
     return goals.map((goal) => {
       const target = Number(goal.target_amount || 0);
       const fallbackCurrent = Number(goal.current_amount || 0);
-      const current = currentTotalAssets ?? fallbackCurrent;
+      const isTotalAssetsGoal =
+        !goal.category_id && !goal.account_id && !goal.subscription_id;
+      const current =
+        isTotalAssetsGoal && currentTotalAssets !== null
+          ? currentTotalAssets
+          : fallbackCurrent;
       const progressPct = target ? (current / target) * 100 : 0;
-      const achieved =
-        currentTotalAssets !== null
+      const computedAchievedAt = isTotalAssetsGoal
+        ? findAchievedAt(target)
+        : (goal.achieved_at ?? null);
+      const computedAchievedDeltaDays =
+        computedAchievedAt && goal.target_date
+          ? Math.round(
+              (toUtcDate(computedAchievedAt).getTime() -
+                toUtcDate(goal.target_date).getTime()) /
+                (1000 * 60 * 60 * 24),
+            )
+          : null;
+      const achieved = isTotalAssetsGoal
+        ? currentTotalAssets !== null
           ? current >= target
-          : goal.progress_pct >= 100;
+          : goal.progress_pct >= 100
+        : goal.progress_pct >= 100;
+
       return {
         ...goal,
         computedCurrentAmount: current,
         computedProgressPct: progressPct,
+        computedAchievedAt,
+        computedAchievedDeltaDays,
         achieved,
       };
     });
-  }, [goals, totalOverview]);
+  }, [goals, totalMoneySeries, totalOverview]);
 
   const stats = useMemo(() => {
     const currentTotalAssets = totalOverview
@@ -217,7 +331,10 @@ export const Goals: React.FC = () => {
           new Date(b.target_date ?? "").getTime(),
       )[0];
     const achievedWithDelta = achievedGoals
-      .map((goal) => goal.achieved_delta_days)
+      .map(
+        (goal) =>
+          goal.computedAchievedDeltaDays ?? goal.achieved_delta_days ?? null,
+      )
       .filter((value): value is number => typeof value === "number");
     const avgDelta = achievedWithDelta.length
       ? Math.round(
@@ -304,18 +421,30 @@ export const Goals: React.FC = () => {
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <Dialog
+                open={isDialogOpen}
+                onOpenChange={(open) => {
+                  setIsDialogOpen(open);
+                  if (!open) setEditingGoal(null);
+                }}
+              >
                 <DialogTrigger asChild>
-                  <Button className="gap-2 bg-white text-slate-900 hover:bg-white/90">
+                  <Button
+                    className="gap-2 bg-white text-slate-900 hover:bg-white/90"
+                    onClick={() => setEditingGoal(null)}
+                  >
                     <Plus className="h-4 w-4" /> Create goal
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="border-slate-200 bg-white">
                   <DialogHeader>
-                    <DialogTitle>Set a total assets goal</DialogTitle>
+                    <DialogTitle>
+                      {editingGoal ? "Edit goal" : "Set a total assets goal"}
+                    </DialogTitle>
                     <DialogDescription>
-                      Your goal will track total assets and show progress over
-                      time.
+                      {editingGoal
+                        ? "Update the milestone details for your goal."
+                        : "Your goal will track total assets and show progress over time."}
                     </DialogDescription>
                   </DialogHeader>
                   <form className="space-y-4" onSubmit={submitGoal}>
@@ -379,11 +508,16 @@ export const Goals: React.FC = () => {
                       <Button
                         type="button"
                         variant="ghost"
-                        onClick={() => setIsDialogOpen(false)}
+                        onClick={() => {
+                          setIsDialogOpen(false);
+                          setEditingGoal(null);
+                        }}
                       >
                         Cancel
                       </Button>
-                      <Button type="submit">Save goal</Button>
+                      <Button type="submit">
+                        {editingGoal ? "Save changes" : "Save goal"}
+                      </Button>
                     </DialogFooter>
                   </form>
                 </DialogContent>
@@ -503,7 +637,12 @@ export const Goals: React.FC = () => {
                 Add a total assets milestone to start tracking your journey.
               </p>
             </div>
-            <Button onClick={() => setIsDialogOpen(true)}>
+            <Button
+              onClick={() => {
+                setEditingGoal(null);
+                setIsDialogOpen(true);
+              }}
+            >
               Create your first goal
             </Button>
           </CardContent>
@@ -619,7 +758,10 @@ export const Goals: React.FC = () => {
               </div>
               <StaggerWrap className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {stats.achievedGoals.map((goal) => {
-                  const achievedDate = goal.achieved_at ?? goal.updated_at;
+                  const achievedDate =
+                    goal.computedAchievedAt ??
+                    goal.achieved_at ??
+                    goal.updated_at;
                   const pct = Math.min(
                     100,
                     Math.round(goal.computedProgressPct),
@@ -674,9 +816,9 @@ export const Goals: React.FC = () => {
                             />
                             <div className="flex items-center justify-between text-xs text-slate-500">
                               <span>
-                                {goal.achieved_delta_days !== null &&
-                                goal.achieved_delta_days !== undefined
-                                  ? formatDelta(goal.achieved_delta_days)
+                                {goal.computedAchievedDeltaDays !== null &&
+                                goal.computedAchievedDeltaDays !== undefined
+                                  ? formatDelta(goal.computedAchievedDeltaDays)
                                   : "Milestone achieved"}
                               </span>
                               <span>
@@ -715,6 +857,29 @@ export const Goals: React.FC = () => {
                   Target {formatCurrency(selectedGoal.target_amount)} •{" "}
                   {formatDate(selectedGoal.target_date)}
                 </SheetDescription>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => {
+                      setEditingGoal(selectedGoal);
+                      setIsDialogOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => deleteGoal(selectedGoal)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                </div>
               </SheetHeader>
 
               <div className="flex-1 space-y-5 overflow-y-auto px-4 pb-6">
@@ -764,12 +929,22 @@ export const Goals: React.FC = () => {
                     </p>
                     <p className="mt-1 text-xs text-slate-500">
                       {selectedGoal.achieved
-                        ? selectedGoal.achieved_delta_days !== null &&
-                          selectedGoal.achieved_delta_days !== undefined
-                          ? formatDelta(selectedGoal.achieved_delta_days)
+                        ? selectedGoal.computedAchievedDeltaDays !== null &&
+                          selectedGoal.computedAchievedDeltaDays !== undefined
+                          ? formatDelta(selectedGoal.computedAchievedDeltaDays)
                           : "Milestone achieved"
                         : "Keep stacking wins to reach the target."}
                     </p>
+                    {selectedGoal.achieved ? (
+                      <p className="mt-2 text-xs text-slate-500">
+                        Achieved{" "}
+                        {formatDate(
+                          selectedGoal.computedAchievedAt ??
+                            selectedGoal.achieved_at ??
+                            selectedGoal.updated_at,
+                        )}
+                      </p>
+                    ) : null}
                   </div>
                   {selectedGoal.note ? (
                     <div className="rounded-2xl border border-slate-200 bg-white p-4">
