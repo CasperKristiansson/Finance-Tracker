@@ -51,6 +51,8 @@ class GoalRead(BaseModel):
     updated_at: datetime
     current_amount: Decimal
     progress_pct: float
+    achieved_at: Optional[date] = None
+    achieved_delta_days: Optional[int] = None
 
 
 class GoalListResponse(BaseModel):
