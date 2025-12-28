@@ -26,9 +26,17 @@ import {
   type TransactionRead,
 } from "@/types/api";
 
+const transactionTypeOptions = [
+  "transaction",
+  TransactionType.ADJUSTMENT,
+  TransactionType.TRANSFER,
+] as const;
+
+type TransactionFormType = (typeof transactionTypeOptions)[number];
+
 const transactionFormSchema = z
   .object({
-    transaction_type: z.enum(TransactionType),
+    transaction_type: z.enum(transactionTypeOptions),
     account_id: z.string().min(1, "Pick an account"),
     transfer_account_id: z.string().optional(),
     amount: z.string().min(1, "Add an amount"),
@@ -77,6 +85,16 @@ const transactionFormSchema = z
 
 type TransactionFormValues = z.infer<typeof transactionFormSchema>;
 
+const toFormTransactionType = (
+  transactionType: TransactionType,
+): TransactionFormType => {
+  if (transactionType === TransactionType.ADJUSTMENT)
+    return TransactionType.ADJUSTMENT;
+  if (transactionType === TransactionType.TRANSFER)
+    return TransactionType.TRANSFER;
+  return "transaction";
+};
+
 export const TransactionModal: React.FC<{
   open: boolean;
   onClose: () => void;
@@ -100,7 +118,7 @@ export const TransactionModal: React.FC<{
   } = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
     defaultValues: {
-      transaction_type: TransactionType.EXPENSE,
+      transaction_type: "transaction",
       account_id: "",
       transfer_account_id: "",
       amount: "",
@@ -156,11 +174,7 @@ export const TransactionModal: React.FC<{
     if (selectedTransactionType === TransactionType.TRANSFER) return null;
     if (selectedTransactionType === TransactionType.ADJUSTMENT)
       return CategoryType.ADJUSTMENT;
-    if (categoryAmountHint === null) {
-      return selectedTransactionType === TransactionType.EXPENSE
-        ? CategoryType.EXPENSE
-        : CategoryType.INCOME;
-    }
+    if (categoryAmountHint === null) return null;
     return categoryAmountHint < 0 ? CategoryType.EXPENSE : CategoryType.INCOME;
   }, [categoryAmountHint, selectedTransactionType, transaction]);
   const visibleCategories = useMemo(() => {
@@ -174,7 +188,7 @@ export const TransactionModal: React.FC<{
       fetchCategories();
       if (!transaction) {
         reset({
-          transaction_type: TransactionType.EXPENSE,
+          transaction_type: "transaction",
           account_id: "",
           transfer_account_id: "",
           amount: "",
@@ -200,7 +214,7 @@ export const TransactionModal: React.FC<{
       transaction.legs[1];
 
     reset({
-      transaction_type: transaction.transaction_type,
+      transaction_type: toFormTransactionType(transaction.transaction_type),
       account_id: transferFrom?.account_id ?? "",
       transfer_account_id:
         transaction.transaction_type === TransactionType.TRANSFER
@@ -236,8 +250,16 @@ export const TransactionModal: React.FC<{
 
     const rawAmount = Number(values.amount);
     const safeAmount = Number.isNaN(rawAmount) ? 0 : rawAmount;
+    const resolvedTransactionType =
+      values.transaction_type === TransactionType.ADJUSTMENT
+        ? TransactionType.ADJUSTMENT
+        : values.transaction_type === TransactionType.TRANSFER
+          ? TransactionType.TRANSFER
+          : safeAmount < 0
+            ? TransactionType.EXPENSE
+            : TransactionType.INCOME;
     if (
-      values.transaction_type !== TransactionType.TRANSFER &&
+      resolvedTransactionType !== TransactionType.TRANSFER &&
       !offsetAccount
     ) {
       setError("account_id", {
@@ -247,15 +269,15 @@ export const TransactionModal: React.FC<{
     }
 
     const signedAmount = (() => {
-      if (values.transaction_type === TransactionType.INCOME)
+      if (resolvedTransactionType === TransactionType.INCOME)
         return Math.abs(safeAmount);
-      if (values.transaction_type === TransactionType.EXPENSE)
+      if (resolvedTransactionType === TransactionType.EXPENSE)
         return -Math.abs(safeAmount);
       return safeAmount;
     })();
 
     const legs =
-      values.transaction_type === TransactionType.TRANSFER
+      resolvedTransactionType === TransactionType.TRANSFER
         ? [
             {
               account_id: values.account_id,
@@ -281,14 +303,14 @@ export const TransactionModal: React.FC<{
       description: values.description,
       notes: values.notes?.trim() || undefined,
       category_id:
-        values.transaction_type === TransactionType.TRANSFER
+        resolvedTransactionType === TransactionType.TRANSFER
           ? undefined
           : values.category_id || undefined,
       occurred_at: new Date(values.occurred_at).toISOString(),
       posted_at: values.posted_at
         ? new Date(values.posted_at).toISOString()
         : undefined,
-      transaction_type: values.transaction_type,
+      transaction_type: resolvedTransactionType,
       legs,
     });
 
@@ -308,7 +330,7 @@ export const TransactionModal: React.FC<{
     }
 
     reset({
-      transaction_type: TransactionType.EXPENSE,
+      transaction_type: "transaction",
       account_id: "",
       transfer_account_id: "",
       amount: "",
@@ -329,7 +351,7 @@ export const TransactionModal: React.FC<{
     if (!shouldDelete) return;
     deleteTransaction(transaction.id);
     reset({
-      transaction_type: TransactionType.EXPENSE,
+      transaction_type: "transaction",
       account_id: "",
       transfer_account_id: "",
       amount: "",
@@ -419,8 +441,7 @@ export const TransactionModal: React.FC<{
                 disabled={isEdit}
                 {...register("transaction_type")}
               >
-                <option value={TransactionType.INCOME}>Income</option>
-                <option value={TransactionType.EXPENSE}>Expense</option>
+                <option value="transaction">Transaction</option>
                 <option value={TransactionType.ADJUSTMENT}>Adjustment</option>
                 <option value={TransactionType.TRANSFER}>Transfer</option>
               </select>
