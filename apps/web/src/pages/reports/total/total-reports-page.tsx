@@ -11,6 +11,7 @@ import type {
   YearlyReportEntry,
   YearlyOverviewResponse,
 } from "@/types/api";
+import { CategoryConcentrationCard } from "../components/category-concentration-card";
 import { CashflowVolatilityCard } from "../components/cashflow-volatility-card";
 import { ForecastCard } from "../components/forecast-card";
 import { ReportsOverviewCard } from "../components/reports-overview-card";
@@ -131,6 +132,8 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
     totalInvestmentsYearlyTable,
     totalExpenseCategoriesLifetime,
     totalIncomeCategoriesLifetime,
+    totalExpenseCategoryConcentration,
+    totalIncomeCategoryConcentration,
     totalExpenseCategoryChanges,
     totalIncomeCategoryChanges,
     totalIncomeSourcesLifetime,
@@ -380,6 +383,22 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
           yearlyTotals={totalYearly}
           onOpenDrilldownDialog={openTotalDrilldownDialog}
           onOpenHeatmapDialog={openTotalHeatmapDialog}
+        />
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <CategoryConcentrationCard
+          flow="expense"
+          loading={totalOverviewLoading}
+          hasOverview={totalOverviewLoaded}
+          concentration={totalExpenseCategoryConcentration}
+        />
+
+        <CategoryConcentrationCard
+          flow="income"
+          loading={totalOverviewLoading}
+          hasOverview={totalOverviewLoaded}
+          concentration={totalIncomeCategoryConcentration}
         />
       </div>
 

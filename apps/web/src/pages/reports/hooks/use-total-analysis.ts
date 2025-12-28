@@ -6,7 +6,11 @@ import type {
   CashflowVolatilityMetric,
   CashflowVolatilitySummary,
 } from "../reports-types";
-import { formatDate, monthLabel } from "../reports-utils";
+import {
+  computeCategoryConcentration,
+  formatDate,
+  monthLabel,
+} from "../reports-utils";
 
 type TotalWindowPreset = "all" | "10" | "5" | "3";
 type TotalWindowRange = { start: string; end: string } | null;
@@ -769,6 +773,16 @@ export const useTotalAnalysis = ({
       .sort((a, b) => b.total - a.total);
   }, [totalOverview]);
 
+  const totalExpenseCategoryConcentration = useMemo(
+    () => computeCategoryConcentration(totalExpenseCategoriesLifetime),
+    [totalExpenseCategoriesLifetime],
+  );
+
+  const totalIncomeCategoryConcentration = useMemo(
+    () => computeCategoryConcentration(totalIncomeCategoriesLifetime),
+    [totalIncomeCategoriesLifetime],
+  );
+
   const totalExpenseCategoryChanges = useMemo(() => {
     if (!totalOverview) return [];
     return totalOverview.expense_category_changes_yoy
@@ -1007,6 +1021,8 @@ export const useTotalAnalysis = ({
     totalInvestmentsYearlyTable,
     totalExpenseCategoriesLifetime,
     totalIncomeCategoriesLifetime,
+    totalExpenseCategoryConcentration,
+    totalIncomeCategoryConcentration,
     totalExpenseCategoryChanges,
     totalIncomeCategoryChanges,
     totalIncomeSourcesLifetime,
