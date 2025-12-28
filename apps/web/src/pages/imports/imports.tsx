@@ -1973,8 +1973,8 @@ export const Imports: React.FC = () => {
                                         categories={rowCategories}
                                         disabled={Boolean(
                                           taxEventType ||
-                                            transferAccountId ||
-                                            isDeleted,
+                                          transferAccountId ||
+                                          isDeleted,
                                         )}
                                         missing={isMissingCategory}
                                         suggesting={
@@ -2748,14 +2748,33 @@ export const Imports: React.FC = () => {
                             className="h-auto justify-start gap-3 text-left"
                             onClick={() => setTransferDraftValue(acc.id)}
                           >
-                            <div className="flex h-9 w-9 items-center justify-center rounded bg-slate-100 text-xs font-semibold text-slate-700">
+                            <div
+                              className={cn(
+                                "flex h-9 w-9 items-center justify-center rounded text-xs font-semibold",
+                                selected
+                                  ? "bg-white/10 text-white"
+                                  : "bg-slate-100 text-slate-700",
+                              )}
+                            >
                               {acc.name.slice(0, 2).toUpperCase()}
                             </div>
                             <div className="flex flex-col">
-                              <span className="text-sm font-semibold text-slate-900">
+                              <span
+                                className={cn(
+                                  "text-sm font-semibold",
+                                  selected ? "text-white" : "text-slate-900",
+                                )}
+                              >
                                 {acc.name}
                               </span>
-                              <span className="text-xs text-slate-500">
+                              <span
+                                className={cn(
+                                  "text-xs",
+                                  selected
+                                    ? "text-slate-200"
+                                    : "text-slate-500",
+                                )}
+                              >
                                 {bankLabel(acc.bank_import_type)}
                               </span>
                             </div>
