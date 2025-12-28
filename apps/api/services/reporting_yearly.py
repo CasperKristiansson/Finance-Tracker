@@ -10,9 +10,10 @@ from decimal import Decimal
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict, cast
 from uuid import UUID
 
+from sqlalchemy import case, func
 from sqlmodel import Session, select
 
-from ..models import Account
+from ..models import Account, Transaction, TransactionLeg
 from ..models.investment_snapshot import InvestmentSnapshot
 from ..repositories.reporting import ReportingRepository, TransactionAmountRow
 from ..shared import AccountType, TransactionType, coerce_decimal
@@ -343,14 +344,59 @@ def build_yearly_overview_enhancements(
 
         contributions = Decimal("0")
         withdrawals = Decimal("0")
-        for row in rows:
-            if row.transaction_type != TransactionType.TRANSFER:
-                continue
-            desc = (row.description or "").lower()
-            if "transfer to investments" in desc:
-                contributions += abs(coerce_decimal(row.amount))
-            elif "transfer from investments" in desc:
-                withdrawals += abs(coerce_decimal(row.amount))
+        investment_account_ids = [acc.id for acc in investment_accounts if acc.id]
+        if investment_account_ids:
+            noninv_tx_ids = (
+                select(cast(Any, TransactionLeg.transaction_id))
+                .join(Account, cast(Any, TransactionLeg.account_id) == cast(Any, Account.id))
+                .where(Account.account_type != AccountType.INVESTMENT)
+                .distinct()
+            ).subquery()
+
+            stmt = (
+                select(
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (
+                                    cast(Any, TransactionLeg.amount) > 0,
+                                    cast(Any, TransactionLeg.amount),
+                                ),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    ).label("deposits"),
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (
+                                    cast(Any, TransactionLeg.amount) < 0,
+                                    -cast(Any, TransactionLeg.amount),
+                                ),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    ).label("withdrawals"),
+                )
+                .join(
+                    Transaction,
+                    cast(Any, TransactionLeg.transaction_id) == cast(Any, Transaction.id),
+                )
+                .where(
+                    cast(Any, TransactionLeg.account_id).in_(investment_account_ids),
+                    cast(Any, Transaction.occurred_at) >= start,
+                    cast(Any, Transaction.occurred_at) < end,
+                    cast(Any, Transaction.transaction_type) != TransactionType.ADJUSTMENT,
+                    cast(Any, TransactionLeg.transaction_id).in_(
+                        select(cast(Any, noninv_tx_ids.c.transaction_id))
+                    ),
+                )
+            )
+            deposits, withdrawals_sum = session.exec(stmt).one()
+            contributions = coerce_decimal(deposits or 0)
+            withdrawals = coerce_decimal(withdrawals_sum or 0)
 
         monthly_values = [Decimal("0") for _ in range(12)]
         investment_snapshot_rows = repository.list_investment_snapshots_until(end=as_of_date)
