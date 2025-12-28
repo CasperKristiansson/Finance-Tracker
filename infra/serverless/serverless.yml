@@ -884,3 +884,15 @@ functions:
           path: /investments/overview
           method: GET
           authorizer: cognitoJwt
+
+  createInvestmentSnapshot:
+    handler: apps/api/handlers/investments.create_investment_snapshot
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /investments/snapshots
+          method: POST
+          authorizer: cognitoJwt
