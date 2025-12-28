@@ -8,8 +8,8 @@ import type {
   YearlyCategoryDetailResponse,
   YearlyOverviewResponse,
 } from "@/types/api";
-import { CategoryConcentrationCard } from "../components/category-concentration-card";
 import { CashflowVolatilityCard } from "../components/cashflow-volatility-card";
+import { CategoryConcentrationCard } from "../components/category-concentration-card";
 import { ReportsOverviewCard } from "../components/reports-overview-card";
 import { YearlyAccountFlowsCard } from "../components/yearly-account-flows-card";
 import { YearlyCategoryBreakdownCard } from "../components/yearly-category-breakdown-card";

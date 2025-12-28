@@ -11,8 +11,8 @@ import type {
   YearlyReportEntry,
   YearlyOverviewResponse,
 } from "@/types/api";
-import { CategoryConcentrationCard } from "../components/category-concentration-card";
 import { CashflowVolatilityCard } from "../components/cashflow-volatility-card";
+import { CategoryConcentrationCard } from "../components/category-concentration-card";
 import { ForecastCard } from "../components/forecast-card";
 import { ReportsOverviewCard } from "../components/reports-overview-card";
 import { TotalAccountsOverviewCard } from "../components/total-accounts-overview-card";
