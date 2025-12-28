@@ -4,15 +4,19 @@ import { callApiWithAuth } from "@/features/api/apiSaga";
 import {
   setInvestmentsError,
   setInvestmentsLoading,
+  setInvestmentsUpdateError,
+  setInvestmentsUpdateLoading,
   setTransactions,
   setOverview,
 } from "@/features/investments/investmentsSlice";
 import type {
   InvestmentOverviewResponse,
+  InvestmentSnapshotCreateRequest,
   InvestmentTransactionListResponse,
 } from "@/types/api";
 import {
   investmentOverviewResponseSchema,
+  investmentSnapshotCreateResponseSchema,
   investmentTransactionListSchema,
 } from "@/types/schemas";
 
@@ -22,6 +26,9 @@ export const FetchInvestmentTransactions = createAction(
 export const FetchInvestmentOverview = createAction(
   "investments/fetchOverview",
 );
+export const CreateInvestmentSnapshot = createAction<{
+  data: InvestmentSnapshotCreateRequest;
+}>("investments/createSnapshot");
 
 function* handleFetchTransactions(): Generator {
   try {
@@ -73,7 +80,39 @@ function* handleFetchOverview(): Generator {
   }
 }
 
+function* handleCreateSnapshot(
+  action: ReturnType<typeof CreateInvestmentSnapshot>,
+): Generator {
+  yield put(setInvestmentsUpdateLoading(true));
+  yield put(setInvestmentsUpdateError(undefined));
+  try {
+    yield call(
+      callApiWithAuth,
+      {
+        path: "/investments/snapshots",
+        method: "POST",
+        body: action.payload.data,
+        schema: investmentSnapshotCreateResponseSchema,
+      },
+      { loadingKey: "investments-create-snapshot" },
+    );
+    yield put(setInvestmentsUpdateError(undefined));
+    yield put(FetchInvestmentOverview());
+  } catch (error) {
+    yield put(
+      setInvestmentsUpdateError(
+        error instanceof Error
+          ? error.message
+          : "Unable to update investment balance.",
+      ),
+    );
+  } finally {
+    yield put(setInvestmentsUpdateLoading(false));
+  }
+}
+
 export function* InvestmentsSaga() {
   yield takeLatest(FetchInvestmentTransactions.type, handleFetchTransactions);
   yield takeLatest(FetchInvestmentOverview.type, handleFetchOverview);
+  yield takeLatest(CreateInvestmentSnapshot.type, handleCreateSnapshot);
 }

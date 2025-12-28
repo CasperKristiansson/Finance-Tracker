@@ -1,93 +1,93 @@
 import React from "react";
 
+import { EmptyState } from "@/components/composed/empty-state";
+import { LoadingCard } from "@/components/composed/loading-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 
-import { percent } from "../reports-utils";
 import type { CategoryConcentration } from "../reports-utils";
+import { percent } from "../reports-utils";
 
-type CategoryConcentrationCardProps = {
+export const CategoryConcentrationCard: React.FC<{
   flow: "income" | "expense";
-  title: string;
-  description?: string;
-  loading?: boolean;
+  loading: boolean;
+  hasOverview: boolean;
   concentration: CategoryConcentration | null;
-};
-
-export const CategoryConcentrationCard: React.FC<
-  CategoryConcentrationCardProps
-> = ({ flow, title, description, loading, concentration }) => {
-  const accentColor = flow === "income" ? "#10b981" : "#ef4444";
+}> = ({ flow, loading, hasOverview, concentration }) => {
+  const title =
+    flow === "income"
+      ? "Income category concentration"
+      : "Expense category concentration";
+  const accent = flow === "income" ? "#10b981" : "#ef4444";
 
   return (
-    <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
+    <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold text-slate-900">
           {title}
         </CardTitle>
-        {description ? (
-          <p className="text-xs text-slate-500">{description}</p>
-        ) : null}
+        <p className="text-xs text-slate-500">
+          How much of the total sits in the top categories.
+        </p>
       </CardHeader>
-      <CardContent className="space-y-4 text-sm">
-        {loading ? (
-          <Skeleton className="h-48 w-full" />
+      <CardContent>
+        {loading && !hasOverview ? (
+          <LoadingCard className="h-56" lines={6} />
         ) : !concentration ? (
-          <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-slate-200 text-xs text-slate-500">
-            No category data yet.
-          </div>
+          <EmptyState className="h-56" title="No category data yet." />
         ) : (
-          <>
-            <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-              <p className="text-[11px] tracking-wide text-slate-500 uppercase">
-                Top 3 share
-              </p>
-              <p className="text-2xl font-semibold text-slate-900">
-                {percent(concentration.topSharePct, {
-                  maximumFractionDigits: 1,
-                })}
-              </p>
-              <p className="text-xs text-slate-500">
-                Portion of total {flow} across categories.
-              </p>
+          <div className="grid gap-4 md:grid-cols-[1.1fr_1fr]">
+            <div className="space-y-3">
+              <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                <p className="text-xs text-slate-400 uppercase">Top 3 share</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">
+                  {percent(concentration.topSharePct)}
+                </p>
+                <p className="text-xs text-slate-500">
+                  Combined share of the three biggest categories.
+                </p>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                <p className="text-xs text-slate-400 uppercase">
+                  Diversity score
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">
+                  {percent(concentration.diversityScore)}
+                </p>
+                <p className="text-xs text-slate-500">
+                  Higher means the mix is more balanced.
+                </p>
+              </div>
             </div>
-
             <div className="space-y-2">
-              {concentration.topCategories.map((category) => (
+              <p className="text-xs font-semibold tracking-wide text-slate-400 uppercase">
+                Top categories
+              </p>
+              {concentration.topCategories.map((row) => (
                 <div
-                  key={category.name}
-                  className="flex items-center justify-between"
+                  key={row.name}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
                 >
-                  <span className="flex items-center gap-2 text-slate-700">
-                    <span
-                      className="h-2 w-2 rounded-full"
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-slate-700">
+                      {row.name}
+                    </span>
+                    <span className="text-slate-500">
+                      {percent(row.sharePct)}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100">
+                    <div
+                      className="h-1.5 rounded-full"
                       style={{
-                        backgroundColor: category.color ?? accentColor,
+                        width: `${Math.min(100, row.sharePct)}%`,
+                        backgroundColor: accent,
                       }}
                     />
-                    {category.name}
-                  </span>
-                  <span className="font-semibold text-slate-900">
-                    {percent(category.sharePct, { maximumFractionDigits: 1 })}
-                  </span>
+                  </div>
                 </div>
               ))}
             </div>
-
-            <div className="rounded-lg border border-slate-100 bg-white/80 p-3">
-              <p className="text-[11px] tracking-wide text-slate-500 uppercase">
-                Diversity score
-              </p>
-              <p className="text-lg font-semibold text-slate-900">
-                {percent(concentration.diversityScorePct, {
-                  maximumFractionDigits: 1,
-                })}
-              </p>
-              <p className="text-xs text-slate-500">
-                Higher scores mean more balanced category mix.
-              </p>
-            </div>
-          </>
+          </div>
         )}
       </CardContent>
     </Card>

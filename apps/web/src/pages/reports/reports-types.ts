@@ -1,5 +1,27 @@
 export type ReportMode = "yearly" | "total";
 
+export type CashflowVolatilityMetric = {
+  mean: number;
+  stdDev: number;
+  cv: number | null;
+};
+
+export type CashflowSpikeMonth = {
+  date: string;
+  label: string;
+  kind: "income" | "expense" | "net";
+  value: number;
+  zScore: number;
+};
+
+export type CashflowVolatilitySummary = {
+  income: CashflowVolatilityMetric;
+  expense: CashflowVolatilityMetric;
+  net: CashflowVolatilityMetric;
+  stabilityScore: number | null;
+  spikes: CashflowSpikeMonth[];
+};
+
 export type DetailDialogState =
   | {
       kind: "investments";

@@ -11,7 +11,9 @@ import type {
   YearlyReportEntry,
   YearlyOverviewResponse,
 } from "@/types/api";
+import { CashflowVolatilityCard } from "../components/cashflow-volatility-card";
 import { CategoryConcentrationCard } from "../components/category-concentration-card";
+import { ForecastCard } from "../components/forecast-card";
 import { ReportsOverviewCard } from "../components/reports-overview-card";
 import { TotalAccountsOverviewCard } from "../components/total-accounts-overview-card";
 import { TotalCategoryByYearCard } from "../components/total-category-by-year-card";
@@ -118,9 +120,11 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
     totalKpis,
     totalNetWorthSeries,
     totalNetWorthStats,
+    totalCashflowVolatility,
     totalNetWorthAttribution,
     totalNetWorthTrajectoryData,
     totalNetWorthTrajectoryDomain,
+    totalNetWorthForecast,
     totalYearly,
     totalExpenseMix,
     totalIncomeMix,
@@ -294,6 +298,11 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
           domain={totalNetWorthTrajectoryDomain}
         />
 
+        <ForecastCard
+          loading={totalOverviewLoading}
+          forecast={totalNetWorthForecast}
+        />
+
         <TotalMoneyPositionCard
           loading={totalOverviewLoading}
           series={totalMoneySeries}
@@ -332,6 +341,13 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
         incomeCategories={totalIncomeCategoriesLifetime}
         expenseCategories={totalExpenseCategoriesLifetime}
         loading={totalOverviewLoading}
+      />
+
+      <CashflowVolatilityCard
+        title="Cashflow stability"
+        description="Monthly volatility for income, expense, and net across the selected window."
+        loading={totalOverviewLoading}
+        volatility={totalCashflowVolatility}
       />
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -373,17 +389,15 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
       <div className="grid gap-3 lg:grid-cols-2">
         <CategoryConcentrationCard
           flow="expense"
-          title="Expense concentration"
-          description="Top categories and overall balance."
           loading={totalOverviewLoading}
+          hasOverview={totalOverviewLoaded}
           concentration={totalExpenseCategoryConcentration}
         />
 
         <CategoryConcentrationCard
           flow="income"
-          title="Income concentration"
-          description="Top categories and overall balance."
           loading={totalOverviewLoading}
+          hasOverview={totalOverviewLoaded}
           concentration={totalIncomeCategoryConcentration}
         />
       </div>
