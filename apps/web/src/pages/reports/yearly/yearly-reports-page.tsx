@@ -8,6 +8,8 @@ import type {
   YearlyCategoryDetailResponse,
   YearlyOverviewResponse,
 } from "@/types/api";
+import { CashflowVolatilityCard } from "../components/cashflow-volatility-card";
+import { CategoryConcentrationCard } from "../components/category-concentration-card";
 import { ReportsOverviewCard } from "../components/reports-overview-card";
 import { YearlyAccountFlowsCard } from "../components/yearly-account-flows-card";
 import { YearlyCategoryBreakdownCard } from "../components/yearly-category-breakdown-card";
@@ -73,11 +75,14 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
     expenseSourceRows,
     prevIncomeSourceRows,
     prevExpenseSourceRows,
+    expenseCategoryConcentration,
+    incomeCategoryConcentration,
     yearlyExpenseCategoryDeltas,
     yearlyIncomeCategoryDeltas,
     yearlyExpenseSourceDeltas,
     yearlyIncomeSourceDeltas,
     yearlySavingsDecomposition,
+    yearlyCashflowVolatility,
   } = useYearlyAnalysis({
     overview,
     prevOverview,
@@ -225,7 +230,7 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
         loading={overviewLoading}
       />
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-2">
         <YearlyDebtCard
           year={year}
           loading={overviewLoading}
@@ -233,10 +238,18 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
           debtOverview={overview?.debt_overview ?? null}
           onOpenDetailDialog={openDetailDialog}
         />
+        <YearlySummaryCard year={year} overview={overview} />
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <CashflowVolatilityCard
+          title="Cashflow stability"
+          description={`Monthly volatility for income, expense, and net in ${year}.`}
+          loading={overviewLoading}
+          volatility={yearlyCashflowVolatility}
+        />
 
         <YearlySavingsRateCard savings={overview?.savings} />
-
-        <YearlySummaryCard year={year} overview={overview} />
       </div>
 
       <YearlyDriversGrid
@@ -255,7 +268,7 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
         }}
       />
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-3">
         <YearlyCategoryBreakdownCard
           flow="expense"
           loading={overviewLoading}
@@ -264,6 +277,13 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
             setSelectedCategoryFlow("expense");
             setSelectedCategoryId(categoryId);
           }}
+        />
+
+        <CategoryConcentrationCard
+          flow="expense"
+          loading={overviewLoading}
+          hasOverview={Boolean(overview)}
+          concentration={expenseCategoryConcentration}
         />
 
         <YearlyCategoryHeatmapCard
@@ -276,7 +296,7 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
         />
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-3 lg:grid-cols-3">
         <YearlyCategoryBreakdownCard
           flow="income"
           loading={overviewLoading}
@@ -285,6 +305,13 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
             setSelectedCategoryFlow("income");
             setSelectedCategoryId(categoryId);
           }}
+        />
+
+        <CategoryConcentrationCard
+          flow="income"
+          loading={overviewLoading}
+          hasOverview={Boolean(overview)}
+          concentration={incomeCategoryConcentration}
         />
 
         <YearlyCategoryHeatmapCard

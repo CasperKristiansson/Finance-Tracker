@@ -12,6 +12,9 @@ import type {
   YearlyOverviewResponse,
 } from "@/types/api";
 import { CashRunwayCard } from "../components/cash-runway-card";
+import { CashflowVolatilityCard } from "../components/cashflow-volatility-card";
+import { CategoryConcentrationCard } from "../components/category-concentration-card";
+import { ForecastCard } from "../components/forecast-card";
 import { ReportsOverviewCard } from "../components/reports-overview-card";
 import { TotalAccountsOverviewCard } from "../components/total-accounts-overview-card";
 import { TotalCategoryByYearCard } from "../components/total-category-by-year-card";
@@ -118,9 +121,11 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
     totalKpis,
     totalNetWorthSeries,
     totalNetWorthStats,
+    totalCashflowVolatility,
     totalNetWorthAttribution,
     totalNetWorthTrajectoryData,
     totalNetWorthTrajectoryDomain,
+    totalNetWorthForecast,
     totalYearly,
     totalExpenseMix,
     totalIncomeMix,
@@ -128,6 +133,8 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
     totalInvestmentsYearlyTable,
     totalExpenseCategoriesLifetime,
     totalIncomeCategoriesLifetime,
+    totalExpenseCategoryConcentration,
+    totalIncomeCategoryConcentration,
     totalExpenseCategoryChanges,
     totalIncomeCategoryChanges,
     totalIncomeSourcesLifetime,
@@ -294,6 +301,11 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
           domain={totalNetWorthTrajectoryDomain}
         />
 
+        <ForecastCard
+          loading={totalOverviewLoading}
+          forecast={totalNetWorthForecast}
+        />
+
         <TotalMoneyPositionCard
           loading={totalOverviewLoading}
           series={totalMoneySeries}
@@ -342,6 +354,13 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
         loading={totalOverviewLoading}
       />
 
+      <CashflowVolatilityCard
+        title="Cashflow stability"
+        description="Monthly volatility for income, expense, and net across the selected window."
+        loading={totalOverviewLoading}
+        volatility={totalCashflowVolatility}
+      />
+
       <div className="grid gap-3 lg:grid-cols-2">
         <TotalSeasonalityCard
           flow="income"
@@ -375,6 +394,22 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
           yearlyTotals={totalYearly}
           onOpenDrilldownDialog={openTotalDrilldownDialog}
           onOpenHeatmapDialog={openTotalHeatmapDialog}
+        />
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <CategoryConcentrationCard
+          flow="expense"
+          loading={totalOverviewLoading}
+          hasOverview={totalOverviewLoaded}
+          concentration={totalExpenseCategoryConcentration}
+        />
+
+        <CategoryConcentrationCard
+          flow="income"
+          loading={totalOverviewLoading}
+          hasOverview={totalOverviewLoaded}
+          concentration={totalIncomeCategoryConcentration}
         />
       </div>
 
