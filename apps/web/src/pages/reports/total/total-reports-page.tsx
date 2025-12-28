@@ -84,6 +84,14 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
     useState<TotalHeatmapDialogState | null>(null);
   const [totalHeatmapDialogOpen, setTotalHeatmapDialogOpen] = useState(false);
   const [yearlyReport, setYearlyReport] = useState<YearlyReportEntry[]>([]);
+  const [netWorthForecastHorizonMonths, setNetWorthForecastHorizonMonths] =
+    useState(12);
+
+  const forecastHorizonOptions = [
+    { label: "6 months", value: 6 },
+    { label: "1 year", value: 12 },
+    { label: "2 years", value: 24 },
+  ];
 
   useEffect(() => {
     const loadTotalOverview = async () => {
@@ -154,6 +162,7 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
   } = useTotalAnalysis({
     totalOverview,
     totalWindowPreset,
+    netWorthForecastHorizonMonths,
   });
 
   const yearByYearPerformance = useMemo(() => {
@@ -304,6 +313,9 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
         <ForecastCard
           loading={totalOverviewLoading}
           forecast={totalNetWorthForecast}
+          horizonMonths={netWorthForecastHorizonMonths}
+          horizonOptions={forecastHorizonOptions}
+          onHorizonChange={setNetWorthForecastHorizonMonths}
         />
 
         <TotalMoneyPositionCard

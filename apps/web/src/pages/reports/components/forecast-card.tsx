@@ -1,4 +1,5 @@
-import React, { useMemo } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
+import React, { useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -14,6 +15,12 @@ import {
   ChartLegendContent,
   ChartTooltipContent,
 } from "@/components/ui/chart";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import { compactCurrency, currency, formatDate } from "../reports-utils";
 import { ChartCard } from "./chart-card";
@@ -33,7 +40,17 @@ export type NetWorthForecast = {
 export const ForecastCard: React.FC<{
   loading: boolean;
   forecast: NetWorthForecast | null;
-}> = ({ loading, forecast }) => {
+  horizonMonths: number;
+  horizonOptions: Array<{ label: string; value: number }>;
+  onHorizonChange: (value: number) => void;
+}> = ({
+  loading,
+  forecast,
+  horizonMonths,
+  horizonOptions,
+  onHorizonChange,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
   const domain = useMemo<[number, number]>(() => {
     if (!forecast?.data?.length) return [0, 0];
     const values = forecast.data
@@ -62,19 +79,42 @@ export const ForecastCard: React.FC<{
         </div>
       ) : (
         <div className="flex h-full flex-col gap-3">
-          <div className="flex flex-wrap gap-2 text-xs text-slate-600">
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
-              Baseline: {compactCurrency(forecast.baselineChange)}/mo
-            </span>
-            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
-              Through{" "}
-              {forecast.projectedEndDate
-                ? formatDate(forecast.projectedEndDate, {
-                    month: "short",
-                    year: "numeric",
-                  })
-                : "next months"}
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
+                Baseline: {compactCurrency(forecast.baselineChange)}/mo
+              </span>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
+                Through{" "}
+                {forecast.projectedEndDate
+                  ? formatDate(forecast.projectedEndDate, {
+                      month: "short",
+                      year: "numeric",
+                    })
+                  : "next months"}
+              </span>
+            </div>
+            <DropdownMenu onOpenChange={setIsOpen}>
+              <DropdownMenuTrigger className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700 shadow-sm">
+                {horizonOptions.find((option) => option.value === horizonMonths)
+                  ?.label ?? `${horizonMonths} months`}
+                {isOpen ? (
+                  <ChevronUp className="h-3 w-3" />
+                ) : (
+                  <ChevronDown className="h-3 w-3" />
+                )}
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-36">
+                {horizonOptions.map((option) => (
+                  <DropdownMenuItem
+                    key={option.value}
+                    onClick={() => onHorizonChange(option.value)}
+                  >
+                    {option.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
           <ChartContainer
             className="h-64 w-full"

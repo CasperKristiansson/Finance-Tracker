@@ -191,9 +191,11 @@ const buildComposition = (
 export const useTotalAnalysis = ({
   totalOverview,
   totalWindowPreset,
+  netWorthForecastHorizonMonths = 12,
 }: {
   totalOverview: TotalOverviewResponse | null;
   totalWindowPreset: TotalWindowPreset;
+  netWorthForecastHorizonMonths?: number;
 }) => {
   const totalAllRange = useMemo<TotalWindowRange>(() => {
     if (!totalOverview) return null;
@@ -553,7 +555,10 @@ export const useTotalAnalysis = ({
 
     const lastPoint = sortedWorth[sortedWorth.length - 1];
     const lastDate = new Date(lastPoint.date);
-    const horizonMonths = 6;
+    const horizonMonths = Math.max(
+      1,
+      Math.round(netWorthForecastHorizonMonths),
+    );
     const projectedPoints: Array<{ date: string; projected: number }> = [];
     let running = lastPoint.netWorth;
     for (let idx = 1; idx <= horizonMonths; idx += 1) {
@@ -596,7 +601,11 @@ export const useTotalAnalysis = ({
       projectedEndDate:
         projectedPoints[projectedPoints.length - 1]?.date ?? null,
     };
-  }, [totalMonthlyIncomeExpense, totalNetWorthSeries]);
+  }, [
+    netWorthForecastHorizonMonths,
+    totalMonthlyIncomeExpense,
+    totalNetWorthSeries,
+  ]);
 
   const totalExpenseComposition = useMemo(() => {
     if (!totalOverview) return null;
