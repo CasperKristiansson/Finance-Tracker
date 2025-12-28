@@ -268,7 +268,7 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
         }}
       />
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-2">
         <YearlyCategoryBreakdownCard
           flow="expense"
           loading={overviewLoading}
@@ -277,13 +277,6 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
             setSelectedCategoryFlow("expense");
             setSelectedCategoryId(categoryId);
           }}
-        />
-
-        <CategoryConcentrationCard
-          flow="expense"
-          loading={overviewLoading}
-          hasOverview={Boolean(overview)}
-          concentration={expenseCategoryConcentration}
         />
 
         <YearlyCategoryHeatmapCard
@@ -296,7 +289,7 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
         />
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-2">
         <YearlyCategoryBreakdownCard
           flow="income"
           loading={overviewLoading}
@@ -307,13 +300,6 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
           }}
         />
 
-        <CategoryConcentrationCard
-          flow="income"
-          loading={overviewLoading}
-          hasOverview={Boolean(overview)}
-          concentration={incomeCategoryConcentration}
-        />
-
         <YearlyCategoryHeatmapCard
           title="Income heatmap"
           description="Seasonality by category and month."
@@ -321,6 +307,22 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
           hasOverview={Boolean(overview)}
           heatmap={incomeHeatmap}
           color="income"
+        />
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <CategoryConcentrationCard
+          flow="expense"
+          loading={overviewLoading}
+          hasOverview={Boolean(overview)}
+          concentration={expenseCategoryConcentration}
+        />
+
+        <CategoryConcentrationCard
+          flow="income"
+          loading={overviewLoading}
+          hasOverview={Boolean(overview)}
+          concentration={incomeCategoryConcentration}
         />
       </div>
 
