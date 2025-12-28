@@ -57,6 +57,7 @@ import {
 import TransactionModal from "./transaction-modal";
 
 type SortKey = "date" | "description" | "amount" | "category" | "type";
+type TransactionTypeFilter = TransactionType | "tax" | "";
 
 type ColumnKey =
   | "date"
@@ -100,13 +101,32 @@ const columnWidthClass: Partial<Record<ColumnKey, string>> = {
   notes: "w-56",
 };
 
-const transactionTypeOptions: Array<{ value: TransactionType; label: string }> =
-  [
-    { value: TransactionType.INCOME, label: "Income" },
-    { value: TransactionType.EXPENSE, label: "Expense" },
-    { value: TransactionType.TRANSFER, label: "Transfer" },
-    { value: TransactionType.ADJUSTMENT, label: "Adjustment" },
-  ];
+const transactionTypeOptions: Array<{
+  value: TransactionTypeFilter;
+  label: string;
+}> = [
+  { value: TransactionType.INCOME, label: "Income" },
+  { value: TransactionType.EXPENSE, label: "Expense" },
+  { value: TransactionType.TRANSFER, label: "Transfer" },
+  { value: "tax", label: "Tax" },
+  { value: TransactionType.ADJUSTMENT, label: "Adjustment" },
+];
+
+const resolveTransactionTypeFilters = (filter: TransactionTypeFilter) => {
+  if (!filter) {
+    return { transactionTypes: undefined, taxEvent: undefined };
+  }
+
+  if (filter === "tax") {
+    return { transactionTypes: undefined, taxEvent: true };
+  }
+
+  if (filter === TransactionType.TRANSFER) {
+    return { transactionTypes: [TransactionType.TRANSFER], taxEvent: false };
+  }
+
+  return { transactionTypes: [filter], taxEvent: undefined };
+};
 
 const formatCurrency = (value: number) =>
   currency(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -204,9 +224,8 @@ export const Transactions: React.FC = () => {
   });
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [accountFilter, setAccountFilter] = useState<string>("");
-  const [transactionTypeFilter, setTransactionTypeFilter] = useState<
-    TransactionType | ""
-  >("");
+  const [transactionTypeFilter, setTransactionTypeFilter] =
+    useState<TransactionTypeFilter>("");
   const [search, setSearch] = useState<string>("");
   const [minAmount, setMinAmount] = useState<string>("");
   const [maxAmount, setMaxAmount] = useState<string>("");
@@ -261,12 +280,15 @@ export const Transactions: React.FC = () => {
                 ? "category"
                 : "type";
 
+      const { transactionTypes, taxEvent } = resolveTransactionTypeFilters(
+        transactionTypeFilter,
+      );
+
       fetchTransactions({
         limit: pagination.limit,
         offset: 0,
-        transactionTypes: transactionTypeFilter
-          ? [transactionTypeFilter]
-          : undefined,
+        transactionTypes,
+        taxEvent,
         accountIds: accountFilter ? [accountFilter] : undefined,
         categoryIds: categoryFilter ? [categoryFilter] : undefined,
         search: search || undefined,
@@ -453,22 +475,24 @@ export const Transactions: React.FC = () => {
         error={reconcileError}
         description="Reconciled from Transactions"
         onReconcile={reconcileAccounts}
-        onSuccess={() =>
+        onSuccess={() => {
+          const { transactionTypes, taxEvent } = resolveTransactionTypeFilters(
+            transactionTypeFilter,
+          );
           fetchTransactions({
             limit: pagination.limit,
             offset: 0,
             accountIds: accountFilter ? [accountFilter] : undefined,
-            transactionTypes: transactionTypeFilter
-              ? [transactionTypeFilter]
-              : undefined,
+            transactionTypes,
+            taxEvent,
             categoryIds: categoryFilter ? [categoryFilter] : undefined,
             search: search || undefined,
             minAmount: minAmount || undefined,
             maxAmount: maxAmount || undefined,
             startDate: startDate || undefined,
             endDate: endDate || undefined,
-          })
-        }
+          });
+        }}
       />
 
       <Card className="flex min-h-0 flex-1 flex-col gap-0 border-slate-200 py-0 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
@@ -525,7 +549,7 @@ export const Transactions: React.FC = () => {
                 value={transactionTypeFilter}
                 onChange={(e) =>
                   setTransactionTypeFilter(
-                    e.target.value as TransactionType | "",
+                    e.target.value as TransactionTypeFilter,
                   )
                 }
               >

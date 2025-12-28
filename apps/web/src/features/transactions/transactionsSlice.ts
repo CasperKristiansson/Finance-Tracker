@@ -13,6 +13,7 @@ export interface TransactionFilters {
   minAmount?: string;
   maxAmount?: string;
   search?: string;
+  taxEvent?: boolean;
   sortBy?: "occurred_at" | "amount" | "description" | "category" | "type";
   sortDir?: "asc" | "desc";
 }

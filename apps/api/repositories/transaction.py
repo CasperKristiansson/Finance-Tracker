@@ -12,7 +12,14 @@ from sqlalchemy import asc, desc, func, or_
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
-from ..models import Category, LoanEvent, Transaction, TransactionImportBatch, TransactionLeg
+from ..models import (
+    Category,
+    LoanEvent,
+    TaxEvent,
+    Transaction,
+    TransactionImportBatch,
+    TransactionLeg,
+)
 from ..shared import (
     LoanEventType,
     TransactionType,
@@ -39,6 +46,7 @@ class TransactionRepository:
         category_ids: Optional[Iterable[UUID]] = None,
         subscription_ids: Optional[Iterable[UUID]] = None,
         transaction_types: Optional[Iterable["TransactionType"]] = None,
+        tax_event: Optional[bool] = None,
         min_amount: Optional[Decimal] = None,
         max_amount: Optional[Decimal] = None,
         search: Optional[str] = None,
@@ -70,6 +78,10 @@ class TransactionRepository:
             statement = statement.where(
                 cast(Any, Transaction.transaction_type).in_(list(transaction_types))
             )
+        if tax_event is True:
+            statement = statement.join(TaxEvent)
+        elif tax_event is False:
+            statement = statement.outerjoin(TaxEvent).where(cast(Any, TaxEvent.id).is_(None))
         if search:
             pattern = f"%{search}%"
             statement = statement.where(

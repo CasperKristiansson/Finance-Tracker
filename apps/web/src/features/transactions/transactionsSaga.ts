@@ -85,6 +85,9 @@ function* handleFetchTransactions(
       ...(filters.minAmount ? { min_amount: filters.minAmount } : {}),
       ...(filters.maxAmount ? { max_amount: filters.maxAmount } : {}),
       ...(filters.search ? { search: filters.search } : {}),
+      ...(filters.taxEvent !== undefined
+        ? { tax_event: filters.taxEvent }
+        : {}),
       ...(filters.sortBy ? { sort_by: filters.sortBy } : {}),
       ...(filters.sortDir ? { sort_dir: filters.sortDir } : {}),
       limit,
