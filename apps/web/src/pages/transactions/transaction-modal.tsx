@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ChevronDown, X } from "lucide-react";
+import { ChevronDown, Trash2, X } from "lucide-react";
 import React, { useEffect, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -84,7 +84,8 @@ export const TransactionModal: React.FC<{
 }> = ({ open, onClose, transaction }) => {
   const { items: accounts, fetchAccounts } = useAccountsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
-  const { createTransaction, updateTransaction } = useTransactionsApi();
+  const { createTransaction, updateTransaction, deleteTransaction } =
+    useTransactionsApi();
   const today = new Date().toISOString().slice(0, 10);
   const isEdit = Boolean(transaction);
 
@@ -306,6 +307,27 @@ export const TransactionModal: React.FC<{
       return;
     }
 
+    reset({
+      transaction_type: TransactionType.EXPENSE,
+      account_id: "",
+      transfer_account_id: "",
+      amount: "",
+      description: "",
+      notes: "",
+      category_id: "",
+      occurred_at: today,
+      posted_at: today,
+    });
+    onClose();
+  };
+
+  const onDelete = () => {
+    if (!transaction) return;
+    const shouldDelete = window.confirm(
+      "Delete this transaction? This cannot be undone.",
+    );
+    if (!shouldDelete) return;
+    deleteTransaction(transaction.id);
     reset({
       transaction_type: TransactionType.EXPENSE,
       account_id: "",
@@ -579,22 +601,36 @@ export const TransactionModal: React.FC<{
             ) : null}
           </div>
         </div>
-        <div className="flex items-center justify-end gap-2 border-t px-6 py-4">
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          {!transaction ? (
-            <Button variant="outline" onClick={onSubmitAndAdd}>
-              Save & add another
+        <div className="flex items-center justify-between gap-2 border-t px-6 py-4">
+          {isEdit ? (
+            <Button
+              variant="destructive"
+              onClick={onDelete}
+              disabled={isSubmitting}
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete
             </Button>
-          ) : null}
-          <Button onClick={onSubmit} disabled={isSubmitting}>
-            {isSubmitting
-              ? "Saving..."
-              : transaction
-                ? "Save changes"
-                : "Save transaction"}
-          </Button>
+          ) : (
+            <div />
+          )}
+          <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            {!transaction ? (
+              <Button variant="outline" onClick={onSubmitAndAdd}>
+                Save & add another
+              </Button>
+            ) : null}
+            <Button onClick={onSubmit} disabled={isSubmitting}>
+              {isSubmitting
+                ? "Saving..."
+                : transaction
+                  ? "Save changes"
+                  : "Save transaction"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>
