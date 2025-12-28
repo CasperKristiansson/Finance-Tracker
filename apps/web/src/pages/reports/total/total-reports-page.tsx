@@ -11,6 +11,7 @@ import type {
   YearlyReportEntry,
   YearlyOverviewResponse,
 } from "@/types/api";
+import { CashflowVolatilityCard } from "../components/cashflow-volatility-card";
 import { ForecastCard } from "../components/forecast-card";
 import { ReportsOverviewCard } from "../components/reports-overview-card";
 import { TotalAccountsOverviewCard } from "../components/total-accounts-overview-card";
@@ -118,6 +119,7 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
     totalKpis,
     totalNetWorthSeries,
     totalNetWorthStats,
+    totalCashflowVolatility,
     totalNetWorthAttribution,
     totalNetWorthTrajectoryData,
     totalNetWorthTrajectoryDomain,
@@ -336,6 +338,13 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
         incomeCategories={totalIncomeCategoriesLifetime}
         expenseCategories={totalExpenseCategoriesLifetime}
         loading={totalOverviewLoading}
+      />
+
+      <CashflowVolatilityCard
+        title="Cashflow stability"
+        description="Monthly volatility for income, expense, and net across the selected window."
+        loading={totalOverviewLoading}
+        volatility={totalCashflowVolatility}
       />
 
       <div className="grid gap-3 lg:grid-cols-2">
