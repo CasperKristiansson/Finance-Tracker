@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -20,7 +21,9 @@ import { renderCategoryIcon } from "@/lib/category-icons";
 import { formatDateTime } from "@/lib/format";
 import { taxAdjustedAmountHint } from "@/lib/transactions";
 import { cn } from "@/lib/utils";
+import { formatAccountType, renderAccountIcon } from "@/pages/accounts/utils";
 import {
+  AccountType,
   CategoryType,
   TransactionType,
   type TransactionRead,
@@ -95,6 +98,12 @@ const toFormTransactionType = (
   return "transaction";
 };
 
+const accountTypeTone: Record<AccountType, string> = {
+  [AccountType.NORMAL]: "bg-slate-100 text-slate-700",
+  [AccountType.DEBT]: "bg-rose-100 text-rose-700",
+  [AccountType.INVESTMENT]: "bg-indigo-100 text-indigo-700",
+};
+
 export const TransactionModal: React.FC<{
   open: boolean;
   onClose: () => void;
@@ -137,9 +146,23 @@ export const TransactionModal: React.FC<{
   });
   const enteredAmount = useWatch({ control, name: "amount" });
   const selectedAccountId = useWatch({ control, name: "account_id" });
+  const selectedTransferAccountId = useWatch({
+    control,
+    name: "transfer_account_id",
+  });
   const selectedCategory = useMemo(
     () => categories.find((cat) => cat.id === selectedCategoryId) ?? null,
     [categories, selectedCategoryId],
+  );
+  const selectedAccount = useMemo(
+    () => accounts.find((account) => account.id === selectedAccountId) ?? null,
+    [accounts, selectedAccountId],
+  );
+  const selectedTransferAccount = useMemo(
+    () =>
+      accounts.find((account) => account.id === selectedTransferAccountId) ??
+      null,
+    [accounts, selectedTransferAccountId],
   );
   const categoryAmountHint = useMemo(() => {
     if (transaction) return taxAdjustedAmountHint(transaction);
@@ -181,6 +204,26 @@ export const TransactionModal: React.FC<{
     if (!categoryTypeFilter) return categories;
     return categories.filter((cat) => cat.category_type === categoryTypeFilter);
   }, [categories, categoryTypeFilter]);
+  const categoryGroups = useMemo(() => {
+    const categoryList = visibleCategories ?? [];
+    const income = categoryList.filter(
+      (cat) => cat.category_type === CategoryType.INCOME,
+    );
+    const expense = categoryList.filter(
+      (cat) => cat.category_type === CategoryType.EXPENSE,
+    );
+    const other = categoryList.filter(
+      (cat) =>
+        cat.category_type !== CategoryType.INCOME &&
+        cat.category_type !== CategoryType.EXPENSE,
+    );
+
+    return [
+      { key: "income", label: "Income", items: income },
+      { key: "expense", label: "Expense", items: expense },
+      { key: "other", label: "Other", items: other },
+    ];
+  }, [visibleCategories]);
 
   useEffect(() => {
     if (open) {
@@ -450,18 +493,78 @@ export const TransactionModal: React.FC<{
               {selectedTransactionType === TransactionType.TRANSFER
                 ? "From account"
                 : "Account"}
-              <select
-                className="rounded border border-slate-200 px-2 py-2 text-sm"
-                disabled={isEdit}
-                {...register("account_id")}
-              >
-                <option value="">Select account</option>
-                {activeAccounts.map((acc) => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.name}
-                  </option>
-                ))}
-              </select>
+              <input type="hidden" {...register("account_id")} />
+              {isEdit ? (
+                <div className="rounded border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                  Accounts can’t be changed when editing.
+                </div>
+              ) : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-2 rounded border border-slate-200 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-slate-300"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        {selectedAccount ? (
+                          <>
+                            {renderAccountIcon(
+                              selectedAccount.icon,
+                              selectedAccount.name,
+                              "h-6 w-6 rounded-full border border-slate-100 bg-white p-1 text-slate-700",
+                            )}
+                            <span className="truncate">
+                              {selectedAccount.name}
+                            </span>
+                            <span
+                              className={cn(
+                                "ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase",
+                                accountTypeTone[selectedAccount.account_type],
+                              )}
+                            >
+                              {formatAccountType(selectedAccount.account_type)}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-slate-500">Select account</span>
+                        )}
+                      </span>
+                      <ChevronDown className="h-4 w-4 text-slate-500" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-72">
+                    {activeAccounts.map((acc) => (
+                      <DropdownMenuItem
+                        key={acc.id}
+                        onSelect={() =>
+                          setValue("account_id", acc.id, {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          })
+                        }
+                        className="flex items-center justify-between gap-3"
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          {renderAccountIcon(
+                            acc.icon,
+                            acc.name,
+                            "h-6 w-6 rounded-full border border-slate-100 bg-white p-1 text-slate-700",
+                          )}
+                          <span className="truncate">{acc.name}</span>
+                        </span>
+                        <span
+                          className={cn(
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase",
+                            accountTypeTone[acc.account_type],
+                          )}
+                        >
+                          {formatAccountType(acc.account_type)}
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               {errors.account_id ? (
                 <span className="text-xs text-rose-600">
                   {errors.account_id.message}
@@ -471,20 +574,86 @@ export const TransactionModal: React.FC<{
             {selectedTransactionType === TransactionType.TRANSFER ? (
               <label className="flex flex-col gap-1 text-sm text-slate-700">
                 To account
-                <select
-                  className="rounded border border-slate-200 px-2 py-2 text-sm"
-                  disabled={isEdit}
-                  {...register("transfer_account_id")}
-                >
-                  <option value="">Select account</option>
-                  {activeAccounts
-                    .filter((acc) => acc.id !== selectedAccountId)
-                    .map((acc) => (
-                      <option key={acc.id} value={acc.id}>
-                        {acc.name}
-                      </option>
-                    ))}
-                </select>
+                <input type="hidden" {...register("transfer_account_id")} />
+                {isEdit ? (
+                  <div className="rounded border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+                    Transfer accounts can’t be changed when editing.
+                  </div>
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-2 rounded border border-slate-200 px-3 py-2 text-left text-sm text-slate-700 transition hover:border-slate-300"
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          {selectedTransferAccount ? (
+                            <>
+                              {renderAccountIcon(
+                                selectedTransferAccount.icon,
+                                selectedTransferAccount.name,
+                                "h-6 w-6 rounded-full border border-slate-100 bg-white p-1 text-slate-700",
+                              )}
+                              <span className="truncate">
+                                {selectedTransferAccount.name}
+                              </span>
+                              <span
+                                className={cn(
+                                  "ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase",
+                                  accountTypeTone[
+                                    selectedTransferAccount.account_type
+                                  ],
+                                )}
+                              >
+                                {formatAccountType(
+                                  selectedTransferAccount.account_type,
+                                )}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-slate-500">
+                              Select account
+                            </span>
+                          )}
+                        </span>
+                        <ChevronDown className="h-4 w-4 text-slate-500" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-72">
+                      {activeAccounts
+                        .filter((acc) => acc.id !== selectedAccountId)
+                        .map((acc) => (
+                          <DropdownMenuItem
+                            key={acc.id}
+                            onSelect={() =>
+                              setValue("transfer_account_id", acc.id, {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              })
+                            }
+                            className="flex items-center justify-between gap-3"
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              {renderAccountIcon(
+                                acc.icon,
+                                acc.name,
+                                "h-6 w-6 rounded-full border border-slate-100 bg-white p-1 text-slate-700",
+                              )}
+                              <span className="truncate">{acc.name}</span>
+                            </span>
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase",
+                                accountTypeTone[acc.account_type],
+                              )}
+                            >
+                              {formatAccountType(acc.account_type)}
+                            </span>
+                          </DropdownMenuItem>
+                        ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 {errors.transfer_account_id ? (
                   <span className="text-xs text-rose-600">
                     {errors.transfer_account_id.message}
@@ -570,46 +739,58 @@ export const TransactionModal: React.FC<{
                       <span className="text-slate-500">Unassigned</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    {visibleCategories.length ? (
-                      visibleCategories.map((cat) => (
-                        <DropdownMenuItem
-                          key={cat.id}
-                          onSelect={() =>
-                            setValue("category_id", cat.id, {
-                              shouldDirty: true,
-                              shouldValidate: true,
-                            })
-                          }
-                        >
-                          <span
-                            className={cn(
-                              "flex h-6 w-6 items-center justify-center rounded-full border",
-                              cat.color_hex
-                                ? "border-transparent text-white"
-                                : "border-slate-200 bg-slate-100 text-slate-700",
-                            )}
-                            style={
-                              cat.color_hex
-                                ? { backgroundColor: cat.color_hex }
-                                : undefined
-                            }
-                          >
-                            {renderCategoryIcon(
-                              cat.icon,
-                              cat.name,
-                              cat.color_hex
-                                ? "h-4 w-4 text-white"
-                                : "h-4 w-4 text-slate-700",
-                            )}
-                          </span>
-                          <span>{cat.name}</span>
-                        </DropdownMenuItem>
-                      ))
-                    ) : (
+                    {categoryGroups
+                      .filter((group) => group.items.length)
+                      .map((group, index, filtered) => (
+                        <React.Fragment key={group.key}>
+                          <DropdownMenuLabel className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
+                            {group.label}
+                          </DropdownMenuLabel>
+                          {group.items.map((cat) => (
+                            <DropdownMenuItem
+                              key={cat.id}
+                              onSelect={() =>
+                                setValue("category_id", cat.id, {
+                                  shouldDirty: true,
+                                  shouldValidate: true,
+                                })
+                              }
+                              className="flex items-center gap-2"
+                            >
+                              <span
+                                className={cn(
+                                  "flex h-6 w-6 items-center justify-center rounded-full border",
+                                  cat.color_hex
+                                    ? "border-transparent text-white"
+                                    : "border-slate-200 bg-slate-100 text-slate-700",
+                                )}
+                                style={
+                                  cat.color_hex
+                                    ? { backgroundColor: cat.color_hex }
+                                    : undefined
+                                }
+                              >
+                                {renderCategoryIcon(
+                                  cat.icon,
+                                  cat.name,
+                                  cat.color_hex
+                                    ? "h-4 w-4 text-white"
+                                    : "h-4 w-4 text-slate-700",
+                                )}
+                              </span>
+                              <span>{cat.name}</span>
+                            </DropdownMenuItem>
+                          ))}
+                          {index < filtered.length - 1 ? (
+                            <DropdownMenuSeparator />
+                          ) : null}
+                        </React.Fragment>
+                      ))}
+                    {!categoryGroups.some((group) => group.items.length) ? (
                       <DropdownMenuItem disabled>
                         No matching categories
                       </DropdownMenuItem>
-                    )}
+                    ) : null}
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}

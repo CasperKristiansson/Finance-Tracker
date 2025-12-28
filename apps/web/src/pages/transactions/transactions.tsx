@@ -3,7 +3,9 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowDownWideNarrow,
   ArrowUpWideNarrow,
+  ArrowRight,
   Calendar,
+  ChevronDown,
   Eye,
   Filter,
   Loader2,
@@ -23,6 +25,7 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -39,7 +42,7 @@ import {
   useCategoriesApi,
   useTransactionsApi,
 } from "@/hooks/use-api";
-import { formatCategoryLabel } from "@/lib/category-icons";
+import { formatCategoryLabel, renderCategoryIcon } from "@/lib/category-icons";
 import { currency, formatDate as formatDateLabel } from "@/lib/format";
 import {
   getDisplayTransactionType,
@@ -48,7 +51,9 @@ import {
   taxAdjustedAmountHint,
 } from "@/lib/transactions";
 import { cn } from "@/lib/utils";
+import { formatAccountType, renderAccountIcon } from "@/pages/accounts/utils";
 import {
+  CategoryType,
   TransactionType,
   AccountType,
   type CategoryRead,
@@ -162,6 +167,12 @@ const typeBadge = (
       {label}
     </span>
   );
+};
+
+const accountTypeTone: Record<AccountType, string> = {
+  [AccountType.NORMAL]: "bg-slate-100 text-slate-700",
+  [AccountType.DEBT]: "bg-rose-100 text-rose-700",
+  [AccountType.INVESTMENT]: "bg-indigo-100 text-indigo-700",
 };
 
 const ColumnToggle: React.FC<{
@@ -316,19 +327,46 @@ export const Transactions: React.FC = () => {
   ]);
 
   const accountLookup = useMemo(
-    () => Object.fromEntries(accounts.map((acc) => [acc.id, acc.name])),
+    () => new Map(accounts.map((acc) => [acc.id, acc])),
     [accounts],
   );
   const categoryLookup = useMemo(
     () =>
-      new Map<string, string>(
-        categories?.map((c: CategoryRead) => [
-          c.id,
-          formatCategoryLabel(c.name, c.icon),
-        ]) ?? [],
+      new Map<string, CategoryRead>(
+        categories?.map((c: CategoryRead) => [c.id, c]) ?? [],
       ),
     [categories],
   );
+  const selectedAccount = useMemo(
+    () => accounts.find((acc) => acc.id === accountFilter) ?? null,
+    [accountFilter, accounts],
+  );
+  const selectedCategory = useMemo(
+    () =>
+      categories?.find((cat: CategoryRead) => cat.id === categoryFilter) ??
+      null,
+    [categories, categoryFilter],
+  );
+  const categoryGroups = useMemo(() => {
+    const categoryList = categories ?? [];
+    const income = categoryList.filter(
+      (cat) => cat.category_type === CategoryType.INCOME,
+    );
+    const expense = categoryList.filter(
+      (cat) => cat.category_type === CategoryType.EXPENSE,
+    );
+    const other = categoryList.filter(
+      (cat) =>
+        cat.category_type !== CategoryType.INCOME &&
+        cat.category_type !== CategoryType.EXPENSE,
+    );
+
+    return [
+      { key: "income", label: "Income", items: income },
+      { key: "expense", label: "Expense", items: expense },
+      { key: "other", label: "Other", items: other },
+    ];
+  }, [categories]);
 
   const selectedTransaction = useMemo(
     () =>
@@ -520,30 +558,168 @@ export const Transactions: React.FC = () => {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-              <select
-                className="h-8 rounded border border-slate-200 bg-white px-2 text-slate-800"
-                value={accountFilter}
-                onChange={(e) => setAccountFilter(e.target.value)}
-              >
-                <option value="">All accounts</option>
-                {accounts.map((acc) => (
-                  <option key={acc.id} value={acc.id}>
-                    {accountLookup[acc.id]}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="h-8 rounded border border-slate-200 bg-white px-2 text-slate-800"
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-              >
-                <option value="">All categories</option>
-                {categories?.map((cat: CategoryRead) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex h-8 min-w-[11rem] items-center justify-between gap-2 rounded border border-slate-200 bg-white px-2 text-left text-slate-800 shadow-sm"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      {selectedAccount ? (
+                        <>
+                          {renderAccountIcon(
+                            selectedAccount.icon,
+                            selectedAccount.name,
+                            "h-6 w-6 rounded-full border border-slate-100 bg-white p-1 text-slate-700",
+                          )}
+                          <span className="truncate">
+                            {selectedAccount.name}
+                          </span>
+                          <span
+                            className={cn(
+                              "ml-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase",
+                              accountTypeTone[selectedAccount.account_type],
+                            )}
+                          >
+                            {formatAccountType(selectedAccount.account_type)}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-slate-500">All accounts</span>
+                      )}
+                    </span>
+                    <ChevronDown className="h-4 w-4 text-slate-500" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-72">
+                  <DropdownMenuItem
+                    onSelect={() => setAccountFilter("")}
+                    className="text-slate-600"
+                  >
+                    All accounts
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {accounts.map((acc) => (
+                    <DropdownMenuItem
+                      key={acc.id}
+                      onSelect={() => setAccountFilter(acc.id)}
+                      className="flex items-center justify-between gap-3"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        {renderAccountIcon(
+                          acc.icon,
+                          acc.name,
+                          "h-6 w-6 rounded-full border border-slate-100 bg-white p-1 text-slate-700",
+                        )}
+                        <span className="truncate">{acc.name}</span>
+                      </span>
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium tracking-wide uppercase",
+                          accountTypeTone[acc.account_type],
+                        )}
+                      >
+                        {formatAccountType(acc.account_type)}
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex h-8 min-w-[11rem] items-center justify-between gap-2 rounded border border-slate-200 bg-white px-2 text-left text-slate-800 shadow-sm"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      {selectedCategory ? (
+                        <>
+                          <span
+                            className={cn(
+                              "flex h-6 w-6 items-center justify-center rounded-full border",
+                              selectedCategory.color_hex
+                                ? "border-transparent text-white"
+                                : "border-slate-200 bg-slate-100 text-slate-700",
+                            )}
+                            style={
+                              selectedCategory.color_hex
+                                ? {
+                                    backgroundColor: selectedCategory.color_hex,
+                                  }
+                                : undefined
+                            }
+                          >
+                            {renderCategoryIcon(
+                              selectedCategory.icon,
+                              selectedCategory.name,
+                              selectedCategory.color_hex
+                                ? "h-4 w-4 text-white"
+                                : "h-4 w-4 text-slate-700",
+                            )}
+                          </span>
+                          <span className="truncate">
+                            {selectedCategory.name}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-slate-500">All categories</span>
+                      )}
+                    </span>
+                    <ChevronDown className="h-4 w-4 text-slate-500" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-72">
+                  <DropdownMenuItem
+                    onSelect={() => setCategoryFilter("")}
+                    className="text-slate-600"
+                  >
+                    All categories
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  {categoryGroups
+                    .filter((group) => group.items.length)
+                    .map((group, index, filtered) => (
+                      <React.Fragment key={group.key}>
+                        <DropdownMenuLabel className="text-[11px] font-semibold tracking-wide text-slate-400 uppercase">
+                          {group.label}
+                        </DropdownMenuLabel>
+                        {group.items.map((cat) => (
+                          <DropdownMenuItem
+                            key={cat.id}
+                            onSelect={() => setCategoryFilter(cat.id)}
+                            className="flex items-center gap-2"
+                          >
+                            <span
+                              className={cn(
+                                "flex h-6 w-6 items-center justify-center rounded-full border",
+                                cat.color_hex
+                                  ? "border-transparent text-white"
+                                  : "border-slate-200 bg-slate-100 text-slate-700",
+                              )}
+                              style={
+                                cat.color_hex
+                                  ? { backgroundColor: cat.color_hex }
+                                  : undefined
+                              }
+                            >
+                              {renderCategoryIcon(
+                                cat.icon,
+                                cat.name,
+                                cat.color_hex
+                                  ? "h-4 w-4 text-white"
+                                  : "h-4 w-4 text-slate-700",
+                              )}
+                            </span>
+                            <span className="truncate">{cat.name}</span>
+                          </DropdownMenuItem>
+                        ))}
+                        {index < filtered.length - 1 ? (
+                          <DropdownMenuSeparator />
+                        ) : null}
+                      </React.Fragment>
+                    ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <select
                 className="h-8 rounded border border-slate-200 bg-white px-2 text-slate-800"
                 value={transactionTypeFilter}
@@ -637,7 +813,7 @@ export const Transactions: React.FC = () => {
                   const displayType = getDisplayTransactionType(row);
                   const taxLinked = isTaxEvent(row);
                   const knownLegs = row.legs.filter((leg) =>
-                    Boolean(accountLookup[leg.account_id]),
+                    Boolean(accountLookup.get(leg.account_id)),
                   );
                   const displayAmount = (() => {
                     if (accountFilter) {
@@ -677,12 +853,14 @@ export const Transactions: React.FC = () => {
                         knownLegs.find((leg) => Number(leg.amount) > 0) ??
                         knownLegs[1];
 
-                      const fromName = fromLeg
-                        ? accountLookup[fromLeg.account_id]
+                      const fromAccount = fromLeg
+                        ? accountLookup.get(fromLeg.account_id)
                         : undefined;
-                      const toName = toLeg
-                        ? accountLookup[toLeg.account_id]
+                      const toAccount = toLeg
+                        ? accountLookup.get(toLeg.account_id)
                         : undefined;
+                      const fromName = fromAccount?.name;
+                      const toName = toAccount?.name;
 
                       if (fromName && toName) return `${fromName} → ${toName}`;
                       if (fromName) return `${fromName} → (unknown)`;
@@ -693,9 +871,27 @@ export const Transactions: React.FC = () => {
                     const primary = knownLegs[0];
                     if (!primary) return "Internal transfer";
                     return (
-                      accountLookup[primary.account_id] ?? "Internal transfer"
+                      accountLookup.get(primary.account_id)?.name ??
+                      "Internal transfer"
                     );
                   })();
+                  const primaryAccount = knownLegs[0]
+                    ? accountLookup.get(knownLegs[0].account_id)
+                    : null;
+                  const transferFrom =
+                    displayType === TransactionType.TRANSFER && !taxLinked
+                      ? accountLookup.get(
+                          knownLegs.find((leg) => Number(leg.amount) < 0)
+                            ?.account_id ?? "",
+                        )
+                      : null;
+                  const transferTo =
+                    displayType === TransactionType.TRANSFER && !taxLinked
+                      ? accountLookup.get(
+                          knownLegs.find((leg) => Number(leg.amount) > 0)
+                            ?.account_id ?? "",
+                        )
+                      : null;
 
                   return (
                     <tr
@@ -761,11 +957,50 @@ export const Transactions: React.FC = () => {
                                 "min-w-0 text-slate-700",
                               )}
                             >
-                              <div className="truncate">{accountsLabel}</div>
+                              {displayType === TransactionType.TRANSFER &&
+                              !taxLinked ? (
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    {renderAccountIcon(
+                                      transferFrom?.icon ?? null,
+                                      transferFrom?.name ?? "?",
+                                      "h-6 w-6 rounded-full border border-slate-100 bg-white p-1 text-slate-700",
+                                    )}
+                                    <span className="truncate">
+                                      {transferFrom?.name ?? "Unknown"}
+                                    </span>
+                                  </span>
+                                  <ArrowRight className="h-3 w-3 text-slate-400" />
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    {renderAccountIcon(
+                                      transferTo?.icon ?? null,
+                                      transferTo?.name ?? "?",
+                                      "h-6 w-6 rounded-full border border-slate-100 bg-white p-1 text-slate-700",
+                                    )}
+                                    <span className="truncate">
+                                      {transferTo?.name ?? "Unknown"}
+                                    </span>
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="flex min-w-0 items-center gap-2 truncate">
+                                  {renderAccountIcon(
+                                    primaryAccount?.icon ?? null,
+                                    primaryAccount?.name ?? "Account",
+                                    "h-6 w-6 rounded-full border border-slate-100 bg-white p-1 text-slate-700",
+                                  )}
+                                  <span className="truncate">
+                                    {accountsLabel}
+                                  </span>
+                                </div>
+                              )}
                             </td>
                           );
                         }
                         if (col.key === "category") {
+                          const category = row.category_id
+                            ? categoryLookup.get(row.category_id)
+                            : null;
                           return (
                             <td
                               key={`${row.id}-category`}
@@ -774,14 +1009,48 @@ export const Transactions: React.FC = () => {
                                 "min-w-0 text-slate-700",
                               )}
                             >
-                              <div className="truncate">
+                              <div className="flex min-w-0 items-center gap-2 truncate">
                                 {displayType === TransactionType.TRANSFER &&
-                                !taxLinked
-                                  ? "—"
-                                  : row.category_id
-                                    ? categoryLookup.get(row.category_id) ||
-                                      "Assigned"
-                                    : "Unassigned"}
+                                !taxLinked ? (
+                                  "—"
+                                ) : category ? (
+                                  <>
+                                    <span
+                                      className={cn(
+                                        "flex h-6 w-6 items-center justify-center rounded-full border",
+                                        category.color_hex
+                                          ? "border-transparent text-white"
+                                          : "border-slate-200 bg-slate-100 text-slate-700",
+                                      )}
+                                      style={
+                                        category.color_hex
+                                          ? {
+                                              backgroundColor:
+                                                category.color_hex,
+                                            }
+                                          : undefined
+                                      }
+                                    >
+                                      {renderCategoryIcon(
+                                        category.icon,
+                                        category.name,
+                                        category.color_hex
+                                          ? "h-4 w-4 text-white"
+                                          : "h-4 w-4 text-slate-700",
+                                      )}
+                                    </span>
+                                    <span className="truncate">
+                                      {formatCategoryLabel(
+                                        category.name,
+                                        category.icon,
+                                      )}
+                                    </span>
+                                  </>
+                                ) : row.category_id ? (
+                                  "Assigned"
+                                ) : (
+                                  "Unassigned"
+                                )}
                               </div>
                             </td>
                           );
@@ -858,8 +1127,16 @@ export const Transactions: React.FC = () => {
                     <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
                       <Tag className="h-3.5 w-3.5" />
                       {selectedTransaction.category_id
-                        ? categoryLookup.get(selectedTransaction.category_id) ||
-                          "Assigned"
+                        ? (() => {
+                            const category = categoryLookup.get(
+                              selectedTransaction.category_id,
+                            );
+                            if (!category) return "Assigned";
+                            return formatCategoryLabel(
+                              category.name,
+                              category.icon,
+                            );
+                          })()
                         : "Unassigned"}
                     </span>
                   ) : null}
@@ -945,7 +1222,8 @@ export const Transactions: React.FC = () => {
                           className="flex items-center justify-between gap-3 rounded-md border border-slate-100 px-3 py-2"
                         >
                           <div className="min-w-0 truncate text-sm text-slate-800">
-                            {accountLookup[leg.account_id] ?? leg.account_id}
+                            {accountLookup.get(leg.account_id)?.name ??
+                              leg.account_id}
                           </div>
                           <div
                             className={cn(
