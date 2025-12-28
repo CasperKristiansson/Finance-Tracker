@@ -36,12 +36,24 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { selectToken } from "@/features/auth/authSlice";
 import { apiFetch } from "@/lib/apiClient";
 import { currency, formatDate as formatDateLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { type GoalListResponse, type GoalRead } from "@/types/api";
+import { fetchTotalOverview } from "@/services/reports";
+import type {
+  GoalListResponse,
+  GoalRead,
+  TotalOverviewResponse,
+} from "@/types/api";
 import { goalListSchema } from "@/types/schemas";
 
 const goalFormSchema = z.object({
@@ -78,7 +90,11 @@ export const Goals: React.FC = () => {
   const prefersReducedMotion = useReducedMotion();
   const [goals, setGoals] = useState<GoalRead[]>([]);
   const [loading, setLoading] = useState(false);
+  const [totalOverview, setTotalOverview] =
+    useState<TotalOverviewResponse | null>(null);
+  const [totalOverviewLoading, setTotalOverviewLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const goalForm = useForm<GoalFormValues>({
     resolver: zodResolver(goalFormSchema),
     defaultValues: {
@@ -91,8 +107,21 @@ export const Goals: React.FC = () => {
 
   useEffect(() => {
     void loadGoals();
+    void loadTotalOverview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const loadTotalOverview = async () => {
+    setTotalOverviewLoading(true);
+    try {
+      const { data } = await fetchTotalOverview({ token });
+      setTotalOverview(data);
+    } catch {
+      setTotalOverview(null);
+    } finally {
+      setTotalOverviewLoading(false);
+    }
+  };
 
   const loadGoals = async () => {
     setLoading(true);
@@ -141,18 +170,44 @@ export const Goals: React.FC = () => {
     }
   });
 
+  const goalsWithProgress = useMemo(() => {
+    const currentTotalAssets = totalOverview
+      ? Number(totalOverview.kpis.net_worth) +
+        Number(totalOverview.kpis.debt_total)
+      : null;
+    return goals.map((goal) => {
+      const target = Number(goal.target_amount || 0);
+      const fallbackCurrent = Number(goal.current_amount || 0);
+      const current = currentTotalAssets ?? fallbackCurrent;
+      const progressPct = target ? (current / target) * 100 : 0;
+      const achieved =
+        currentTotalAssets !== null
+          ? current >= target
+          : goal.progress_pct >= 100;
+      return {
+        ...goal,
+        computedCurrentAmount: current,
+        computedProgressPct: progressPct,
+        achieved,
+      };
+    });
+  }, [goals, totalOverview]);
+
   const stats = useMemo(() => {
-    const totalTarget = goals.reduce(
+    const currentTotalAssets = totalOverview
+      ? Number(totalOverview.kpis.net_worth) +
+        Number(totalOverview.kpis.debt_total)
+      : goals.length
+        ? Math.max(...goals.map((goal) => Number(goal.current_amount || 0)))
+        : 0;
+    const achievedGoals = goalsWithProgress.filter((goal) => goal.achieved);
+    const activeGoals = goalsWithProgress.filter((goal) => !goal.achieved);
+    const totalTarget = activeGoals.reduce(
       (sum, goal) => sum + Number(goal.target_amount || 0),
       0,
     );
-    const currentNetWorth = goals.length
-      ? Math.max(...goals.map((goal) => Number(goal.current_amount || 0)))
-      : 0;
-    const achievedGoals = goals.filter((goal) => goal.progress_pct >= 100);
-    const activeGoals = goals.filter((goal) => goal.progress_pct < 100);
     const avgProgress = totalTarget
-      ? Math.min(100, Math.round((currentNetWorth / totalTarget) * 100))
+      ? Math.min(100, Math.round((currentTotalAssets / totalTarget) * 100))
       : 0;
     const nextGoal = activeGoals
       .filter((goal) => goal.target_date)
@@ -173,14 +228,19 @@ export const Goals: React.FC = () => {
 
     return {
       totalTarget,
-      currentNetWorth,
+      currentTotalAssets,
       achievedGoals,
       activeGoals,
       avgProgress,
       nextGoal,
       avgDelta,
     };
-  }, [goals]);
+  }, [goals, goalsWithProgress, totalOverview]);
+
+  const selectedGoal = useMemo(
+    () => goalsWithProgress.find((goal) => goal.id === selectedGoalId) ?? null,
+    [goalsWithProgress, selectedGoalId],
+  );
 
   return (
     <MotionPage className="space-y-10 pb-12">
@@ -338,12 +398,14 @@ export const Goals: React.FC = () => {
           <div className="space-y-4 rounded-2xl border border-white/15 bg-white/10 p-6 backdrop-blur">
             <div className="flex items-center justify-between">
               <p className="text-xs font-semibold tracking-[0.2em] text-white/60 uppercase">
-                Current net worth
+                Current total assets
               </p>
               <Award className="h-5 w-5 text-white/70" />
             </div>
             <p className="text-3xl font-semibold text-white">
-              {formatCurrency(stats.currentNetWorth)}
+              {totalOverviewLoading
+                ? "—"
+                : formatCurrency(stats.currentTotalAssets)}
             </p>
             <Progress
               value={stats.avgProgress}
@@ -465,10 +527,13 @@ export const Goals: React.FC = () => {
               </div>
               <StaggerWrap className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {stats.activeGoals.map((goal) => {
-                  const pct = Math.min(100, Math.round(goal.progress_pct));
+                  const pct = Math.min(
+                    100,
+                    Math.round(goal.computedProgressPct),
+                  );
                   const remaining = Math.max(
                     0,
-                    Number(goal.target_amount) - Number(goal.current_amount),
+                    Number(goal.target_amount) - goal.computedCurrentAmount,
                   );
                   return (
                     <motion.div
@@ -476,7 +541,18 @@ export const Goals: React.FC = () => {
                       variants={fadeInUp}
                       {...subtleHover}
                     >
-                      <Card className="flex h-full flex-col border-slate-200 bg-white shadow-[0_24px_55px_-35px_rgba(15,23,42,0.35)]">
+                      <Card
+                        className="flex h-full cursor-pointer flex-col border-slate-200 bg-white shadow-[0_24px_55px_-35px_rgba(15,23,42,0.35)] transition hover:-translate-y-1 hover:shadow-[0_32px_70px_-40px_rgba(15,23,42,0.35)]"
+                        onClick={() => setSelectedGoalId(goal.id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setSelectedGoalId(goal.id);
+                          }
+                        }}
+                      >
                         <CardHeader className="space-y-3">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -499,7 +575,7 @@ export const Goals: React.FC = () => {
                             <div className="flex items-center justify-between text-xs text-slate-500">
                               <span>Current</span>
                               <span className="font-semibold text-slate-900">
-                                {formatCurrency(goal.current_amount)}
+                                {formatCurrency(goal.computedCurrentAmount)}
                               </span>
                             </div>
                             <Progress
@@ -544,14 +620,28 @@ export const Goals: React.FC = () => {
               <StaggerWrap className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                 {stats.achievedGoals.map((goal) => {
                   const achievedDate = goal.achieved_at ?? goal.updated_at;
-                  const pct = Math.min(100, Math.round(goal.progress_pct));
+                  const pct = Math.min(
+                    100,
+                    Math.round(goal.computedProgressPct),
+                  );
                   return (
                     <motion.div
                       key={goal.id}
                       variants={fadeInUp}
                       {...subtleHover}
                     >
-                      <Card className="flex h-full flex-col border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 shadow-[0_30px_70px_-40px_rgba(16,185,129,0.45)]">
+                      <Card
+                        className="flex h-full cursor-pointer flex-col border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-cyan-50 shadow-[0_30px_70px_-40px_rgba(16,185,129,0.45)] transition hover:-translate-y-1 hover:shadow-[0_36px_80px_-45px_rgba(16,185,129,0.45)]"
+                        onClick={() => setSelectedGoalId(goal.id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setSelectedGoalId(goal.id);
+                          }
+                        }}
+                      >
                         <CardHeader className="space-y-3">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -589,7 +679,9 @@ export const Goals: React.FC = () => {
                                   ? formatDelta(goal.achieved_delta_days)
                                   : "Milestone achieved"}
                               </span>
-                              <span>{formatCurrency(goal.current_amount)}</span>
+                              <span>
+                                {formatCurrency(goal.computedCurrentAmount)}
+                              </span>
                             </div>
                           </div>
                           {goal.note ? (
@@ -607,6 +699,94 @@ export const Goals: React.FC = () => {
           ) : null}
         </div>
       )}
+
+      <Sheet
+        open={Boolean(selectedGoal)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedGoalId(null);
+        }}
+      >
+        <SheetContent side="right" className="bg-white sm:max-w-lg">
+          {selectedGoal ? (
+            <>
+              <SheetHeader className="border-b border-slate-100">
+                <SheetTitle className="text-lg">{selectedGoal.name}</SheetTitle>
+                <SheetDescription className="mt-2 text-sm text-slate-500">
+                  Target {formatCurrency(selectedGoal.target_amount)} •{" "}
+                  {formatDate(selectedGoal.target_date)}
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="flex-1 space-y-5 overflow-y-auto px-4 pb-6">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between text-xs text-slate-500">
+                    <span>Current total assets</span>
+                    <span className="font-semibold text-slate-900">
+                      {formatCurrency(selectedGoal.computedCurrentAmount)}
+                    </span>
+                  </div>
+                  <Progress
+                    value={Math.min(
+                      100,
+                      Math.round(selectedGoal.computedProgressPct),
+                    )}
+                    className="mt-3 h-2.5"
+                    indicatorClassName="bg-gradient-to-r from-emerald-500 via-cyan-500 to-violet-500"
+                  />
+                  <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+                    <span>
+                      {Math.min(
+                        100,
+                        Math.round(selectedGoal.computedProgressPct),
+                      )}
+                      % complete
+                    </span>
+                    <span>
+                      {formatCurrency(
+                        Math.max(
+                          0,
+                          Number(selectedGoal.target_amount) -
+                            selectedGoal.computedCurrentAmount,
+                        ),
+                      )}{" "}
+                      to go
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid gap-3">
+                  <div className="rounded-2xl border border-slate-200 p-4">
+                    <p className="text-xs font-semibold text-slate-500 uppercase">
+                      Status
+                    </p>
+                    <p className="mt-2 text-sm font-semibold text-slate-900">
+                      {selectedGoal.achieved ? "Achieved" : "In progress"}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {selectedGoal.achieved
+                        ? selectedGoal.achieved_delta_days !== null &&
+                          selectedGoal.achieved_delta_days !== undefined
+                          ? formatDelta(selectedGoal.achieved_delta_days)
+                          : "Milestone achieved"
+                        : "Keep stacking wins to reach the target."}
+                    </p>
+                  </div>
+                  {selectedGoal.note ? (
+                    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                      <p className="text-xs font-semibold text-slate-500 uppercase">
+                        Notes
+                      </p>
+                      <p className="mt-2 text-sm text-slate-700">
+                        {selectedGoal.note}
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
 
       <section
         className={cn(
