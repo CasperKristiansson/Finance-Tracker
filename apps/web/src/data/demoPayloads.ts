@@ -4,15 +4,16 @@ import type {
   CashflowForecastResponse,
   CategoryListResponse,
   GoalListResponse,
+  ImportFileListResponse,
   ImportCategorySuggestResponse,
   ImportPreviewResponse,
   InvestmentHoldingRead,
-  InvestmentMetricsResponse,
   InvestmentOverviewResponse,
-  InvestmentSnapshotListResponse,
   InvestmentTransactionListResponse,
   LoanEventRead,
+  LoanPortfolioSeriesResponse,
   LoanScheduleRead,
+  InvestmentSnapshot,
   MonthlyReportEntry,
   NetWorthHistoryResponse,
   NetWorthProjectionResponse,
@@ -74,6 +75,9 @@ const buildMonthlyReport = (
       period: `${year}-${pad2(idx + 1)}`,
       income: toMoney(value),
       expense: toMoney(exp),
+      adjustment_inflow: "0.00",
+      adjustment_outflow: "0.00",
+      adjustment_net: "0.00",
       net: toMoney(value - exp),
     };
   });
@@ -92,6 +96,9 @@ const buildQuarterlyReport = (
       quarter,
       income: toMoney(income),
       expense: toMoney(expense),
+      adjustment_inflow: "0.00",
+      adjustment_outflow: "0.00",
+      adjustment_net: "0.00",
       net: toMoney(income - expense),
     };
   });
@@ -108,6 +115,9 @@ const buildYearlyReport = (
         year,
         income: toMoney(currentIncome),
         expense: toMoney(currentExpense),
+        adjustment_inflow: "0.00",
+        adjustment_outflow: "0.00",
+        adjustment_net: "0.00",
         net: toMoney(currentIncome - currentExpense),
       };
     }
@@ -119,6 +129,9 @@ const buildYearlyReport = (
       year,
       income: toMoney(income),
       expense: toMoney(expense),
+      adjustment_inflow: "0.00",
+      adjustment_outflow: "0.00",
+      adjustment_net: "0.00",
       net: toMoney(income - expense),
     };
   });
@@ -518,6 +531,9 @@ export const demoReportPayloads: {
   total: {
     income: toMoney(demoTotalIncome),
     expense: toMoney(demoTotalExpense),
+    adjustment_inflow: "0.00",
+    adjustment_outflow: "0.00",
+    adjustment_net: "0.00",
     net: toMoney(demoTotalIncome - demoTotalExpense),
     generated_at: nowIso,
   },
@@ -526,7 +542,9 @@ export const demoReportPayloads: {
   },
 };
 
-export const demoInvestmentSnapshots: InvestmentSnapshotListResponse = {
+export const demoInvestmentSnapshots: {
+  snapshots: InvestmentSnapshot[];
+} = {
   snapshots: [
     {
       id: "snap-2024-12-30",
@@ -624,7 +642,7 @@ export const demoInvestmentTransactions: InvestmentTransactionListResponse = {
   ],
 };
 
-export const demoInvestmentMetrics: InvestmentMetricsResponse = {
+export const demoInvestmentMetrics = {
   performance: {
     total_value: "4700000.00",
     invested: "3900000.00",
@@ -814,6 +832,7 @@ export const demoImportPreview: ImportPreviewResponse = {
       recent_transactions: [
         {
           id: "tx-recent-coffee",
+          account_id: "acc-checking",
           occurred_at: "2024-12-14",
           description: "Coffee Shop",
           category_id: "cat-exp-entertainment",
@@ -823,6 +842,7 @@ export const demoImportPreview: ImportPreviewResponse = {
       similar_transactions: [
         {
           id: "tx-similar-payroll",
+          account_id: "acc-checking",
           occurred_at: "2024-11-28",
           description: "Salary",
           category_id: "cat-income-salary",
@@ -850,6 +870,46 @@ export const demoImportSuggestions: ImportCategorySuggestResponse = {
       category_id: "cat-income-salary",
       confidence: 0.98,
       reason: "Consistent payroll memo and amount",
+    },
+  ],
+};
+
+export const demoImportFiles: ImportFileListResponse = {
+  files: [
+    {
+      id: "import-file-1",
+      filename: "checking_december.xlsx",
+      account_id: "acc-checking",
+      account_name: "Everyday Checking",
+      bank_import_type: "seb",
+      row_count: 42,
+      error_count: 0,
+      transaction_ids: demoTransactionsResponse.transactions
+        .slice(0, 6)
+        .map((tx) => tx.id),
+      import_batch_id: "batch-demo-1",
+      size_bytes: 18432,
+      content_type:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      uploaded_at: demoDate(-1, 20),
+      status: "processed",
+    },
+    {
+      id: "import-file-2",
+      filename: "credit_card_october.csv",
+      account_id: "acc-card",
+      account_name: "Travel Rewards Card",
+      bank_import_type: "circle_k_mastercard",
+      row_count: 28,
+      error_count: 1,
+      transaction_ids: demoTransactionsResponse.transactions
+        .slice(6, 10)
+        .map((tx) => tx.id),
+      import_batch_id: "batch-demo-2",
+      size_bytes: 9320,
+      content_type: "text/csv",
+      uploaded_at: demoDate(-2, 18),
+      status: "processed",
     },
   ],
 };
@@ -902,6 +962,15 @@ export const demoLoanEvents: Record<string, LoanEventRead[]> = {
       occurred_at: "2025-01-01",
     },
   ],
+};
+
+const demoLoanPortfolioTotals = buildLinearSeries(560000, 520000, 12);
+
+export const demoLoanPortfolioSeries: LoanPortfolioSeriesResponse = {
+  series: demoLoanPortfolioTotals.map((total, idx) => ({
+    date: monthIso(demoYear, demoMonthIndex - 11 + idx),
+    total: toMoney(total),
+  })),
 };
 
 const getYearFactor = (year: number) => {

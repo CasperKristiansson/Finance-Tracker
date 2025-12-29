@@ -2,7 +2,11 @@ import { createAction } from "@reduxjs/toolkit";
 import { END, eventChannel, type EventChannel } from "redux-saga";
 import { call, put, select, take, takeLatest } from "redux-saga/effects";
 import { toast } from "sonner";
-import { demoImportPreview, demoImportSuggestions } from "@/data/demoPayloads";
+import {
+  demoImportFiles,
+  demoImportPreview,
+  demoImportSuggestions,
+} from "@/data/demoPayloads";
 import { callApiWithAuth } from "@/features/api/apiSaga";
 import { selectIsDemo } from "@/features/auth/authSlice";
 import { selectCategories } from "@/features/categories/categoriesSlice";
@@ -30,6 +34,7 @@ import type {
   ImportCategorySuggestionRead,
   ImportPreviewRequest,
   ImportPreviewResponse,
+  ImportFileRead,
   ImportFileListResponse,
   ImportFileDownloadResponse,
 } from "@/types/api";
@@ -136,6 +141,17 @@ const createSuggestionsChannel = (
       }
     };
   });
+};
+
+const buildDemoDownloadUrl = (file?: ImportFileRead) => {
+  const filename = file?.filename ?? "demo_import.csv";
+  const header = "Date,Description,Amount";
+  const rows = [
+    `${new Date().toISOString().slice(0, 10)},Demo import for ${filename},0.00`,
+    `${new Date().toISOString().slice(0, 10)},Sample transaction,-145.20`,
+  ];
+  const content = [header, ...rows].join("\n");
+  return `data:text/csv;charset=utf-8,${encodeURIComponent(content)}`;
 };
 
 function* waitForSocketOpen(
@@ -486,18 +502,23 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
 function* handleFetchStoredFiles() {
   yield put(setStoredImportFilesLoading(true));
   yield put(setStoredImportFilesError(undefined));
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
-    const response: ImportFileListResponse = yield call(
-      callApiWithAuth,
-      {
-        path: "/import-files",
-        method: "GET",
-        schema: importFileListResponseSchema,
-      },
-      { loadingKey: "import-files" },
-    );
-    const parsed = importFileListResponseSchema.parse(response);
-    yield put(setStoredImportFiles(parsed.files ?? []));
+    if (isDemo) {
+      yield put(setStoredImportFiles(demoImportFiles.files ?? []));
+    } else {
+      const response: ImportFileListResponse = yield call(
+        callApiWithAuth,
+        {
+          path: "/import-files",
+          method: "GET",
+          schema: importFileListResponseSchema,
+        },
+        { loadingKey: "import-files" },
+      );
+      const parsed = importFileListResponseSchema.parse(response);
+      yield put(setStoredImportFiles(parsed.files ?? []));
+    }
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to load import files.";
@@ -511,20 +532,30 @@ function* handleFetchStoredFiles() {
 function* handleDownloadImportFile(
   action: ReturnType<typeof DownloadImportFile>,
 ) {
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
-    const response: ImportFileDownloadResponse = yield call(
-      callApiWithAuth,
-      {
-        path: "/import-files/download",
-        method: "POST",
-        body: { file_id: action.payload.fileId },
-        schema: importFileDownloadResponseSchema,
-      },
-      { loadingKey: `import-file-${action.payload.fileId}` },
-    );
-    const parsed = importFileDownloadResponseSchema.parse(response);
-    if (parsed.url) {
-      window.open(parsed.url, "_blank", "noopener,noreferrer");
+    if (isDemo) {
+      const file = demoImportFiles.files.find(
+        (item) => item.id === action.payload.fileId,
+      );
+      const url = buildDemoDownloadUrl(file);
+      window.open(url, "_blank", "noopener,noreferrer");
+      toast.success("Download started (demo mode)");
+    } else {
+      const response: ImportFileDownloadResponse = yield call(
+        callApiWithAuth,
+        {
+          path: "/import-files/download",
+          method: "POST",
+          body: { file_id: action.payload.fileId },
+          schema: importFileDownloadResponseSchema,
+        },
+        { loadingKey: `import-file-${action.payload.fileId}` },
+      );
+      const parsed = importFileDownloadResponseSchema.parse(response);
+      if (parsed.url) {
+        window.open(parsed.url, "_blank", "noopener,noreferrer");
+      }
     }
   } catch (error) {
     const message =

@@ -1,6 +1,10 @@
 import { createAction } from "@reduxjs/toolkit";
 import { call, put, select, takeLatest } from "redux-saga/effects";
-import { demoLoanEvents, demoLoanSchedules } from "@/data/demoPayloads";
+import {
+  demoLoanEvents,
+  demoLoanPortfolioSeries,
+  demoLoanSchedules,
+} from "@/data/demoPayloads";
 import { callApiWithAuth } from "@/features/api/apiSaga";
 import { selectIsDemo } from "@/features/auth/authSlice";
 import {
@@ -124,6 +128,7 @@ function* handleFetchPortfolioSeries(
   const { startDate, endDate } = action.payload;
   const loadingKey = "loan-portfolio-series";
   yield put(setLoanLoading({ key: loadingKey, isLoading: true }));
+  const isDemo: boolean = yield select(selectIsDemo);
 
   try {
     const query = {
@@ -131,17 +136,23 @@ function* handleFetchPortfolioSeries(
       ...(endDate ? { end_date: endDate } : {}),
     };
 
-    const response: LoanPortfolioSeriesResponse = yield call(
-      callApiWithAuth,
-      {
-        path: "/loans/events/series",
-        query,
-        schema: loanPortfolioSeriesResponseSchema,
-      },
-      { loadingKey },
-    );
+    if (isDemo) {
+      yield put(
+        setLoanPortfolioSeries({ series: demoLoanPortfolioSeries.series }),
+      );
+    } else {
+      const response: LoanPortfolioSeriesResponse = yield call(
+        callApiWithAuth,
+        {
+          path: "/loans/events/series",
+          query,
+          schema: loanPortfolioSeriesResponseSchema,
+        },
+        { loadingKey },
+      );
 
-    yield put(setLoanPortfolioSeries({ series: response.series }));
+      yield put(setLoanPortfolioSeries({ series: response.series }));
+    }
   } catch (error) {
     yield put(
       setLoanError(

@@ -100,12 +100,31 @@ export const resolveDemoRequest = (request: DemoApiRequest) => {
         const accountIds = getStringArray(request.query?.account_ids);
         const categoryIds = getStringArray(request.query?.category_ids);
         const limit = getNumber(request.query?.limit, 100);
+        const offset = getNumber(request.query?.offset, 0);
         const transactionTypes = getStringArray(
-          request.query?.transaction_types,
+          request.query?.transaction_types ?? request.query?.transaction_type,
         );
+        const subscriptionIds = getStringArray(request.query?.subscription_ids);
         const startDate = request.query?.start_date
           ? new Date(String(request.query.start_date))
           : null;
+        const endDate = request.query?.end_date
+          ? new Date(String(request.query.end_date))
+          : null;
+        const minAmount = request.query?.min_amount
+          ? Number(request.query.min_amount)
+          : null;
+        const maxAmount = request.query?.max_amount
+          ? Number(request.query.max_amount)
+          : null;
+        const hasMinAmount =
+          typeof minAmount === "number" && Number.isFinite(minAmount);
+        const hasMaxAmount =
+          typeof maxAmount === "number" && Number.isFinite(maxAmount);
+        const search =
+          typeof request.query?.search === "string"
+            ? request.query.search.toLowerCase()
+            : null;
         const transactions = demoTransactionsResponse.transactions.filter(
           (tx) => {
             if (accountIds.length) {
@@ -120,16 +139,45 @@ export const resolveDemoRequest = (request: DemoApiRequest) => {
             ) {
               return false;
             }
+            if (
+              subscriptionIds.length &&
+              !subscriptionIds.includes(tx.subscription_id ?? "")
+            ) {
+              return false;
+            }
             if (transactionTypes.length) {
               return transactionTypes.includes(tx.transaction_type);
             }
             if (startDate && new Date(tx.occurred_at) < startDate) {
               return false;
             }
+            if (endDate && new Date(tx.occurred_at) > endDate) {
+              return false;
+            }
+            if (hasMinAmount || hasMaxAmount) {
+              const total = tx.legs.reduce(
+                (sum, leg) => sum + Number(leg.amount),
+                0,
+              );
+              if (hasMinAmount && minAmount !== null && total < minAmount) {
+                return false;
+              }
+              if (hasMaxAmount && maxAmount !== null && total > maxAmount) {
+                return false;
+              }
+            }
+            if (search) {
+              const description = tx.description?.toLowerCase() ?? "";
+              if (!description.includes(search)) {
+                return false;
+              }
+            }
             return true;
           },
         );
-        const sliced = limit ? transactions.slice(0, limit) : transactions;
+        const sliced = limit
+          ? transactions.slice(offset, offset + limit)
+          : transactions.slice(offset);
         return {
           transactions: sliced,
           running_balances: demoTransactionsResponse.running_balances,
