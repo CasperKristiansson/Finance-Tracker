@@ -2,7 +2,9 @@ import { createAction } from "@reduxjs/toolkit";
 import { END, eventChannel, type EventChannel } from "redux-saga";
 import { call, put, select, take, takeLatest } from "redux-saga/effects";
 import { toast } from "sonner";
+import { demoImportPreview, demoImportSuggestions } from "@/data/demoPayloads";
 import { callApiWithAuth } from "@/features/api/apiSaga";
+import { selectIsDemo } from "@/features/auth/authSlice";
 import { selectCategories } from "@/features/categories/categoriesSlice";
 import {
   clearImportPreview,
@@ -25,6 +27,7 @@ import type {
   ImportCategorySuggestJobResponse,
   ImportCategorySuggestRequest,
   ImportCategorySuggestResponse,
+  ImportCategorySuggestionRead,
   ImportPreviewRequest,
   ImportPreviewResponse,
   ImportFileListResponse,
@@ -306,23 +309,31 @@ function* suggestSync(
 function* handlePreview(action: ReturnType<typeof PreviewImports>) {
   yield put(setImportsLoading(true));
   yield put(clearImportsError());
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
     const body = importPreviewRequestSchema.parse(action.payload);
-    const response: ImportPreviewResponse = yield call(
-      callApiWithAuth,
-      {
-        path: "/imports/preview",
-        method: "POST",
-        body,
-        schema: importPreviewResponseSchema,
-      },
-      { loadingKey: "imports" },
-    );
+    if (isDemo) {
+      yield put(setImportPreview(demoImportPreview));
+      toast.success("Files parsed", {
+        description: "Review transactions and submit when ready.",
+      });
+    } else {
+      const response: ImportPreviewResponse = yield call(
+        callApiWithAuth,
+        {
+          path: "/imports/preview",
+          method: "POST",
+          body,
+          schema: importPreviewResponseSchema,
+        },
+        { loadingKey: "imports" },
+      );
 
-    yield put(setImportPreview(response));
-    toast.success("Files parsed", {
-      description: "Review transactions and submit when ready.",
-    });
+      yield put(setImportPreview(response));
+      toast.success("Files parsed", {
+        description: "Review transactions and submit when ready.",
+      });
+    }
   } catch (error) {
     yield put(
       setImportsError(
@@ -341,26 +352,34 @@ function* handlePreview(action: ReturnType<typeof PreviewImports>) {
 function* handleCommit(action: ReturnType<typeof CommitImports>) {
   yield put(setImportsSaving(true));
   yield put(clearImportsError());
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
     const body: ImportCommitRequest = importCommitRequestSchema.parse(
       action.payload,
     );
-    const response: ImportCommitResponse = yield call(
-      callApiWithAuth,
-      {
-        path: "/imports/commit",
-        method: "POST",
-        body,
-        schema: importCommitResponseSchema,
-      },
-      { loadingKey: "imports" },
-    );
-    const parsed = importCommitResponseSchema.parse(response);
+    if (isDemo) {
+      toast.success("Transactions saved", {
+        description: "Demo import saved locally.",
+      });
+      yield put(clearImportPreview());
+    } else {
+      const response: ImportCommitResponse = yield call(
+        callApiWithAuth,
+        {
+          path: "/imports/commit",
+          method: "POST",
+          body,
+          schema: importCommitResponseSchema,
+        },
+        { loadingKey: "imports" },
+      );
+      const parsed = importCommitResponseSchema.parse(response);
 
-    toast.success("Transactions saved", {
-      description: `Batch ${parsed.import_batch_id.slice(0, 8)} created.`,
-    });
-    yield put(clearImportPreview());
+      toast.success("Transactions saved", {
+        description: `Batch ${parsed.import_batch_id.slice(0, 8)} created.`,
+      });
+      yield put(clearImportPreview());
+    }
   } catch (error) {
     yield put(
       setImportsError(
@@ -380,6 +399,7 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
   yield put(setImportsSuggesting(true));
   yield put(setImportsSuggestionsError(undefined));
   let channel: EventChannel<SuggestionSocketEvent> | null = null;
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
     const categories: Array<{
       id: string;
@@ -398,50 +418,58 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
       throw new Error("No transactions available for suggestions.");
     }
 
-    if (!WS_API_BASE_URL) {
+    if (isDemo) {
+      const mapped = demoImportSuggestions.suggestions.reduce(
+        (acc, suggestion) => {
+          acc[suggestion.id] = suggestion;
+          return acc;
+        },
+        {} as Record<string, ImportCategorySuggestionRead>,
+      );
+      yield put(setImportSuggestions(mapped));
+    } else if (!WS_API_BASE_URL) {
       const mapped = yield* suggestSync(payloads);
       yield put(setImportSuggestions(mapped));
-      return;
+    } else {
+      const clientId = crypto.randomUUID();
+      const clientToken = createClientToken();
+      channel = createSuggestionsChannel(clientId, clientToken);
+      yield* waitForSocketOpen(channel);
+
+      const mapped: Record<
+        string,
+        ImportCategorySuggestResponse["suggestions"][number]
+      > = {};
+
+      for (const { accountId, request } of payloads) {
+        const jobRequest: ImportCategorySuggestJobRequest = {
+          ...request,
+          client_id: clientId,
+          client_token: clientToken,
+        };
+        const body = importCategorySuggestJobRequestSchema.parse(jobRequest);
+
+        const response: ImportCategorySuggestJobResponse = yield call(
+          callApiWithAuth,
+          {
+            path: "/imports/suggest-categories/jobs",
+            method: "POST",
+            body,
+            schema: importCategorySuggestJobResponseSchema,
+          },
+          { loadingKey: `imports-suggest-${accountId}` },
+        );
+        const parsed = importCategorySuggestJobResponseSchema.parse(response);
+
+        const jobResponse: ImportCategorySuggestResponse =
+          yield* waitForSuggestionJob(channel, parsed.job_id);
+        jobResponse.suggestions.forEach((suggestion) => {
+          mapped[suggestion.id] = suggestion;
+        });
+      }
+
+      yield put(setImportSuggestions(mapped));
     }
-
-    const clientId = crypto.randomUUID();
-    const clientToken = createClientToken();
-    channel = createSuggestionsChannel(clientId, clientToken);
-    yield* waitForSocketOpen(channel);
-
-    const mapped: Record<
-      string,
-      ImportCategorySuggestResponse["suggestions"][number]
-    > = {};
-
-    for (const { accountId, request } of payloads) {
-      const jobRequest: ImportCategorySuggestJobRequest = {
-        ...request,
-        client_id: clientId,
-        client_token: clientToken,
-      };
-      const body = importCategorySuggestJobRequestSchema.parse(jobRequest);
-
-      const response: ImportCategorySuggestJobResponse = yield call(
-        callApiWithAuth,
-        {
-          path: "/imports/suggest-categories/jobs",
-          method: "POST",
-          body,
-          schema: importCategorySuggestJobResponseSchema,
-        },
-        { loadingKey: `imports-suggest-${accountId}` },
-      );
-      const parsed = importCategorySuggestJobResponseSchema.parse(response);
-
-      const jobResponse: ImportCategorySuggestResponse =
-        yield* waitForSuggestionJob(channel, parsed.job_id);
-      jobResponse.suggestions.forEach((suggestion) => {
-        mapped[suggestion.id] = suggestion;
-      });
-    }
-
-    yield put(setImportSuggestions(mapped));
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to suggest categories.";

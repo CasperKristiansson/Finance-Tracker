@@ -46,7 +46,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { selectToken } from "@/features/auth/authSlice";
+import { demoGoals } from "@/data/demoPayloads";
+import { selectIsDemo, selectToken } from "@/features/auth/authSlice";
 import { apiFetch } from "@/lib/apiClient";
 import { currency, formatDate as formatDateLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -104,6 +105,7 @@ const formatDelta = (deltaDays: number) => {
 
 export const Goals: React.FC = () => {
   const token = useAppSelector(selectToken);
+  const isDemo = useAppSelector(selectIsDemo);
   const prefersReducedMotion = useReducedMotion();
   const [goals, setGoals] = useState<GoalRead[]>([]);
   const [loading, setLoading] = useState(false);
@@ -141,6 +143,10 @@ export const Goals: React.FC = () => {
   const loadTotalOverview = async () => {
     setTotalOverviewLoading(true);
     try {
+      if (isDemo) {
+        setTotalOverview(null);
+        return;
+      }
       const { data } = await fetchTotalOverview({ token });
       setTotalOverview(data);
     } catch {
@@ -153,6 +159,10 @@ export const Goals: React.FC = () => {
   const loadGoals = async () => {
     setLoading(true);
     try {
+      if (isDemo) {
+        setGoals(demoGoals.goals ?? []);
+        return;
+      }
       const { data } = await apiFetch<GoalListResponse>({
         path: "/goals",
         schema: goalListSchema,
@@ -171,6 +181,50 @@ export const Goals: React.FC = () => {
 
   const submitGoal = goalForm.handleSubmit(async (values) => {
     try {
+      if (isDemo) {
+        const now = new Date().toISOString();
+        if (editingGoal) {
+          setGoals((prev) =>
+            prev.map((goal) =>
+              goal.id === editingGoal.id
+                ? {
+                    ...goal,
+                    name: values.name.trim(),
+                    target_amount: values.target_amount.trim(),
+                    target_date: values.target_date || null,
+                    note: values.note || null,
+                    updated_at: now,
+                  }
+                : goal,
+            ),
+          );
+          toast.success("Goal updated (demo mode)");
+        } else {
+          const nextGoal: GoalRead = {
+            id: `demo-goal-${Date.now()}`,
+            name: values.name.trim(),
+            target_amount: values.target_amount.trim(),
+            target_date: values.target_date || null,
+            category_id: null,
+            account_id: null,
+            subscription_id: null,
+            note: values.note || null,
+            created_at: now,
+            updated_at: now,
+            current_amount: "0.00",
+            progress_pct: 0,
+            achieved_at: null,
+            achieved_delta_days: null,
+          };
+          setGoals((prev) => [...prev, nextGoal]);
+          toast.success("Goal added (demo mode)");
+        }
+        goalForm.reset(defaultGoalValues);
+        setIsDialogOpen(false);
+        setEditingGoal(null);
+        return;
+      }
+
       const payload = {
         ...values,
         target_date: values.target_date || null,
@@ -213,6 +267,12 @@ export const Goals: React.FC = () => {
     );
     if (!confirmed) return;
     try {
+      if (isDemo) {
+        setGoals((prev) => prev.filter((item) => item.id !== goal.id));
+        toast.success("Goal deleted (demo mode)");
+        setSelectedGoalId(null);
+        return;
+      }
       await apiFetch({
         path: `/goals/${goal.id}`,
         method: "DELETE",

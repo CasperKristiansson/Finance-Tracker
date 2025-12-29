@@ -1,32 +1,135 @@
-<p align="center">
-<img src="https://user-images.githubusercontent.com/36133918/192075691-b5892073-923e-4d1e-ae62-3ad963725e7f.png" height="400"/>
-</p>
-
 # Finance Tracker
 
-_A project which solved an issue of mine which was tracking my finance. This Finance Tracking application gives overviews of expenses and income to give its users an easy way to explore their data._
+Personal finance intelligence built as an end-to-end product: ingestion, categorization, reporting, and decision-ready insights. This repo is a full-stack showcase focused on UX polish, data-heavy views, and a clean service architecture.
 
-I have always been interested in finance and personal economics. Therefore, for the past five years, I have been tracking every single expense or income that I have made. And like most people, I then visualized that data in excel. But creating advanced views with dynamic categories became extremely hard and required a lot of work.
+![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white&style=flat-square)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=0A0A0A&style=flat-square)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white&style=flat-square)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind-4-38B2AC?logo=tailwindcss&logoColor=white&style=flat-square)
+![Redux](https://img.shields.io/badge/Redux_Toolkit-Saga-764ABC?logo=redux&logoColor=white&style=flat-square)
+![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white&style=flat-square)
+![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-D71F00?logo=sqlalchemy&logoColor=white&style=flat-square)
+![AWS](https://img.shields.io/badge/AWS-Lambda%20%2F%20Cognito-232F3E?logo=amazonaws&logoColor=white&style=flat-square)
+![Terraform](https://img.shields.io/badge/Terraform-IaC-7B42BC?logo=terraform&logoColor=white&style=flat-square)
 
-An easy solution for this (kind of time-consuming 😊) was to in a more programmatic way explore and manage my personal finance. The application allows me to, in a much faster and easy way track month-to-month expenses and income.
+<!-- IMAGE: Hero (replace with a wide dashboard screenshot) -->
 
-## Technologies Used
+![Finance Tracker hero](docs/images/hero.png)
 
-- **MYSQL** database to store transactions and loans
-- The website is made using **React** and website authentication is made using **Firebase**
-- Eight different **API endpoints** were developed to manage the data between the application and the database
-- Python Pandas to clean the old transaction data
+## Product snapshot
 
-<p align="center">
-<img src="https://user-images.githubusercontent.com/36133918/192075699-af6a3a35-a098-4d0d-bb82-da15273d24ad.jpg" height="400"/>
-</p>
+- Unified view of transactions, accounts, budgets, goals, loans, investments, and taxes.
+- Rich reporting with net-worth, cash-flow, and category analytics.
+- Spreadsheet import workflows with preview, mapping, and reconciliation.
+- UX-first interface with motion, progressive loading states, and data-dense layouts.
 
-## Features
+## Screenshots
 
-The overview page is what the user is first presented with when entering the website. The overview view gives the user an insight into last month's income and expenses and a bar chart for this year's income and expenses. The page also includes two sections where the user can either add a new transaction or upload an excel document. The second part of the page includes a list of transactions where the user can easily navigate and see the different transactions made. The table gives the user the option to edit each transaction.
+<!-- IMAGE: Dashboard -->
 
-The two most important pages are the yearly and total overview. Both these pages give deep insight into exactly which income/expense categories exist and exactly how much each source is. With the yearly overview, the user can explore how much the user has made an impact on their NET growth. The total view gives more insight into comparing the years towards each other.
+![Dashboard overview](docs/images/dashboard.png)
 
-A big part of keeping track of personal finance is knowing exactly where all the existing money is located. As you grow older you usually will end up with more and more different bank accounts, investment portfolios, and saving accounts. The accounts overview gives the exact amount that exists in each account. One thing that I had a really hard time with before when tracking in excel is that even after tracking all the monthly expenses the accounts wouldn’t always line up with the real-world amount. Therefore, the transaction page also gives it user a way to edit the balance and then track it as an adjustment.
+<!-- IMAGE: Reports -->
 
-Another big thing in managing finance is that it must be easy to create new, edit or delete transactions. The application with help of API endpoints can easily perform all of these actions against the database. A biig functionality added to the application is uploading an excel document. The user can upload an excel document with a list of expenses and income which the application can post to the database. This makes it easy to manage the finance from month to month.
+![Reports and analytics](docs/images/reports.png)
+
+<!-- IMAGE: Transactions -->
+
+![Transaction management](docs/images/transactions.png)
+
+### Feature grid
+
+<!-- IMAGE GRID: Categories / Taxes / Investments / Goals (2x2) -->
+<table>
+  <tr>
+    <td><img alt="Categories" src="docs/images/categories.png" /></td>
+    <td><img alt="Taxes" src="docs/images/taxes.png" /></td>
+  </tr>
+  <tr>
+    <td><img alt="Investments" src="docs/images/investments.png" /></td>
+    <td><img alt="Goals" src="docs/images/goals.png" /></td>
+  </tr>
+</table>
+
+## Why this project
+
+I wanted a personal finance workspace that felt like a modern product instead of a spreadsheet. The goal is clarity: see where money goes, how it compounds, and what to do next. This repo is where I explore data modeling, UI density, and end-to-end product thinking.
+
+It is built as a portfolio-grade app, not a tutorial. Every screen is meant to be opinionated, fast, and practical for day-to-day tracking while still surfacing long-term trends.
+
+## Highlights
+
+- Data-rich reporting (yearly and total views, net worth trajectory, category mix, cash-flow forecasts).
+- Full CRUD flows across domains like accounts, budgets, loans, investments, and subscriptions.
+- Authenticated experience with AWS Amplify and Cognito-ready configuration.
+- Async data orchestration via Redux Toolkit + Saga for predictable client state.
+- Import pipelines powered by pandas and openpyxl for real-world bank data.
+
+## Feature deep dive
+
+### Transactions & imports
+
+Capture spending and income with a multi-leg transaction model that supports transfers and rich filtering. Imports accept spreadsheet exports with previews and validation, then commit into the ledger with running balances and reconciliation support.
+
+### Categories & rules
+
+Maintain a category system that scales: income vs expense types, icon and color metadata, archival, and merges. Categories surface lifetime totals and recent sparklines so the classification system becomes a real decision tool.
+
+### Accounts & reconciliation
+
+Track every account and balance, including debt accounts with embedded loan metadata. Reconciliation creates explicit adjustments with captured balances, reconciliation gaps, and timestamps so ledger state always aligns with reality.
+
+### Budgets & subscriptions
+
+Define budgets per category and time period, then track spent vs remaining with progress metrics. Subscription matching uses merchant text, tolerance, and day-of-month rules to attach recurring transactions and visualize spend trends.
+
+### Debt & loans
+
+Model loans with principal, interest, minimum payments, and expected maturity dates. Generate amortization schedules and derive loan events from transactions to visualize liability changes over time.
+
+### Investments
+
+Record investment snapshots, holdings, and cashflows, then roll them into portfolio and account-level overviews. Performance metrics include realized and unrealized gains, time-weighted and IRR values, and benchmark comparisons, plus raw statement parsing for broker exports.
+
+### Goals
+
+Set goals with target amounts and dates, optionally linked to accounts, categories, or subscriptions. Progress is computed from current balances so goals stay grounded in actual ledger data.
+
+### Taxes
+
+Record tax payments and refunds with authority metadata and notes, then generate monthly and yearly summaries. The tax dashboard highlights total paid, refunds, and the largest periods at a glance.
+
+### Reporting & analytics
+
+Yearly and total reports break down category mix, cash-flow volatility, net worth trajectory, and cash runway. Dedicated endpoints deliver exports, projections, and forecasts so the reporting layer can evolve without rewriting the UI.
+
+### Security & session handling
+
+Authentication is handled via AWS Amplify and Cognito-backed configuration with session-aware data loading. The app maintains a clean separation between authenticated and demo flows.
+
+## Tech stack
+
+**Frontend**
+
+- React 19 + Vite 6 + TypeScript
+- Tailwind CSS 4, Radix UI primitives, shadcn-style components, lucide icons
+- Redux Toolkit + redux-saga, react-router, React Hook Form + Zod
+- Recharts for visualization, Framer Motion for transitions
+
+**Backend**
+
+- Python 3.13, SQLModel + SQLAlchemy, Pydantic schemas
+- Alembic migrations, pytest coverage
+- Serverless-style AWS Lambda handlers (organized by feature)
+
+**Infra**
+
+- Terraform for infrastructure-as-code
+- AWS integration points (Lambda, Cognito via Amplify)
+
+## Repo layout
+
+- `apps/web` - Vite + React frontend
+- `apps/api` - Python API handlers, services, repositories, and schemas
+- `infra/terraform` - Infrastructure definitions
+- `docs` - Supporting documentation and assets

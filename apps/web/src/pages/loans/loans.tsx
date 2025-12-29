@@ -73,7 +73,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageRoutes } from "@/data/routes";
-import { selectToken } from "@/features/auth/authSlice";
+import { selectIsDemo, selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useLoansApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import {
@@ -240,6 +240,7 @@ export const Loans: React.FC = () => {
   const { accountId } = useParams<{ accountId?: string }>();
   const navigate = useNavigate();
   const token = useAppSelector(selectToken);
+  const isDemo = useAppSelector(selectIsDemo);
   const {
     items: accounts,
     loading: accountsLoading,
@@ -593,6 +594,12 @@ export const Loans: React.FC = () => {
       toast.error("You must be logged in to create a loan.");
       return;
     }
+    if (isDemo) {
+      toast.info("Demo mode", {
+        description: "Loan creation is disabled in demo mode.",
+      });
+      return;
+    }
 
     const originCents = parseMoneyToCents(loanOriginPrincipal);
     const currentCents = parseMoneyToCents(
@@ -658,6 +665,12 @@ export const Loans: React.FC = () => {
   const recordLoanActivity = async () => {
     if (!token) {
       toast.error("You must be logged in to record loan activity.");
+      return;
+    }
+    if (isDemo) {
+      toast.info("Demo mode", {
+        description: "Recording loan activity is disabled in demo mode.",
+      });
       return;
     }
     if (!accountId) return;
@@ -749,6 +762,12 @@ export const Loans: React.FC = () => {
   const updateLoan = async () => {
     if (!token) {
       toast.error("You must be logged in to update a loan.");
+      return;
+    }
+    if (isDemo) {
+      toast.info("Demo mode", {
+        description: "Updating loans is disabled in demo mode.",
+      });
       return;
     }
     if (!accountId) return;

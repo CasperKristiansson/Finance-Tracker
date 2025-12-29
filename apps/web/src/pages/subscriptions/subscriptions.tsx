@@ -23,7 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { selectToken } from "@/features/auth/authSlice";
+import { selectIsDemo, selectToken } from "@/features/auth/authSlice";
 import { useCategoriesApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import { currency } from "@/lib/format";
@@ -119,6 +119,7 @@ type EditableFields = Pick<
 
 export const Subscriptions: React.FC = () => {
   const token = useAppSelector(selectToken);
+  const isDemo = useAppSelector(selectIsDemo);
   const { items: categories, fetchCategories } = useCategoriesApi();
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -193,6 +194,54 @@ export const Subscriptions: React.FC = () => {
         is_active: true,
       };
 
+      if (isDemo) {
+        const now = new Date().toISOString();
+        const categoryName =
+          categories.find((cat) => cat.id === payload.category_id)?.name ??
+          null;
+        const newSub: SubscriptionSummaryRead = {
+          id: `demo-sub-${Date.now()}`,
+          name: payload.name,
+          matcher_text: payload.matcher_text,
+          matcher_amount_tolerance: payload.matcher_amount_tolerance ?? null,
+          matcher_day_of_month: payload.matcher_day_of_month ?? null,
+          category_id: payload.category_id ?? null,
+          is_active: true,
+          created_at: now,
+          updated_at: now,
+          current_month_spend: "0.00",
+          trailing_three_month_spend: "0.00",
+          trailing_twelve_month_spend: "0.00",
+          trend: ["0.00", "0.00", "0.00", "0.00", "0.00", "0.00"],
+          last_charge_at: null,
+          category_name: categoryName,
+        };
+        setSubscriptions((prev) => [newSub, ...prev]);
+        matcherForm.reset({
+          rows: [
+            {
+              id: newSub.id,
+              matcher_text: newSub.matcher_text,
+              matcher_amount_tolerance: newSub.matcher_amount_tolerance ?? null,
+              matcher_day_of_month: newSub.matcher_day_of_month ?? null,
+              category_id: newSub.category_id ?? null,
+            },
+            ...(matcherForm.getValues("rows") ?? []),
+          ],
+        });
+        toast.success("Subscription created (demo mode)", {
+          description: payload.name,
+        });
+        createForm.reset({
+          name: "",
+          matcher_text: "",
+          matcher_amount_tolerance: null,
+          matcher_day_of_month: null,
+          category_id: null,
+        });
+        return;
+      }
+
       await apiFetch<SubscriptionRead>({
         path: "/subscriptions",
         method: "POST",
@@ -256,6 +305,34 @@ export const Subscriptions: React.FC = () => {
         category_id: parsed.category_id || null,
       };
 
+      if (isDemo) {
+        const updated = subscriptions.map((sub) =>
+          sub.id === subscription.id
+            ? {
+                ...sub,
+                matcher_text: payload.matcher_text ?? sub.matcher_text,
+                matcher_amount_tolerance:
+                  payload.matcher_amount_tolerance ??
+                  sub.matcher_amount_tolerance,
+                matcher_day_of_month:
+                  payload.matcher_day_of_month ?? sub.matcher_day_of_month,
+                category_id: payload.category_id ?? sub.category_id,
+                category_name:
+                  categories.find((cat) => cat.id === payload.category_id)
+                    ?.name ??
+                  sub.category_name ??
+                  null,
+                updated_at: new Date().toISOString(),
+              }
+            : sub,
+        );
+        setSubscriptions(updated);
+        toast.success("Subscription updated (demo mode)", {
+          description: subscription.name,
+        });
+        return;
+      }
+
       await apiFetch({
         path: `/subscriptions/${subscription.id}`,
         method: "PATCH",
@@ -278,6 +355,26 @@ export const Subscriptions: React.FC = () => {
     if (!token) return;
     setSavingId(subscription.id);
     try {
+      if (isDemo) {
+        setSubscriptions((prev) =>
+          prev.map((sub) =>
+            sub.id === subscription.id
+              ? {
+                  ...sub,
+                  is_active: !sub.is_active,
+                  updated_at: new Date().toISOString(),
+                }
+              : sub,
+          ),
+        );
+        toast.success(
+          subscription.is_active
+            ? "Subscription archived (demo mode)"
+            : "Subscription reactivated (demo mode)",
+          { description: subscription.name },
+        );
+        return;
+      }
       await apiFetch({
         path: `/subscriptions/${subscription.id}`,
         method: "PATCH",

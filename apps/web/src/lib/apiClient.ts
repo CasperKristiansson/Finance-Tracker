@@ -1,3 +1,5 @@
+import { resolveDemoRequest } from "@/data/demoApi";
+
 type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
 
 export interface ApiRequest {
@@ -79,6 +81,40 @@ const parseResponse = async (response: Response) => {
 export const apiFetch = async <T>(
   request: ApiRequest,
 ): Promise<{ data: T; status: number; response: Response }> => {
+  const isDemo = request.token === "demo-access-token";
+  if (isDemo) {
+    const demoPayload = resolveDemoRequest(request);
+    if (demoPayload !== null) {
+      if (request.schema) {
+        const parsed = request.schema.safeParse(demoPayload);
+        if (!parsed.success) {
+          throw new ApiError(
+            422,
+            "Demo response validation failed",
+            request.path,
+            parsed.error.flatten(),
+          );
+        }
+        const response = new Response(JSON.stringify(parsed.data), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+        return { data: parsed.data as T, status: 200, response };
+      }
+      const response = new Response(JSON.stringify(demoPayload), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+      return { data: demoPayload as T, status: 200, response };
+    }
+
+    throw new ApiError(
+      400,
+      "Demo response not implemented for request.",
+      request.path,
+    );
+  }
+
   if (!API_BASE_URL) {
     throw new ApiError(
       0,

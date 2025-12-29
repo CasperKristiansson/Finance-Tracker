@@ -40,7 +40,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { selectToken } from "@/features/auth/authSlice";
+import {
+  demoTaxEvents,
+  demoTaxTotalSummary,
+  getDemoTaxSummary,
+} from "@/data/demoPayloads";
+import { selectIsDemo, selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import { currency, formatDate } from "@/lib/format";
@@ -101,6 +106,7 @@ const typeTone: Record<TaxEventType, string> = {
 
 export const Taxes: React.FC = () => {
   const token = useAppSelector(selectToken);
+  const isDemo = useAppSelector(selectIsDemo);
   const { items: accounts, fetchAccounts } = useAccountsApi();
 
   const currentYear = new Date().getFullYear();
@@ -143,6 +149,10 @@ export const Taxes: React.FC = () => {
     if (!token) return;
     setSummaryLoading(true);
     try {
+      if (isDemo) {
+        setSummary(getDemoTaxSummary(targetYear));
+        return;
+      }
       const { data } = await apiFetch<TaxSummaryResponse>({
         path: "/tax/summary",
         query: { year: targetYear },
@@ -165,6 +175,10 @@ export const Taxes: React.FC = () => {
     if (!token) return;
     setTotalSummaryLoading(true);
     try {
+      if (isDemo) {
+        setTotalSummary(demoTaxTotalSummary);
+        return;
+      }
       const { data } = await apiFetch<TaxTotalSummaryResponse>({
         path: "/tax/summary/total",
         schema: taxTotalSummarySchema,
@@ -186,6 +200,10 @@ export const Taxes: React.FC = () => {
     if (!token) return;
     setEventsLoading(true);
     try {
+      if (isDemo) {
+        setEvents(demoTaxEvents);
+        return;
+      }
       const limit = 200;
       const maxPages = 50;
       const all: TaxEventListResponse["events"] = [];
@@ -251,6 +269,38 @@ export const Taxes: React.FC = () => {
     if (!token) return;
     setCreating(true);
     try {
+      if (isDemo) {
+        const now = new Date(values.occurred_at).toISOString();
+        const nextEvent = {
+          id: `demo-tax-${Date.now()}`,
+          transaction_id: `demo-tax-tx-${Date.now()}`,
+          occurred_at: now,
+          description: values.description.trim(),
+          event_type: values.event_type,
+          authority: "Skatteverket",
+          note: values.note?.trim() || null,
+          account_id: values.account_id,
+          account_name:
+            accounts.find((acc) => acc.id === values.account_id)?.name ?? null,
+          amount: values.amount,
+        };
+        setEvents((prev) => ({
+          events: [nextEvent, ...(prev?.events ?? [])],
+        }));
+        setDialogOpen(false);
+        toast.success("Tax recorded (demo mode)", {
+          description: `Created ${values.event_type} event.`,
+        });
+        form.reset({
+          event_type: TaxEventType.PAYMENT,
+          account_id: "",
+          occurred_at: new Date().toISOString().slice(0, 10),
+          amount: "",
+          description: "Skatteverket",
+          note: "",
+        });
+        return;
+      }
       const { data } = await apiFetch<TaxEventCreateResponse>({
         path: "/tax/events",
         method: "POST",

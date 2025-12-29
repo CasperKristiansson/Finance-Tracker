@@ -1,6 +1,11 @@
 import { createAction } from "@reduxjs/toolkit";
-import { call, put, takeLatest } from "redux-saga/effects";
+import { call, put, select, takeLatest } from "redux-saga/effects";
+import {
+  demoInvestmentOverview,
+  demoInvestmentTransactions,
+} from "@/data/demoPayloads";
 import { callApiWithAuth } from "@/features/api/apiSaga";
+import { selectIsDemo } from "@/features/auth/authSlice";
 import {
   setInvestmentsError,
   setInvestmentsLoading,
@@ -31,7 +36,13 @@ export const CreateInvestmentSnapshot = createAction<{
 }>("investments/createSnapshot");
 
 function* handleFetchTransactions(): Generator {
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
+    if (isDemo) {
+      yield put(setTransactions(demoInvestmentTransactions.transactions));
+      return;
+    }
+
     const response: InvestmentTransactionListResponse = yield call(
       callApiWithAuth,
       {
@@ -57,16 +68,21 @@ function* handleFetchTransactions(): Generator {
 
 function* handleFetchOverview(): Generator {
   yield put(setInvestmentsLoading(true));
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
-    const response: InvestmentOverviewResponse = yield call(
-      callApiWithAuth,
-      {
-        path: "/investments/overview",
-        schema: investmentOverviewResponseSchema,
-      },
-      { loadingKey: "investments", silent: true },
-    );
-    yield put(setOverview(response));
+    if (isDemo) {
+      yield put(setOverview(demoInvestmentOverview));
+    } else {
+      const response: InvestmentOverviewResponse = yield call(
+        callApiWithAuth,
+        {
+          path: "/investments/overview",
+          schema: investmentOverviewResponseSchema,
+        },
+        { loadingKey: "investments", silent: true },
+      );
+      yield put(setOverview(response));
+    }
   } catch (error) {
     yield put(
       setInvestmentsError(
@@ -85,17 +101,20 @@ function* handleCreateSnapshot(
 ): Generator {
   yield put(setInvestmentsUpdateLoading(true));
   yield put(setInvestmentsUpdateError(undefined));
+  const isDemo: boolean = yield select(selectIsDemo);
   try {
-    yield call(
-      callApiWithAuth,
-      {
-        path: "/investments/snapshots",
-        method: "POST",
-        body: action.payload.data,
-        schema: investmentSnapshotCreateResponseSchema,
-      },
-      { loadingKey: "investments-create-snapshot" },
-    );
+    if (!isDemo) {
+      yield call(
+        callApiWithAuth,
+        {
+          path: "/investments/snapshots",
+          method: "POST",
+          body: action.payload.data,
+          schema: investmentSnapshotCreateResponseSchema,
+        },
+        { loadingKey: "investments-create-snapshot" },
+      );
+    }
     yield put(setInvestmentsUpdateError(undefined));
     yield put(FetchInvestmentOverview());
   } catch (error) {
