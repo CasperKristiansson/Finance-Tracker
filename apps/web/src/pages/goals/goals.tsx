@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { selectToken } from "@/features/auth/authSlice";
+import { demoGoals } from "@/data/demoPayloads";
+import { selectIsDemo, selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useCategoriesApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import { type GoalRead, type GoalListResponse } from "@/types/api";
@@ -48,6 +49,7 @@ const formatDate = (value?: string | null) => {
 
 export const Goals: React.FC = () => {
   const token = useAppSelector(selectToken);
+  const isDemo = useAppSelector(selectIsDemo);
   const { items: accounts, fetchAccounts } = useAccountsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
   const [goals, setGoals] = useState<GoalRead[]>([]);
@@ -75,6 +77,10 @@ export const Goals: React.FC = () => {
   const loadGoals = async () => {
     setLoading(true);
     try {
+      if (isDemo) {
+        setGoals(demoGoals.goals ?? []);
+        return;
+      }
       const { data } = await apiFetch<GoalListResponse>({
         path: "/goals",
         schema: goalListSchema,
@@ -93,6 +99,36 @@ export const Goals: React.FC = () => {
 
   const submitGoal = goalForm.handleSubmit(async (values) => {
     try {
+      if (isDemo) {
+        const now = new Date().toISOString();
+        const target = Number(values.target_amount || 0);
+        const nextGoal: GoalRead = {
+          id: `demo-goal-${Date.now()}`,
+          name: values.name.trim(),
+          target_amount: values.target_amount.trim(),
+          target_date: values.target_date || null,
+          category_id: values.category_id || null,
+          account_id: values.account_id || null,
+          subscription_id: values.subscription_id || null,
+          note: values.note || null,
+          created_at: now,
+          updated_at: now,
+          current_amount: "0.00",
+          progress_pct: target ? 0 : 0,
+        };
+        setGoals((prev) => [...prev, nextGoal]);
+        toast.success("Goal added (demo mode)");
+        goalForm.reset({
+          name: "",
+          target_amount: "",
+          target_date: "",
+          category_id: "",
+          account_id: "",
+          subscription_id: "",
+          note: "",
+        });
+        return;
+      }
       await apiFetch({
         path: "/goals",
         method: "POST",
