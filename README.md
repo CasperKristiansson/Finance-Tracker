@@ -29,17 +29,18 @@ Personal finance intelligence built as an end-to-end product: ingestion, categor
 
 ![Dashboard overview](docs/images/dashboard.png)
 
+The command center view focuses on "what moved" and "what matters next" with quick access to accounts, goals, and high-signal KPIs.
+
 <!-- IMAGE: Reports -->
 
 ![Reports and analytics](docs/images/reports.png)
 
-<!-- IMAGE: Transactions -->
-
-![Transaction management](docs/images/transactions.png)
+Reporting is built for long-range clarity: net-worth trends, cash-flow volatility, and category mix that make tradeoffs visible.
 
 ### Feature grid
 
-<!-- IMAGE GRID: Categories / Taxes / Investments / Goals (2x2) -->
+The feature set goes wide without feeling fragmented: each surface is scoped, data-dense, and tuned for daily use.
+
 <table>
   <tr>
     <td><img alt="Categories" src="docs/images/categories.png" /></td>
@@ -50,6 +51,14 @@ Personal finance intelligence built as an end-to-end product: ingestion, categor
     <td><img alt="Goals" src="docs/images/goals.png" /></td>
   </tr>
 </table>
+
+Day-to-day workflows stay close to the data, so editing, categorizing, and reconciling never feels like a separate mode.
+
+<!-- IMAGE: Transactions -->
+
+![Transaction management](docs/images/transactions.png)
+
+Imports and transactions emphasize speed: bulk ingest, smart mapping, and fast filters for audit-ready edits.
 
 ## Why this project
 
