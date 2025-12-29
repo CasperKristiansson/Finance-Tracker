@@ -146,6 +146,15 @@ export const loanEventsResponseSchema = z.object({
   events: z.array(loanEventSchema),
 });
 
+export const loanPortfolioSeriesPointSchema = z.object({
+  date: dateString,
+  total: z.string(),
+});
+
+export const loanPortfolioSeriesResponseSchema = z.object({
+  series: z.array(loanPortfolioSeriesPointSchema),
+});
+
 export const categorySchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -261,6 +270,10 @@ export const transactionSchema = z.object({
   posted_at: dateString,
   created_at: dateString,
   updated_at: dateString,
+  tax_event: z
+    .lazy(() => taxEventSchema)
+    .nullable()
+    .optional(),
   legs: z.array(transactionLegSchema),
 });
 
@@ -275,6 +288,9 @@ export const monthlyReportSchema = z.object({
       period: z.string(),
       income: z.string(),
       expense: z.string(),
+      adjustment_inflow: z.string(),
+      adjustment_outflow: z.string(),
+      adjustment_net: z.string(),
       net: z.string(),
     }),
   ),
@@ -286,6 +302,9 @@ export const yearlyReportSchema = z.object({
       year: z.number(),
       income: z.string(),
       expense: z.string(),
+      adjustment_inflow: z.string(),
+      adjustment_outflow: z.string(),
+      adjustment_net: z.string(),
       net: z.string(),
     }),
   ),
@@ -298,6 +317,9 @@ export const quarterlyReportSchema = z.object({
       quarter: z.number(),
       income: z.string(),
       expense: z.string(),
+      adjustment_inflow: z.string(),
+      adjustment_outflow: z.string(),
+      adjustment_net: z.string(),
       net: z.string(),
     }),
   ),
@@ -306,6 +328,9 @@ export const quarterlyReportSchema = z.object({
 export const totalReportSchema = z.object({
   income: z.string(),
   expense: z.string(),
+  adjustment_inflow: z.string(),
+  adjustment_outflow: z.string(),
+  adjustment_net: z.string(),
   net: z.string(),
   generated_at: z.string().optional(),
 });
@@ -824,6 +849,7 @@ export const importPreviewResponseSchema = z.object({
           .array(
             z.object({
               id: z.string(),
+              account_id: z.string(),
               occurred_at: z.string(),
               description: z.string(),
               category_id: nullableString,
@@ -835,6 +861,7 @@ export const importPreviewResponseSchema = z.object({
           .array(
             z.object({
               id: z.string(),
+              account_id: z.string(),
               occurred_at: z.string(),
               description: z.string(),
               category_id: nullableString,
@@ -857,6 +884,7 @@ export const importPreviewResponseSchema = z.object({
 
 export const importCommitRowSchema = z.object({
   id: z.string(),
+  file_id: nullableString,
   account_id: z.string(),
   occurred_at: z.string(),
   amount: z.string(),
@@ -871,11 +899,49 @@ export const importCommitRowSchema = z.object({
 export const importCommitRequestSchema = z.object({
   note: z.string().optional(),
   rows: z.array(importCommitRowSchema),
+  files: z
+    .array(
+      z.object({
+        id: z.string(),
+        filename: z.string(),
+        account_id: z.string(),
+        row_count: numeric,
+        error_count: numeric,
+        bank_import_type: bankImportTypeSchema.nullable().optional(),
+        content_base64: z.string(),
+        content_type: z.string().nullable().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export const importCommitResponseSchema = z.object({
   import_batch_id: z.string(),
   transaction_ids: z.array(z.string()),
+});
+
+export const importFileSchema = z.object({
+  id: z.string(),
+  filename: z.string(),
+  account_id: z.string().nullable(),
+  account_name: z.string().nullable(),
+  bank_import_type: bankImportTypeSchema.nullable().optional(),
+  row_count: numeric,
+  error_count: numeric,
+  transaction_ids: z.array(z.string()).default([]),
+  import_batch_id: z.string(),
+  size_bytes: numeric.nullable().optional(),
+  content_type: z.string().nullable().optional(),
+  uploaded_at: z.string(),
+  status: z.string(),
+});
+
+export const importFileListResponseSchema = z.object({
+  files: z.array(importFileSchema),
+});
+
+export const importFileDownloadResponseSchema = z.object({
+  url: z.string(),
 });
 
 export const importCategoryOptionSchema = z.object({
@@ -1037,14 +1103,6 @@ export const investmentSnapshotSchema = z.object({
   holdings: z.array(investmentHoldingSchema).nullable().optional(),
 });
 
-export const investmentSnapshotResponseSchema = z.object({
-  snapshot: investmentSnapshotSchema,
-});
-
-export const investmentSnapshotListResponseSchema = z.object({
-  snapshots: z.array(investmentSnapshotSchema),
-});
-
 export const investmentTransactionSchema = z
   .object({
     id: z.string(),
@@ -1065,30 +1123,6 @@ export const investmentTransactionSchema = z
 
 export const investmentTransactionListSchema = z.object({
   transactions: z.array(investmentTransactionSchema),
-});
-
-const benchmarkSchema = z.object({
-  symbol: z.string(),
-  change_pct: nullableNumeric,
-  series: z.array(z.tuple([z.string(), z.number()])).default([]),
-});
-
-export const investmentPerformanceSchema = z.object({
-  total_value: money,
-  invested: money,
-  realized_pl: money,
-  unrealized_pl: money,
-  twr: nullableNumeric,
-  irr: nullableNumeric,
-  as_of: dateString,
-  benchmarks: z.array(benchmarkSchema).default([]),
-});
-
-export const investmentMetricsResponseSchema = z.object({
-  performance: investmentPerformanceSchema,
-  snapshots: z.array(investmentSnapshotSchema).default([]),
-  holdings: z.array(investmentHoldingSchema).default([]),
-  transactions: z.array(investmentTransactionSchema).default([]),
 });
 
 export const investmentValuePointSchema = z.object({
@@ -1167,29 +1201,18 @@ export const investmentOverviewResponseSchema = z.object({
   recent_cashflows: z.array(investmentCashflowEventSchema).default([]),
 });
 
-export const nordnetParseRequestSchema = z.object({
-  raw_text: z.string(),
-  manual_payload: z.record(z.string(), z.unknown()).optional(),
+export const investmentSnapshotCreateRequestSchema = z.object({
+  account_id: z.string(),
+  snapshot_date: dateString,
+  balance: money,
+  notes: nullableString,
 });
 
-export const nordnetParseResponseSchema = z.object({
-  report_type: nullableString,
-  snapshot_date: nullableString,
-  portfolio_value: nullableMoney,
-  parsed_payload: z.record(z.string(), z.unknown()),
-});
-
-export const nordnetSnapshotCreateRequestSchema = z.object({
-  raw_text: z.string(),
-  parsed_payload: z.record(z.string(), z.unknown()).optional(),
-  manual_payload: z.record(z.string(), z.unknown()).optional(),
-  snapshot_date: z.string().optional(),
-  account_name: nullableString,
-  report_type: nullableString,
-  portfolio_value: nullableMoney,
-  use_bedrock: z.boolean().optional(),
-  bedrock_model_id: z.string().nullable().optional(),
-  bedrock_max_tokens: z.union([z.number(), z.string()]).nullable().optional(),
+export const investmentSnapshotCreateResponseSchema = z.object({
+  snapshot_id: z.string(),
+  account_id: z.string(),
+  snapshot_date: dateString,
+  balance: money,
 });
 
 export const goalSchema = z.object({
@@ -1205,6 +1228,8 @@ export const goalSchema = z.object({
   updated_at: z.string(),
   current_amount: money,
   progress_pct: numeric,
+  achieved_at: nullableString,
+  achieved_delta_days: nullableNumeric,
 });
 
 export const goalListSchema = z.object({
@@ -1226,10 +1251,23 @@ export const goalUpdateRequestSchema = goalCreateRequestSchema.partial();
 export const settingsPayloadSchema = z.object({
   first_name: nullableString,
   last_name: nullableString,
+  currency_code: nullableString,
 });
 
 export const settingsResponseSchema = z.object({
   settings: settingsPayloadSchema,
+});
+
+export const backupTableSchema = z.object({
+  table: z.string(),
+  row_count: z.number(),
+  s3_key: z.string(),
+});
+
+export const backupRunResponseSchema = z.object({
+  bucket: z.string(),
+  manifest_key: z.string(),
+  tables: z.array(backupTableSchema),
 });
 
 export const warmupResponseSchema = z.object({
@@ -1299,6 +1337,12 @@ export type AccountListResponse = z.infer<typeof accountListSchema>;
 export type LoanScheduleEntry = z.infer<typeof loanScheduleEntrySchema>;
 export type LoanScheduleRead = z.infer<typeof loanScheduleSchema>;
 export type LoanEventRead = z.infer<typeof loanEventSchema>;
+export type LoanPortfolioSeriesPoint = z.infer<
+  typeof loanPortfolioSeriesPointSchema
+>;
+export type LoanPortfolioSeriesResponse = z.infer<
+  typeof loanPortfolioSeriesResponseSchema
+>;
 export type CategoryCreateRequest = z.infer<typeof categoryCreateRequestSchema>;
 export type CategoryUpdateRequest = z.infer<typeof categoryUpdateRequestSchema>;
 export type CategoryRead = z.infer<typeof categorySchema>;
@@ -1352,6 +1396,13 @@ export type ImportPreviewResponse = z.infer<typeof importPreviewResponseSchema>;
 export type ImportCommitRow = z.infer<typeof importCommitRowSchema>;
 export type ImportCommitRequest = z.infer<typeof importCommitRequestSchema>;
 export type ImportCommitResponse = z.infer<typeof importCommitResponseSchema>;
+export type ImportFileRead = z.infer<typeof importFileSchema>;
+export type ImportFileListResponse = z.infer<
+  typeof importFileListResponseSchema
+>;
+export type ImportFileDownloadResponse = z.infer<
+  typeof importFileDownloadResponseSchema
+>;
 export type ImportCategoryOption = z.infer<typeof importCategoryOptionSchema>;
 export type ImportCategoryHistoryItem = z.infer<
   typeof importCategoryHistoryItemSchema
@@ -1385,21 +1436,11 @@ export type TaxSummaryResponse = z.infer<typeof taxSummarySchema>;
 export type TaxTotalSummaryResponse = z.infer<typeof taxTotalSummarySchema>;
 export type InvestmentHoldingRead = z.infer<typeof investmentHoldingSchema>;
 export type InvestmentSnapshot = z.infer<typeof investmentSnapshotSchema>;
-export type InvestmentSnapshotResponse = z.infer<
-  typeof investmentSnapshotResponseSchema
->;
-export type InvestmentSnapshotListResponse = z.infer<
-  typeof investmentSnapshotListResponseSchema
->;
 export type InvestmentTransactionRead = z.infer<
   typeof investmentTransactionSchema
 >;
 export type InvestmentTransactionListResponse = z.infer<
   typeof investmentTransactionListSchema
->;
-export type InvestmentPerformance = z.infer<typeof investmentPerformanceSchema>;
-export type InvestmentMetricsResponse = z.infer<
-  typeof investmentMetricsResponseSchema
 >;
 export type InvestmentValuePoint = z.infer<typeof investmentValuePointSchema>;
 export type InvestmentCashflowSummary = z.infer<
@@ -1418,15 +1459,17 @@ export type InvestmentCashflowEvent = z.infer<
 export type InvestmentOverviewResponse = z.infer<
   typeof investmentOverviewResponseSchema
 >;
-export type NordnetParseRequest = z.infer<typeof nordnetParseRequestSchema>;
-export type NordnetParseResponse = z.infer<typeof nordnetParseResponseSchema>;
-export type NordnetSnapshotCreateRequest = z.infer<
-  typeof nordnetSnapshotCreateRequestSchema
+export type InvestmentSnapshotCreateRequest = z.infer<
+  typeof investmentSnapshotCreateRequestSchema
+>;
+export type InvestmentSnapshotCreateResponse = z.infer<
+  typeof investmentSnapshotCreateResponseSchema
 >;
 export type GoalRead = z.infer<typeof goalSchema>;
 export type GoalListResponse = z.infer<typeof goalListSchema>;
 export type GoalCreateRequest = z.infer<typeof goalCreateRequestSchema>;
 export type GoalUpdateRequest = z.infer<typeof goalUpdateRequestSchema>;
+export type BackupRunResponse = z.infer<typeof backupRunResponseSchema>;
 export type SettingsPayload = z.infer<typeof settingsPayloadSchema>;
 export type SettingsResponse = z.infer<typeof settingsResponseSchema>;
 export type WarmupResponse = z.infer<typeof warmupResponseSchema>;

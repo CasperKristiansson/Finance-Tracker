@@ -16,6 +16,9 @@ import {
   setImportsSuggestionsError,
   setImportsSuggesting,
   setImportsSaving,
+  setStoredImportFiles,
+  setStoredImportFilesError,
+  setStoredImportFilesLoading,
 } from "@/features/imports/importsSlice";
 import type {
   ImportCommitRequest,
@@ -27,7 +30,10 @@ import type {
   ImportCategorySuggestionRead,
   ImportPreviewRequest,
   ImportPreviewResponse,
+  ImportFileListResponse,
+  ImportFileDownloadResponse,
 } from "@/types/api";
+import type { BankImportType } from "@/types/enums";
 import {
   importCommitRequestSchema,
   importCommitResponseSchema,
@@ -37,6 +43,8 @@ import {
   importCategorySuggestResponseSchema,
   importPreviewRequestSchema,
   importPreviewResponseSchema,
+  importFileListResponseSchema,
+  importFileDownloadResponseSchema,
 } from "@/types/schemas";
 
 const WS_API_BASE_URL = (import.meta.env.VITE_WS_API_BASE_URL ?? "").replace(
@@ -51,6 +59,10 @@ export const CommitImports =
 export const SuggestImportCategories = createAction<{
   preview: ImportPreviewResponse;
 }>("imports/suggestCategories");
+export const FetchStoredImportFiles = createAction("imports/fetchStoredFiles");
+export const DownloadImportFile = createAction<{ fileId: string }>(
+  "imports/downloadFile",
+);
 export const ResetImports = createAction("imports/reset");
 
 type SuggestionSocketEvent =
@@ -184,6 +196,16 @@ function buildSuggestPayload(
     is_archived?: boolean;
   }>,
 ) {
+  const bankImportTypeByAccount = new Map<string, BankImportType | null>();
+  (preview.files ?? []).forEach((file) => {
+    if (!bankImportTypeByAccount.has(file.account_id)) {
+      bankImportTypeByAccount.set(
+        file.account_id,
+        file.bank_import_type ?? null,
+      );
+    }
+  });
+
   const contexts = preview.accounts ?? [];
   const rowsByAccount = new Map<string, typeof preview.rows>();
   preview.rows.forEach((row) => {
@@ -199,9 +221,18 @@ function buildSuggestPayload(
 
   for (const ctx of contexts) {
     const accountRows = rowsByAccount.get(ctx.account_id) ?? [];
+    const bankImportType = bankImportTypeByAccount.get(ctx.account_id);
+    const isSwedbankAccount = bankImportType === "swedbank";
+
     const transactions: ImportCategorySuggestRequest["transactions"] = [];
     for (const row of accountRows) {
       if (row.rule_applied) continue;
+      if (
+        isSwedbankAccount &&
+        row.description.toLowerCase().includes("swish")
+      ) {
+        continue;
+      }
       transactions.push({
         id: row.id,
         description: row.description,
@@ -452,10 +483,62 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
   }
 }
 
+function* handleFetchStoredFiles() {
+  yield put(setStoredImportFilesLoading(true));
+  yield put(setStoredImportFilesError(undefined));
+  try {
+    const response: ImportFileListResponse = yield call(
+      callApiWithAuth,
+      {
+        path: "/import-files",
+        method: "GET",
+        schema: importFileListResponseSchema,
+      },
+      { loadingKey: "import-files" },
+    );
+    const parsed = importFileListResponseSchema.parse(response);
+    yield put(setStoredImportFiles(parsed.files ?? []));
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load import files.";
+    yield put(setStoredImportFilesError(message));
+    toast.error("Could not load stored files", { description: message });
+  } finally {
+    yield put(setStoredImportFilesLoading(false));
+  }
+}
+
+function* handleDownloadImportFile(
+  action: ReturnType<typeof DownloadImportFile>,
+) {
+  try {
+    const response: ImportFileDownloadResponse = yield call(
+      callApiWithAuth,
+      {
+        path: "/import-files/download",
+        method: "POST",
+        body: { file_id: action.payload.fileId },
+        schema: importFileDownloadResponseSchema,
+      },
+      { loadingKey: `import-file-${action.payload.fileId}` },
+    );
+    const parsed = importFileDownloadResponseSchema.parse(response);
+    if (parsed.url) {
+      window.open(parsed.url, "_blank", "noopener,noreferrer");
+    }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to download file.";
+    toast.error("Download failed", { description: message });
+  }
+}
+
 export function* ImportsSaga() {
   yield takeLatest(PreviewImports.type, handlePreview);
   yield takeLatest(CommitImports.type, handleCommit);
   yield takeLatest(SuggestImportCategories.type, handleSuggest);
+  yield takeLatest(FetchStoredImportFiles.type, handleFetchStoredFiles);
+  yield takeLatest(DownloadImportFile.type, handleDownloadImportFile);
   yield takeLatest(ResetImports.type, function* () {
     yield put(clearImportPreview());
     yield put(clearImportsError());

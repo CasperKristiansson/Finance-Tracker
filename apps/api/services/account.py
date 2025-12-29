@@ -123,7 +123,7 @@ class AccountService:
         adjustment_transaction: Transaction | None = None
 
         if delta != 0:
-            # Create an adjustment transaction to bring ledger in sync.
+            # Create a reconciliation transaction to bring ledger in sync.
             offset_account = self._get_or_create_offset_account()
             legs = [
                 TransactionLeg(account_id=account_id, amount=delta),

@@ -10,6 +10,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from ..shared import TransactionType
+from .tax import TaxEventRead
 
 
 class TransactionLegCreate(BaseModel):
@@ -67,6 +68,7 @@ class TransactionRead(BaseModel):
     posted_at: datetime
     created_at: datetime
     updated_at: datetime
+    tax_event: Optional[TaxEventRead] = None
     legs: List[TransactionLegRead]
 
 
@@ -81,6 +83,7 @@ class TransactionListQuery(BaseModel):
     transaction_type: Optional[List[TransactionType]] = Field(
         default=None, alias="transaction_type"
     )
+    tax_event: Optional[bool] = Field(default=None, alias="tax_event")
     min_amount: Optional[Decimal] = Field(default=None, alias="min_amount")
     max_amount: Optional[Decimal] = Field(default=None, alias="max_amount")
     search: Optional[str] = None

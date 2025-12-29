@@ -11,6 +11,7 @@ import {
   Upload,
   Layers,
   Receipt,
+  Archive,
 } from "lucide-react";
 import * as React from "react";
 import { useAppSelector } from "@/app/hooks";
@@ -55,6 +56,11 @@ const data = {
       title: "Imports",
       url: PageRoutes.imports,
       icon: Upload,
+    },
+    {
+      title: "Import files",
+      url: PageRoutes.importFiles,
+      icon: Archive,
     },
     {
       title: "Subscriptions",
@@ -130,11 +136,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         {showLargeLogo ? (
-          <img src={LogoLarge} alt="Logo" className="mt-2 h-6 px-2" />
+          <img
+            src={LogoLarge}
+            alt="Logo"
+            className="h-12 w-auto object-contain"
+          />
         ) : showSmallLogo ? (
-          <img src={LogoSmall} alt="Logo" className="mt-2 h-6 px-1" />
+          <img
+            src={LogoSmall}
+            alt="Logo"
+            className="mt-2 h-7 w-7 object-contain"
+          />
         ) : (
-          <div className="h-6" />
+          <div className="h-8" />
         )}
       </SidebarHeader>
       <SidebarContent>

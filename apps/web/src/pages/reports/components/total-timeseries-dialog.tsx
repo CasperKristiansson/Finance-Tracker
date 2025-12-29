@@ -22,7 +22,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 
 import type { TotalTimeseriesDialogState } from "../reports-types";
-import { compactCurrency, currency } from "../reports-utils";
+import { compactCurrency, currency, formatDate } from "../reports-utils";
 
 export const TotalTimeseriesDialog: React.FC<{
   open: boolean;
@@ -42,15 +42,15 @@ export const TotalTimeseriesDialog: React.FC<{
       <DialogHeader>
         <DialogTitle>
           {state?.kind === "netWorthBreakdown"
-            ? `Net worth breakdown • ${new Date(state.date).toLocaleDateString(
-                "sv-SE",
-                { year: "numeric", month: "long" },
-              )}`
+            ? `Net worth breakdown • ${formatDate(state.date, {
+                year: "numeric",
+                month: "long",
+              })}`
             : state?.kind === "savingsRate"
-              ? `Savings rate • ${new Date(state.date).toLocaleDateString(
-                  "sv-SE",
-                  { year: "numeric", month: "long" },
-                )}`
+              ? `Savings rate • ${formatDate(state.date, {
+                  year: "numeric",
+                  month: "long",
+                })}`
               : "Details"}
         </DialogTitle>
       </DialogHeader>

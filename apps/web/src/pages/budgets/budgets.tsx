@@ -20,6 +20,7 @@ import {
   useReportsApi,
 } from "@/hooks/use-api";
 import { formatCategoryLabel } from "@/lib/category-icons";
+import { currency, formatDate } from "@/lib/format";
 import {
   BudgetPeriod,
   CategoryType,
@@ -35,10 +36,11 @@ const periodLabels: Record<BudgetPeriod, string> = {
 };
 
 const formatCurrency = (value: string | number) =>
-  Number(value || 0).toLocaleString("en-US", {
-    style: "currency",
+  currency(Number(value || 0), {
+    locale: "en-US",
     currency: "USD",
     minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   });
 
 const categoryLabel = (cat: CategoryRead) =>
@@ -330,9 +332,7 @@ export const Budgets: React.FC = () => {
     const useIncome = category?.category_type === CategoryType.INCOME;
     return data
       .map((entry) => ({
-        label: new Date(entry.period).toLocaleString("en-US", {
-          month: "short",
-        }),
+        label: formatDate(entry.period, { month: "short", locale: "en-US" }),
         value: Number(useIncome ? entry.income : entry.expense),
       }))
       .slice(-6);

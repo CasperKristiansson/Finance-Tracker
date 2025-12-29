@@ -1,6 +1,6 @@
 .PHONY: tf-init tf-plan tf-apply tf-destroy tf-fmt tf-validate tf-write-web-env \
         tf-enable-public-db tf-disable-public-db \
-        type-check format test deploy-layer deploy-api deploy
+        type-check format test deploy-layer deploy-api deploy deployWebsite
 
 TF_DIR ?= infra/terraform
 TF_CMD = terraform -chdir=$(TF_DIR)
@@ -11,25 +11,6 @@ PYLINTHOME ?= $(CURDIR)/.cache/pylint
 
 # Terraform helpers
 
-tf-init:
-	$(TF_CMD) init
-
-tf-plan:
-	$(TF_CMD) plan
-
-tf-apply:
-	$(TF_CMD) apply
-	$(MAKE) tf-write-web-env
-
-tf-destroy:
-	$(TF_CMD) destroy
-
-tf-fmt:
-	$(TF_CMD) fmt -recursive
-
-tf-validate:
-	$(TF_CMD) validate
-
 tf-write-web-env:
 	@$(PYTHON) scripts/write_web_env.py \
 		--tf-dir "$(TF_DIR)" \
@@ -37,13 +18,17 @@ tf-write-web-env:
 		--aws-region "$(AWS_REGION)" \
 		--aws-profile "$(AWS_PROFILE)"
 
-# Toggle public database exposure (for local development)
-
 tf-enable-public-db:
-	$(TF_CMD) apply -var 'enable_public_db_access=true'
+	@set -e; \
+	ACCOUNT_ID=$$(aws sts get-caller-identity --profile "$(AWS_PROFILE)" --query Account --output text); \
+	echo "Using AWS account ID $$ACCOUNT_ID"; \
+	$(TF_CMD) apply -var 'enable_public_db_access=true' -var "account_id=$$ACCOUNT_ID"
 
 tf-disable-public-db:
-	$(TF_CMD) apply -var 'enable_public_db_access=false'
+	@set -e; \
+	ACCOUNT_ID=$$(aws sts get-caller-identity --profile "$(AWS_PROFILE)" --query Account --output text); \
+	echo "Using AWS account ID $$ACCOUNT_ID"; \
+	$(TF_CMD) apply -var 'enable_public_db_access=false' -var "account_id=$$ACCOUNT_ID"
 
 # Quality gates
 
@@ -71,5 +56,17 @@ deploy-api:
 
 deploy: deploy-layer deploy-api
 
-startdev:
-	npm run dev -w apps/web
+deployWebsite:
+	@set -e; \
+	ACCOUNT_ID="$$(aws sts get-caller-identity --profile "$(AWS_PROFILE)" --query Account --output text)"; \
+	STATIC_SITE_DOMAIN="finance-tracker.casperkristiansson.com"; \
+	STATIC_SITE_BUCKET="$$(printf '%s' "$$STATIC_SITE_DOMAIN" | tr '.' '-')-$$ACCOUNT_ID"; \
+	CLOUDFRONT_DISTRIBUTION_ID="$$(aws cloudfront list-distributions --profile "$(AWS_PROFILE)" --query "DistributionList.Items[?Aliases.Items && contains(Aliases.Items, '$$STATIC_SITE_DOMAIN')].Id | [0]" --output text)"; \
+	if [ -z "$$CLOUDFRONT_DISTRIBUTION_ID" ] || [ "$$CLOUDFRONT_DISTRIBUTION_ID" = "None" ]; then \
+		echo "ERROR: Unable to resolve CloudFront distribution for $$STATIC_SITE_DOMAIN."; \
+		exit 1; \
+	fi; \
+	echo "Deploying to s3://$$STATIC_SITE_BUCKET (CloudFront $$CLOUDFRONT_DISTRIBUTION_ID)"; \
+	npm run build -w apps/web; \
+	aws s3 sync apps/web/dist s3://$$STATIC_SITE_BUCKET --delete --profile "$(AWS_PROFILE)" --region "$(AWS_REGION)"; \
+	aws cloudfront create-invalidation --distribution-id "$$CLOUDFRONT_DISTRIBUTION_ID" --paths "/*" --profile "$(AWS_PROFILE)"

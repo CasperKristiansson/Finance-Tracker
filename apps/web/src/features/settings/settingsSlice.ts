@@ -3,8 +3,10 @@ import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 export interface SettingsState {
   firstName?: string;
   lastName?: string;
+  currencyCode?: string;
   loading: boolean;
   saving: boolean;
+  backingUp: boolean;
   error?: string;
   lastSavedAt?: string;
 }
@@ -28,8 +30,10 @@ const cachedSettings = safeParseLocalSettings();
 const initialState: SettingsState = {
   firstName: cachedSettings?.firstName,
   lastName: cachedSettings?.lastName,
+  currencyCode: cachedSettings?.currencyCode,
   loading: false,
   saving: false,
+  backingUp: false,
   error: undefined,
   lastSavedAt: cachedSettings?.lastSavedAt,
 };
@@ -44,6 +48,8 @@ const settingsSlice = createSlice({
         state.firstName = payload.firstName || undefined;
       if (payload.lastName !== undefined)
         state.lastName = payload.lastName || undefined;
+      if (payload.currencyCode !== undefined)
+        state.currencyCode = payload.currencyCode || undefined;
       if (payload.lastSavedAt) state.lastSavedAt = payload.lastSavedAt;
       state.error = undefined;
     },
@@ -53,11 +59,17 @@ const settingsSlice = createSlice({
     setSettingsSaving(state, action: PayloadAction<boolean>) {
       state.saving = action.payload;
     },
+    setBackingUp(state, action: PayloadAction<boolean>) {
+      state.backingUp = action.payload;
+    },
     setSettingsError(state, action: PayloadAction<string | undefined>) {
       state.error = action.payload;
     },
     setLastSavedAt(state, action: PayloadAction<string | undefined>) {
       state.lastSavedAt = action.payload;
+    },
+    setCurrencyCode(state, action: PayloadAction<string | undefined>) {
+      state.currencyCode = action.payload || undefined;
     },
     setFirstName(state, action: PayloadAction<string>) {
       state.firstName = action.payload;
@@ -74,6 +86,8 @@ const settingsSlice = createSlice({
     selectSettingsLoading: (state) => state.loading,
     selectSettingsError: (state) => state.error,
     selectSettingsLastSavedAt: (state) => state.lastSavedAt,
+    selectCurrencyCode: (state) => state.currencyCode,
+    selectBackingUp: (state) => state.backingUp,
   },
 });
 
@@ -81,10 +95,12 @@ export const {
   hydrateSettings,
   setSettingsLoading,
   setSettingsSaving,
+  setBackingUp,
   setSettingsError,
   setLastSavedAt,
   setFirstName,
   setLastName,
+  setCurrencyCode,
 } = settingsSlice.actions;
 
 export const {
@@ -95,6 +111,8 @@ export const {
   selectSettingsLoading,
   selectSettingsError,
   selectSettingsLastSavedAt,
+  selectCurrencyCode,
+  selectBackingUp,
 } = settingsSlice.selectors;
 
 export const SettingsReducer = settingsSlice.reducer;

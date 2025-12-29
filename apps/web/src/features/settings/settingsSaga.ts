@@ -4,12 +4,21 @@ import { toast } from "sonner";
 import { TypedSelect } from "@/app/rootSaga";
 import { callApiWithAuth } from "@/features/api/apiSaga";
 import { ApiError } from "@/lib/apiClient";
-import type { SettingsPayload, SettingsResponse } from "@/types/api";
-import { settingsPayloadSchema, settingsResponseSchema } from "@/types/schemas";
+import type {
+  BackupRunResponse,
+  SettingsPayload,
+  SettingsResponse,
+} from "@/types/api";
+import {
+  backupRunResponseSchema,
+  settingsPayloadSchema,
+  settingsResponseSchema,
+} from "@/types/schemas";
 import { selectIsDemo, selectToken } from "../auth/authSlice";
 import {
   SETTINGS_STORAGE_KEY,
   hydrateSettings,
+  setBackingUp,
   selectSettingsState,
   setLastSavedAt,
   setSettingsError,
@@ -20,6 +29,7 @@ import {
 
 export const LoadSettings = createAction("settings/load");
 export const SaveSettings = createAction("settings/save");
+export const RunBackup = createAction("settings/run-backup");
 
 const readCachedSettings = (): Partial<SettingsState> | undefined => {
   if (typeof window === "undefined") return undefined;
@@ -41,6 +51,7 @@ const persistLocalSettings = (
   const payload: Partial<SettingsState> = {
     firstName: state.firstName,
     lastName: state.lastName,
+    currencyCode: state.currencyCode,
     lastSavedAt: overrideTimestamp ?? state.lastSavedAt,
   };
   localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
@@ -75,6 +86,7 @@ function* handleLoadSettings() {
         const payload: Partial<SettingsState> = {
           firstName: response.settings.first_name || undefined,
           lastName: response.settings.last_name || undefined,
+          currencyCode: response.settings.currency_code || undefined,
         };
         yield put(hydrateSettings(payload));
         const currentState: SettingsState =
@@ -112,6 +124,7 @@ function* handleSaveSettings() {
       const payload: SettingsPayload = settingsPayloadSchema.parse({
         first_name: state.firstName,
         last_name: state.lastName,
+        currency_code: state.currencyCode,
       });
       yield call(
         callApiWithAuth,
@@ -143,7 +156,43 @@ function* handleSaveSettings() {
   }
 }
 
+function* handleRunBackup() {
+  yield put(setBackingUp(true));
+  try {
+    const token: string | undefined = yield* TypedSelect(selectToken);
+    const isDemo: boolean = yield* TypedSelect(selectIsDemo);
+
+    if (!token || isDemo) {
+      toast.error("Backups unavailable", {
+        description: "Sign in with a full account to run backups.",
+      });
+      return;
+    }
+
+    try {
+      yield call(
+        callApiWithAuth<BackupRunResponse>,
+        {
+          path: "/backups/transactions",
+          method: "POST",
+          schema: backupRunResponseSchema,
+        },
+        { loadingKey: "settings", silent: true },
+      );
+      toast.success("Backup created", {
+        description: "Database tables have been backed up for all users.",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : undefined;
+      toast.error("Could not run backup", { description: message });
+    }
+  } finally {
+    yield put(setBackingUp(false));
+  }
+}
+
 export function* SettingsSaga() {
   yield takeLatest(LoadSettings.type, handleLoadSettings);
   yield takeLatest(SaveSettings.type, handleSaveSettings);
+  yield takeLatest(RunBackup.type, handleRunBackup);
 }

@@ -20,24 +20,116 @@ import {
   setInitialLoaded,
   setLastUsername,
   setLoginError,
+  setPendingApproval,
   setRememberMe,
 } from "./authSlice";
 
 export const AuthLoginGoogle = createAction("auth/loginGoogle");
 export const AuthLogout = createAction("auth/logout");
+export const AuthForceLogout = createAction("auth/forceLogout");
 export const AuthInitialize = createAction("auth/initialize");
 export const AuthLoginDemo = createAction("auth/loginDemo");
 
 const REMEMBER_KEY = "finance-tracker-remember";
 const REMEMBER_USERNAME_KEY = "finance-tracker-last-username";
-const PENDING_APPROVAL_MESSAGE =
+export const PENDING_APPROVAL_MESSAGE =
   "Your account is pending approval. An admin must approve access before you can sign in.";
 
-const isPendingApprovalError = (error: unknown): boolean =>
-  error instanceof PendingApprovalError ||
-  (error instanceof Error &&
-    (error.message?.includes("USER_NOT_APPROVED") ||
-      error.message?.includes("pending approval")));
+const safeStringify = (value: unknown): string => {
+  const seen = new WeakSet<object>();
+  try {
+    return (
+      JSON.stringify(value, (_, candidate) => {
+        if (typeof candidate === "object" && candidate !== null) {
+          if (seen.has(candidate)) return undefined;
+          seen.add(candidate);
+        }
+        return candidate;
+      }) ?? ""
+    );
+  } catch {
+    return "";
+  }
+};
+
+const collectErrorStrings = (error: unknown): string[] => {
+  const strings: string[] = [];
+  const queue: Array<{ value: unknown; depth: number }> = [
+    { value: error, depth: 0 },
+  ];
+  const seen = new WeakSet<object>();
+  const maxDepth = 3;
+
+  const addString = (value: unknown) => {
+    if (typeof value !== "string") return;
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === "[object Object]") return;
+    strings.push(trimmed);
+  };
+
+  while (queue.length) {
+    const item = queue.shift();
+    if (!item) break;
+    const { value, depth } = item;
+    if (!value) continue;
+
+    if (typeof value === "string") {
+      addString(value);
+      continue;
+    }
+
+    if (value instanceof Error) {
+      addString(value.message);
+      addString(value.name);
+      const cause = (value as { cause?: unknown }).cause;
+      if (cause) {
+        queue.push({ value: cause, depth: depth + 1 });
+      }
+      continue;
+    }
+
+    if (typeof value !== "object") {
+      addString(String(value));
+      continue;
+    }
+
+    if (seen.has(value)) continue;
+    seen.add(value);
+    if (depth >= maxDepth) continue;
+
+    const record = value as Record<string, unknown>;
+    Object.values(record).forEach((child) => {
+      queue.push({ value: child, depth: depth + 1 });
+    });
+  }
+
+  const serialized = safeStringify(error);
+  addString(serialized);
+  addString(String(error));
+
+  return Array.from(new Set(strings));
+};
+
+const extractErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  const candidates = collectErrorStrings(error);
+  return candidates[0] ?? "";
+};
+
+const isPendingApprovalError = (error: unknown): boolean => {
+  if (error instanceof PendingApprovalError) return true;
+  const tokens = [
+    "user_not_approved",
+    "pending approval",
+    "userlambdavalidationexception",
+    "pretokengeneration failed",
+  ];
+  return collectErrorStrings(error).some((text) => {
+    const normalized = text.toLowerCase();
+    return tokens.some((token) => normalized.includes(token));
+  });
+};
 
 const persistRememberMe = (remember: boolean, username?: string) => {
   if (remember) {
@@ -77,6 +169,7 @@ function* handleLoginWithGoogle() {
   } catch (error) {
     if (isPendingApprovalError(error)) {
       yield put(setLoginError(PENDING_APPROVAL_MESSAGE));
+      yield put(setPendingApproval(true));
       toast.error("Account pending approval", {
         description: PENDING_APPROVAL_MESSAGE,
       });
@@ -90,7 +183,7 @@ function* handleLoginWithGoogle() {
     }
 
     const message =
-      error instanceof Error ? error.message : "Failed to start Google sign-in";
+      extractErrorMessage(error) || "Failed to start Google sign-in";
     const alreadySignedIn = message.toLowerCase().includes("signed in user");
 
     if (alreadySignedIn) {
@@ -141,6 +234,16 @@ function* handleLogout() {
   yield put(setLoading({ key: "logout", isLoading: false }));
 }
 
+function* handleForceLogout() {
+  yield put(setLoading({ key: "logout", isLoading: true }));
+  try {
+    yield call(() => authService.signOut());
+  } catch {
+    // Best-effort sign-out for forced logout.
+  }
+  window.location.href = "/login";
+}
+
 function* initializeAuth() {
   const { remember, username } = hydrateRemembered();
   yield put(setRememberMe(remember));
@@ -170,6 +273,7 @@ function* initializeAuth() {
   } catch (error) {
     if (isPendingApprovalError(error)) {
       yield put(setLoginError(PENDING_APPROVAL_MESSAGE));
+      yield put(setPendingApproval(true));
       toast.error("Account pending approval", {
         description: PENDING_APPROVAL_MESSAGE,
       });
@@ -223,6 +327,7 @@ export function* AuthSaga() {
   yield all([
     takeLatest(AuthLoginGoogle.type, handleLoginWithGoogle),
     takeLatest(AuthLogout.type, handleLogout),
+    takeLatest(AuthForceLogout.type, handleForceLogout),
     takeLatest(AuthInitialize.type, initializeAuth),
     takeLatest(AuthLoginDemo.type, handleLoginDemo),
   ]);

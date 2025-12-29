@@ -108,6 +108,24 @@ def _seed_sample_transactions(session) -> tuple[Account, Iterable[Transaction]]:
             session,
             account=bank,
             counter_account=offset,
+            amount=Decimal("300.00"),
+            occurred_at=datetime(2024, 1, 20, tzinfo=timezone.utc),
+            description="Reconciliation adjustment",
+            transaction_type=TransactionType.ADJUSTMENT,
+        ),
+        _post_transaction(
+            session,
+            account=bank,
+            counter_account=offset,
+            amount=Decimal("-150.00"),
+            occurred_at=datetime(2024, 2, 20, tzinfo=timezone.utc),
+            description="Reconciliation adjustment",
+            transaction_type=TransactionType.ADJUSTMENT,
+        ),
+        _post_transaction(
+            session,
+            account=bank,
+            counter_account=offset,
             amount=Decimal("-1200.00"),
             occurred_at=datetime(2024, 3, 1, tzinfo=timezone.utc),
             description="Rent",
@@ -135,18 +153,27 @@ def test_monthly_yearly_and_total_reports(reporting_repo, session):
             period=date(2024, 1, 1),
             income=Decimal("5000.00"),
             expense=Decimal("200.00"),
-            net=Decimal("4800.00"),
+            adjustment_inflow=Decimal("300.00"),
+            adjustment_outflow=Decimal("0"),
+            adjustment_net=Decimal("300.00"),
+            net=Decimal("5100.00"),
         ),
         MonthlyTotals(
             period=date(2024, 2, 1),
             income=Decimal("1000.00"),
             expense=Decimal("0"),
-            net=Decimal("1000.00"),
+            adjustment_inflow=Decimal("0"),
+            adjustment_outflow=Decimal("150.00"),
+            adjustment_net=Decimal("-150.00"),
+            net=Decimal("850.00"),
         ),
         MonthlyTotals(
             period=date(2024, 3, 1),
             income=Decimal("0"),
             expense=Decimal("1200.00"),
+            adjustment_inflow=Decimal("0"),
+            adjustment_outflow=Decimal("0"),
+            adjustment_net=Decimal("0"),
             net=Decimal("-1200.00"),
         ),
     ]
@@ -154,10 +181,22 @@ def test_monthly_yearly_and_total_reports(reporting_repo, session):
     yearly = reporting_repo.get_yearly_totals(account_ids=[bank_account.id])
     assert yearly == [
         YearlyTotals(
-            year=2023, income=Decimal("4000.00"), expense=Decimal("0"), net=Decimal("4000.00")
+            year=2023,
+            income=Decimal("4000.00"),
+            expense=Decimal("0"),
+            adjustment_inflow=Decimal("0"),
+            adjustment_outflow=Decimal("0"),
+            adjustment_net=Decimal("0"),
+            net=Decimal("4000.00"),
         ),
         YearlyTotals(
-            year=2024, income=Decimal("6000.00"), expense=Decimal("1400.00"), net=Decimal("4600.00")
+            year=2024,
+            income=Decimal("6000.00"),
+            expense=Decimal("1400.00"),
+            adjustment_inflow=Decimal("300.00"),
+            adjustment_outflow=Decimal("150.00"),
+            adjustment_net=Decimal("150.00"),
+            net=Decimal("4750.00"),
         ),
     ]
 
@@ -165,7 +204,10 @@ def test_monthly_yearly_and_total_reports(reporting_repo, session):
     assert totals == LifetimeTotals(
         income=Decimal("10000.00"),
         expense=Decimal("1400.00"),
-        net=Decimal("8600.00"),
+        adjustment_inflow=Decimal("300.00"),
+        adjustment_outflow=Decimal("150.00"),
+        adjustment_net=Decimal("150.00"),
+        net=Decimal("8750.00"),
     )
 
 
@@ -178,8 +220,8 @@ def test_reporting_service_wraps_repository(session):
     totals = service.total_report(account_ids=[bank_account.id])
 
     assert len(monthly) == 3
-    assert yearly[-1].net == Decimal("4600.00")
-    assert totals.net == Decimal("8600.00")
+    assert yearly[-1].net == Decimal("4750.00")
+    assert totals.net == Decimal("8750.00")
 
 
 def test_net_worth_history(reporting_repo, session):
@@ -190,8 +232,10 @@ def test_net_worth_history(reporting_repo, session):
         NetWorthPoint(period=date(2023, 11, 15), net_worth=Decimal("4000.00")),
         NetWorthPoint(period=date(2024, 1, 10), net_worth=Decimal("9000.00")),
         NetWorthPoint(period=date(2024, 1, 12), net_worth=Decimal("8800.00")),
-        NetWorthPoint(period=date(2024, 2, 5), net_worth=Decimal("9800.00")),
-        NetWorthPoint(period=date(2024, 3, 1), net_worth=Decimal("8600.00")),
+        NetWorthPoint(period=date(2024, 1, 20), net_worth=Decimal("9100.00")),
+        NetWorthPoint(period=date(2024, 2, 5), net_worth=Decimal("10100.00")),
+        NetWorthPoint(period=date(2024, 2, 20), net_worth=Decimal("9950.00")),
+        NetWorthPoint(period=date(2024, 3, 1), net_worth=Decimal("8750.00")),
     ]
 
 

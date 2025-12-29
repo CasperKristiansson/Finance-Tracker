@@ -34,14 +34,20 @@ export const TotalYearByYearPerformanceCard: React.FC<{
     income: number;
     expense: number;
     net: number;
+    adjustmentNet: number;
     savingsRate: number | null;
+    adjustmentInflow?: number;
+    adjustmentOutflow?: number;
   }>;
   tableData: Array<{
     year: number;
     income: number;
     expense: number;
     net: number;
+    adjustmentNet: number;
     savingsRate: number | null;
+    adjustmentInflow?: number;
+    adjustmentOutflow?: number;
   }>;
   onOpenDrilldownDialog: (state: TotalDrilldownState) => void;
 }> = ({
@@ -120,12 +126,12 @@ export const TotalYearByYearPerformanceCard: React.FC<{
                     <Tooltip
                       content={({ active, payload }) => {
                         if (!active || !payload?.length) return null;
-                        const yearLabel = payload[0]?.payload?.year;
-                        const income = Number(payload[0]?.payload?.income ?? 0);
-                        const expense = Number(
-                          payload[0]?.payload?.expense ?? 0,
-                        );
-                        const net = Number(payload[0]?.payload?.net ?? 0);
+                        const record = payload[0]?.payload;
+                        const yearLabel =
+                          typeof record?.year === "number" ? record.year : "";
+                        const income = Number(record?.income ?? 0);
+                        const expense = Number(record?.expense ?? 0);
+                        const net = Number(record?.net ?? 0);
                         return (
                           <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
                             <p className="font-semibold text-slate-800">
@@ -170,6 +176,7 @@ export const TotalYearByYearPerformanceCard: React.FC<{
                     <TableHead>Year</TableHead>
                     <TableHead className="text-right">Income</TableHead>
                     <TableHead className="text-right">Expense</TableHead>
+                    <TableHead className="text-right">Adjustments</TableHead>
                     <TableHead className="text-right">Net</TableHead>
                     <TableHead className="hidden text-right md:table-cell">
                       Savings rate
@@ -194,6 +201,12 @@ export const TotalYearByYearPerformanceCard: React.FC<{
                       </TableCell>
                       <TableCell className="text-right font-semibold text-rose-700">
                         {currency(row.expense)}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-amber-700">
+                        <span>
+                          {row.adjustmentNet >= 0 ? "+" : "−"}
+                          {currency(Math.abs(row.adjustmentNet))}
+                        </span>
                       </TableCell>
                       <TableCell className="text-right font-semibold">
                         <span

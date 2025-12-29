@@ -18,7 +18,7 @@ from ..models import Account, Category, Transaction, TransactionLeg
 from ..models.investment_snapshot import InvestmentSnapshot
 from ..shared import AccountType, TransactionType, coerce_decimal, get_default_user_id
 
-DecimalTotals = Tuple[Decimal, Decimal]
+DecimalTotals = Tuple[Decimal, Decimal, Decimal, Decimal]
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,9 @@ class MonthlyTotals:
     period: date
     income: Decimal
     expense: Decimal
+    adjustment_inflow: Decimal
+    adjustment_outflow: Decimal
+    adjustment_net: Decimal
     net: Decimal
 
 
@@ -38,6 +41,9 @@ class YearlyTotals:
     year: int
     income: Decimal
     expense: Decimal
+    adjustment_inflow: Decimal
+    adjustment_outflow: Decimal
+    adjustment_net: Decimal
     net: Decimal
 
 
@@ -47,6 +53,9 @@ class LifetimeTotals:
 
     income: Decimal
     expense: Decimal
+    adjustment_inflow: Decimal
+    adjustment_outflow: Decimal
+    adjustment_net: Decimal
     net: Decimal
 
 
@@ -58,6 +67,9 @@ class QuarterlyTotals:
     quarter: int
     income: Decimal
     expense: Decimal
+    adjustment_inflow: Decimal
+    adjustment_outflow: Decimal
+    adjustment_net: Decimal
     net: Decimal
 
 
@@ -133,20 +145,35 @@ class ReportingRepository:
 
         buckets: Dict[date, DecimalTotals] = {}
 
-        for occurred_at, amount in legs:
+        for occurred_at, amount, tx_type in legs:
             if year is not None and occurred_at.year != year:
                 continue
 
             period = date(occurred_at.year, occurred_at.month, 1)
-            income, expense = buckets.get(period, (Decimal("0"), Decimal("0")))
-            income, expense = self._accumulate(amount, income, expense)
-            buckets[period] = (income, expense)
+            income, expense, adjustment_inflow, adjustment_outflow = buckets.get(
+                period, (Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0"))
+            )
+            income, expense, adjustment_inflow, adjustment_outflow = self._accumulate(
+                amount, tx_type, income, expense, adjustment_inflow, adjustment_outflow
+            )
+            buckets[period] = (income, expense, adjustment_inflow, adjustment_outflow)
 
         results: List[MonthlyTotals] = []
         for period in sorted(buckets.keys()):
-            income, expense = buckets[period]
-            net = income - expense
-            results.append(MonthlyTotals(period=period, income=income, expense=expense, net=net))
+            income, expense, adjustment_inflow, adjustment_outflow = buckets[period]
+            adjustment_net = adjustment_inflow - adjustment_outflow
+            net = income - expense + adjustment_net
+            results.append(
+                MonthlyTotals(
+                    period=period,
+                    income=income,
+                    expense=expense,
+                    adjustment_inflow=adjustment_inflow,
+                    adjustment_outflow=adjustment_outflow,
+                    adjustment_net=adjustment_net,
+                    net=net,
+                )
+            )
         return results
 
     def get_yearly_totals(
@@ -168,16 +195,31 @@ class ReportingRepository:
 
         buckets: Dict[int, DecimalTotals] = {}
 
-        for occurred_at, amount in legs:
-            income, expense = buckets.get(occurred_at.year, (Decimal("0"), Decimal("0")))
-            income, expense = self._accumulate(amount, income, expense)
-            buckets[occurred_at.year] = (income, expense)
+        for occurred_at, amount, tx_type in legs:
+            income, expense, adjustment_inflow, adjustment_outflow = buckets.get(
+                occurred_at.year, (Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0"))
+            )
+            income, expense, adjustment_inflow, adjustment_outflow = self._accumulate(
+                amount, tx_type, income, expense, adjustment_inflow, adjustment_outflow
+            )
+            buckets[occurred_at.year] = (income, expense, adjustment_inflow, adjustment_outflow)
 
         results: List[YearlyTotals] = []
         for year in sorted(buckets.keys()):
-            income, expense = buckets[year]
-            net = income - expense
-            results.append(YearlyTotals(year=year, income=income, expense=expense, net=net))
+            income, expense, adjustment_inflow, adjustment_outflow = buckets[year]
+            adjustment_net = adjustment_inflow - adjustment_outflow
+            net = income - expense + adjustment_net
+            results.append(
+                YearlyTotals(
+                    year=year,
+                    income=income,
+                    expense=expense,
+                    adjustment_inflow=adjustment_inflow,
+                    adjustment_outflow=adjustment_outflow,
+                    adjustment_net=adjustment_net,
+                    net=net,
+                )
+            )
         return results
 
     def get_total_summary(
@@ -199,12 +241,29 @@ class ReportingRepository:
 
         income_total = Decimal("0")
         expense_total = Decimal("0")
+        adjustment_inflow = Decimal("0")
+        adjustment_outflow = Decimal("0")
 
-        for _occurred_at, amount in legs:
-            income_total, expense_total = self._accumulate(amount, income_total, expense_total)
+        for _occurred_at, amount, tx_type in legs:
+            income_total, expense_total, adjustment_inflow, adjustment_outflow = self._accumulate(
+                amount,
+                tx_type,
+                income_total,
+                expense_total,
+                adjustment_inflow,
+                adjustment_outflow,
+            )
 
-        net_total = income_total - expense_total
-        return LifetimeTotals(income=income_total, expense=expense_total, net=net_total)
+        adjustment_net = adjustment_inflow - adjustment_outflow
+        net_total = income_total - expense_total + adjustment_net
+        return LifetimeTotals(
+            income=income_total,
+            expense=expense_total,
+            adjustment_inflow=adjustment_inflow,
+            adjustment_outflow=adjustment_outflow,
+            adjustment_net=adjustment_net,
+            net=net_total,
+        )
 
     def get_net_worth_history(
         self,
@@ -584,21 +643,35 @@ class ReportingRepository:
 
         buckets: Dict[tuple[int, int], DecimalTotals] = {}
 
-        for occurred_at, amount in legs:
+        for occurred_at, amount, tx_type in legs:
             if year is not None and occurred_at.year != year:
                 continue
             quarter = (occurred_at.month - 1) // 3 + 1
             key = (occurred_at.year, quarter)
-            income, expense = buckets.get(key, (Decimal("0"), Decimal("0")))
-            income, expense = self._accumulate(amount, income, expense)
-            buckets[key] = (income, expense)
+            income, expense, adjustment_inflow, adjustment_outflow = buckets.get(
+                key, (Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0"))
+            )
+            income, expense, adjustment_inflow, adjustment_outflow = self._accumulate(
+                amount, tx_type, income, expense, adjustment_inflow, adjustment_outflow
+            )
+            buckets[key] = (income, expense, adjustment_inflow, adjustment_outflow)
 
         results: List[QuarterlyTotals] = []
         for yr, qtr in sorted(buckets.keys()):
-            income, expense = buckets[(yr, qtr)]
-            net = income - expense
+            income, expense, adjustment_inflow, adjustment_outflow = buckets[(yr, qtr)]
+            adjustment_net = adjustment_inflow - adjustment_outflow
+            net = income - expense + adjustment_net
             results.append(
-                QuarterlyTotals(year=yr, quarter=qtr, income=income, expense=expense, net=net)
+                QuarterlyTotals(
+                    year=yr,
+                    quarter=qtr,
+                    income=income,
+                    expense=expense,
+                    adjustment_inflow=adjustment_inflow,
+                    adjustment_outflow=adjustment_outflow,
+                    adjustment_net=adjustment_net,
+                    net=net,
+                )
             )
         return results
 
@@ -627,12 +700,16 @@ class ReportingRepository:
         subscription_ids: Optional[Iterable[UUID]] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
-    ) -> Sequence[Tuple[datetime, Decimal]]:
+    ) -> Sequence[Tuple[datetime, Decimal, TransactionType]]:
         transaction_table = cast(Table, getattr(Transaction, "__table__"))
         leg_table = cast(Table, getattr(TransactionLeg, "__table__"))
 
         statement = (
-            select(transaction_table.c.occurred_at, leg_table.c.amount)
+            select(
+                transaction_table.c.occurred_at,
+                leg_table.c.amount,
+                transaction_table.c.transaction_type,
+            )
             .join_from(
                 leg_table, transaction_table, leg_table.c.transaction_id == transaction_table.c.id
             )
@@ -659,20 +736,33 @@ class ReportingRepository:
             statement = statement.where(transaction_table.c.occurred_at <= end_date)
 
         rows = self.session.exec(statement).all()
-        return [(occurred_at, coerce_decimal(amount)) for occurred_at, amount in rows]
+        return [
+            (occurred_at, coerce_decimal(amount), TransactionType(str(tx_type)))
+            for occurred_at, amount, tx_type in rows
+        ]
 
     @staticmethod
+    # pylint: disable=too-many-positional-arguments
     def _accumulate(
         amount: Decimal,
+        transaction_type: TransactionType,
         income: Decimal,
         expense: Decimal,
+        adjustment_inflow: Decimal,
+        adjustment_outflow: Decimal,
     ) -> DecimalTotals:
         amount = coerce_decimal(amount)
+        if transaction_type == TransactionType.ADJUSTMENT:
+            if amount > 0:
+                adjustment_inflow += amount
+            elif amount < 0:
+                adjustment_outflow += -amount
+            return income, expense, adjustment_inflow, adjustment_outflow
         if amount > 0:
             income += amount
         elif amount < 0:
             expense += -amount
-        return income, expense
+        return income, expense, adjustment_inflow, adjustment_outflow
 
     @staticmethod
     def _coerce_date(raw: object) -> date:

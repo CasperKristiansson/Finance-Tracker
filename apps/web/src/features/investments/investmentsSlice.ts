@@ -1,142 +1,81 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type {
-  InvestmentSnapshot,
   InvestmentTransactionRead,
-  InvestmentMetricsResponse,
   InvestmentOverviewResponse,
-  NordnetParseResponse,
 } from "@/types/api";
 
 export interface InvestmentsState {
-  snapshots: InvestmentSnapshot[];
   transactions: InvestmentTransactionRead[];
-  metrics?: InvestmentMetricsResponse["performance"];
   overview?: InvestmentOverviewResponse;
   loading: boolean;
-  saving: boolean;
-  parseLoading: Record<string, boolean>;
-  parsedResults: Record<string, NordnetParseResponse>;
-  lastSavedClientId?: string;
+  updateLoading: boolean;
   error?: string;
+  updateError?: string;
 }
 
 const initialState: InvestmentsState = {
-  snapshots: [],
   transactions: [],
   overview: undefined,
   loading: false,
-  saving: false,
-  parseLoading: {},
-  parsedResults: {},
+  updateLoading: false,
 };
 
 const investmentsSlice = createSlice({
   name: "investments",
   initialState,
   reducers: {
-    setSnapshots(state, action: PayloadAction<InvestmentSnapshot[]>) {
-      state.snapshots = action.payload;
-      state.error = undefined;
-    },
     setTransactions(state, action: PayloadAction<InvestmentTransactionRead[]>) {
       state.transactions = action.payload;
       state.error = undefined;
-    },
-    setMetrics(
-      state,
-      action: PayloadAction<
-        InvestmentMetricsResponse["performance"] | undefined
-      >,
-    ) {
-      state.metrics = action.payload;
     },
     setOverview(state, action: PayloadAction<InvestmentOverviewResponse>) {
       state.overview = action.payload;
       state.error = undefined;
     },
-    upsertSnapshot(state, action: PayloadAction<InvestmentSnapshot>) {
-      const existingIndex = state.snapshots.findIndex(
-        (snap) => snap.id === action.payload.id,
-      );
-      if (existingIndex >= 0) {
-        state.snapshots[existingIndex] = action.payload;
-      } else {
-        state.snapshots = [...state.snapshots, action.payload];
-      }
-      state.error = undefined;
-    },
     setInvestmentsLoading(state, action: PayloadAction<boolean>) {
       state.loading = action.payload;
     },
-    setInvestmentsSaving(state, action: PayloadAction<boolean>) {
-      state.saving = action.payload;
-    },
     setInvestmentsError(state, action: PayloadAction<string | undefined>) {
-      state.error =
-        action.payload ?? "Unable to load or save investment snapshots.";
+      state.error = action.payload ?? "Unable to load investment data.";
     },
-    setParseLoading(
+    setInvestmentsUpdateLoading(state, action: PayloadAction<boolean>) {
+      state.updateLoading = action.payload;
+    },
+    setInvestmentsUpdateError(
       state,
-      action: PayloadAction<{ clientId: string; loading: boolean }>,
+      action: PayloadAction<string | undefined>,
     ) {
-      state.parseLoading[action.payload.clientId] = action.payload.loading;
-    },
-    setParseResult(
-      state,
-      action: PayloadAction<{ clientId: string; result: NordnetParseResponse }>,
-    ) {
-      state.parsedResults[action.payload.clientId] = action.payload.result;
-      state.parseLoading[action.payload.clientId] = false;
-    },
-    clearParseResult(state, action: PayloadAction<string>) {
-      delete state.parsedResults[action.payload];
-      delete state.parseLoading[action.payload];
-    },
-    setLastSavedClientId(state, action: PayloadAction<string | undefined>) {
-      state.lastSavedClientId = action.payload;
+      state.updateError =
+        action.payload ?? "Unable to update investment balance.";
     },
   },
   selectors: {
     selectInvestmentsState: (state) => state,
-    selectInvestmentSnapshots: (state) => state.snapshots,
     selectInvestmentTransactions: (state) => state.transactions,
-    selectInvestmentMetrics: (state) => state.metrics,
     selectInvestmentOverview: (state) => state.overview,
     selectInvestmentsLoading: (state) => state.loading,
-    selectInvestmentsSaving: (state) => state.saving,
     selectInvestmentsError: (state) => state.error,
-    selectParseLoading: (state) => state.parseLoading,
-    selectParsedResults: (state) => state.parsedResults,
-    selectLastSavedClientId: (state) => state.lastSavedClientId,
+    selectInvestmentsUpdateLoading: (state) => state.updateLoading,
+    selectInvestmentsUpdateError: (state) => state.updateError,
   },
 });
 
 export const {
-  setSnapshots,
   setTransactions,
-  setMetrics,
   setOverview,
-  upsertSnapshot,
   setInvestmentsLoading,
-  setInvestmentsSaving,
   setInvestmentsError,
-  setParseLoading,
-  setParseResult,
-  clearParseResult,
-  setLastSavedClientId,
+  setInvestmentsUpdateLoading,
+  setInvestmentsUpdateError,
 } = investmentsSlice.actions;
 
 export const {
   selectInvestmentsState,
-  selectInvestmentSnapshots,
   selectInvestmentTransactions,
-  selectInvestmentMetrics,
   selectInvestmentOverview,
   selectInvestmentsLoading,
-  selectInvestmentsSaving,
   selectInvestmentsError,
-  selectParseLoading,
-  selectParsedResults,
-  selectLastSavedClientId,
+  selectInvestmentsUpdateLoading,
+  selectInvestmentsUpdateError,
 } = investmentsSlice.selectors;
 export const InvestmentsReducer = investmentsSlice.reducer;

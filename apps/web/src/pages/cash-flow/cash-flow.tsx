@@ -6,6 +6,7 @@ import {
   AreaChart,
   CartesianGrid,
   Legend,
+  Line,
   Tooltip,
   XAxis,
   YAxis,
@@ -28,6 +29,7 @@ import { PageRoutes } from "@/data/routes";
 import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useReportsApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
+import { compactCurrency, currency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type {
   CashflowForecastResponse,
@@ -48,20 +50,13 @@ const coerceMoney = (value: unknown): number => {
 };
 
 const formatSek = (value: number, digits = 0) =>
-  value.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: digits,
+  currency(value, {
     minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
   });
 
 const formatSekCompact = (value: number) =>
-  value.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    notation: "compact",
-    maximumFractionDigits: 0,
-  });
+  compactCurrency(value, { maximumFractionDigits: 0 });
 
 type Granularity = "monthly" | "quarterly";
 
@@ -70,6 +65,9 @@ type HistoryPoint = {
   inflow: number;
   outflow: number;
   net: number;
+  adjustmentInflow: number;
+  adjustmentOutflow: number;
+  adjustmentNet: number;
 };
 
 type ForecastModel = "ensemble" | "seasonal" | "simple";
@@ -218,19 +216,34 @@ export const CashFlow: React.FC = () => {
   };
 
   const historyData: HistoryPoint[] = useMemo(() => {
+    const mapRow = (row: {
+      period?: string;
+      year?: number;
+      quarter?: number;
+      income: string | number;
+      expense: string | number;
+      adjustment_inflow?: string | number;
+      adjustment_outflow?: string | number;
+      adjustment_net?: string | number;
+      net: string | number;
+    }) => ({
+      inflow: Number(row.income),
+      outflow: Math.abs(Number(row.expense)),
+      net: Number(row.net),
+      adjustmentInflow: Number(row.adjustment_inflow ?? 0),
+      adjustmentOutflow: Math.abs(Number(row.adjustment_outflow ?? 0)),
+      adjustmentNet: Number(row.adjustment_net ?? 0),
+    });
+
     if (granularity === "monthly") {
       return monthly.data.map((row) => ({
-        label: new Date(row.period).toLocaleString("sv-SE", { month: "short" }),
-        inflow: Number(row.income),
-        outflow: Math.abs(Number(row.expense)),
-        net: Number(row.net),
+        label: formatDate(row.period, { month: "short", locale: "sv-SE" }),
+        ...mapRow(row),
       }));
     }
     return quarterly.data.map((row) => ({
       label: `Q${row.quarter} ${row.year}`,
-      inflow: Number(row.income),
-      outflow: Math.abs(Number(row.expense)),
-      net: Number(row.net),
+      ...mapRow(row),
     }));
   }, [granularity, monthly.data, quarterly.data]);
 
@@ -1024,6 +1037,10 @@ export const CashFlow: React.FC = () => {
                 inflow: { label: "Inflow", color: "var(--chart-2)" },
                 outflow: { label: "Outflow", color: "var(--chart-4)" },
                 net: { label: "Net", color: "var(--chart-1)" },
+                adjustmentNet: {
+                  label: "Adjustments",
+                  color: "var(--color-amber-500, #f59e0b)",
+                },
               }}
             >
               <AreaChart
@@ -1054,7 +1071,9 @@ export const CashFlow: React.FC = () => {
                             ? "Inflow"
                             : name === "outflow"
                               ? "Outflow"
-                              : "Net";
+                              : name === "adjustmentNet"
+                                ? "Adjustments"
+                                : "Net";
                         return (
                           <div className="flex w-full items-center justify-between gap-2">
                             <span className="text-slate-500">{label}</span>
@@ -1097,6 +1116,15 @@ export const CashFlow: React.FC = () => {
                   fillOpacity={0.06}
                   strokeWidth={2}
                   dot={false}
+                />
+                <Line
+                  type="monotoneX"
+                  dataKey="adjustmentNet"
+                  name="Adjustments"
+                  stroke="var(--color-amber-500, #f59e0b)"
+                  strokeWidth={2}
+                  dot={false}
+                  isAnimationActive={false}
                 />
               </AreaChart>
             </ChartContainer>

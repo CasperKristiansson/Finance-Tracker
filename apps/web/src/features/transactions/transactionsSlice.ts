@@ -1,10 +1,11 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
-import type { TransactionRead } from "@/types/api";
+import type { TransactionRead, TransactionType } from "@/types/api";
 
 export interface TransactionFilters {
   startDate?: string | null;
   endDate?: string | null;
   accountIds?: string[];
+  transactionTypes?: TransactionType[];
   limit?: number;
   offset?: number;
   categoryIds?: string[];
@@ -12,6 +13,7 @@ export interface TransactionFilters {
   minAmount?: string;
   maxAmount?: string;
   search?: string;
+  taxEvent?: boolean;
   sortBy?: "occurred_at" | "amount" | "description" | "category" | "type";
   sortDir?: "asc" | "desc";
 }

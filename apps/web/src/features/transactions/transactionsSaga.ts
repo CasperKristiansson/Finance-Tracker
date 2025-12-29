@@ -77,6 +77,9 @@ function* handleFetchTransactions(
       ...(serializeAccounts(filters.accountIds)
         ? { account_ids: serializeAccounts(filters.accountIds) }
         : {}),
+      ...(filters.transactionTypes?.length
+        ? { transaction_type: filters.transactionTypes.join(",") }
+        : {}),
       ...(filters.categoryIds?.length
         ? { category_ids: filters.categoryIds.join(",") }
         : {}),
@@ -86,6 +89,9 @@ function* handleFetchTransactions(
       ...(filters.minAmount ? { min_amount: filters.minAmount } : {}),
       ...(filters.maxAmount ? { max_amount: filters.maxAmount } : {}),
       ...(filters.search ? { search: filters.search } : {}),
+      ...(filters.taxEvent !== undefined
+        ? { tax_event: filters.taxEvent }
+        : {}),
       ...(filters.sortBy ? { sort_by: filters.sortBy } : {}),
       ...(filters.sortDir ? { sort_dir: filters.sortDir } : {}),
       limit,

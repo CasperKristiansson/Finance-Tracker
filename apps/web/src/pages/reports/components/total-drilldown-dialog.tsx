@@ -15,6 +15,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { InlineError } from "@/components/composed/inline-error";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -42,6 +43,7 @@ import type { TotalDrilldownState } from "../reports-types";
 import {
   compactCurrency,
   currency,
+  formatDate,
   median,
   medianAbsoluteDeviation,
   monthLabel,
@@ -230,9 +232,7 @@ export const TotalDrilldownDialog: React.FC<{
               </p>
             </div>
             {totalDrilldownError ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-                {totalDrilldownError}
-              </div>
+              <InlineError message={totalDrilldownError} />
             ) : null}
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-3">
@@ -269,7 +269,7 @@ export const TotalDrilldownDialog: React.FC<{
                           className="flex items-center justify-between text-xs"
                         >
                           <span className="text-slate-600">
-                            {new Date(row.period).toLocaleDateString("sv-SE", {
+                            {formatDate(row.period, {
                               year: "numeric",
                               month: "short",
                             })}
@@ -335,10 +335,10 @@ export const TotalDrilldownDialog: React.FC<{
                     <AreaChart
                       data={totalDrilldownSeries.map((row) => ({
                         date: row.period,
-                        label: new Date(row.period).toLocaleDateString(
-                          "sv-SE",
-                          { month: "short", year: "2-digit" },
-                        ),
+                        label: formatDate(row.period, {
+                          month: "short",
+                          year: "2-digit",
+                        }),
                         value:
                           totalDrilldown.flow === "expense"
                             ? row.expense
@@ -362,9 +362,7 @@ export const TotalDrilldownDialog: React.FC<{
                         formatter={(value) => currency(Number(value))}
                         labelFormatter={(_label, payload) =>
                           payload?.[0]?.payload?.date
-                            ? new Date(
-                                String(payload[0].payload.date),
-                              ).toLocaleDateString("sv-SE", {
+                            ? formatDate(String(payload[0].payload.date), {
                                 year: "numeric",
                                 month: "long",
                               })
@@ -411,9 +409,7 @@ export const TotalDrilldownDialog: React.FC<{
               </p>
             </div>
             {totalDrilldownError ? (
-              <div className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-                {totalDrilldownError}
-              </div>
+              <InlineError message={totalDrilldownError} />
             ) : null}
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-3">
@@ -474,7 +470,7 @@ export const TotalDrilldownDialog: React.FC<{
                           className="flex items-center justify-between text-xs"
                         >
                           <span className="text-slate-600">
-                            {new Date(row.period).toLocaleDateString("sv-SE", {
+                            {formatDate(row.period, {
                               year: "numeric",
                               month: "short",
                             })}
@@ -503,10 +499,10 @@ export const TotalDrilldownDialog: React.FC<{
                     <BarChart
                       data={totalDrilldownSeries.map((row) => ({
                         date: row.period,
-                        label: new Date(row.period).toLocaleDateString(
-                          "sv-SE",
-                          { month: "short", year: "2-digit" },
-                        ),
+                        label: formatDate(row.period, {
+                          month: "short",
+                          year: "2-digit",
+                        }),
                         income: row.income,
                         expenseNeg: -row.expense,
                       }))}
@@ -528,9 +524,7 @@ export const TotalDrilldownDialog: React.FC<{
                         formatter={(value) => currency(Math.abs(Number(value)))}
                         labelFormatter={(_label, payload) =>
                           payload?.[0]?.payload?.date
-                            ? new Date(
-                                String(payload[0].payload.date),
-                              ).toLocaleDateString("sv-SE", {
+                            ? formatDate(String(payload[0].payload.date), {
                                 year: "numeric",
                                 month: "long",
                               })
@@ -872,7 +866,7 @@ export const TotalDrilldownDialog: React.FC<{
                     <AreaChart
                       data={totalOverview.investments.series.map((row) => ({
                         date: row.date,
-                        label: new Date(row.date).toLocaleDateString("sv-SE", {
+                        label: formatDate(row.date, {
                           month: "short",
                           year: "2-digit",
                         }),
@@ -896,9 +890,7 @@ export const TotalDrilldownDialog: React.FC<{
                         formatter={(value) => currency(Number(value))}
                         labelFormatter={(_label, payload) =>
                           payload?.[0]?.payload?.date
-                            ? new Date(
-                                String(payload[0].payload.date),
-                              ).toLocaleDateString("sv-SE", {
+                            ? formatDate(String(payload[0].payload.date), {
                                 year: "numeric",
                                 month: "long",
                               })
@@ -966,7 +958,7 @@ export const TotalDrilldownDialog: React.FC<{
                     <LineChart
                       data={totalOverview?.debt.series.map((row) => ({
                         date: row.date,
-                        label: new Date(row.date).toLocaleDateString("sv-SE", {
+                        label: formatDate(row.date, {
                           month: "short",
                           year: "2-digit",
                         }),
@@ -990,9 +982,7 @@ export const TotalDrilldownDialog: React.FC<{
                         formatter={(value) => currency(Number(value))}
                         labelFormatter={(_label, payload) =>
                           payload?.[0]?.payload?.date
-                            ? new Date(
-                                String(payload[0].payload.date),
-                              ).toLocaleDateString("sv-SE", {
+                            ? formatDate(String(payload[0].payload.date), {
                                 year: "numeric",
                                 month: "long",
                               })
@@ -1027,11 +1017,7 @@ export const TotalDrilldownDialog: React.FC<{
                     As of
                   </p>
                   <p className="font-semibold text-slate-900">
-                    {totalOverview
-                      ? new Date(totalOverview.as_of).toLocaleDateString(
-                          "sv-SE",
-                        )
-                      : "—"}
+                    {totalOverview ? formatDate(totalOverview.as_of) : "—"}
                   </p>
                   <p className="text-xs text-slate-600">
                     Ledger + investment snapshots.
@@ -1109,10 +1095,7 @@ export const TotalDrilldownDialog: React.FC<{
                         {currency(totalNetWorthStats.allTimeHigh)}
                       </p>
                       <p className="text-xs text-slate-600">
-                        High:{" "}
-                        {new Date(
-                          totalNetWorthStats.allTimeHighDate,
-                        ).toLocaleDateString("sv-SE")}
+                        High: {formatDate(totalNetWorthStats.allTimeHighDate)}
                       </p>
                     </div>
                   </div>
@@ -1126,13 +1109,13 @@ export const TotalDrilldownDialog: React.FC<{
                           Change Attribution
                         </p>
                         <p className="text-xs text-slate-500">
-                          {new Date(
-                            totalNetWorthAttribution.windowStart,
-                          ).getFullYear()}
+                          {formatDate(totalNetWorthAttribution.windowStart, {
+                            year: "numeric",
+                          })}
                           –
-                          {new Date(
-                            totalNetWorthAttribution.windowEnd,
-                          ).getFullYear()}
+                          {formatDate(totalNetWorthAttribution.windowEnd, {
+                            year: "numeric",
+                          })}
                         </p>
                       </div>
                       <p className="text-sm font-semibold text-slate-900">
@@ -1216,7 +1199,7 @@ export const TotalDrilldownDialog: React.FC<{
                     <AreaChart
                       data={totalOverview.net_worth_series.map((row) => ({
                         date: row.date,
-                        label: new Date(row.date).toLocaleDateString("sv-SE", {
+                        label: formatDate(row.date, {
                           month: "short",
                           year: "2-digit",
                         }),
@@ -1240,9 +1223,7 @@ export const TotalDrilldownDialog: React.FC<{
                         formatter={(value) => currency(Number(value))}
                         labelFormatter={(_label, payload) =>
                           payload?.[0]?.payload?.date
-                            ? new Date(
-                                String(payload[0].payload.date),
-                              ).toLocaleDateString("sv-SE", {
+                            ? formatDate(String(payload[0].payload.date), {
                                 year: "numeric",
                                 month: "long",
                               })

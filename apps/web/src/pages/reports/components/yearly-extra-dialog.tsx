@@ -19,7 +19,7 @@ import {
 
 import type { YearlyOverviewResponse } from "@/types/api";
 import type { YearlyExtraDialogState } from "../reports-types";
-import { currency, downloadCsv } from "../reports-utils";
+import { currency, downloadCsv, formatDate } from "../reports-utils";
 
 type CategoryDeltaRow = {
   key: string;
@@ -439,14 +439,11 @@ export const YearlyExtraDialog: React.FC<{
                     {overview.largest_transactions.map((row) => (
                       <TableRow key={row.id}>
                         <TableCell className="text-xs text-slate-600">
-                          {new Date(row.occurred_at).toLocaleDateString(
-                            "sv-SE",
-                            {
-                              year: "numeric",
-                              month: "short",
-                              day: "2-digit",
-                            },
-                          )}
+                          {formatDate(row.occurred_at, {
+                            year: "numeric",
+                            month: "short",
+                            day: "2-digit",
+                          })}
                         </TableCell>
                         <TableCell className="max-w-[260px] truncate font-medium">
                           {row.merchant}

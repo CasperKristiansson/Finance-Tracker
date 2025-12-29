@@ -58,21 +58,39 @@ class ReportingService:
             subscription_ids=subscription_ids,
         )
 
-        buckets: Dict[date, Tuple[Decimal, Decimal]] = {}
+        buckets: Dict[date, Tuple[Decimal, Decimal, Decimal, Decimal]] = {}
         account_scoped = account_ids is not None
         for row in rows:
-            income, expense = self._classify_income_expense(row, account_scoped=account_scoped)
-            if income == 0 and expense == 0:
+            income, expense, adjustment_inflow, adjustment_outflow = self._classify_flows(
+                row, account_scoped=account_scoped
+            )
+            if income == 0 and expense == 0 and adjustment_inflow == 0 and adjustment_outflow == 0:
                 continue
             period = date(row.occurred_at.year, row.occurred_at.month, 1)
-            inc, exp = buckets.get(period, (Decimal("0"), Decimal("0")))
-            buckets[period] = (inc + income, exp + expense)
+            inc, exp, adj_in, adj_out = buckets.get(
+                period, (Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0"))
+            )
+            buckets[period] = (
+                inc + income,
+                exp + expense,
+                adj_in + adjustment_inflow,
+                adj_out + adjustment_outflow,
+            )
 
         results: List[MonthlyTotals] = []
         for period in sorted(buckets.keys()):
-            income, expense = buckets[period]
+            income, expense, adjustment_inflow, adjustment_outflow = buckets[period]
+            adjustment_net = adjustment_inflow - adjustment_outflow
             results.append(
-                MonthlyTotals(period=period, income=income, expense=expense, net=income - expense)
+                MonthlyTotals(
+                    period=period,
+                    income=income,
+                    expense=expense,
+                    adjustment_inflow=adjustment_inflow,
+                    adjustment_outflow=adjustment_outflow,
+                    adjustment_net=adjustment_net,
+                    net=income - expense + adjustment_net,
+                )
             )
         return results
 
@@ -93,20 +111,38 @@ class ReportingService:
             subscription_ids=subscription_ids,
         )
 
-        buckets: Dict[int, Tuple[Decimal, Decimal]] = {}
+        buckets: Dict[int, Tuple[Decimal, Decimal, Decimal, Decimal]] = {}
         account_scoped = account_ids is not None
         for row in rows:
-            income, expense = self._classify_income_expense(row, account_scoped=account_scoped)
-            if income == 0 and expense == 0:
+            income, expense, adjustment_inflow, adjustment_outflow = self._classify_flows(
+                row, account_scoped=account_scoped
+            )
+            if income == 0 and expense == 0 and adjustment_inflow == 0 and adjustment_outflow == 0:
                 continue
-            inc, exp = buckets.get(row.occurred_at.year, (Decimal("0"), Decimal("0")))
-            buckets[row.occurred_at.year] = (inc + income, exp + expense)
+            inc, exp, adj_in, adj_out = buckets.get(
+                row.occurred_at.year, (Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0"))
+            )
+            buckets[row.occurred_at.year] = (
+                inc + income,
+                exp + expense,
+                adj_in + adjustment_inflow,
+                adj_out + adjustment_outflow,
+            )
 
         results: List[YearlyTotals] = []
         for yr in sorted(buckets.keys()):
-            income, expense = buckets[yr]
+            income, expense, adjustment_inflow, adjustment_outflow = buckets[yr]
+            adjustment_net = adjustment_inflow - adjustment_outflow
             results.append(
-                YearlyTotals(year=yr, income=income, expense=expense, net=income - expense)
+                YearlyTotals(
+                    year=yr,
+                    income=income,
+                    expense=expense,
+                    adjustment_inflow=adjustment_inflow,
+                    adjustment_outflow=adjustment_outflow,
+                    adjustment_net=adjustment_net,
+                    net=income - expense + adjustment_net,
+                )
             )
         return results
 
@@ -137,13 +173,25 @@ class ReportingService:
 
         income_total = Decimal("0")
         expense_total = Decimal("0")
+        adjustment_inflow = Decimal("0")
+        adjustment_outflow = Decimal("0")
         account_scoped = account_ids is not None
         for row in rows:
-            income, expense = self._classify_income_expense(row, account_scoped=account_scoped)
+            income, expense, adj_in, adj_out = self._classify_flows(
+                row, account_scoped=account_scoped
+            )
             income_total += income
             expense_total += expense
+            adjustment_inflow += adj_in
+            adjustment_outflow += adj_out
+        adjustment_net = adjustment_inflow - adjustment_outflow
         return LifetimeTotals(
-            income=income_total, expense=expense_total, net=income_total - expense_total
+            income=income_total,
+            expense=expense_total,
+            adjustment_inflow=adjustment_inflow,
+            adjustment_outflow=adjustment_outflow,
+            adjustment_net=adjustment_net,
+            net=income_total - expense_total + adjustment_net,
         )
 
     def total_overview(
@@ -776,6 +824,28 @@ class ReportingService:
         return value if value else "Unknown"
 
     @staticmethod
+    def _classify_flows(
+        row: TransactionAmountRow, *, account_scoped: bool
+    ) -> Tuple[Decimal, Decimal, Decimal, Decimal]:
+        """Return income, expense, adjustment inflow/outflow for reporting views."""
+
+        if row.transaction_type == TransactionType.TRANSFER:
+            return Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0")
+
+        if row.transaction_type == TransactionType.ADJUSTMENT:
+            amount = coerce_decimal(row.amount)
+            if amount > 0:
+                return Decimal("0"), Decimal("0"), amount, Decimal("0")
+            if amount < 0:
+                return Decimal("0"), Decimal("0"), Decimal("0"), -amount
+            return Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0")
+
+        income, expense = ReportingService._classify_income_expense(
+            row, account_scoped=account_scoped
+        )
+        return income, expense, Decimal("0"), Decimal("0")
+
+    @staticmethod
     def _classify_income_expense(
         row: TransactionAmountRow, *, account_scoped: bool
     ) -> Tuple[Decimal, Decimal]:
@@ -1294,23 +1364,40 @@ class ReportingService:
             subscription_ids=subscription_ids,
         )
 
-        buckets: Dict[tuple[int, int], Tuple[Decimal, Decimal]] = {}
+        buckets: Dict[tuple[int, int], Tuple[Decimal, Decimal, Decimal, Decimal]] = {}
         account_scoped = account_ids is not None
         for row in rows:
-            income, expense = self._classify_income_expense(row, account_scoped=account_scoped)
-            if income == 0 and expense == 0:
+            income, expense, adjustment_inflow, adjustment_outflow = self._classify_flows(
+                row, account_scoped=account_scoped
+            )
+            if income == 0 and expense == 0 and adjustment_inflow == 0 and adjustment_outflow == 0:
                 continue
             quarter = (row.occurred_at.month - 1) // 3 + 1
             key = (row.occurred_at.year, quarter)
-            inc, exp = buckets.get(key, (Decimal("0"), Decimal("0")))
-            buckets[key] = (inc + income, exp + expense)
+            inc, exp, adj_in, adj_out = buckets.get(
+                key, (Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0"))
+            )
+            buckets[key] = (
+                inc + income,
+                exp + expense,
+                adj_in + adjustment_inflow,
+                adj_out + adjustment_outflow,
+            )
 
         results: List[QuarterlyTotals] = []
         for yr, qtr in sorted(buckets.keys()):
-            income, expense = buckets[(yr, qtr)]
+            income, expense, adjustment_inflow, adjustment_outflow = buckets[(yr, qtr)]
+            adjustment_net = adjustment_inflow - adjustment_outflow
             results.append(
                 QuarterlyTotals(
-                    year=yr, quarter=qtr, income=income, expense=expense, net=income - expense
+                    year=yr,
+                    quarter=qtr,
+                    income=income,
+                    expense=expense,
+                    adjustment_inflow=adjustment_inflow,
+                    adjustment_outflow=adjustment_outflow,
+                    adjustment_net=adjustment_net,
+                    net=income - expense + adjustment_net,
                 )
             )
         return results
@@ -1340,21 +1427,39 @@ class ReportingService:
         if source:
             rows = [row for row in rows if self._merchant_key(row.description) == source]
 
-        buckets: Dict[date, Tuple[Decimal, Decimal]] = {}
+        buckets: Dict[date, Tuple[Decimal, Decimal, Decimal, Decimal]] = {}
         account_scoped = account_ids is not None
         for row in rows:
-            income, expense = self._classify_income_expense(row, account_scoped=account_scoped)
-            if income == 0 and expense == 0:
+            income, expense, adjustment_inflow, adjustment_outflow = self._classify_flows(
+                row, account_scoped=account_scoped
+            )
+            if income == 0 and expense == 0 and adjustment_inflow == 0 and adjustment_outflow == 0:
                 continue
             period = date(row.occurred_at.year, row.occurred_at.month, 1)
-            inc, exp = buckets.get(period, (Decimal("0"), Decimal("0")))
-            buckets[period] = (inc + income, exp + expense)
+            inc, exp, adj_in, adj_out = buckets.get(
+                period, (Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0"))
+            )
+            buckets[period] = (
+                inc + income,
+                exp + expense,
+                adj_in + adjustment_inflow,
+                adj_out + adjustment_outflow,
+            )
 
         results: List[MonthlyTotals] = []
         for period in sorted(buckets.keys()):
-            income, expense = buckets[period]
+            income, expense, adjustment_inflow, adjustment_outflow = buckets[period]
+            adjustment_net = adjustment_inflow - adjustment_outflow
             results.append(
-                MonthlyTotals(period=period, income=income, expense=expense, net=income - expense)
+                MonthlyTotals(
+                    period=period,
+                    income=income,
+                    expense=expense,
+                    adjustment_inflow=adjustment_inflow,
+                    adjustment_outflow=adjustment_outflow,
+                    adjustment_net=adjustment_net,
+                    net=income - expense + adjustment_net,
+                )
             )
         return results
 

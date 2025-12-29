@@ -12,12 +12,19 @@ from sqlalchemy import asc, desc, func, or_
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
-from ..models import Category, LoanEvent, Transaction, TransactionImportBatch, TransactionLeg
+from ..models import (
+    Category,
+    LoanEvent,
+    TaxEvent,
+    Transaction,
+    TransactionImportBatch,
+    TransactionLeg,
+)
 from ..shared import (
     LoanEventType,
     TransactionType,
     coerce_decimal,
-    ensure_balanced_legs,
+    validate_transaction_legs,
 )
 
 
@@ -39,6 +46,7 @@ class TransactionRepository:
         category_ids: Optional[Iterable[UUID]] = None,
         subscription_ids: Optional[Iterable[UUID]] = None,
         transaction_types: Optional[Iterable["TransactionType"]] = None,
+        tax_event: Optional[bool] = None,
         min_amount: Optional[Decimal] = None,
         max_amount: Optional[Decimal] = None,
         search: Optional[str] = None,
@@ -48,7 +56,8 @@ class TransactionRepository:
         offset: Optional[int] = None,
     ) -> List[Transaction]:
         statement = select(Transaction).options(
-            selectinload(Transaction.legs)  # type: ignore[arg-type]
+            selectinload(Transaction.legs),  # type: ignore[arg-type]
+            selectinload(cast(Any, Transaction.tax_event)),
         )
 
         if start_date is not None:
@@ -69,6 +78,10 @@ class TransactionRepository:
             statement = statement.where(
                 cast(Any, Transaction.transaction_type).in_(list(transaction_types))
             )
+        if tax_event is True:
+            statement = statement.join(TaxEvent)
+        elif tax_event is False:
+            statement = statement.outerjoin(TaxEvent).where(cast(Any, TaxEvent.id).is_(None))
         if search:
             pattern = f"%{search}%"
             statement = statement.where(
@@ -131,20 +144,6 @@ class TransactionRepository:
         transactions = list(result.unique().all())
         return transactions
 
-    def _validate_legs(self, legs: List[TransactionLeg]) -> None:
-        if len(legs) < 2:
-            raise ValueError("Transactions require at least two legs")
-
-        zero_amount = Decimal("0")
-        for leg in legs:
-            if leg.account_id is None:  # pragma: no cover - defensive
-                raise ValueError("Transaction legs require an account reference")
-            amount = coerce_decimal(leg.amount)
-            if amount == zero_amount:
-                raise ValueError("Transaction legs must carry a non-zero amount")
-
-        ensure_balanced_legs([leg.amount for leg in legs])
-
     def create(
         self,
         transaction: Transaction,
@@ -153,9 +152,7 @@ class TransactionRepository:
         import_batch: Optional[TransactionImportBatch] = None,
         commit: bool = True,
     ) -> Transaction:
-        if not legs:
-            raise ValueError("Transactions require at least one leg")
-        self._validate_legs(legs)
+        validate_transaction_legs(transaction.transaction_type, legs)
 
         if import_batch:
             transaction.import_batch_id = import_batch.id
@@ -227,6 +224,10 @@ class TransactionRepository:
     def list_by_account(self, account_id: UUID) -> List[Transaction]:
         statement = (
             select(Transaction)
+            .options(
+                selectinload(Transaction.legs),  # type: ignore[arg-type]
+                selectinload(cast(Any, Transaction.tax_event)),
+            )
             .join(TransactionLeg)
             .where(TransactionLeg.account_id == account_id)
             .order_by(desc(Transaction.occurred_at))  # type: ignore[arg-type]

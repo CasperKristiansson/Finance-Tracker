@@ -38,6 +38,8 @@ import { selectToken } from "@/features/auth/authSlice";
 import { useCategoriesApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import { formatCategoryLabel, renderCategoryIcon } from "@/lib/category-icons";
+import { currency, formatDate } from "@/lib/format";
+import { getDisplayTransactionType } from "@/lib/transactions";
 import {
   CategoryType,
   TransactionType,
@@ -90,9 +92,7 @@ type ArchivedFilter = "active" | "archived" | "all";
 type SortKey = "az" | "most_used" | "newest";
 
 const formatCurrency = (value: number) =>
-  value.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
+  currency(value, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   });
@@ -101,7 +101,7 @@ const formatShortDate = (value?: string | null) => {
   if (!value) return "Never";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Never";
-  return date.toLocaleDateString("sv-SE", {
+  return formatDate(date, {
     year: "numeric",
     month: "short",
     day: "2-digit",
@@ -119,7 +119,7 @@ const formatDateCompact = (value?: string | null) => {
   if (!value) return "";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleDateString("sv-SE", {
+  return formatDate(date, {
     year: "numeric",
     month: "short",
     day: "2-digit",
@@ -423,7 +423,7 @@ export const Categories: React.FC = () => {
         if (cancelled) return;
         setDetailsTransactions(
           data.transactions.filter(
-            (tx) => tx.transaction_type !== TransactionType.TRANSFER,
+            (tx) => getDisplayTransactionType(tx) !== TransactionType.TRANSFER,
           ),
         );
       })

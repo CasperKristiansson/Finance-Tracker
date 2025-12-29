@@ -25,7 +25,7 @@ from ..shared import (
     LoanEventType,
     TransactionType,
     coerce_decimal,
-    ensure_balanced_legs,
+    validate_transaction_legs,
 )
 
 
@@ -45,6 +45,7 @@ class TransactionService:
         category_ids: Optional[Iterable[UUID]] = None,
         subscription_ids: Optional[Iterable[UUID]] = None,
         transaction_types: Optional[Iterable["TransactionType"]] = None,
+        tax_event: Optional[bool] = None,
         min_amount: Optional[Decimal] = None,
         max_amount: Optional[Decimal] = None,
         search: Optional[str] = None,
@@ -60,6 +61,7 @@ class TransactionService:
             category_ids=category_ids,
             subscription_ids=subscription_ids,
             transaction_types=transaction_types,
+            tax_event=tax_event,
             min_amount=min_amount,
             max_amount=max_amount,
             search=search,
@@ -89,7 +91,7 @@ class TransactionService:
             transaction.transaction_type,
         )
 
-        self._validate_transaction_legs(transaction.transaction_type, prepared_legs)
+        validate_transaction_legs(transaction.transaction_type, prepared_legs)
 
         created = self.repository.create(
             transaction,
@@ -205,6 +207,8 @@ class TransactionService:
             mapped = category_mapping.get(category.category_type)
             if mapped is not None:
                 return mapped
+        if fallback in {TransactionType.INCOME, TransactionType.EXPENSE}:
+            return fallback
 
         has_positive = any(coerce_decimal(leg.amount) > 0 for leg in legs)
         has_negative = any(coerce_decimal(leg.amount) < 0 for leg in legs)
@@ -213,27 +217,6 @@ class TransactionService:
             return TransactionType.TRANSFER
 
         return fallback
-
-    def _validate_transaction_legs(
-        self,
-        transaction_type: TransactionType,
-        legs: Sequence[TransactionLeg],
-    ) -> None:
-        if len(legs) < 2:
-            raise ValueError("Transactions require at least two legs")
-
-        ensure_balanced_legs([leg.amount for leg in legs])
-
-        has_positive = any(coerce_decimal(leg.amount) > 0 for leg in legs)
-        has_negative = any(coerce_decimal(leg.amount) < 0 for leg in legs)
-
-        if not (has_positive and has_negative):
-            raise ValueError("Transactions must include positive and negative legs")
-
-        if transaction_type == TransactionType.TRANSFER:
-            unique_accounts = {leg.account_id for leg in legs}
-            if len(unique_accounts) < 2:
-                raise ValueError("Transfers require at least two distinct accounts")
 
     def _record_loan_events(
         self,

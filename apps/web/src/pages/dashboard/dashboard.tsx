@@ -29,8 +29,9 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
+import { EmptyState } from "@/components/composed/empty-state";
+import { LoadingCard } from "@/components/composed/loading-card";
 import {
   MotionPage,
   StaggerWrap,
@@ -52,6 +53,12 @@ import {
 } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import { renderCategoryIcon } from "@/lib/category-icons";
+import { compactCurrency, currency } from "@/lib/format";
+import {
+  getDisplayTransactionType,
+  getTransactionTypeLabel,
+  isTaxEvent,
+} from "@/lib/transactions";
 import {
   AccountType,
   type MonthlyReportEntry,
@@ -78,23 +85,35 @@ const numberFromString = (value?: string): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const currency = (value: number) =>
-  value.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: 0,
-  });
-
-const compactCurrency = (value: number) =>
-  new Intl.NumberFormat("sv-SE", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
-
 const formatDelta = (value: number) => {
   const sign = value >= 0 ? "+" : "-";
   return `${sign}${currency(Math.abs(value))}`;
 };
+
+const MONTH_LABELS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+const parsePeriodDate = (period: string) => {
+  const normalized = period.includes("T") ? period : `${period}T00:00:00`;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+};
+
+const getPeriodYear = (period: string) => parsePeriodDate(period).getFullYear();
+const getPeriodMonthIndex = (period: string) =>
+  parsePeriodDate(period).getMonth();
 
 const renderAccountIcon = (icon: string | null | undefined, name: string) => {
   if (icon?.startsWith("lucide:")) {
@@ -226,8 +245,8 @@ export const Dashboard: React.FC = () => {
       recentTab === "all"
         ? undefined
         : recentTab === "income"
-          ? [TransactionType.INCOME]
-          : [TransactionType.EXPENSE];
+          ? [TransactionType.INCOME, TransactionType.TRANSFER]
+          : [TransactionType.EXPENSE, TransactionType.TRANSFER];
     fetchRecentTransactions({ limit, transactionTypes });
   }, [fetchRecentTransactions, isAuthenticated, recentTab]);
 
@@ -318,7 +337,7 @@ export const Dashboard: React.FC = () => {
       ? filteredMonthly
       : monthly.data || [];
     const ytd = ytdSrc.filter(
-      (entry) => new Date(entry.period).getFullYear() === currentYear,
+      (entry) => getPeriodYear(entry.period) === currentYear,
     );
     const ytdIncome = ytd.reduce((sum, entry) => sum + Number(entry.income), 0);
     const ytdExpense = ytd.reduce(
@@ -357,7 +376,6 @@ export const Dashboard: React.FC = () => {
 
   const incomeExpenseChart = useMemo(() => {
     const src = filteredMonthly.length ? filteredMonthly : monthly.data || [];
-    const year = src.length ? new Date(src[0].period).getFullYear() : undefined;
     const byMonth = new Map<
       number,
       {
@@ -367,18 +385,16 @@ export const Dashboard: React.FC = () => {
     >();
 
     src.forEach((entry) => {
-      const date = new Date(entry.period);
-      byMonth.set(date.getMonth(), {
+      byMonth.set(getPeriodMonthIndex(entry.period), {
         income: Number(entry.income),
         expense: Number(entry.expense),
       });
     });
 
     return Array.from({ length: 12 }, (_, monthIndex) => {
-      const month = new Date(year ?? new Date().getFullYear(), monthIndex, 1);
       const entry = byMonth.get(monthIndex);
       return {
-        month: month.toLocaleString("en-US", { month: "short" }),
+        month: MONTH_LABELS[monthIndex] ?? "",
         monthIndex,
         income: entry?.income ?? null,
         expense: entry?.expense ?? null,
@@ -415,10 +431,9 @@ export const Dashboard: React.FC = () => {
       const expense = Number(entry.expense);
       const rate =
         income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
+      const monthIndex = getPeriodMonthIndex(entry.period);
       return {
-        month: new Date(entry.period).toLocaleString("en-US", {
-          month: "short",
-        }),
+        month: MONTH_LABELS[monthIndex] ?? "",
         rate,
       };
     });
@@ -429,7 +444,7 @@ export const Dashboard: React.FC = () => {
     return points.map((point) => ({
       date: point.period,
       net: Number(point.net_worth),
-      year: new Date(point.period).getFullYear(),
+      year: getPeriodYear(point.period),
     }));
   }, [netWorth.data]);
 
@@ -469,7 +484,9 @@ export const Dashboard: React.FC = () => {
     }
 
     const sorted = entries.sort(
-      (a, b) => new Date(a.period).getTime() - new Date(b.period).getTime(),
+      (a, b) =>
+        parsePeriodDate(a.period).getTime() -
+        parsePeriodDate(b.period).getTime(),
     );
 
     const avgBurn =
@@ -493,10 +510,9 @@ export const Dashboard: React.FC = () => {
     let running = 0;
     const sparkline = sorted.slice(-6).map((entry) => {
       running += Number(entry.income) - Number(entry.expense);
+      const monthIndex = getPeriodMonthIndex(entry.period);
       return {
-        month: new Date(entry.period).toLocaleString("en-US", {
-          month: "short",
-        }),
+        month: MONTH_LABELS[monthIndex] ?? "",
         balance: running,
       };
     });
@@ -510,9 +526,9 @@ export const Dashboard: React.FC = () => {
     return recent.items.map((tx) => {
       const primaryLeg = tx.legs?.[0];
       const amount = primaryLeg ? Number(primaryLeg.amount) : 0;
-      const txType =
-        tx.transaction_type ||
-        (amount >= 0 ? TransactionType.INCOME : TransactionType.EXPENSE);
+      const txType = getDisplayTransactionType(tx);
+      const taxLinked = isTaxEvent(tx);
+      const typeLabel = getTransactionTypeLabel(tx);
 
       const accountLabel = (() => {
         const legs = tx.legs ?? [];
@@ -556,6 +572,8 @@ export const Dashboard: React.FC = () => {
         accountLabel,
         category,
         type: txType,
+        typeLabel,
+        isTax: taxLinked,
       };
     });
   }, [accountNameById, categoryById, recent.items]);
@@ -585,35 +603,27 @@ export const Dashboard: React.FC = () => {
             Live net worth, cash flow, and savings snapshot.
           </p>
         </motion.div>
-        <motion.div
-          variants={fadeInUp}
-          className="flex flex-wrap gap-2"
-          {...subtleHover}
-        >
-          <Button
-            variant="default"
-            className="gap-2"
-            onClick={() =>
-              toast.info("Add transaction", {
-                description: "Flow coming soon.",
-              })
-            }
-          >
-            <Plus className="h-4 w-4" />
-            Add transaction
-          </Button>
-          <Button
-            variant="outline"
-            className="gap-2 border-slate-300 text-slate-800"
-            onClick={() =>
-              toast.info("Import file", {
-                description: "Upload flow coming soon.",
-              })
-            }
-          >
-            <Upload className="h-4 w-4" />
-            Import file
-          </Button>
+        <motion.div variants={fadeInUp} className="flex flex-wrap gap-2">
+          <motion.div {...subtleHover}>
+            <Button asChild variant="default" className="gap-2">
+              <Link to={PageRoutes.transactions}>
+                <Plus className="h-4 w-4" />
+                Add transaction
+              </Link>
+            </Button>
+          </motion.div>
+          <motion.div {...subtleHover}>
+            <Button
+              asChild
+              variant="outline"
+              className="gap-2 border-slate-300 text-slate-800"
+            >
+              <Link to={PageRoutes.imports}>
+                <Upload className="h-4 w-4" />
+                Import file
+              </Link>
+            </Button>
+          </motion.div>
         </motion.div>
       </StaggerWrap>
 
@@ -1364,7 +1374,7 @@ export const Dashboard: React.FC = () => {
                   {currency(cashOnHand)}
                 </div>
               )}
-              <div className="space-y-3">
+              <div className="max-h-96 space-y-3 overflow-y-auto pr-1">
                 {activeAccounts.map((account) => {
                   const delta = accountDeltas[account.id] ?? 0;
                   const isPositive = delta >= 0;
@@ -1556,15 +1566,21 @@ export const Dashboard: React.FC = () => {
           </CardHeader>
           <CardContent className="space-y-2">
             {recent.loading ? (
-              <div className="space-y-2">
-                {[...Array(4)].map((_, idx) => (
-                  <Skeleton key={idx} className="h-12 w-full" />
-                ))}
-              </div>
+              <LoadingCard lines={4} />
             ) : filteredRecentTransactions.length === 0 ? (
-              <p className="text-sm text-slate-500">
-                No recent transactions yet.
-              </p>
+              <EmptyState
+                title="No recent transactions yet."
+                description="Import files or add activity to see your latest account movements."
+                action={
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="border-slate-200"
+                  >
+                    <Link to={PageRoutes.transactions}>Open transactions</Link>
+                  </Button>
+                }
+              />
             ) : (
               <div className="space-y-2">
                 {filteredRecentTransactions.map((tx) => (
@@ -1602,11 +1618,7 @@ export const Dashboard: React.FC = () => {
                                 : "bg-rose-50 text-rose-700"
                           }`}
                         >
-                          {tx.type === TransactionType.TRANSFER
-                            ? "Transfer"
-                            : tx.amount >= 0
-                              ? "Income"
-                              : "Expense"}
+                          {tx.typeLabel}
                         </span>
 
                         {tx.type ===

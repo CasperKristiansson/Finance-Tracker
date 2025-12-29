@@ -7,6 +7,7 @@ import type { ReportMode } from "../reports-types";
 import { currency, percent } from "../reports-utils";
 
 type TotalKpis = {
+  totalMoney: number;
   netWorth: number;
   cashBalance: number;
   debtTotal: number;
@@ -79,6 +80,12 @@ export const ReportsOverviewCard: React.FC<{
       <CardContent className="grid gap-3 md:grid-cols-6">
         {[
           {
+            label: "Total money",
+            value: totalKpis.totalMoney,
+            format: "currency" as const,
+            color: "text-slate-900",
+          },
+          {
             label: "Net worth",
             value: totalKpis.netWorth,
             format: "currency" as const,
@@ -97,12 +104,6 @@ export const ReportsOverviewCard: React.FC<{
             label: "Savings rate (lifetime)",
             value: totalKpis.lifetimeSavingsRate,
             format: "percent" as const,
-            color: "text-slate-900",
-          },
-          {
-            label: "Cash balance",
-            value: totalKpis.cashBalance,
-            format: "currency" as const,
             color: "text-slate-900",
           },
           {

@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Save } from "lucide-react";
+import { ArchiveRestore, Loader2, Save } from "lucide-react";
 import React, { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -11,9 +11,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSettings } from "@/hooks/use-api";
 
+const currencyOptions = ["SEK", "EUR", "USD"] as const;
+type CurrencyCode = (typeof currencyOptions)[number];
+const currencyCodeSchema = z.enum(currencyOptions, {
+  message: "Select a supported currency.",
+});
+
 const profileSchema = z.object({
   first_name: z.string().min(1, "First name required").trim(),
   last_name: z.string().min(1, "Last name required").trim(),
+  currency_code: currencyCodeSchema,
 });
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
@@ -27,23 +34,39 @@ const formatTimestamp = (value?: string) => {
   }
 };
 
+const resolveCurrencyCode = (value?: string): CurrencyCode => {
+  const normalized = value?.toUpperCase() ?? "";
+  return currencyOptions.includes(normalized as CurrencyCode)
+    ? (normalized as CurrencyCode)
+    : "SEK";
+};
+
 export const Settings: React.FC = () => {
   const {
     firstName,
     lastName,
+    currencyCode,
     loading,
     saving,
+    backingUp,
     error,
     lastSavedAt,
     saveSettings,
+    runBackup,
     changeFirstName,
     changeLastName,
+    changeCurrencyCode,
   } = useSettings();
+  const resolvedCurrencyCode = useMemo(
+    () => resolveCurrencyCode(currencyCode),
+    [currencyCode],
+  );
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
       first_name: firstName ?? "",
       last_name: lastName ?? "",
+      currency_code: resolvedCurrencyCode,
     },
   });
 
@@ -54,6 +77,7 @@ export const Settings: React.FC = () => {
   const handleProfileSubmit = profileForm.handleSubmit((values) => {
     changeFirstName(values.first_name);
     changeLastName(values.last_name);
+    changeCurrencyCode(values.currency_code || undefined);
     saveSettings();
   });
 
@@ -61,8 +85,9 @@ export const Settings: React.FC = () => {
     profileForm.reset({
       first_name: firstName ?? "",
       last_name: lastName ?? "",
+      currency_code: resolvedCurrencyCode,
     });
-  }, [firstName, lastName, profileForm]);
+  }, [firstName, lastName, profileForm, resolvedCurrencyCode]);
 
   const headerStatus = useMemo(() => {
     if (saving) return "Saving";
@@ -119,6 +144,31 @@ export const Settings: React.FC = () => {
               ) : null}
             </div>
             <div className="space-y-2">
+              <Label htmlFor="currency-code">Currency</Label>
+              <select
+                id="currency-code"
+                className="flex h-9 w-full min-w-0 rounded-md border border-input bg-white px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:aria-invalid:ring-destructive/40"
+                aria-invalid={Boolean(
+                  profileForm.formState.errors.currency_code,
+                )}
+                {...profileForm.register("currency_code")}
+              >
+                {currencyOptions.map((currency) => (
+                  <option key={currency} value={currency}>
+                    {currency}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500">
+                Used for default currency formatting across the app.
+              </p>
+              {profileForm.formState.errors.currency_code ? (
+                <p className="text-xs text-rose-600">
+                  {profileForm.formState.errors.currency_code.message}
+                </p>
+              ) : null}
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="last-name">Last name</Label>
               <Input
                 id="last-name"
@@ -148,14 +198,48 @@ export const Settings: React.FC = () => {
                 >
                   Incomplete
                 </Badge>
-              ) : (
-                <Badge variant="secondary">Up to date</Badge>
-              )}
+              ) : null}
             </div>
             {error ? (
               <p className="text-sm text-rose-600 md:col-span-2">{error}</p>
             ) : null}
           </form>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)]">
+        <CardHeader>
+          <CardTitle className="text-sm text-slate-700">
+            Database backups
+          </CardTitle>
+          <p className="text-sm text-slate-500">
+            Create a one-click archive of all tables across every user.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1 text-sm text-slate-600">
+              <p>Run a fresh backup to secure the full database.</p>
+              <p className="text-xs text-slate-500">
+                Progress is not shown here, but data is saved to the backup
+                store.
+              </p>
+            </div>
+            <Button
+              type="button"
+              onClick={runBackup}
+              disabled={backingUp}
+              className="gap-2"
+              variant="secondary"
+            >
+              {backingUp ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArchiveRestore className="h-4 w-4" />
+              )}
+              Run database backup
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </MotionPage>

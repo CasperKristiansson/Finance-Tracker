@@ -3,7 +3,6 @@
 .env
 *.env
 **/.env
-!apps/web/.env
 .vscode
 .DS_Store
 **.terraform*

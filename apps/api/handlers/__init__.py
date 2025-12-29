@@ -3,6 +3,7 @@
 from .accounts import create_account, list_accounts, reconcile_account
 from .accounts import reset_handler_state as reset_account_handler_state
 from .accounts import update_account
+from .backups import run_transactions_backup
 from .budgets import (
     create_budget,
     delete_budget,
@@ -25,11 +26,11 @@ from .categories import (
 from .goals import create_goal, delete_goal, list_goals, update_goal
 from .imports import commit_imports, preview_imports
 from .imports import reset_handler_state as reset_import_handler_state
-from .investments import sync_investment_ledger
 from .loans import (
     create_loan,
     get_loan_schedule,
     list_loan_events,
+    list_loan_portfolio_series,
 )
 from .loans import reset_handler_state as reset_loan_handler_state
 from .loans import (
@@ -91,6 +92,7 @@ __all__ = [
     "create_loan",
     "update_loan",
     "list_loan_events",
+    "list_loan_portfolio_series",
     "get_loan_schedule",
     "monthly_report",
     "quarterly_report",
@@ -128,6 +130,7 @@ __all__ = [
     "attach_subscription",
     "detach_subscription",
     "list_subscription_summaries",
+    "run_transactions_backup",
     "reset_account_handler_state",
     "reset_category_handler_state",
     "reset_loan_handler_state",
@@ -141,5 +144,4 @@ __all__ = [
     "list_goals",
     "update_goal",
     "delete_goal",
-    "sync_investment_ledger",
 ]

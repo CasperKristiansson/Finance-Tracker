@@ -9,6 +9,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { EmptyState } from "@/components/composed/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -51,9 +52,10 @@ export const TotalCompositionOverTimeCard: React.FC<{
         {loading ? (
           <Skeleton className="h-full w-full" />
         ) : !composition ? (
-          <div className="flex h-full items-center justify-center text-sm text-slate-600">
-            No {flow} composition data yet.
-          </div>
+          <EmptyState
+            title={`No ${flow} composition data yet.`}
+            className="h-full"
+          />
         ) : (
           <div className="flex h-full flex-col gap-2">
             <div className="min-h-0 flex-1 rounded-md border border-slate-100 bg-white p-2">

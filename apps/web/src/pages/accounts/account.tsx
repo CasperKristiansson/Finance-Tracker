@@ -25,6 +25,9 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
+import { EmptyState } from "@/components/composed/empty-state";
+import { InlineError } from "@/components/composed/inline-error";
+import { LoadingCard } from "@/components/composed/loading-card";
 import {
   MotionPage,
   StaggerWrap,
@@ -54,36 +57,25 @@ import {
   useCategoriesApi,
   useInvestmentsApi,
 } from "@/hooks/use-api";
-import { apiFetch } from "@/lib/apiClient";
 import { formatCategoryLabel, renderCategoryIcon } from "@/lib/category-icons";
+import { compactCurrency, currency, formatDate } from "@/lib/format";
+import {
+  getDisplayTransactionType,
+  getTransactionBadge,
+  isTaxEvent,
+} from "@/lib/transactions";
 import { cn } from "@/lib/utils";
+import { fetchYearlyOverview, fetchYearlyReport } from "@/services/reports";
+import { fetchTransactions } from "@/services/transactions";
 import {
   AccountType,
   TransactionType,
-  type TransactionListResponse,
   type TransactionRead,
-  type YearlyReportEntry,
   type YearlyOverviewResponse,
 } from "@/types/api";
-import {
-  transactionListSchema,
-  yearlyOverviewSchema,
-  yearlyReportSchema,
-} from "@/types/schemas";
 import { AccountModal } from "./children/account-modal";
 
-const formatCurrency = (value: number) =>
-  value.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: 0,
-  });
-
-const compactCurrency = (value: number) =>
-  new Intl.NumberFormat("sv-SE", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
+const formatCurrency = (value: number) => currency(value);
 
 const formatAccountType = (type: AccountType) => {
   switch (type) {
@@ -101,7 +93,10 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 const monthKeyFromDate = (date: Date) =>
   date.getFullYear() * 12 + date.getMonth();
 const formatMonthLabel = (year: number, monthIndex: number) =>
-  new Date(year, monthIndex, 1).toLocaleString("en-US", { month: "short" });
+  formatDate(new Date(year, monthIndex, 1), {
+    month: "short",
+    locale: "en-US",
+  });
 const formatMonthLabelWithYear = (year: number, monthIndex: number) =>
   `${formatMonthLabel(year, monthIndex)} '${String(year).slice(-2)}`;
 
@@ -135,22 +130,6 @@ const renderAccountIcon = (icon: string | null | undefined, name: string) => {
       <Landmark className="h-5 w-5 text-slate-600" />
     </div>
   );
-};
-
-const transactionTypeLabel: Record<TransactionType, string> = {
-  [TransactionType.INCOME]: "Income",
-  [TransactionType.EXPENSE]: "Expense",
-  [TransactionType.TRANSFER]: "Transfer",
-  [TransactionType.ADJUSTMENT]: "Adjustment",
-  [TransactionType.INVESTMENT_EVENT]: "Investment",
-};
-
-const transactionTypeBadgeClass: Record<TransactionType, string> = {
-  [TransactionType.INCOME]: "bg-emerald-100 text-emerald-800",
-  [TransactionType.EXPENSE]: "bg-rose-100 text-rose-800",
-  [TransactionType.TRANSFER]: "bg-slate-100 text-slate-700",
-  [TransactionType.ADJUSTMENT]: "bg-amber-100 text-amber-800",
-  [TransactionType.INVESTMENT_EVENT]: "bg-indigo-100 text-indigo-800",
 };
 
 export const AccountDetails: React.FC = () => {
@@ -280,10 +259,8 @@ export const AccountDetails: React.FC = () => {
       if (!accountId) return;
       setAvailableYearsLoading(true);
       try {
-        const { data } = await apiFetch<{ results: YearlyReportEntry[] }>({
-          path: "/reports/yearly",
-          schema: yearlyReportSchema,
-          query: { account_ids: accountId },
+        const { data } = await fetchYearlyReport({
+          accountIds: accountId,
           token,
         });
         const years = (data.results ?? [])
@@ -318,10 +295,8 @@ export const AccountDetails: React.FC = () => {
       try {
         const results = await Promise.all(
           years.map(async (year) => {
-            const { data } = await apiFetch<YearlyOverviewResponse>({
-              path: "/reports/yearly-overview",
-              schema: yearlyOverviewSchema,
-              query: { year, account_ids: accountId },
+            const { data } = await fetchYearlyOverview({
+              year,
               token,
             });
             return [year, data] as const;
@@ -646,12 +621,7 @@ export const AccountDetails: React.FC = () => {
         limit: txLimit,
         offset: nextOffset,
       };
-      const { data } = await apiFetch<TransactionListResponse>({
-        path: "/transactions",
-        schema: transactionListSchema,
-        query,
-        token,
-      });
+      const { data } = await fetchTransactions({ token, query });
       const next = reset
         ? data.transactions
         : [...txItems, ...data.transactions];
@@ -1368,22 +1338,27 @@ export const AccountDetails: React.FC = () => {
 
                 <Separator className="my-4" />
 
-                {txError ? (
-                  <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-                    {txError}
-                  </div>
-                ) : null}
+                {txError ? <InlineError message={txError} /> : null}
 
                 {txLoading && txItems.length === 0 ? (
-                  <div className="space-y-2">
-                    {[...Array(6)].map((_, idx) => (
-                      <Skeleton key={idx} className="h-12 w-full" />
-                    ))}
-                  </div>
+                  <LoadingCard className="rounded-lg" lines={6} />
                 ) : txItems.length === 0 ? (
-                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-                    No transactions in this range.
-                  </div>
+                  <EmptyState
+                    className="rounded-lg"
+                    title="No transactions in this range."
+                    description="Adjust the filters or refresh to fetch the latest activity."
+                    action={
+                      <Button
+                        variant="outline"
+                        className="border-slate-300 text-slate-700"
+                        onClick={() => loadTransactions({ reset: true })}
+                        disabled={txLoading}
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Refresh
+                      </Button>
+                    }
+                  />
                 ) : (
                   <div className="space-y-2">
                     <div className="rounded-lg border border-slate-100 bg-white shadow-[0_10px_30px_-28px_rgba(15,23,42,0.25)]">
@@ -1410,6 +1385,10 @@ export const AccountDetails: React.FC = () => {
                             const category = tx.category_id
                               ? (categoryLookup.get(tx.category_id) ?? null)
                               : null;
+                            const displayType = getDisplayTransactionType(tx);
+                            const taxLinked = isTaxEvent(tx);
+                            const { label: typeLabel, toneClass } =
+                              getTransactionBadge(tx);
 
                             const counterpartyNames = tx.legs
                               ?.filter((l) => l.account_id !== accountId)
@@ -1446,17 +1425,14 @@ export const AccountDetails: React.FC = () => {
                                       <span
                                         className={cn(
                                           "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                                          transactionTypeBadgeClass[
-                                            tx.transaction_type
-                                          ],
+                                          toneClass,
                                         )}
                                       >
-                                        {transactionTypeLabel[
-                                          tx.transaction_type
-                                        ] ?? tx.transaction_type}
+                                        {typeLabel}
                                       </span>
-                                      {tx.transaction_type ===
+                                      {displayType ===
                                         TransactionType.TRANSFER &&
+                                      !taxLinked &&
                                       counterparty ? (
                                         <span className="truncate">
                                           {isPositive ? "From" : "To"}{" "}

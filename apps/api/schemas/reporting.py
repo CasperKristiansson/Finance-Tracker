@@ -129,6 +129,9 @@ class MonthlyReportEntry(BaseModel):
     period: date
     income: Decimal
     expense: Decimal
+    adjustment_inflow: Decimal
+    adjustment_outflow: Decimal
+    adjustment_net: Decimal
     net: Decimal
 
 
@@ -146,6 +149,9 @@ class YearlyReportEntry(BaseModel):
     year: int
     income: Decimal
     expense: Decimal
+    adjustment_inflow: Decimal
+    adjustment_outflow: Decimal
+    adjustment_net: Decimal
     net: Decimal
 
 
@@ -164,6 +170,9 @@ class QuarterlyReportEntry(BaseModel):
     quarter: int
     income: Decimal
     expense: Decimal
+    adjustment_inflow: Decimal
+    adjustment_outflow: Decimal
+    adjustment_net: Decimal
     net: Decimal
 
 
@@ -186,6 +195,9 @@ class TotalReportRead(BaseModel):
 
     income: Decimal
     expense: Decimal
+    adjustment_inflow: Decimal
+    adjustment_outflow: Decimal
+    adjustment_net: Decimal
     net: Decimal
 
 

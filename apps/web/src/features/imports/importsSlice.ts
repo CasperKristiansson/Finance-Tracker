@@ -1,6 +1,7 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type {
   ImportCategorySuggestionRead,
+  ImportFileRead,
   ImportPreviewResponse,
 } from "@/types/api";
 
@@ -12,6 +13,9 @@ export interface ImportsState {
   suggestions: Record<string, ImportCategorySuggestionRead>;
   suggestionsError?: string;
   error?: string;
+  storedFiles: ImportFileRead[];
+  storedFilesLoading: boolean;
+  storedFilesError?: string;
 }
 
 const initialState: ImportsState = {
@@ -20,6 +24,8 @@ const initialState: ImportsState = {
   saving: false,
   suggesting: false,
   suggestions: {},
+  storedFiles: [],
+  storedFilesLoading: false,
 };
 
 const importsSlice = createSlice({
@@ -68,6 +74,19 @@ const importsSlice = createSlice({
     clearImportsError(state) {
       state.error = undefined;
     },
+    setStoredImportFiles(state, action: PayloadAction<ImportFileRead[]>) {
+      state.storedFiles = action.payload;
+      state.storedFilesError = undefined;
+    },
+    setStoredImportFilesLoading(state, action: PayloadAction<boolean>) {
+      state.storedFilesLoading = action.payload;
+    },
+    setStoredImportFilesError(
+      state,
+      action: PayloadAction<string | undefined>,
+    ) {
+      state.storedFilesError = action.payload;
+    },
   },
   selectors: {
     selectImportPreview: (state) => state.preview,
@@ -77,6 +96,9 @@ const importsSlice = createSlice({
     selectImportSuggestions: (state) => state.suggestions,
     selectImportsSuggestionsError: (state) => state.suggestionsError,
     selectImportsError: (state) => state.error,
+    selectStoredImportFiles: (state) => state.storedFiles,
+    selectStoredImportFilesLoading: (state) => state.storedFilesLoading,
+    selectStoredImportFilesError: (state) => state.storedFilesError,
   },
 });
 
@@ -90,6 +112,9 @@ export const {
   setImportsSuggestionsError,
   setImportsError,
   clearImportsError,
+  setStoredImportFiles,
+  setStoredImportFilesLoading,
+  setStoredImportFilesError,
 } = importsSlice.actions;
 
 export const {
@@ -100,6 +125,9 @@ export const {
   selectImportSuggestions,
   selectImportsSuggestionsError,
   selectImportsError,
+  selectStoredImportFiles,
+  selectStoredImportFilesLoading,
+  selectStoredImportFilesError,
 } = importsSlice.selectors;
 
 export const ImportsReducer = importsSlice.reducer;

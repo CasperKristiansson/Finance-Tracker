@@ -11,6 +11,8 @@ from ..schemas import (
     LoanCreateRequest,
     LoanEventListQuery,
     LoanEventRead,
+    LoanPortfolioSeriesQuery,
+    LoanPortfolioSeriesRead,
     LoanRead,
     LoanScheduleQuery,
     LoanScheduleRead,
@@ -114,6 +116,28 @@ def list_loan_events(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         200,
         {"events": [item.model_dump(mode="json") for item in response]},
     )
+
+
+def list_loan_portfolio_series(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    user_id = get_user_id(event)
+    params = get_query_params(event)
+
+    try:
+        query = LoanPortfolioSeriesQuery.model_validate(params)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope(user_id=user_id) as session:
+        service = LoanService(session)
+        series = service.portfolio_series(
+            start_date=query.start_date,
+            end_date=query.end_date,
+        )
+
+        response = LoanPortfolioSeriesRead(series=series)
+
+    return json_response(200, response.model_dump(mode="json"))
 
 
 def get_loan_schedule(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:

@@ -18,6 +18,9 @@ provider:
     DB_USER: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/user}
     DB_PASSWORD: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/password}
     AWS_BEARER_TOKEN_BEDROCK: ${aws:ssm:/finance-tracker/${self:provider.stage}/bedrock/bearer_token}
+    IMPORT_FILES_BUCKET: ${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/bucket}
+    IMPORT_FILES_PREFIX: ${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/prefix}
+    IMPORT_FILES_URL_EXPIRES_SECONDS: ${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/url_expires_seconds}
   iam:
     role:
       statements:
@@ -31,6 +34,11 @@ provider:
             - ssm:GetParameter
             - ssm:GetParameters
           Resource: arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/finance-tracker/${self:provider.stage}/bedrock/*
+        - Effect: Allow
+          Action:
+            - ssm:GetParameter
+            - ssm:GetParameters
+          Resource: arn:aws:ssm:${aws:region}:${aws:accountId}:parameter/finance-tracker/${self:provider.stage}/imports/files/*
         - Effect: Allow
           Action:
             - bedrock:InvokeModel
@@ -56,6 +64,17 @@ provider:
             - execute-api:ManageConnections
           Resource:
             - Fn::Sub: "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebsocketsApi}/*"
+        - Effect: Allow
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+            - s3:AbortMultipartUpload
+            - s3:ListBucket
+          Resource:
+            - arn:aws:s3:::${ssm:/finance-tracker/${self:provider.stage}/backups/bucket}
+            - arn:aws:s3:::${ssm:/finance-tracker/${self:provider.stage}/backups/bucket}/*
+            - arn:aws:s3:::${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/bucket}/*
+            - arn:aws:s3:::${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/bucket}
   httpApi:
     name: ${self:service}-${self:provider.stage}-http
     cors: true
@@ -82,9 +101,39 @@ custom:
   backendLayerArn: ${cf:finance-tracker-layer-service-${self:provider.stage}.BackendDepsLambdaLayerQualifiedArn}
 
 functions:
+  databaseBackup:
+    handler: apps/api/handlers/backups.run_database_backup
+    timeout: 900
+    memorySize: 1024
+    layers:
+      - ${self:custom.backendLayerArn}
+    environment:
+      BACKUP_BUCKET_NAME: ${ssm:/finance-tracker/${self:provider.stage}/backups/bucket}
+      BACKUP_PREFIX: finance-tracker/${self:provider.stage}/database-backups
+    events:
+      - schedule:
+          rate: cron(0 3 1 * ? *)
+          enabled: true
+          description: Monthly export of database tables to S3
+
+  runTransactionsBackup:
+    handler: apps/api/handlers/backups.run_transactions_backup
+    timeout: 29
+    memorySize: 1024
+    layers:
+      - ${self:custom.backendLayerArn}
+    environment:
+      BACKUP_BUCKET_NAME: ${ssm:/finance-tracker/${self:provider.stage}/backups/bucket}
+      BACKUP_PREFIX: finance-tracker/${self:provider.stage}/database-backups
+    events:
+      - httpApi:
+          path: /backups/transactions
+          method: POST
+          authorizer: cognitoJwt
+
   warmDatabase:
     handler: apps/api/handlers/warmup.warm_database
-    timeout: 12
+    timeout: 29
     memorySize: 256
     layers:
       - ${self:custom.backendLayerArn}
@@ -163,6 +212,30 @@ functions:
     events:
       - httpApi:
           path: /imports/commit
+          method: POST
+          authorizer: cognitoJwt
+
+  listImportFiles:
+    handler: apps/api/handlers/import_files.list_import_files
+    memorySize: 512
+    timeout: 29
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /import-files
+          method: GET
+          authorizer: cognitoJwt
+
+  downloadImportFile:
+    handler: apps/api/handlers/import_files.download_import_file
+    memorySize: 512
+    timeout: 29
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /import-files/download
           method: POST
           authorizer: cognitoJwt
 
@@ -440,6 +513,30 @@ functions:
           method: POST
           authorizer: cognitoJwt
 
+  updateTransaction:
+    handler: apps/api/handlers/transactions.update_transaction
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /transactions/{transactionId}
+          method: PATCH
+          authorizer: cognitoJwt
+
+  deleteTransaction:
+    handler: apps/api/handlers/transactions.delete_transaction
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /transactions/{transactionId}
+          method: DELETE
+          authorizer: cognitoJwt
+
   listTaxEvents:
     handler: apps/api/handlers/tax.list_tax_events
     timeout: 29
@@ -593,6 +690,18 @@ functions:
     events:
       - httpApi:
           path: /loans/{accountId}/events
+          method: GET
+          authorizer: cognitoJwt
+
+  listLoanPortfolioSeries:
+    handler: apps/api/handlers/loans.list_loan_portfolio_series
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /loans/events/series
           method: GET
           authorizer: cognitoJwt
 
@@ -752,42 +861,6 @@ functions:
           method: POST
           authorizer: cognitoJwt
 
-  createNordnetSnapshot:
-    handler: apps/api/handlers/investments.create_nordnet_snapshot
-    timeout: 29
-    memorySize: 512
-    layers:
-      - ${self:custom.backendLayerArn}
-    events:
-      - httpApi:
-          path: /investments/nordnet/snapshots
-          method: POST
-          authorizer: cognitoJwt
-
-  listNordnetSnapshots:
-    handler: apps/api/handlers/investments.list_nordnet_snapshots
-    timeout: 29
-    memorySize: 512
-    layers:
-      - ${self:custom.backendLayerArn}
-    events:
-      - httpApi:
-          path: /investments/nordnet/snapshots
-          method: GET
-          authorizer: cognitoJwt
-
-  parseNordnetExport:
-    handler: apps/api/handlers/investments.parse_nordnet_export
-    timeout: 29
-    memorySize: 512
-    layers:
-      - ${self:custom.backendLayerArn}
-    events:
-      - httpApi:
-          path: /investments/nordnet/parse
-          method: POST
-          authorizer: cognitoJwt
-
   listInvestmentTransactions:
     handler: apps/api/handlers/investments.list_investment_transactions
     timeout: 29
@@ -797,18 +870,6 @@ functions:
     events:
       - httpApi:
           path: /investments/transactions
-          method: GET
-          authorizer: cognitoJwt
-
-  investmentMetrics:
-    handler: apps/api/handlers/investments.investment_metrics
-    timeout: 29
-    memorySize: 512
-    layers:
-      - ${self:custom.backendLayerArn}
-    events:
-      - httpApi:
-          path: /investments/metrics
           method: GET
           authorizer: cognitoJwt
 
@@ -824,14 +885,14 @@ functions:
           method: GET
           authorizer: cognitoJwt
 
-  syncInvestmentLedger:
-    handler: apps/api/handlers/investments.sync_investment_ledger
+  createInvestmentSnapshot:
+    handler: apps/api/handlers/investments.create_investment_snapshot
     timeout: 29
     memorySize: 512
     layers:
       - ${self:custom.backendLayerArn}
     events:
       - httpApi:
-          path: /investments/sync-ledger
+          path: /investments/snapshots
           method: POST
           authorizer: cognitoJwt

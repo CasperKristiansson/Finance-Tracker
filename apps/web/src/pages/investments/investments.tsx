@@ -29,6 +29,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Sheet,
   SheetContent,
@@ -48,20 +50,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageRoutes } from "@/data/routes";
 import { useInvestmentsApi } from "@/hooks/use-api";
+import { compactCurrency, currency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-const formatSek = (value: number) =>
-  value.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: 0,
-  });
+const formatSek = (value: number) => currency(value);
 
-const formatCompact = (value: number) =>
-  new Intl.NumberFormat("sv-SE", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
+const formatCompact = (value: number) => compactCurrency(value);
 
 const formatSignedSek = (value: number) =>
   `${value >= 0 ? "+" : "-"}${formatSek(Math.abs(value))}`;
@@ -127,6 +121,11 @@ const MetricRow: React.FC<{
 );
 
 type PortfolioPoint = { date: string; value: number; year: number };
+type ContributionPoint = {
+  period: string;
+  contributions: number;
+  marketGrowth: number | null;
+};
 
 const valueAtIsoDate = (series: PortfolioPoint[], isoDate: string) => {
   if (!series.length) return null;
@@ -150,24 +149,87 @@ const endOfMonthIso = (monthIso: string) => {
   return end.toISOString().slice(0, 10);
 };
 
+const groupContributionPoints = (
+  points: ContributionPoint[],
+  grouping: "month" | "quarter" | "year",
+) => {
+  if (grouping === "month") return points;
+
+  const buckets = new Map<
+    string,
+    {
+      period: string;
+      contributions: number;
+      marketGrowth: number;
+      marketGrowthCount: number;
+    }
+  >();
+
+  for (const point of points) {
+    const dt = new Date(`${point.period}T00:00:00Z`);
+    if (Number.isNaN(dt.getTime())) continue;
+    const year = dt.getUTCFullYear();
+    const key =
+      grouping === "year"
+        ? `${year}-01-01`
+        : `${year}-${String(Math.floor(dt.getUTCMonth() / 3) * 3 + 1).padStart(
+            2,
+            "0",
+          )}-01`;
+    const bucket = buckets.get(key) ?? {
+      period: key,
+      contributions: 0,
+      marketGrowth: 0,
+      marketGrowthCount: 0,
+    };
+    bucket.contributions += point.contributions;
+    if (typeof point.marketGrowth === "number") {
+      bucket.marketGrowth += point.marketGrowth;
+      bucket.marketGrowthCount += 1;
+    }
+    buckets.set(key, bucket);
+  }
+
+  return Array.from(buckets.values())
+    .map((bucket) => ({
+      period: bucket.period,
+      contributions: bucket.contributions,
+      marketGrowth: bucket.marketGrowthCount ? bucket.marketGrowth : null,
+    }))
+    .sort((a, b) => a.period.localeCompare(b.period));
+};
+
 export const Investments: React.FC = () => {
   const {
     overview,
     transactions,
     loading,
     error,
+    updateLoading,
+    updateError,
     fetchOverview,
     fetchTransactions: fetchInvestmentTransactions,
+    createSnapshot,
   } = useInvestmentsApi();
 
   const [portfolioWindow, setPortfolioWindow] = useState<"since" | "12m">(
     "since",
   );
+  const [contributionsGrouping, setContributionsGrouping] = useState<
+    "month" | "quarter" | "year"
+  >("month");
   const [accountWindow, setAccountWindow] = useState<"since" | "12m">("since");
   const [detailsAccountId, setDetailsAccountId] = useState<string | null>(null);
   const [cashflowDetailsMonth, setCashflowDetailsMonth] = useState<
     string | null
   >(null);
+  const [snapshotDialogOpen, setSnapshotDialogOpen] = useState(false);
+  const [snapshotBalance, setSnapshotBalance] = useState("");
+  const [snapshotDate, setSnapshotDate] = useState(() =>
+    new Date().toISOString().slice(0, 10),
+  );
+  const [snapshotNotes, setSnapshotNotes] = useState("");
+  const [snapshotSubmitted, setSnapshotSubmitted] = useState(false);
   const [cashflowsDialogScope, setCashflowsDialogScope] = useState<
     "portfolio" | "account" | null
   >(null);
@@ -230,7 +292,7 @@ export const Investments: React.FC = () => {
     };
   }, [portfolioCashflow, portfolioGrowth12m, portfolioGrowthSince]);
 
-  const contributionsVsGrowth = useMemo(() => {
+  const contributionsVsGrowth = useMemo<ContributionPoint[]>(() => {
     const cashflowSeries = overview?.portfolio.cashflow_series ?? [];
     if (!cashflowSeries.length) return [];
     return cashflowSeries
@@ -253,8 +315,42 @@ export const Investments: React.FC = () => {
           marketGrowth: valueChange - netContrib,
         };
       })
-      .filter((row) => Boolean(row.period));
+      .filter((row) => Boolean(row.period))
+      .sort((a, b) => a.period.localeCompare(b.period));
   }, [overview?.portfolio.cashflow_series, portfolioSeries]);
+
+  const contributionsVsGrowthGrouped = useMemo(
+    () => groupContributionPoints(contributionsVsGrowth, contributionsGrouping),
+    [contributionsGrouping, contributionsVsGrowth],
+  );
+
+  const contributionsGroupingLabel = useMemo(() => {
+    switch (contributionsGrouping) {
+      case "year":
+        return "Yearly";
+      case "quarter":
+        return "Quarterly";
+      default:
+        return "Monthly";
+    }
+  }, [contributionsGrouping]);
+
+  const formatContributionsTick = (value: string) => {
+    const dt = new Date(`${value}T00:00:00Z`);
+    if (Number.isNaN(dt.getTime())) return value;
+    if (contributionsGrouping === "year") {
+      return `${dt.getUTCFullYear()}`;
+    }
+    if (contributionsGrouping === "quarter") {
+      const quarter = Math.floor(dt.getUTCMonth() / 3) + 1;
+      const shortYear = String(dt.getUTCFullYear()).slice(2);
+      return `Q${quarter} '${shortYear}`;
+    }
+    return dt.toLocaleDateString("en-US", {
+      month: "short",
+      year: "2-digit",
+    });
+  };
 
   const accountSummaries = useMemo(() => {
     const accounts = overview?.accounts ?? [];
@@ -386,6 +482,28 @@ export const Investments: React.FC = () => {
     if (transactions.length) return;
     fetchInvestmentTransactions();
   }, [detailsAccountId, fetchInvestmentTransactions, transactions.length]);
+
+  useEffect(() => {
+    if (!snapshotDialogOpen || !selectedAccount) return;
+    setSnapshotBalance(selectedAccount.currentValue.toFixed(2));
+    setSnapshotDate(new Date().toISOString().slice(0, 10));
+    setSnapshotNotes("");
+    setSnapshotSubmitted(false);
+  }, [selectedAccount, snapshotDialogOpen]);
+
+  useEffect(() => {
+    if (!snapshotSubmitted) return;
+    if (updateLoading) return;
+    if (updateError) return;
+    setSnapshotDialogOpen(false);
+    setSnapshotSubmitted(false);
+  }, [snapshotSubmitted, updateError, updateLoading]);
+
+  const snapshotSubmitDisabled =
+    updateLoading ||
+    !selectedAccount ||
+    !snapshotDate ||
+    !snapshotBalance.trim();
 
   return (
     <MotionPage className="space-y-6">
@@ -705,15 +823,6 @@ export const Investments: React.FC = () => {
                               {dateLabel}
                               {row.description ? ` · ${row.description}` : ""}
                             </div>
-                            <Link
-                              to={`${PageRoutes.transactions}?search=${encodeURIComponent(
-                                row.transaction_id,
-                              )}`}
-                              className="mt-1 inline-block truncate font-mono text-[11px] text-slate-500 hover:text-slate-700"
-                              title={row.transaction_id}
-                            >
-                              {row.transaction_id}
-                            </Link>
                           </div>
                           <div
                             className={cn(
@@ -742,18 +851,42 @@ export const Investments: React.FC = () => {
       <StaggerWrap className="grid gap-4 lg:grid-cols-2">
         <motion.div variants={fadeInUp} {...subtleHover}>
           <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base font-semibold text-slate-900">
-                Contributions vs market growth
-              </CardTitle>
-              <p className="text-xs text-slate-500">
-                Monthly decomposition of value change.
-              </p>
+            <CardHeader className="flex flex-col gap-2 pb-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Contributions vs market growth
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  {contributionsGroupingLabel} decomposition of value change.
+                </p>
+              </div>
+              <Tabs
+                value={contributionsGrouping}
+                onValueChange={(value) =>
+                  setContributionsGrouping(
+                    value as "month" | "quarter" | "year",
+                  )
+                }
+                className="w-full sm:w-auto"
+              >
+                <TabsList className="grid w-full grid-cols-3 bg-slate-100 sm:w-auto">
+                  <TabsTrigger value="month" className="text-xs">
+                    Monthly
+                  </TabsTrigger>
+                  <TabsTrigger value="quarter" className="text-xs">
+                    Quarterly
+                  </TabsTrigger>
+                  <TabsTrigger value="year" className="text-xs">
+                    Yearly
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
             </CardHeader>
             <CardContent className="h-80">
               {isLoading ? (
                 <Skeleton className="h-full w-full" />
-              ) : portfolioSeries.length && contributionsVsGrowth.length ? (
+              ) : portfolioSeries.length &&
+                contributionsVsGrowthGrouped.length ? (
                 <ChartContainer
                   className="h-full w-full"
                   config={{
@@ -765,18 +898,13 @@ export const Investments: React.FC = () => {
                   }}
                 >
                   <BarChart
-                    data={contributionsVsGrowth}
+                    data={contributionsVsGrowthGrouped}
                     margin={{ left: 0, right: 0, top: 10 }}
                   >
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis
                       dataKey="period"
-                      tickFormatter={(value) =>
-                        new Date(value).toLocaleDateString("en-US", {
-                          month: "short",
-                          year: "2-digit",
-                        })
-                      }
+                      tickFormatter={(value) => formatContributionsTick(value)}
                       tickLine={false}
                       axisLine={false}
                     />
@@ -809,6 +937,7 @@ export const Investments: React.FC = () => {
                       radius={[4, 4, 0, 0]}
                       isAnimationActive={false}
                       onClick={(data) => {
+                        if (contributionsGrouping !== "month") return;
                         const period = String(data?.payload?.period ?? "");
                         if (!period) return;
                         setCashflowDetailsMonth(period);
@@ -821,6 +950,7 @@ export const Investments: React.FC = () => {
                       radius={[4, 4, 0, 0]}
                       isAnimationActive={false}
                       onClick={(data) => {
+                        if (contributionsGrouping !== "month") return;
                         const period = String(data?.payload?.period ?? "");
                         if (!period) return;
                         setCashflowDetailsMonth(period);
@@ -970,19 +1100,35 @@ export const Investments: React.FC = () => {
           {selectedAccount ? (
             <>
               <SheetHeader className="border-b border-slate-100">
-                <SheetTitle className="truncate text-lg">
-                  {selectedAccount.accountName}
-                </SheetTitle>
-                <SheetDescription className="mt-1 text-slate-600">
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium",
-                      freshnessBadge(selectedAccount.asOf).className,
-                    )}
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <SheetTitle className="truncate text-lg">
+                      {selectedAccount.accountName}
+                    </SheetTitle>
+                    <SheetDescription className="mt-1 text-slate-600">
+                      <span
+                        className={cn(
+                          "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium",
+                          freshnessBadge(selectedAccount.asOf).className,
+                        )}
+                      >
+                        {freshnessBadge(selectedAccount.asOf).label}
+                      </span>
+                      {selectedAccount.startDate ? (
+                        <span className="ml-2 text-xs text-slate-500">
+                          Since {selectedAccount.startDate}
+                        </span>
+                      ) : null}
+                    </SheetDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSnapshotDialogOpen(true)}
                   >
-                    {freshnessBadge(selectedAccount.asOf).label}
-                  </span>
-                </SheetDescription>
+                    Update balance
+                  </Button>
+                </div>
               </SheetHeader>
               <div className="flex-1 space-y-4 overflow-y-auto p-4">
                 <div className="grid grid-cols-2 gap-2">
@@ -1312,12 +1458,94 @@ export const Investments: React.FC = () => {
       </Sheet>
 
       <Dialog
+        open={snapshotDialogOpen}
+        onOpenChange={(open) => {
+          if (updateLoading) return;
+          setSnapshotDialogOpen(open);
+        }}
+      >
+        <DialogContent className="bg-white sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update investment balance</DialogTitle>
+            <DialogDescription className="text-slate-600">
+              Record the latest statement balance for this account.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="snapshot-date">As of date</Label>
+              <Input
+                id="snapshot-date"
+                type="date"
+                value={snapshotDate}
+                onChange={(e) => setSnapshotDate(e.target.value)}
+                disabled={updateLoading}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="snapshot-balance">Reported balance</Label>
+              <Input
+                id="snapshot-balance"
+                inputMode="decimal"
+                value={snapshotBalance}
+                onChange={(e) => setSnapshotBalance(e.target.value)}
+                placeholder={
+                  selectedAccount ? formatSek(selectedAccount.currentValue) : ""
+                }
+                disabled={updateLoading}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="snapshot-notes">Notes (optional)</Label>
+              <Input
+                id="snapshot-notes"
+                value={snapshotNotes}
+                onChange={(e) => setSnapshotNotes(e.target.value)}
+                placeholder="Statement upload, manual update, etc."
+                disabled={updateLoading}
+              />
+            </div>
+            {updateError ? (
+              <div className="text-sm text-rose-600">{updateError}</div>
+            ) : null}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setSnapshotDialogOpen(false)}
+                disabled={updateLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (!selectedAccount) return;
+                  createSnapshot({
+                    account_id: selectedAccount.accountId,
+                    snapshot_date: snapshotDate,
+                    balance: snapshotBalance.trim(),
+                    notes: snapshotNotes.trim() || null,
+                  });
+                  setSnapshotSubmitted(true);
+                }}
+                disabled={snapshotSubmitDisabled}
+              >
+                {updateLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
+                Save balance
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
         open={cashflowsDialogScope !== null}
         onOpenChange={(open) => {
           if (!open) setCashflowsDialogScope(null);
         }}
       >
-        <DialogContent className="bg-white sm:max-w-4xl">
+        <DialogContent className="max-h-[80vh] overflow-y-auto bg-white sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>{cashflowsDialogTitle}</DialogTitle>
             <DialogDescription className="text-slate-600">
@@ -1338,7 +1566,7 @@ export const Investments: React.FC = () => {
               </Link>
             </div>
             {cashflowsDialogItems.length ? (
-              <div className="max-h-[60vh] overflow-auto rounded-md border border-slate-100">
+              <div className="max-h-[60vh] overflow-y-auto rounded-md border border-slate-100">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1347,7 +1575,6 @@ export const Investments: React.FC = () => {
                       <TableHead>Description</TableHead>
                       <TableHead>Direction</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
-                      <TableHead className="text-right">Transaction</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1386,17 +1613,6 @@ export const Investments: React.FC = () => {
                           >
                             {isDeposit ? "+" : "-"}
                             {formatSek(amount)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Link
-                              to={`${PageRoutes.transactions}?search=${encodeURIComponent(
-                                row.transaction_id,
-                              )}`}
-                              className="font-mono text-[11px] text-slate-500 hover:text-slate-700"
-                              title={row.transaction_id}
-                            >
-                              {row.transaction_id}
-                            </Link>
                           </TableCell>
                         </TableRow>
                       );
@@ -1460,15 +1676,6 @@ export const Investments: React.FC = () => {
                           {dateLabel}
                           {row.description ? ` · ${row.description}` : ""}
                         </div>
-                        <Link
-                          to={`${PageRoutes.transactions}?search=${encodeURIComponent(
-                            row.transaction_id,
-                          )}`}
-                          className="mt-1 inline-block truncate font-mono text-[11px] text-slate-500 hover:text-slate-700"
-                          title={row.transaction_id}
-                        >
-                          {row.transaction_id}
-                        </Link>
                       </div>
                       <div
                         className={cn(

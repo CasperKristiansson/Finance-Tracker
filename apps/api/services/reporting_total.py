@@ -9,9 +9,10 @@ from decimal import Decimal
 from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict, cast
 from uuid import UUID
 
+from sqlalchemy import case, extract, func
 from sqlmodel import Session, select
 
-from ..models import Account
+from ..models import Account, Transaction, TransactionLeg
 from ..models.investment_snapshot import InvestmentSnapshot
 from ..repositories.reporting import ReportingRepository, TransactionAmountRow
 from ..shared import AccountType, TransactionType, coerce_decimal
@@ -282,15 +283,72 @@ def build_total_overview(
             life_src["total"] += inc
             life_src["transaction_count"] += 1
 
-        if account_id_list is None and row.transaction_type == TransactionType.TRANSFER:
-            desc = (row.description or "").lower()
-            amount = abs(coerce_decimal(row.amount))
-            if "transfer to investments" in desc:
-                contributions_by_year[year] += amount
-                contributions_lifetime += amount
-            elif "transfer from investments" in desc:
-                withdrawals_by_year[year] += amount
-                withdrawals_lifetime += amount
+    if account_id_list is None:
+        investment_account_ids = [
+            acc.id
+            for acc in accounts
+            if acc.account_type == AccountType.INVESTMENT and acc.id is not None
+        ]
+        if investment_account_ids:
+            noninv_tx_ids = (
+                select(cast(Any, TransactionLeg.transaction_id))
+                .join(Account, cast(Any, TransactionLeg.account_id) == cast(Any, Account.id))
+                .where(Account.account_type != AccountType.INVESTMENT)
+                .distinct()
+            ).subquery()
+
+            year_expr = cast(Any, extract("year", cast(Any, Transaction.occurred_at)))
+            stmt = (
+                select(
+                    year_expr.label("year"),
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (
+                                    cast(Any, TransactionLeg.amount) > 0,
+                                    cast(Any, TransactionLeg.amount),
+                                ),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    ).label("deposits"),
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (
+                                    cast(Any, TransactionLeg.amount) < 0,
+                                    -cast(Any, TransactionLeg.amount),
+                                ),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    ).label("withdrawals"),
+                )
+                .join(
+                    Transaction,
+                    cast(Any, TransactionLeg.transaction_id) == cast(Any, Transaction.id),
+                )
+                .where(
+                    cast(Any, TransactionLeg.account_id).in_(investment_account_ids),
+                    cast(Any, Transaction.occurred_at) < end,
+                    cast(Any, Transaction.transaction_type) != TransactionType.ADJUSTMENT,
+                    cast(Any, TransactionLeg.transaction_id).in_(
+                        select(cast(Any, noninv_tx_ids.c.transaction_id))
+                    ),
+                )
+                .group_by(year_expr)
+            )
+            for year, deposits, withdrawals in session.exec(stmt).all():
+                if year is None:
+                    continue
+                year_key = int(year)
+                contributions_by_year[year_key] += coerce_decimal(deposits or 0)
+                withdrawals_by_year[year_key] += coerce_decimal(withdrawals or 0)
+
+            contributions_lifetime = sum(contributions_by_year.values(), Decimal("0"))
+            withdrawals_lifetime = sum(withdrawals_by_year.values(), Decimal("0"))
 
     years_sorted = sorted(yearly.keys())
     monthly_income_expense = [

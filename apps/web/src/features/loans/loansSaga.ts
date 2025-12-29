@@ -7,10 +7,19 @@ import {
   setLoanError,
   setLoanEvents,
   setLoanLoading,
+  setLoanPortfolioSeries,
   setLoanSchedule,
 } from "@/features/loans/loansSlice";
-import type { LoanEventRead, LoanScheduleRead } from "@/types/api";
-import { loanEventsResponseSchema, loanScheduleSchema } from "@/types/schemas";
+import type {
+  LoanEventRead,
+  LoanPortfolioSeriesResponse,
+  LoanScheduleRead,
+} from "@/types/api";
+import {
+  loanEventsResponseSchema,
+  loanPortfolioSeriesResponseSchema,
+  loanScheduleSchema,
+} from "@/types/schemas";
 
 export const FetchLoanSchedule = createAction<{
   accountId: string;
@@ -23,6 +32,11 @@ export const FetchLoanEvents = createAction<{
   limit?: number;
   offset?: number;
 }>("loans/fetchEvents");
+
+export const FetchLoanPortfolioSeries = createAction<{
+  startDate?: string;
+  endDate?: string;
+}>("loans/fetchPortfolioSeries");
 
 function* handleFetchSchedule(action: ReturnType<typeof FetchLoanSchedule>) {
   const { accountId, asOfDate, periods } = action.payload;
@@ -104,7 +118,45 @@ function* handleFetchEvents(action: ReturnType<typeof FetchLoanEvents>) {
   }
 }
 
+function* handleFetchPortfolioSeries(
+  action: ReturnType<typeof FetchLoanPortfolioSeries>,
+) {
+  const { startDate, endDate } = action.payload;
+  const loadingKey = "loan-portfolio-series";
+  yield put(setLoanLoading({ key: loadingKey, isLoading: true }));
+
+  try {
+    const query = {
+      ...(startDate ? { start_date: startDate } : {}),
+      ...(endDate ? { end_date: endDate } : {}),
+    };
+
+    const response: LoanPortfolioSeriesResponse = yield call(
+      callApiWithAuth,
+      {
+        path: "/loans/events/series",
+        query,
+        schema: loanPortfolioSeriesResponseSchema,
+      },
+      { loadingKey },
+    );
+
+    yield put(setLoanPortfolioSeries({ series: response.series }));
+  } catch (error) {
+    yield put(
+      setLoanError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load loan portfolio series",
+      ),
+    );
+  } finally {
+    yield put(setLoanLoading({ key: loadingKey, isLoading: false }));
+  }
+}
+
 export function* LoansSaga() {
   yield takeLatest(FetchLoanSchedule.type, handleFetchSchedule);
   yield takeLatest(FetchLoanEvents.type, handleFetchEvents);
+  yield takeLatest(FetchLoanPortfolioSeries.type, handleFetchPortfolioSeries);
 }

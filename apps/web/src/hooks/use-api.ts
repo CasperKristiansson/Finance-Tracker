@@ -40,6 +40,8 @@ import {
 import {
   CommitImports,
   PreviewImports,
+  FetchStoredImportFiles,
+  DownloadImportFile,
   ResetImports,
   SuggestImportCategories,
 } from "@/features/imports/importsSaga";
@@ -51,30 +53,30 @@ import {
   selectImportsSuggesting,
   selectImportsSuggestionsError,
   selectImportsSaving,
+  selectStoredImportFiles,
+  selectStoredImportFilesLoading,
+  selectStoredImportFilesError,
 } from "@/features/imports/importsSlice";
 import {
-  FetchInvestmentSnapshots,
   FetchInvestmentTransactions,
-  FetchInvestmentMetrics,
   FetchInvestmentOverview,
-  ParseNordnetExport,
-  SaveNordnetSnapshot,
-  ClearDraft as ClearInvestmentDraft,
+  CreateInvestmentSnapshot,
 } from "@/features/investments/investmentsSaga";
 import {
   selectInvestmentsState,
-  selectParsedResults,
-  selectParseLoading,
-  selectLastSavedClientId,
   selectInvestmentTransactions,
-  selectInvestmentMetrics,
   selectInvestmentOverview,
 } from "@/features/investments/investmentsSlice";
-import { FetchLoanEvents, FetchLoanSchedule } from "@/features/loans/loansSaga";
+import {
+  FetchLoanEvents,
+  FetchLoanPortfolioSeries,
+  FetchLoanSchedule,
+} from "@/features/loans/loansSaga";
 import {
   selectLoanError,
   selectLoanEvents,
   selectLoanLoading,
+  selectLoanPortfolioSeries,
   selectLoanSchedule,
 } from "@/features/loans/loansSlice";
 import {
@@ -97,7 +99,11 @@ import {
   selectYearlyReport,
   type ReportFilters,
 } from "@/features/reports/reportsSlice";
-import { LoadSettings, SaveSettings } from "@/features/settings/settingsSaga";
+import {
+  LoadSettings,
+  RunBackup,
+  SaveSettings,
+} from "@/features/settings/settingsSaga";
 import {
   selectFirstName,
   selectLastName,
@@ -106,8 +112,11 @@ import {
   selectSettingsLoading,
   selectSettingsSaving,
   selectSettingsState,
+  selectCurrencyCode,
+  selectBackingUp,
   setFirstName,
   setLastName,
+  setCurrencyCode,
 } from "@/features/settings/settingsSlice";
 import {
   FetchRecentTransactions,
@@ -136,7 +145,6 @@ import type {
   ImportPreviewResponse,
   TransactionCreate,
   TransactionUpdateRequest,
-  NordnetSnapshotCreateRequest,
 } from "@/types/api";
 
 export const useAccountsApi = () => {
@@ -297,25 +305,11 @@ export const useTransactionsApi = () => {
 export const useInvestmentsApi = () => {
   const dispatch = useAppDispatch();
   const state = useAppSelector(selectInvestmentsState);
-  const parseLoading = useAppSelector(selectParseLoading);
-  const parsedResults = useAppSelector(selectParsedResults);
-  const lastSavedClientId = useAppSelector(selectLastSavedClientId);
   const transactions = useAppSelector(selectInvestmentTransactions);
-  const metrics = useAppSelector(selectInvestmentMetrics);
   const overview = useAppSelector(selectInvestmentOverview);
-
-  const fetchSnapshots = useCallback(
-    () => dispatch(FetchInvestmentSnapshots()),
-    [dispatch],
-  );
 
   const fetchTransactions = useCallback(
     () => dispatch(FetchInvestmentTransactions()),
-    [dispatch],
-  );
-
-  const fetchMetrics = useCallback(
-    () => dispatch(FetchInvestmentMetrics()),
     [dispatch],
   );
 
@@ -324,48 +318,19 @@ export const useInvestmentsApi = () => {
     [dispatch],
   );
 
-  const parseExport = useCallback(
-    (
-      clientId: string,
-      raw_text: string,
-      manual_payload?: Record<string, unknown>,
-    ) =>
-      dispatch(
-        ParseNordnetExport({
-          clientId,
-          raw_text,
-          manual_payload,
-        }),
-      ),
-    [dispatch],
-  );
-
-  const saveSnapshot = useCallback(
-    (payload: NordnetSnapshotCreateRequest & { clientId?: string }) =>
-      dispatch(SaveNordnetSnapshot(payload)),
-    [dispatch],
-  );
-
-  const clearDraft = useCallback(
-    (clientId: string) => dispatch(ClearInvestmentDraft({ clientId })),
+  const createSnapshot = useCallback(
+    (data: Parameters<typeof CreateInvestmentSnapshot>[0]["data"]) =>
+      dispatch(CreateInvestmentSnapshot({ data })),
     [dispatch],
   );
 
   return {
     ...state,
-    parseLoading,
-    parsedResults,
-    lastSavedClientId,
     transactions,
-    metrics,
     overview,
-    fetchSnapshots,
     fetchTransactions,
-    fetchMetrics,
     fetchOverview,
-    parseExport,
-    saveSnapshot,
-    clearDraft,
+    createSnapshot,
   };
 };
 
@@ -444,6 +409,7 @@ export const useLoansApi = () => {
   const dispatch = useAppDispatch();
   const schedules = useAppSelector(selectLoanSchedule);
   const events = useAppSelector(selectLoanEvents);
+  const portfolioSeries = useAppSelector(selectLoanPortfolioSeries);
   const loading = useAppSelector(selectLoanLoading);
   const error = useAppSelector(selectLoanError);
 
@@ -461,13 +427,22 @@ export const useLoansApi = () => {
     [dispatch],
   );
 
+  const fetchLoanPortfolioSeries = useCallback(
+    (params: { startDate?: string; endDate?: string } = {}) => {
+      dispatch(FetchLoanPortfolioSeries(params));
+    },
+    [dispatch],
+  );
+
   return {
     schedules,
     events,
+    portfolioSeries,
     loading,
     error,
     fetchLoanSchedule,
     fetchLoanEvents,
+    fetchLoanPortfolioSeries,
   };
 };
 
@@ -480,6 +455,9 @@ export const useImportsApi = () => {
   const suggestions = useAppSelector(selectImportSuggestions);
   const suggestionsError = useAppSelector(selectImportsSuggestionsError);
   const error = useAppSelector(selectImportsError);
+  const storedFiles = useAppSelector(selectStoredImportFiles);
+  const storedFilesLoading = useAppSelector(selectStoredImportFilesLoading);
+  const storedFilesError = useAppSelector(selectStoredImportFilesError);
 
   const previewImports = useCallback(
     (payload: ImportPreviewRequest) => dispatch(PreviewImports(payload)),
@@ -499,6 +477,16 @@ export const useImportsApi = () => {
     [dispatch],
   );
 
+  const fetchStoredFiles = useCallback(
+    () => dispatch(FetchStoredImportFiles()),
+    [dispatch],
+  );
+
+  const downloadImportFile = useCallback(
+    (fileId: string) => dispatch(DownloadImportFile({ fileId })),
+    [dispatch],
+  );
+
   return {
     preview,
     loading,
@@ -507,10 +495,15 @@ export const useImportsApi = () => {
     suggestions,
     suggestionsError,
     error,
+    storedFiles,
+    storedFilesLoading,
+    storedFilesError,
     previewImports,
     commitImports,
     suggestCategories,
     resetImports,
+    fetchStoredFiles,
+    downloadImportFile,
   };
 };
 
@@ -562,8 +555,10 @@ export const useSettings = () => {
   const state = useAppSelector(selectSettingsState);
   const firstName = useAppSelector(selectFirstName);
   const lastName = useAppSelector(selectLastName);
+  const currencyCode = useAppSelector(selectCurrencyCode);
   const loading = useAppSelector(selectSettingsLoading);
   const saving = useAppSelector(selectSettingsSaving);
+  const backingUp = useAppSelector(selectBackingUp);
   const error = useAppSelector(selectSettingsError);
   const lastSavedAt = useAppSelector(selectSettingsLastSavedAt);
 
@@ -585,17 +580,30 @@ export const useSettings = () => {
     [dispatch],
   );
 
+  const changeCurrencyCode = useCallback(
+    (value: string | undefined) => dispatch(setCurrencyCode(value)),
+    [dispatch],
+  );
+
+  const runBackup = useCallback(() => {
+    dispatch(RunBackup());
+  }, [dispatch]);
+
   return {
     ...state,
     firstName,
     lastName,
+    currencyCode,
     loading,
     saving,
+    backingUp,
     error,
     lastSavedAt,
     loadSettings,
     saveSettings,
+    runBackup,
     changeFirstName,
     changeLastName,
+    changeCurrencyCode,
   };
 };

@@ -48,6 +48,7 @@ import {
 import { selectIsDemo, selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
+import { currency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { TaxEventType } from "@/types/api";
 import type {
@@ -64,15 +65,8 @@ import {
   taxTotalSummarySchema,
 } from "@/types/schemas";
 
-const currency = (value: number) =>
-  value.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: 0,
-  });
-
 const monthLabel = (year: number, month: number) =>
-  new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("sv-SE", {
+  formatDate(Date.UTC(year, month - 1, 1), {
     month: "short",
   });
 
@@ -85,7 +79,7 @@ const toNumber = (value: unknown) => {
 };
 
 const formatDisplayDate = (iso: string) =>
-  new Date(iso).toLocaleDateString("sv-SE", {
+  formatDate(iso, {
     year: "numeric",
     month: "short",
     day: "numeric",

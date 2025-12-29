@@ -1,26 +1,13 @@
-export const currency = (value: number) =>
-  value.toLocaleString("sv-SE", {
-    style: "currency",
-    currency: "SEK",
-    maximumFractionDigits: 0,
-  });
-
-export const compactCurrency = (value: number) =>
-  new Intl.NumberFormat("sv-SE", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
-
-export const monthLabel = (dateString: string) =>
-  new Date(dateString).toLocaleDateString("sv-SE", { month: "short" });
-
-export const monthName = (year: number, month: number) =>
-  new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("sv-SE", {
-    month: "long",
-  });
-
-export const percent = (value: number) =>
-  `${value.toLocaleString("sv-SE", { maximumFractionDigits: 0 })}%`;
+export {
+  compactCurrency,
+  currency,
+  formatDate,
+  formatDateTime,
+  monthAndYear,
+  monthLabel,
+  monthName,
+  percent,
+} from "@/lib/format";
 
 export const median = (values: number[]) => {
   if (!values.length) return 0;
@@ -83,3 +70,53 @@ export const heatColor = (rgb: string, value: number, max: number) => {
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+export type CategoryConcentration = {
+  total: number;
+  topSharePct: number;
+  diversityScore: number;
+  topCategories: Array<{
+    name: string;
+    total: number;
+    sharePct: number;
+  }>;
+};
+
+export const computeCategoryConcentration = (
+  rows: Array<{ name: string; total: number }>,
+  topN = 3,
+): CategoryConcentration | null => {
+  if (!rows.length) return null;
+  const normalized = rows.map((row) => ({
+    name: row.name,
+    total: Math.abs(row.total),
+  }));
+  const total = normalized.reduce((sum, row) => sum + row.total, 0);
+  if (total <= 0) return null;
+
+  const topCategories = normalized
+    .filter((row) => row.name !== "Other")
+    .sort((a, b) => b.total - a.total)
+    .slice(0, topN)
+    .map((row) => ({
+      name: row.name,
+      total: row.total,
+      sharePct: (row.total / total) * 100,
+    }));
+
+  const topSharePct = topCategories.reduce((sum, row) => sum + row.sharePct, 0);
+
+  const concentration = normalized.reduce((sum, row) => {
+    if (row.total <= 0) return sum;
+    const share = row.total / total;
+    return sum + share * share;
+  }, 0);
+  const diversityScore = Math.max(0, (1 - concentration) * 100);
+
+  return {
+    total,
+    topSharePct,
+    diversityScore,
+    topCategories,
+  };
+};

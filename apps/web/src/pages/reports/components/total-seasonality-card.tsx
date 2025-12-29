@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from "react";
 
+import { EmptyState } from "@/components/composed/empty-state";
+import { LoadingCard } from "@/components/composed/loading-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 
 import type { TotalHeatmapDialogState } from "../reports-types";
 import { currency, heatColor } from "../reports-utils";
@@ -51,11 +52,9 @@ export const TotalSeasonalityCard: React.FC<{
       </CardHeader>
       <CardContent className="overflow-auto">
         {!totalOverviewLoaded ? (
-          <Skeleton className="h-56 w-full" />
+          <LoadingCard className="h-56" lines={10} />
         ) : !heatmaps ? (
-          <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
-            No seasonality data yet.
-          </div>
+          <EmptyState className="h-56" title="No seasonality data yet." />
         ) : (
           <div
             className="min-w-[560px] space-y-3"
