@@ -1,7 +1,9 @@
 import type {
   AccountListResponse,
   BudgetProgressListResponse,
+  CashflowForecastResponse,
   CategoryListResponse,
+  GoalListResponse,
   ImportCategorySuggestResponse,
   ImportPreviewResponse,
   InvestmentHoldingRead,
@@ -13,9 +15,17 @@ import type {
   LoanScheduleRead,
   MonthlyReportEntry,
   NetWorthHistoryResponse,
+  NetWorthProjectionResponse,
   QuarterlyReportEntry,
+  SubscriptionSummaryResponse,
+  TaxEventListResponse,
+  TaxSummaryResponse,
+  TaxTotalSummaryResponse,
   TotalReportRead,
+  TotalOverviewResponse,
   TransactionListResponse,
+  YearlyCategoryDetailResponse,
+  YearlyOverviewResponse,
   YearlyReportEntry,
 } from "@/types/api";
 import {
@@ -24,11 +34,94 @@ import {
   CategoryType,
   InterestCompound,
   LoanEventType,
+  TaxEventType,
   TransactionType,
 } from "@/types/enums";
 
 const formatDate = (date: string) => new Date(date).toISOString();
 const nowIso = new Date().toISOString();
+const demoYear = new Date().getFullYear();
+const pad2 = (value: number) => String(value).padStart(2, "0");
+const monthIso = (year: number, monthIndex: number) =>
+  new Date(Date.UTC(year, monthIndex, 1)).toISOString();
+const sum = (values: number[]) =>
+  values.reduce((total, value) => total + value, 0);
+const toMoney = (value: number) => value.toFixed(2);
+const scaleSeries = (values: number[], factor: number) =>
+  values.map((value) => Math.round(value * factor));
+const demoMonthIndex = new Date().getMonth();
+const demoMonth = (offset: number) =>
+  pad2(Math.max(0, Math.min(11, demoMonthIndex + offset)) + 1);
+const demoDate = (offset: number, day: number) =>
+  formatDate(`${demoYear}-${demoMonth(offset)}-${pad2(day)}`);
+
+const buildLinearSeries = (start: number, end: number, count: number) => {
+  if (count <= 1) return [Math.round(end)];
+  const step = (end - start) / (count - 1);
+  return Array.from({ length: count }, (_, idx) =>
+    Math.round(start + step * idx),
+  );
+};
+
+const buildMonthlyReport = (
+  year: number,
+  income: number[],
+  expense: number[],
+): MonthlyReportEntry[] =>
+  income.map((value, idx) => {
+    const exp = expense[idx] ?? 0;
+    return {
+      period: `${year}-${pad2(idx + 1)}`,
+      income: toMoney(value),
+      expense: toMoney(exp),
+      net: toMoney(value - exp),
+    };
+  });
+
+const buildQuarterlyReport = (
+  year: number,
+  monthly: MonthlyReportEntry[],
+): QuarterlyReportEntry[] => {
+  const quarters = Array.from({ length: 4 }, (_, idx) => idx + 1);
+  return quarters.map((quarter) => {
+    const slice = monthly.slice((quarter - 1) * 3, quarter * 3);
+    const income = slice.reduce((acc, row) => acc + Number(row.income), 0);
+    const expense = slice.reduce((acc, row) => acc + Number(row.expense), 0);
+    return {
+      year,
+      quarter,
+      income: toMoney(income),
+      expense: toMoney(expense),
+      net: toMoney(income - expense),
+    };
+  });
+};
+
+const buildYearlyReport = (
+  years: number[],
+  currentIncome: number,
+  currentExpense: number,
+): YearlyReportEntry[] =>
+  years.map((year, idx) => {
+    if (year === demoYear) {
+      return {
+        year,
+        income: toMoney(currentIncome),
+        expense: toMoney(currentExpense),
+        net: toMoney(currentIncome - currentExpense),
+      };
+    }
+    const incomeFactor = 0.72 + idx * 0.05;
+    const expenseFactor = 0.64 + idx * 0.045;
+    const income = Math.round(currentIncome * incomeFactor);
+    const expense = Math.round(currentExpense * expenseFactor);
+    return {
+      year,
+      income: toMoney(income),
+      expense: toMoney(expense),
+      net: toMoney(income - expense),
+    };
+  });
 
 export const demoCategories: CategoryListResponse = {
   categories: [
@@ -252,10 +345,10 @@ export const demoTransactionsResponse: TransactionListResponse = {
       description: "Monthly salary and bonus",
       notes: null,
       external_id: "payroll-2024-12",
-      occurred_at: formatDate("2024-12-28"),
-      posted_at: formatDate("2024-12-28"),
-      created_at: formatDate("2024-12-28"),
-      updated_at: formatDate("2024-12-28"),
+      occurred_at: demoDate(0, 26),
+      posted_at: demoDate(0, 26),
+      created_at: demoDate(0, 26),
+      updated_at: demoDate(0, 26),
       legs: [
         {
           id: "leg-salary-checking",
@@ -277,10 +370,10 @@ export const demoTransactionsResponse: TransactionListResponse = {
       description: "Mortgage Payment - December",
       notes: null,
       external_id: "mortgage-2024-12",
-      occurred_at: formatDate("2024-12-01"),
-      posted_at: formatDate("2024-12-01"),
-      created_at: formatDate("2024-12-01"),
-      updated_at: formatDate("2024-12-01"),
+      occurred_at: demoDate(0, 1),
+      posted_at: demoDate(0, 1),
+      created_at: demoDate(0, 1),
+      updated_at: demoDate(0, 1),
       legs: [
         {
           id: "leg-mortgage-checking",
@@ -302,10 +395,10 @@ export const demoTransactionsResponse: TransactionListResponse = {
       description: "Groceries - Local Market",
       notes: "Weekly essentials",
       external_id: "groceries-2024-12-22",
-      occurred_at: formatDate("2024-12-22"),
-      posted_at: formatDate("2024-12-22"),
-      created_at: formatDate("2024-12-22"),
-      updated_at: formatDate("2024-12-22"),
+      occurred_at: demoDate(0, 12),
+      posted_at: demoDate(0, 12),
+      created_at: demoDate(0, 12),
+      updated_at: demoDate(0, 12),
       legs: [
         {
           id: "leg-groceries-checking",
@@ -322,10 +415,10 @@ export const demoTransactionsResponse: TransactionListResponse = {
       description: "Transfer to savings",
       notes: "Monthly surplus",
       external_id: "transfer-2024-12-29",
-      occurred_at: formatDate("2024-12-29"),
-      posted_at: formatDate("2024-12-29"),
-      created_at: formatDate("2024-12-29"),
-      updated_at: formatDate("2024-12-29"),
+      occurred_at: demoDate(0, 27),
+      posted_at: demoDate(0, 27),
+      created_at: demoDate(0, 27),
+      updated_at: demoDate(0, 27),
       legs: [
         {
           id: "leg-transfer-out",
@@ -347,10 +440,10 @@ export const demoTransactionsResponse: TransactionListResponse = {
       description: "Weekend getaway",
       notes: "Train + hotel",
       external_id: "travel-2024-12-15",
-      occurred_at: formatDate("2024-12-15"),
-      posted_at: formatDate("2024-12-15"),
-      created_at: formatDate("2024-12-15"),
-      updated_at: formatDate("2024-12-15"),
+      occurred_at: demoDate(-1, 18),
+      posted_at: demoDate(-1, 18),
+      created_at: demoDate(-1, 18),
+      updated_at: demoDate(-1, 18),
       legs: [
         { id: "leg-travel-card", account_id: "acc-card", amount: "-1850.45" },
       ],
@@ -365,6 +458,58 @@ export const demoTransactionsResponse: TransactionListResponse = {
   },
 };
 
+const demoMonthlyIncome = [
+  118000, 120000, 122000, 125000, 128000, 130000, 133000, 135000, 138000,
+  140000, 145000, 155000,
+];
+const demoMonthlyExpense = [
+  72000, 74000, 76000, 78000, 80000, 82000, 85000, 83000, 86000, 87000, 89000,
+  92000,
+];
+const demoMonthlyIncomePrev = scaleSeries(demoMonthlyIncome, 0.92);
+const demoMonthlyExpensePrev = scaleSeries(demoMonthlyExpense, 0.9);
+const demoMonthlyReport = buildMonthlyReport(
+  demoYear,
+  demoMonthlyIncome,
+  demoMonthlyExpense,
+);
+const demoMonthlyReportPrev = buildMonthlyReport(
+  demoYear - 1,
+  demoMonthlyIncomePrev,
+  demoMonthlyExpensePrev,
+);
+const demoQuarterlyReport = buildQuarterlyReport(demoYear, demoMonthlyReport);
+const demoYears = Array.from({ length: 7 }, (_, idx) => demoYear - 6 + idx);
+const demoYearlyReport = buildYearlyReport(
+  demoYears,
+  sum(demoMonthlyIncome),
+  sum(demoMonthlyExpense),
+);
+const demoTotalIncome = sum(demoYearlyReport.map((row) => Number(row.income)));
+const demoTotalExpense = sum(
+  demoYearlyReport.map((row) => Number(row.expense)),
+);
+const demoNetWorthPoints = (() => {
+  let netWorth = 900000;
+  return demoYearlyReport.map((row) => {
+    netWorth += Number(row.net) * 0.8;
+    return { period: `${row.year}-12`, net_worth: toMoney(netWorth) };
+  });
+})();
+const demoNetWorthByYear = new Map<number, number>(
+  demoNetWorthPoints.map((point) => [
+    Number(point.period.slice(0, 4)),
+    Number(point.net_worth),
+  ]),
+);
+
+const periodToDate = (period: string) => {
+  const [year, month] = period.split("-");
+  const monthIndex = Number(month) - 1;
+  if (!year || !Number.isFinite(monthIndex)) return nowIso;
+  return monthIso(Number(year), monthIndex);
+};
+
 export const demoReportPayloads: {
   monthly: MonthlyReportEntry[];
   yearly: YearlyReportEntry[];
@@ -372,102 +517,17 @@ export const demoReportPayloads: {
   total: TotalReportRead;
   netWorth: NetWorthHistoryResponse;
 } = {
-  monthly: [
-    {
-      period: "2024-10",
-      income: "140000.00",
-      expense: "-86000.32",
-      net: "54000.00",
-    },
-    {
-      period: "2024-11",
-      income: "138500.00",
-      expense: "-89520.88",
-      net: "49000.00",
-    },
-    {
-      period: "2024-12",
-      income: "152000.00",
-      expense: "-90220.18",
-      net: "61800.00",
-    },
-  ],
-  yearly: [
-    {
-      year: 2018,
-      income: "820000.00",
-      expense: "-500000.00",
-      net: "320000.00",
-    },
-    {
-      year: 2019,
-      income: "900000.00",
-      expense: "-540000.00",
-      net: "360000.00",
-    },
-    {
-      year: 2020,
-      income: "980000.00",
-      expense: "-620000.00",
-      net: "360000.00",
-    },
-    {
-      year: 2021,
-      income: "1120000.00",
-      expense: "-690000.00",
-      net: "430000.00",
-    },
-    {
-      year: 2022,
-      income: "1240000.00",
-      expense: "-800000.00",
-      net: "440000.00",
-    },
-    {
-      year: 2023,
-      income: "1350000.00",
-      expense: "-880000.00",
-      net: "470000.00",
-    },
-    {
-      year: 2024,
-      income: "1500000.00",
-      expense: "-950000.00",
-      net: "550000.00",
-    },
-  ],
-  quarterly: [
-    {
-      year: 2024,
-      quarter: 3,
-      income: "400000.00",
-      expense: "-246000.00",
-      net: "154000.00",
-    },
-    {
-      year: 2024,
-      quarter: 4,
-      income: "450000.00",
-      expense: "-260000.00",
-      net: "190000.00",
-    },
-  ],
+  monthly: demoMonthlyReport,
+  yearly: demoYearlyReport,
+  quarterly: demoQuarterlyReport,
   total: {
-    income: "8910000.00",
-    expense: "-5000000.00",
-    net: "3910000.00",
+    income: toMoney(demoTotalIncome),
+    expense: toMoney(demoTotalExpense),
+    net: toMoney(demoTotalIncome - demoTotalExpense),
     generated_at: nowIso,
   },
   netWorth: {
-    points: [
-      { period: "2018-12", net_worth: "800000.00" },
-      { period: "2019-12", net_worth: "1200000.00" },
-      { period: "2020-12", net_worth: "1650000.00" },
-      { period: "2021-12", net_worth: "2300000.00" },
-      { period: "2022-12", net_worth: "2950000.00" },
-      { period: "2023-12", net_worth: "3600000.00" },
-      { period: "2024-12", net_worth: "4800000.00" },
-    ],
+    points: demoNetWorthPoints,
   },
 };
 
