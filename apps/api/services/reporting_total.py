@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict, cast
 from uuid import UUID
 
 from sqlalchemy import case, extract, func
+from sqlalchemy import select as sa_select
 from sqlmodel import Session, select
 
 from ..models import Account, Transaction, TransactionLeg
@@ -333,7 +334,9 @@ def build_total_overview(
                 .where(
                     cast(Any, TransactionLeg.account_id).in_(investment_account_ids),
                     cast(Any, Transaction.occurred_at) < end,
-                    cast(Any, Transaction.transaction_type) != TransactionType.ADJUSTMENT,
+                    cast(Any, Transaction.transaction_type).notin_(
+                        [TransactionType.ADJUSTMENT, TransactionType.INVESTMENT_EVENT]
+                    ),
                     cast(Any, TransactionLeg.transaction_id).in_(
                         select(cast(Any, noninv_tx_ids.c.transaction_id))
                     ),
@@ -709,24 +712,64 @@ def build_total_overview(
         )
         investment_names = {acc.name for acc in investment_accounts}
 
-        latest_snapshot = session.exec(
-            select(InvestmentSnapshot)
-            .where(InvestmentSnapshot.user_id == user_id)
-            .where(cast(Any, InvestmentSnapshot.snapshot_date) <= as_of)
-            .order_by(cast(Any, InvestmentSnapshot.snapshot_date).desc())
-            .limit(1)
-        ).first()
         accounts_latest: List[InvestmentAccountValue] = []
-        if latest_snapshot:
-            accounts_raw = cast(dict[str, object], latest_snapshot.parsed_payload or {}).get(
-                "accounts"
+        investment_name_map = {name.strip().lower(): name for name in investment_names}
+        snapshot_statement: Any = sa_select(
+            cast(Any, InvestmentSnapshot.snapshot_date),
+            cast(Any, InvestmentSnapshot.account_name),
+            cast(Any, InvestmentSnapshot.portfolio_value),
+            cast(Any, InvestmentSnapshot.parsed_payload),
+            cast(Any, InvestmentSnapshot.cleaned_payload),
+            cast(Any, InvestmentSnapshot.created_at),
+            cast(Any, InvestmentSnapshot.updated_at),
+        )
+        snapshot_statement = (
+            snapshot_statement.where(InvestmentSnapshot.user_id == user_id)
+            .where(cast(Any, InvestmentSnapshot.snapshot_date) <= as_of)
+            .order_by(
+                cast(Any, InvestmentSnapshot.snapshot_date).asc(),
+                cast(Any, InvestmentSnapshot.created_at).asc(),
             )
-            if isinstance(accounts_raw, dict):
-                for key, value in accounts_raw.items():
-                    if isinstance(key, str) and key in investment_names:
-                        accounts_latest.append(
-                            {"account_name": key, "value": coerce_decimal(value)}
-                        )
+        )
+        snapshot_rows = session.exec(snapshot_statement).all()
+
+        latest_by_name: Dict[str, Decimal] = {}
+        for (
+            _snapshot_date,
+            account_name,
+            portfolio_value,
+            parsed_payload,
+            cleaned_payload,
+            _created_at,
+            _updated_at,
+        ) in snapshot_rows:
+            payload: dict[str, Any] = {}
+            if isinstance(cleaned_payload, dict):
+                payload = cleaned_payload
+            elif isinstance(parsed_payload, dict):
+                payload = parsed_payload
+
+            accounts_payload = payload.get("accounts") if isinstance(payload, dict) else None
+            if isinstance(accounts_payload, dict):
+                for key, value in accounts_payload.items():
+                    normalized = str(key).strip().lower()
+                    if normalized not in investment_name_map:
+                        continue
+                    latest_by_name[normalized] = coerce_decimal(value)
+                continue
+
+            if account_name and portfolio_value is not None:
+                normalized = str(account_name).strip().lower()
+                if normalized in investment_name_map:
+                    latest_by_name[normalized] = coerce_decimal(portfolio_value)
+
+        for normalized, display_name in investment_name_map.items():
+            accounts_latest.append(
+                {
+                    "account_name": display_name,
+                    "value": latest_by_name.get(normalized, Decimal("0")),
+                }
+            )
         accounts_latest.sort(key=lambda item: item["value"], reverse=True)
 
         year_set = {day.year for day, _value in snap_rows}

@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, TypedDict, cast
 from uuid import UUID
 
 from sqlalchemy import case, func
+from sqlalchemy import select as sa_select
 from sqlmodel import Session, select
 
 from ..models import Account, Transaction, TransactionLeg
@@ -69,6 +70,18 @@ def build_yearly_overview_enhancements(
             if value is not None:
                 last = value
         return last if last is not None else Decimal("0")
+
+    def _portfolio_value_at(
+        *,
+        snapshots: List[Tuple[date, Dict[str, Decimal]]],
+        target: date,
+    ) -> Decimal:
+        latest: Dict[str, Decimal] = {}
+        for snapshot_date, values in snapshots:
+            if snapshot_date > target:
+                break
+            latest.update(values)
+        return sum(latest.values(), Decimal("0"))
 
     income_sources: Dict[str, SourceBucket] = {}
     expense_sources: Dict[str, SourceBucket] = {}
@@ -137,13 +150,17 @@ def build_yearly_overview_enhancements(
     accounts = list(session.exec(accounts_statement).all())
     accounts = [acc for acc in accounts if acc.name not in {"Offset", "Unassigned"}]
 
+    snapshot_statement: Any = sa_select(
+        cast(Any, InvestmentSnapshot.snapshot_date),
+        cast(Any, InvestmentSnapshot.account_name),
+        cast(Any, InvestmentSnapshot.portfolio_value),
+        cast(Any, InvestmentSnapshot.parsed_payload),
+        cast(Any, InvestmentSnapshot.cleaned_payload),
+        cast(Any, InvestmentSnapshot.created_at),
+        cast(Any, InvestmentSnapshot.updated_at),
+    )
     snapshot_statement = (
-        select(
-            cast(Any, InvestmentSnapshot.snapshot_date),
-            cast(Any, InvestmentSnapshot.parsed_payload),
-            cast(Any, InvestmentSnapshot.cleaned_payload),
-        )
-        .where(InvestmentSnapshot.user_id == user_id)
+        snapshot_statement.where(InvestmentSnapshot.user_id == user_id)
         .where(cast(Any, InvestmentSnapshot.snapshot_date) <= as_of_date)
         .order_by(
             cast(Any, InvestmentSnapshot.snapshot_date).asc(),
@@ -152,21 +169,31 @@ def build_yearly_overview_enhancements(
     )
     snapshot_rows = list(session.exec(snapshot_statement).all())
     investment_snapshots: List[Tuple[date, Dict[str, Decimal]]] = []
-    for snapshot_date, parsed_payload, cleaned_payload in snapshot_rows:
+    for (
+        snapshot_date,
+        account_name,
+        portfolio_value,
+        parsed_payload,
+        cleaned_payload,
+        _created_at,
+        _updated_at,
+    ) in snapshot_rows:
         payload: dict[str, Any] = {}
-        if isinstance(cleaned_payload, dict) and isinstance(cleaned_payload.get("accounts"), dict):
+        if isinstance(cleaned_payload, dict):
             payload = cleaned_payload
-        elif isinstance(parsed_payload, dict) and isinstance(parsed_payload.get("accounts"), dict):
+        elif isinstance(parsed_payload, dict):
             payload = parsed_payload
 
         accounts_payload = payload.get("accounts") if isinstance(payload, dict) else None
-        if not isinstance(accounts_payload, dict):
-            continue
-
         values: Dict[str, Decimal] = {}
-        for name, value in accounts_payload.items():
-            values[str(name).strip().lower()] = coerce_decimal(value)
-        investment_snapshots.append((cast(date, snapshot_date), values))
+        if isinstance(accounts_payload, dict):
+            for name, value in accounts_payload.items():
+                values[str(name).strip().lower()] = coerce_decimal(value)
+        elif account_name and portfolio_value is not None:
+            values[str(account_name).strip().lower()] = coerce_decimal(portfolio_value)
+
+        if values:
+            investment_snapshots.append((cast(date, snapshot_date), values))
 
     for account in accounts:
         if account.account_type == AccountType.INVESTMENT:
@@ -311,33 +338,15 @@ def build_yearly_overview_enhancements(
                 .where(Account.account_type == AccountType.INVESTMENT)
             ).all()
         )
-        investment_names = {acc.name for acc in investment_accounts}
 
         start_target = date(year, 1, 1) - timedelta(days=1)
-        start_snapshot = session.exec(
-            select(InvestmentSnapshot)
-            .where(InvestmentSnapshot.user_id == user_id)
-            .where(cast(Any, InvestmentSnapshot.snapshot_date) <= start_target)
-            .order_by(cast(Any, InvestmentSnapshot.snapshot_date).desc())
-            .limit(1)
-        ).first()
-        end_snapshot = session.exec(
-            select(InvestmentSnapshot)
-            .where(InvestmentSnapshot.user_id == user_id)
-            .where(cast(Any, InvestmentSnapshot.snapshot_date) <= as_of_date)
-            .order_by(cast(Any, InvestmentSnapshot.snapshot_date).desc())
-            .limit(1)
-        ).first()
-
-        start_value = (
-            coerce_decimal(start_snapshot.portfolio_value)
-            if start_snapshot and start_snapshot.portfolio_value is not None
-            else Decimal("0")
+        start_value = _portfolio_value_at(
+            snapshots=investment_snapshots,
+            target=start_target,
         )
-        end_value = (
-            coerce_decimal(end_snapshot.portfolio_value)
-            if end_snapshot and end_snapshot.portfolio_value is not None
-            else Decimal("0")
+        end_value = _portfolio_value_at(
+            snapshots=investment_snapshots,
+            target=as_of_date,
         )
         change_value = end_value - start_value
         change_pct = (change_value / start_value * Decimal("100")) if start_value > 0 else None
@@ -388,7 +397,9 @@ def build_yearly_overview_enhancements(
                     cast(Any, TransactionLeg.account_id).in_(investment_account_ids),
                     cast(Any, Transaction.occurred_at) >= start,
                     cast(Any, Transaction.occurred_at) < end,
-                    cast(Any, Transaction.transaction_type) != TransactionType.ADJUSTMENT,
+                    cast(Any, Transaction.transaction_type).notin_(
+                        [TransactionType.ADJUSTMENT, TransactionType.INVESTMENT_EVENT]
+                    ),
                     cast(Any, TransactionLeg.transaction_id).in_(
                         select(cast(Any, noninv_tx_ids.c.transaction_id))
                     ),
@@ -398,39 +409,19 @@ def build_yearly_overview_enhancements(
             contributions = coerce_decimal(deposits or 0)
             withdrawals = coerce_decimal(withdrawals_sum or 0)
 
-        monthly_values = [Decimal("0") for _ in range(12)]
-        investment_snapshot_rows = repository.list_investment_snapshots_until(end=as_of_date)
-        snap_idx = 0
-        latest = Decimal("0")
-        for month_idx, month_end in enumerate(month_end_dates(year)):
-            target = min(month_end, as_of_date)
-            while (
-                snap_idx < len(investment_snapshot_rows)
-                and investment_snapshot_rows[snap_idx][0] <= target
-            ):
-                latest = investment_snapshot_rows[snap_idx][1]
-                snap_idx += 1
-            monthly_values[month_idx] = latest
-
-        def accounts_map(snapshot: InvestmentSnapshot | None) -> Dict[str, Decimal]:
-            if not snapshot:
-                return {}
-            accounts_raw = cast(dict[str, object], snapshot.parsed_payload or {}).get("accounts")
-            if not isinstance(accounts_raw, dict):
-                return {}
-            mapped: Dict[str, Decimal] = {}
-            for key, value in accounts_raw.items():
-                if not isinstance(key, str) or key not in investment_names:
-                    continue
-                mapped[key] = coerce_decimal(value)
-            return mapped
-
-        start_accounts = accounts_map(start_snapshot)
-        end_accounts = accounts_map(end_snapshot)
         account_rows_summary = []
-        for name in sorted(set(start_accounts.keys()) | set(end_accounts.keys())):
-            acc_start = start_accounts.get(name, Decimal("0"))
-            acc_end = end_accounts.get(name, Decimal("0"))
+        for account in investment_accounts:
+            name = account.name
+            acc_start = _investment_value_at(
+                account_name=name,
+                snapshots=investment_snapshots,
+                target=start_target,
+            )
+            acc_end = _investment_value_at(
+                account_name=name,
+                snapshots=investment_snapshots,
+                target=as_of_date,
+            )
             account_rows_summary.append(
                 {
                     "account_name": name,
@@ -438,6 +429,14 @@ def build_yearly_overview_enhancements(
                     "end_value": acc_end,
                     "change": acc_end - acc_start,
                 }
+            )
+        account_rows_summary.sort(key=lambda item: cast(Decimal, item["end_value"]), reverse=True)
+
+        monthly_values = []
+        for month_end in month_end_dates(year):
+            target = min(month_end, as_of_date)
+            monthly_values.append(
+                _portfolio_value_at(snapshots=investment_snapshots, target=target)
             )
 
         investments_summary = {
