@@ -1,8 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { ChevronDown, Trash2, X } from "lucide-react";
+import { ChevronDown, Loader2, Trash2, X } from "lucide-react";
 import React, { useEffect, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
+import { useAppSelector } from "@/app/hooks";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -12,6 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { selectLoading } from "@/features/app/appSlice";
 import {
   useAccountsApi,
   useCategoriesApi,
@@ -113,8 +115,12 @@ export const TransactionModal: React.FC<{
   const { items: categories, fetchCategories } = useCategoriesApi();
   const { createTransaction, updateTransaction, deleteTransaction } =
     useTransactionsApi();
+  const loadingMap = useAppSelector(selectLoading);
   const today = new Date().toISOString().slice(0, 10);
   const isEdit = Boolean(transaction);
+  const createLoading = Boolean(loadingMap["transaction-create"]);
+  const updateLoading = Boolean(loadingMap["transaction-update"]);
+  const deleteLoading = Boolean(loadingMap["transaction-delete"]);
 
   const {
     control,
@@ -138,6 +144,8 @@ export const TransactionModal: React.FC<{
       posted_at: today,
     },
   });
+  const submitLoading = isEdit ? updateLoading : createLoading;
+  const isBusy = submitLoading || deleteLoading || isSubmitting;
 
   const selectedCategoryId = useWatch({ control, name: "category_id" });
   const selectedTransactionType = useWatch({
@@ -430,7 +438,12 @@ export const TransactionModal: React.FC<{
               </span>
             ) : null}
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose}>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            disabled={isBusy}
+          >
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -805,32 +818,53 @@ export const TransactionModal: React.FC<{
         </div>
         <div className="flex items-center justify-between gap-2 border-t px-6 py-4">
           {isEdit ? (
-            <Button
-              variant="destructive"
-              onClick={onDelete}
-              disabled={isSubmitting}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete
+            <Button variant="destructive" onClick={onDelete} disabled={isBusy}>
+              {deleteLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </>
+              )}
             </Button>
           ) : (
             <div />
           )}
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={onClose}>
+            <Button variant="outline" onClick={onClose} disabled={isBusy}>
               Cancel
             </Button>
             {!transaction ? (
-              <Button variant="outline" onClick={onSubmitAndAdd}>
-                Save & add another
+              <Button
+                variant="outline"
+                onClick={onSubmitAndAdd}
+                disabled={isBusy}
+              >
+                {submitLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save & add another"
+                )}
               </Button>
             ) : null}
-            <Button onClick={onSubmit} disabled={isSubmitting}>
-              {isSubmitting
-                ? "Saving..."
-                : transaction
-                  ? "Save changes"
-                  : "Save transaction"}
+            <Button onClick={onSubmit} disabled={isBusy}>
+              {submitLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : transaction ? (
+                "Save changes"
+              ) : (
+                "Save transaction"
+              )}
             </Button>
           </div>
         </div>
