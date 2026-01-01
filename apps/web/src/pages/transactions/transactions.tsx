@@ -113,6 +113,7 @@ const transactionTypeOptions: Array<{
   { value: TransactionType.INCOME, label: "Income" },
   { value: TransactionType.EXPENSE, label: "Expense" },
   { value: TransactionType.TRANSFER, label: "Transfer" },
+  { value: TransactionType.INVESTMENT_EVENT, label: "Investment" },
   { value: "tax", label: "Tax" },
   { value: TransactionType.ADJUSTMENT, label: "Adjustment" },
 ];

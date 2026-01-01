@@ -236,5 +236,8 @@ class AccountService:
         setattr(self, "_offset_account", account)
         return account
 
+    def get_or_create_offset_account(self) -> Account:
+        return self._get_or_create_offset_account()
+
 
 __all__ = ["AccountService"]

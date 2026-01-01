@@ -268,7 +268,9 @@ class InvestmentSnapshotService:
                     cast(Any, TransactionLeg.account_id).in_(account_ids),
                     cast(Any, Transaction.occurred_at) >= start_dt,
                     cast(Any, Transaction.occurred_at) <= end_dt,
-                    cast(Any, Transaction.transaction_type) != TransactionType.ADJUSTMENT,
+                    cast(Any, Transaction.transaction_type).notin_(
+                        [TransactionType.ADJUSTMENT, TransactionType.INVESTMENT_EVENT]
+                    ),
                     cast(Any, TransactionLeg.transaction_id).in_(
                         select(cast(Any, noninv_tx_ids.c.transaction_id))
                     ),
@@ -295,7 +297,9 @@ class InvestmentSnapshotService:
                 )
                 .where(
                     cast(Any, TransactionLeg.account_id).in_(account_ids),
-                    cast(Any, Transaction.transaction_type) != TransactionType.ADJUSTMENT,
+                    cast(Any, Transaction.transaction_type).notin_(
+                        [TransactionType.ADJUSTMENT, TransactionType.INVESTMENT_EVENT]
+                    ),
                     cast(Any, TransactionLeg.transaction_id).in_(
                         select(cast(Any, noninv_tx_ids.c.transaction_id))
                     ),
@@ -315,7 +319,9 @@ class InvestmentSnapshotService:
                 )
                 .where(
                     cast(Any, TransactionLeg.account_id).in_(account_ids),
-                    cast(Any, Transaction.transaction_type) != TransactionType.ADJUSTMENT,
+                    cast(Any, Transaction.transaction_type).notin_(
+                        [TransactionType.ADJUSTMENT, TransactionType.INVESTMENT_EVENT]
+                    ),
                     cast(Any, TransactionLeg.transaction_id).in_(
                         select(cast(Any, noninv_tx_ids.c.transaction_id))
                     ),
@@ -368,7 +374,9 @@ class InvestmentSnapshotService:
                     cast(Any, TransactionLeg.account_id).in_(account_ids),
                     cast(Any, Transaction.occurred_at) >= start_dt,
                     cast(Any, Transaction.occurred_at) <= end_dt,
-                    cast(Any, Transaction.transaction_type) != TransactionType.ADJUSTMENT,
+                    cast(Any, Transaction.transaction_type).notin_(
+                        [TransactionType.ADJUSTMENT, TransactionType.INVESTMENT_EVENT]
+                    ),
                     cast(Any, TransactionLeg.transaction_id).in_(
                         select(cast(Any, noninv_tx_ids.c.transaction_id))
                     ),

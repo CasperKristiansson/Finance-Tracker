@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, time, timezone
+from decimal import Decimal
 from typing import Any, Dict, Optional
 
 from pydantic import ValidationError
 
-from ..models import Account, InvestmentSnapshot
+from ..models import Account, InvestmentSnapshot, Transaction, TransactionLeg
 from ..schemas import (
     InvestmentOverviewResponse,
     InvestmentSnapshotCreateRequest,
@@ -15,8 +16,8 @@ from ..schemas import (
     InvestmentTransactionListResponse,
     InvestmentTransactionRead,
 )
-from ..services import InvestmentSnapshotService
-from ..shared import AccountType, session_scope
+from ..services import AccountService, InvestmentSnapshotService, TransactionService
+from ..shared import AccountType, TransactionType, coerce_decimal, session_scope
 from .utils import (
     ensure_engine,
     get_query_params,
@@ -91,6 +92,15 @@ def create_investment_snapshot(event: Dict[str, Any], _context: Any) -> Dict[str
         if account is None or account.account_type != AccountType.INVESTMENT:
             return json_response(404, {"error": "Investment account not found"})
 
+        previous_value = Decimal("0")
+        overview = InvestmentSnapshotService(session).investment_overview()
+        for row in overview.get("accounts", []):
+            if row.get("account_id") == account.id:
+                current_value = row.get("current_value")
+                if current_value is not None:
+                    previous_value = coerce_decimal(current_value)
+                break
+
         parsed_payload = {"accounts": {account.name: float(data.balance)}}
         snapshot = InvestmentSnapshot(
             user_id=user_id,
@@ -107,6 +117,33 @@ def create_investment_snapshot(event: Dict[str, Any], _context: Any) -> Dict[str
         session.add(snapshot)
         session.flush()
         snapshot_id = snapshot.id
+
+        delta = data.balance - previous_value
+        if delta != 0 and account.id is not None:
+            offset_account = AccountService(session).get_or_create_offset_account()
+            if offset_account.id is not None:
+                occurred_at = datetime.combine(
+                    data.snapshot_date,
+                    time.min,
+                    tzinfo=timezone.utc,
+                )
+                transaction = Transaction(
+                    transaction_type=TransactionType.INVESTMENT_EVENT,
+                    description=data.notes or "Investment balance update",
+                    notes=None,
+                    external_id=f"investment_snapshot:{snapshot_id}",
+                    occurred_at=occurred_at,
+                    posted_at=occurred_at,
+                )
+                legs = [
+                    TransactionLeg(account_id=account.id, amount=delta),
+                    TransactionLeg(account_id=offset_account.id, amount=-delta),
+                ]
+                TransactionService(session).create_transaction(
+                    transaction,
+                    legs,
+                    commit=False,
+                )
 
     response = InvestmentSnapshotCreateResponse(
         snapshot_id=snapshot_id,

@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 
 from ..models import (
     Category,
+    InvestmentSnapshot,
     Loan,
     LoanEvent,
     Subscription,
@@ -27,6 +28,8 @@ from ..shared import (
     coerce_decimal,
     validate_transaction_legs,
 )
+
+_SNAPSHOT_EXTERNAL_PREFIX = "investment_snapshot:"
 
 
 class TransactionService:
@@ -120,7 +123,7 @@ class TransactionService:
             raise LookupError("Transaction not found")
         if update_subscription and subscription_id is not None:
             self._ensure_subscription_exists(subscription_id)
-        return self.repository.update(
+        updated = self.repository.update(
             transaction,
             description=description,
             notes=notes,
@@ -130,11 +133,19 @@ class TransactionService:
             subscription_id=subscription_id,
             update_subscription=update_subscription,
         )
+        self._sync_investment_snapshot(
+            updated,
+            description=description,
+            notes=notes,
+            occurred_at=occurred_at,
+        )
+        return updated
 
     def delete_transaction(self, transaction_id: UUID) -> None:
         transaction = self.repository.get(transaction_id)
         if transaction is None:
             raise LookupError("Transaction not found")
+        self._delete_investment_snapshot(transaction)
         self.repository.delete(transaction)
 
     def add_transaction_leg(self, transaction_id: UUID, leg: TransactionLeg) -> TransactionLeg:
@@ -194,6 +205,8 @@ class TransactionService:
         category: Optional[Category],
         fallback: TransactionType,
     ) -> TransactionType:
+        if fallback == TransactionType.INVESTMENT_EVENT:
+            return TransactionType.INVESTMENT_EVENT
         if fallback == TransactionType.ADJUSTMENT:
             return TransactionType.ADJUSTMENT
         if category is not None:
@@ -217,6 +230,60 @@ class TransactionService:
             return TransactionType.TRANSFER
 
         return fallback
+
+    def _snapshot_id_from_external_id(self, external_id: Optional[str]) -> Optional[UUID]:
+        if not external_id:
+            return None
+        if not external_id.startswith(_SNAPSHOT_EXTERNAL_PREFIX):
+            return None
+        raw_id = external_id[len(_SNAPSHOT_EXTERNAL_PREFIX) :]
+        try:
+            return UUID(raw_id)
+        except ValueError:
+            return None
+
+    def _sync_investment_snapshot(
+        self,
+        transaction: Transaction,
+        *,
+        description: Optional[str],
+        notes: Optional[str],
+        occurred_at: Optional[datetime],
+    ) -> None:
+        if transaction.transaction_type != TransactionType.INVESTMENT_EVENT:
+            return
+        snapshot_id = self._snapshot_id_from_external_id(transaction.external_id)
+        if snapshot_id is None:
+            return
+        snapshot = self.session.exec(
+            select(InvestmentSnapshot).where(InvestmentSnapshot.id == snapshot_id)
+        ).one_or_none()
+        if snapshot is None:
+            return
+        if occurred_at is not None:
+            snapshot.snapshot_date = occurred_at.date()
+        new_raw: Optional[str] = None
+        if notes is not None:
+            new_raw = notes.strip() if isinstance(notes, str) else notes
+        elif description is not None:
+            new_raw = description.strip() if isinstance(description, str) else description
+        if new_raw is not None:
+            snapshot.raw_text = new_raw or "Manual investment balance update"
+        self.session.add(snapshot)
+        self.session.commit()
+
+    def _delete_investment_snapshot(self, transaction: Transaction) -> None:
+        if transaction.transaction_type != TransactionType.INVESTMENT_EVENT:
+            return
+        snapshot_id = self._snapshot_id_from_external_id(transaction.external_id)
+        if snapshot_id is None:
+            return
+        snapshot = self.session.exec(
+            select(InvestmentSnapshot).where(InvestmentSnapshot.id == snapshot_id)
+        ).one_or_none()
+        if snapshot is None:
+            return
+        self.session.delete(snapshot)
 
     def _record_loan_events(
         self,
