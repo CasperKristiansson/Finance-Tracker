@@ -10,6 +10,9 @@ import {
   setCategoriesError,
   setCategoriesFilters,
   setCategoriesLoading,
+  setCategoryCreateLoading,
+  setCategoryMutationError,
+  setCategoryUpdateLoading,
   type CategoriesState,
 } from "@/features/categories/categoriesSlice";
 import type {
@@ -76,6 +79,8 @@ function* handleFetchCategories(action: ReturnType<typeof FetchCategories>) {
 
 function* handleCreateCategory(action: ReturnType<typeof CreateCategory>) {
   const isDemo: boolean = yield select(selectIsDemo);
+  yield put(setCategoryCreateLoading(true));
+  yield put(setCategoryMutationError(undefined));
   try {
     const body = categoryCreateRequestSchema.parse(action.payload);
     if (isDemo) {
@@ -121,15 +126,19 @@ function* handleCreateCategory(action: ReturnType<typeof CreateCategory>) {
     );
   } catch (error) {
     yield put(
-      setCategoriesError(
+      setCategoryMutationError(
         error instanceof Error ? error.message : "Failed to create category",
       ),
     );
+  } finally {
+    yield put(setCategoryCreateLoading(false));
   }
 }
 
 function* handleUpdateCategory(action: ReturnType<typeof UpdateCategory>) {
   const isDemo: boolean = yield select(selectIsDemo);
+  yield put(setCategoryUpdateLoading(true));
+  yield put(setCategoryMutationError(undefined));
   try {
     const body = categoryUpdateRequestSchema.parse(action.payload.data);
     if (isDemo) {
@@ -170,15 +179,18 @@ function* handleUpdateCategory(action: ReturnType<typeof UpdateCategory>) {
     );
   } catch (error) {
     yield put(
-      setCategoriesError(
+      setCategoryMutationError(
         error instanceof Error ? error.message : "Failed to update category",
       ),
     );
+  } finally {
+    yield put(setCategoryUpdateLoading(false));
   }
 }
 
 function* handleMergeCategory(action: ReturnType<typeof MergeCategory>) {
   const isDemo: boolean = yield select(selectIsDemo);
+  yield put(setCategoryMutationError(undefined));
   try {
     if (isDemo) {
       const current = (yield select(
@@ -221,7 +233,7 @@ function* handleMergeCategory(action: ReturnType<typeof MergeCategory>) {
     );
   } catch (error) {
     yield put(
-      setCategoriesError(
+      setCategoryMutationError(
         error instanceof Error ? error.message : "Failed to merge categories",
       ),
     );

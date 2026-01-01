@@ -33,6 +33,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { selectToken } from "@/features/auth/authSlice";
 import { useCategoriesApi } from "@/hooks/use-api";
@@ -160,6 +161,9 @@ export const Categories: React.FC = () => {
     items,
     loading,
     error,
+    createLoading,
+    updateLoading,
+    mutationError,
     fetchCategories,
     updateCategory,
     createCategory,
@@ -177,6 +181,8 @@ export const Categories: React.FC = () => {
   const [mergeRename, setMergeRename] = useState<string>("");
   const [showNewSheet, setShowNewSheet] = useState(false);
   const [detailsId, setDetailsId] = useState<string | null>(null);
+  const [createSubmitted, setCreateSubmitted] = useState(false);
+  const [updateSubmitted, setUpdateSubmitted] = useState(false);
   const [detailsTransactions, setDetailsTransactions] = useState<
     TransactionRead[]
   >([]);
@@ -242,14 +248,7 @@ export const Categories: React.FC = () => {
       icon: values.icon?.trim() || undefined,
       color_hex: values.color_hex?.trim() ? values.color_hex.trim() : undefined,
     });
-    toast.success("Category created");
-    createForm.reset({
-      name: "",
-      category_type: values.category_type,
-      icon: "",
-      color_hex: "",
-    });
-    setShowNewSheet(false);
+    setCreateSubmitted(true);
   });
 
   const escapeCsv = (value: unknown) => {
@@ -327,8 +326,7 @@ export const Categories: React.FC = () => {
       color_hex: values.color_hex?.trim() ? values.color_hex.trim() : null,
       is_archived: values.is_archived,
     });
-    toast.success("Category updated");
-    setEditingId(null);
+    setUpdateSubmitted(true);
   });
 
   const filteredCategories = useMemo(() => {
@@ -450,6 +448,36 @@ export const Categories: React.FC = () => {
       setDetailsError(null);
     }
   }, [detailsId, detailsCategory]);
+
+  useEffect(() => {
+    if (!createSubmitted) return;
+    if (createLoading) return;
+    if (mutationError) {
+      setCreateSubmitted(false);
+      return;
+    }
+    toast.success("Category created");
+    createForm.reset({
+      name: "",
+      category_type: createForm.getValues("category_type"),
+      icon: "",
+      color_hex: "",
+    });
+    setShowNewSheet(false);
+    setCreateSubmitted(false);
+  }, [createForm, createLoading, createSubmitted, mutationError]);
+
+  useEffect(() => {
+    if (!updateSubmitted) return;
+    if (updateLoading) return;
+    if (mutationError) {
+      setUpdateSubmitted(false);
+      return;
+    }
+    toast.success("Category updated");
+    setEditingId(null);
+    setUpdateSubmitted(false);
+  }, [mutationError, updateLoading, updateSubmitted]);
 
   const submitMerge = () => {
     if (!mergeSourceId || !mergeTargetId) return;
@@ -605,176 +633,189 @@ export const Categories: React.FC = () => {
               </div>
             </div>
 
-            <div className="divide-y divide-slate-100 rounded-md border border-slate-100 bg-white">
-              {sortedCategories.map((cat) => {
-                const series = (cat.recent_months ?? []).map((p) =>
-                  Number(p.total ?? 0),
-                );
-                const hasSeries = series.length >= 2;
-                const delta = hasSeries
-                  ? series[series.length - 1] - series[0]
-                  : 0;
-                const deltaPct =
-                  hasSeries && series[0] !== 0
-                    ? (delta / Math.abs(series[0])) * 100
-                    : null;
+            {loading ? (
+              <div className="space-y-2 rounded-md border border-slate-100 bg-white p-3">
+                {[...Array(6)].map((_, idx) => (
+                  <Skeleton key={idx} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 rounded-md border border-slate-100 bg-white">
+                {sortedCategories.map((cat) => {
+                  const series = (cat.recent_months ?? []).map((p) =>
+                    Number(p.total ?? 0),
+                  );
+                  const hasSeries = series.length >= 2;
+                  const delta = hasSeries
+                    ? series[series.length - 1] - series[0]
+                    : 0;
+                  const deltaPct =
+                    hasSeries && series[0] !== 0
+                      ? (delta / Math.abs(series[0])) * 100
+                      : null;
 
-                const accent =
-                  cat.color_hex ??
-                  (cat.category_type === CategoryType.INCOME
-                    ? "#10b981"
-                    : "#ef4444");
+                  const accent =
+                    cat.color_hex ??
+                    (cat.category_type === CategoryType.INCOME
+                      ? "#10b981"
+                      : "#ef4444");
 
-                const txCount = Number(cat.transaction_count ?? 0);
-                const lastUsed = formatShortDate(cat.last_used_at ?? null);
-                const lifetimeTotal = Number(cat.lifetime_total ?? 0);
+                  const txCount = Number(cat.transaction_count ?? 0);
+                  const lastUsed = formatShortDate(cat.last_used_at ?? null);
+                  const lifetimeTotal = Number(cat.lifetime_total ?? 0);
 
-                return (
-                  <div
-                    key={cat.id}
-                    className="group grid cursor-pointer grid-cols-1 gap-3 px-3 py-2 transition-colors hover:bg-slate-50 lg:grid-cols-[minmax(0,1fr)_110px_130px_150px_140px_auto] lg:items-center"
-                    onClick={() => openDetails(cat.id)}
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <div
-                        className="h-3 w-3 shrink-0 rounded-full border border-slate-200"
-                        style={{ backgroundColor: cat.color_hex ?? "#e2e8f0" }}
-                        title={cat.color_hex ?? "No color"}
-                      />
-                      {renderCategoryIcon(
-                        cat.icon ?? "",
-                        cat.name,
-                        "h-6 w-6 text-slate-700 flex items-center justify-center",
-                      )}
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <div className="flex min-w-0 items-center gap-1.5">
-                            <div className="truncate font-medium text-slate-900">
-                              {cat.name}
+                  return (
+                    <div
+                      key={cat.id}
+                      className="group grid cursor-pointer grid-cols-1 gap-3 px-3 py-2 transition-colors hover:bg-slate-50 lg:grid-cols-[minmax(0,1fr)_110px_130px_150px_140px_auto] lg:items-center"
+                      onClick={() => openDetails(cat.id)}
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div
+                          className="h-3 w-3 shrink-0 rounded-full border border-slate-200"
+                          style={{
+                            backgroundColor: cat.color_hex ?? "#e2e8f0",
+                          }}
+                          title={cat.color_hex ?? "No color"}
+                        />
+                        {renderCategoryIcon(
+                          cat.icon ?? "",
+                          cat.name,
+                          "h-6 w-6 text-slate-700 flex items-center justify-center",
+                        )}
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <div className="truncate font-medium text-slate-900">
+                                {cat.name}
+                              </div>
+                              <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 opacity-0 transition-opacity group-hover:opacity-100" />
                             </div>
-                            <ChevronRight className="h-4 w-4 shrink-0 text-slate-400 opacity-0 transition-opacity group-hover:opacity-100" />
+                            <Badge
+                              variant="secondary"
+                              className={
+                                cat.category_type === CategoryType.INCOME
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : "bg-rose-50 text-rose-700"
+                              }
+                            >
+                              {cat.category_type}
+                            </Badge>
+                            {cat.is_archived ? (
+                              <Badge variant="outline">Archived</Badge>
+                            ) : null}
                           </div>
-                          <Badge
-                            variant="secondary"
-                            className={
-                              cat.category_type === CategoryType.INCOME
-                                ? "bg-emerald-50 text-emerald-700"
-                                : "bg-rose-50 text-rose-700"
-                            }
-                          >
-                            {cat.category_type}
-                          </Badge>
-                          {cat.is_archived ? (
-                            <Badge variant="outline">Archived</Badge>
-                          ) : null}
-                        </div>
-                        <div className="text-xs text-slate-500 lg:hidden">
-                          {usageText(cat)}
+                          <div className="text-xs text-slate-500 lg:hidden">
+                            {usageText(cat)}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <div className="hidden lg:block">
-                      <div className="text-sm font-semibold text-slate-900 tabular-nums">
-                        {txCount.toLocaleString("sv-SE")}
+                      <div className="hidden lg:block">
+                        <div className="text-sm font-semibold text-slate-900 tabular-nums">
+                          {txCount.toLocaleString("sv-SE")}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          Transactions
+                        </div>
                       </div>
-                      <div className="text-[11px] text-slate-500">
-                        Transactions
-                      </div>
-                    </div>
 
-                    <div className="hidden lg:block">
-                      <div className="text-sm font-semibold text-slate-900">
-                        {lastUsed}
+                      <div className="hidden lg:block">
+                        <div className="text-sm font-semibold text-slate-900">
+                          {lastUsed}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          Last used
+                        </div>
                       </div>
-                      <div className="text-[11px] text-slate-500">
-                        Last used
+
+                      <div className="hidden text-right lg:block">
+                        <div className="text-sm font-semibold text-slate-900 tabular-nums">
+                          {formatCurrency(lifetimeTotal)}
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          Lifetime
+                        </div>
+                      </div>
+
+                      <div className="hidden flex-col items-end gap-1 lg:flex">
+                        {hasSeries ? (
+                          <>
+                            <svg
+                              width="112"
+                              height="28"
+                              viewBox="0 0 112 28"
+                              className="overflow-visible"
+                            >
+                              <path
+                                d={sparklinePath(series, 112, 28)}
+                                fill="none"
+                                stroke={accent}
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                            <span className="text-[11px] font-semibold text-slate-600 tabular-nums">
+                              {deltaPct !== null
+                                ? `${delta >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%`
+                                : formatCurrency(delta)}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </div>
+
+                      <div className="flex shrink-0 items-center justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openMerge(cat.id);
+                          }}
+                          disabled={cat.is_archived}
+                          title={
+                            cat.is_archived
+                              ? "Unarchive to merge"
+                              : "Merge into another category"
+                          }
+                        >
+                          <Merge className="h-4 w-4" />
+                          Merge
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingId(cat.id);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                          Edit
+                        </Button>
                       </div>
                     </div>
-
-                    <div className="hidden text-right lg:block">
-                      <div className="text-sm font-semibold text-slate-900 tabular-nums">
-                        {formatCurrency(lifetimeTotal)}
-                      </div>
-                      <div className="text-[11px] text-slate-500">Lifetime</div>
-                    </div>
-
-                    <div className="hidden flex-col items-end gap-1 lg:flex">
-                      {hasSeries ? (
-                        <>
-                          <svg
-                            width="112"
-                            height="28"
-                            viewBox="0 0 112 28"
-                            className="overflow-visible"
-                          >
-                            <path
-                              d={sparklinePath(series, 112, 28)}
-                              fill="none"
-                              stroke={accent}
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                          <span className="text-[11px] font-semibold text-slate-600 tabular-nums">
-                            {deltaPct !== null
-                              ? `${delta >= 0 ? "+" : ""}${deltaPct.toFixed(1)}%`
-                              : formatCurrency(delta)}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-xs text-slate-400">—</span>
-                      )}
-                    </div>
-
-                    <div className="flex shrink-0 items-center justify-end gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="gap-2"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openMerge(cat.id);
-                        }}
-                        disabled={cat.is_archived}
-                        title={
-                          cat.is_archived
-                            ? "Unarchive to merge"
-                            : "Merge into another category"
-                        }
-                      >
-                        <Merge className="h-4 w-4" />
-                        Merge
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingId(cat.id);
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                        Edit
-                      </Button>
-                    </div>
+                  );
+                })}
+                {sortedCategories.length === 0 ? (
+                  <div className="px-3 py-8 text-center text-sm text-slate-500">
+                    No categories match your filters.
                   </div>
-                );
-              })}
-              {sortedCategories.length === 0 ? (
-                <div className="px-3 py-8 text-center text-sm text-slate-500">
-                  No categories match your filters.
-                </div>
-              ) : null}
-            </div>
+                ) : null}
+              </div>
+            )}
           </CardContent>
         </Card>
 
         <Dialog
           open={Boolean(editingCategory)}
           onOpenChange={(open) => {
+            if (!open && updateLoading) return;
             if (!open) setEditingId(null);
           }}
         >
@@ -798,6 +839,7 @@ export const Categories: React.FC = () => {
                     id="edit-category-name"
                     placeholder="e.g., Groceries"
                     {...editForm.register("name")}
+                    disabled={updateLoading}
                   />
                   {editForm.formState.errors.name ? (
                     <p className="text-xs text-rose-600">
@@ -812,6 +854,7 @@ export const Categories: React.FC = () => {
                     <select
                       className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-800"
                       {...editForm.register("category_type")}
+                      disabled={updateLoading}
                     >
                       {selectableCategoryTypes.map((value) => (
                         <option key={value} value={value}>
@@ -834,6 +877,7 @@ export const Categories: React.FC = () => {
                             shouldDirty: true,
                           })
                         }
+                        disabled={updateLoading}
                       />
                     </div>
                   </div>
@@ -852,10 +896,12 @@ export const Categories: React.FC = () => {
                       }
                       className="h-10 w-12 cursor-pointer rounded border border-slate-300 bg-white p-1"
                       aria-label="Pick color"
+                      disabled={updateLoading}
                     />
                     <Input
                       {...editForm.register("color_hex")}
                       placeholder="#64748b"
+                      disabled={updateLoading}
                     />
                     <Button
                       type="button"
@@ -865,6 +911,7 @@ export const Categories: React.FC = () => {
                           shouldDirty: true,
                         })
                       }
+                      disabled={updateLoading}
                     >
                       Clear
                     </Button>
@@ -892,6 +939,7 @@ export const Categories: React.FC = () => {
                       onChange={(icon) =>
                         editForm.setValue("icon", icon, { shouldDirty: true })
                       }
+                      disabled={updateLoading}
                     />
                   </div>
                 </div>
@@ -901,10 +949,20 @@ export const Categories: React.FC = () => {
                     type="button"
                     variant="outline"
                     onClick={() => setEditingId(null)}
+                    disabled={updateLoading}
                   >
                     Cancel
                   </Button>
-                  <Button type="submit">Save changes</Button>
+                  <Button type="submit" disabled={updateLoading}>
+                    {updateLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : (
+                      "Save changes"
+                    )}
+                  </Button>
                 </DialogFooter>
               </form>
             ) : null}
@@ -1247,6 +1305,7 @@ export const Categories: React.FC = () => {
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowNewSheet(false)}
+                disabled={createLoading}
               >
                 Close
               </Button>
@@ -1257,6 +1316,7 @@ export const Categories: React.FC = () => {
                 <Input
                   placeholder="Groceries"
                   {...createForm.register("name")}
+                  disabled={createLoading}
                 />
                 {createForm.formState.errors.name ? (
                   <p className="text-xs text-rose-600">
@@ -1269,6 +1329,7 @@ export const Categories: React.FC = () => {
                 <select
                   className="w-full rounded-md border border-slate-300 bg-white px-2 py-2 text-sm text-slate-800"
                   {...createForm.register("category_type")}
+                  disabled={createLoading}
                 >
                   {selectableCategoryTypes.map((value) => (
                     <option key={value} value={value}>
@@ -1288,15 +1349,18 @@ export const Categories: React.FC = () => {
                     }
                     className="h-10 w-12 cursor-pointer rounded border border-slate-300 bg-white p-1"
                     aria-label="Pick color"
+                    disabled={createLoading}
                   />
                   <Input
                     {...createForm.register("color_hex")}
                     placeholder="#64748b"
+                    disabled={createLoading}
                   />
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => createForm.setValue("color_hex", "")}
+                    disabled={createLoading}
                   >
                     Clear
                   </Button>
@@ -1323,6 +1387,7 @@ export const Categories: React.FC = () => {
                     onChange={(icon) =>
                       createForm.setValue("icon", icon, { shouldDirty: true })
                     }
+                    disabled={createLoading}
                   />
                 </div>
               </div>
@@ -1331,11 +1396,21 @@ export const Categories: React.FC = () => {
                   variant="outline"
                   type="button"
                   onClick={() => setShowNewSheet(false)}
+                  disabled={createLoading}
                 >
                   Cancel
                 </Button>
-                <Button type="submit">
-                  <Plus className="mr-2 h-4 w-4" /> Add category
+                <Button type="submit" disabled={createLoading}>
+                  {createLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" /> Add category
+                    </>
+                  )}
                 </Button>
               </div>
             </form>

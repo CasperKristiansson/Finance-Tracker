@@ -5,12 +5,17 @@ export interface CategoriesState {
   items: CategoryRead[];
   loading: boolean;
   error?: string;
+  createLoading: boolean;
+  updateLoading: boolean;
+  mutationError?: string;
   includeArchived: boolean;
 }
 
 const initialState: CategoriesState = {
   items: [],
   loading: false,
+  createLoading: false,
+  updateLoading: false,
   includeArchived: false,
 };
 
@@ -25,8 +30,17 @@ const categoriesSlice = createSlice({
     setCategoriesLoading(state, action: PayloadAction<boolean>) {
       state.loading = action.payload;
     },
+    setCategoryCreateLoading(state, action: PayloadAction<boolean>) {
+      state.createLoading = action.payload;
+    },
+    setCategoryUpdateLoading(state, action: PayloadAction<boolean>) {
+      state.updateLoading = action.payload;
+    },
     setCategoriesError(state, action: PayloadAction<string | undefined>) {
       state.error = action.payload ?? "Unable to load categories";
+    },
+    setCategoryMutationError(state, action: PayloadAction<string | undefined>) {
+      state.mutationError = action.payload;
     },
     setCategoriesFilters(
       state,
@@ -42,13 +56,19 @@ const categoriesSlice = createSlice({
     selectCategories: (state) => state.items,
     selectCategoriesLoading: (state) => state.loading,
     selectCategoriesError: (state) => state.error,
+    selectCategoryCreateLoading: (state) => state.createLoading,
+    selectCategoryUpdateLoading: (state) => state.updateLoading,
+    selectCategoryMutationError: (state) => state.mutationError,
   },
 });
 
 export const {
   setCategories,
   setCategoriesLoading,
+  setCategoryCreateLoading,
+  setCategoryUpdateLoading,
   setCategoriesError,
+  setCategoryMutationError,
   setCategoriesFilters,
 } = categoriesSlice.actions;
 export const {
@@ -56,5 +76,8 @@ export const {
   selectCategories,
   selectCategoriesLoading,
   selectCategoriesError,
+  selectCategoryCreateLoading,
+  selectCategoryUpdateLoading,
+  selectCategoryMutationError,
 } = categoriesSlice.selectors;
 export const CategoriesReducer = categoriesSlice.reducer;
