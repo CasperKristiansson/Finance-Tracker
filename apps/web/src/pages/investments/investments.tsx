@@ -13,6 +13,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { toast } from "sonner";
 import {
   MotionPage,
   StaggerWrap,
@@ -519,9 +520,14 @@ export const Investments: React.FC = () => {
     if (!snapshotSubmitted) return;
     if (updateLoading) return;
     if (updateError) return;
+    toast.success(
+      snapshotAccount
+        ? `${snapshotAccount.accountName} balance updated.`
+        : "Investment balance updated.",
+    );
     setSnapshotDialogOpen(false);
     setSnapshotSubmitted(false);
-  }, [snapshotSubmitted, updateError, updateLoading]);
+  }, [snapshotAccount, snapshotSubmitted, updateError, updateLoading]);
 
   const snapshotSubmitDisabled =
     updateLoading ||
@@ -1589,9 +1595,13 @@ export const Investments: React.FC = () => {
                 disabled={snapshotSubmitDisabled}
               >
                 {updateLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : null}
-                Save balance
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Saving...
+                  </>
+                ) : (
+                  "Save balance"
+                )}
               </Button>
             </div>
           </div>

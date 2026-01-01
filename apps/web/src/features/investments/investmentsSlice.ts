@@ -45,8 +45,7 @@ const investmentsSlice = createSlice({
       state,
       action: PayloadAction<string | undefined>,
     ) {
-      state.updateError =
-        action.payload ?? "Unable to update investment balance.";
+      state.updateError = action.payload;
     },
   },
   selectors: {
