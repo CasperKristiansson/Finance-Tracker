@@ -224,6 +224,9 @@ export const Investments: React.FC = () => {
     string | null
   >(null);
   const [snapshotDialogOpen, setSnapshotDialogOpen] = useState(false);
+  const [snapshotAccountId, setSnapshotAccountId] = useState<string | null>(
+    null,
+  );
   const [snapshotBalance, setSnapshotBalance] = useState("");
   const [snapshotDate, setSnapshotDate] = useState(() =>
     new Date().toISOString().slice(0, 10),
@@ -408,6 +411,13 @@ export const Investments: React.FC = () => {
     );
   }, [accountSummaries, detailsAccountId]);
 
+  const snapshotAccount = useMemo(() => {
+    if (!snapshotAccountId) return null;
+    return (
+      accountSummaries.find((a) => a.accountId === snapshotAccountId) ?? null
+    );
+  }, [accountSummaries, snapshotAccountId]);
+
   const selectedAccountInvestmentTxs = useMemo(() => {
     if (!selectedAccount) return [];
     const norm = (value: string | null | undefined) =>
@@ -484,12 +494,26 @@ export const Investments: React.FC = () => {
   }, [detailsAccountId, fetchInvestmentTransactions, transactions.length]);
 
   useEffect(() => {
-    if (!snapshotDialogOpen || !selectedAccount) return;
-    setSnapshotBalance(selectedAccount.currentValue.toFixed(2));
+    if (!snapshotDialogOpen) return;
+    if (!snapshotAccountId && accountSummaries.length) {
+      setSnapshotAccountId(accountSummaries[0].accountId);
+    }
+  }, [accountSummaries, snapshotAccountId, snapshotDialogOpen]);
+
+  useEffect(() => {
+    if (!snapshotDialogOpen) return;
+    if (!snapshotAccount) {
+      setSnapshotBalance("");
+      setSnapshotDate(new Date().toISOString().slice(0, 10));
+      setSnapshotNotes("");
+      setSnapshotSubmitted(false);
+      return;
+    }
+    setSnapshotBalance(snapshotAccount.currentValue.toFixed(2));
     setSnapshotDate(new Date().toISOString().slice(0, 10));
     setSnapshotNotes("");
     setSnapshotSubmitted(false);
-  }, [selectedAccount, snapshotDialogOpen]);
+  }, [snapshotAccount, snapshotDialogOpen]);
 
   useEffect(() => {
     if (!snapshotSubmitted) return;
@@ -501,9 +525,15 @@ export const Investments: React.FC = () => {
 
   const snapshotSubmitDisabled =
     updateLoading ||
-    !selectedAccount ||
+    !snapshotAccount ||
     !snapshotDate ||
     !snapshotBalance.trim();
+
+  const openSnapshotDialog = (accountId?: string | null) => {
+    if (!accountSummaries.length) return;
+    setSnapshotAccountId(accountId ?? accountSummaries[0].accountId);
+    setSnapshotDialogOpen(true);
+  };
 
   return (
     <MotionPage className="space-y-6">
@@ -523,6 +553,13 @@ export const Investments: React.FC = () => {
           variants={fadeInUp}
           className="flex flex-wrap items-center justify-end gap-2"
         >
+          <Button
+            size="sm"
+            onClick={() => openSnapshotDialog()}
+            disabled={!accountSummaries.length}
+          >
+            Update balances
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -1124,7 +1161,9 @@ export const Investments: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setSnapshotDialogOpen(true)}
+                    onClick={() =>
+                      openSnapshotDialog(selectedAccount.accountId)
+                    }
                   >
                     Update balance
                   </Button>
@@ -1468,10 +1507,30 @@ export const Investments: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Update investment balance</DialogTitle>
             <DialogDescription className="text-slate-600">
-              Record the latest statement balance for this account.
+              Record the latest statement balance so value changes are captured
+              as market growth.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="snapshot-account">Account</Label>
+              <select
+                id="snapshot-account"
+                className="h-10 w-full rounded border border-slate-200 bg-white px-3 text-sm text-slate-800"
+                value={snapshotAccountId ?? ""}
+                onChange={(e) => setSnapshotAccountId(e.target.value)}
+                disabled={updateLoading || !accountSummaries.length}
+              >
+                <option value="" disabled>
+                  Select account
+                </option>
+                {accountSummaries.map((account) => (
+                  <option key={account.accountId} value={account.accountId}>
+                    {account.accountName}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="snapshot-date">As of date</Label>
               <Input
@@ -1490,9 +1549,9 @@ export const Investments: React.FC = () => {
                 value={snapshotBalance}
                 onChange={(e) => setSnapshotBalance(e.target.value)}
                 placeholder={
-                  selectedAccount ? formatSek(selectedAccount.currentValue) : ""
+                  snapshotAccount ? formatSek(snapshotAccount.currentValue) : ""
                 }
-                disabled={updateLoading}
+                disabled={updateLoading || !snapshotAccount}
               />
             </div>
             <div className="space-y-1.5">
@@ -1518,9 +1577,9 @@ export const Investments: React.FC = () => {
               </Button>
               <Button
                 onClick={() => {
-                  if (!selectedAccount) return;
+                  if (!snapshotAccount) return;
                   createSnapshot({
-                    account_id: selectedAccount.accountId,
+                    account_id: snapshotAccount.accountId,
                     snapshot_date: snapshotDate,
                     balance: snapshotBalance.trim(),
                     notes: snapshotNotes.trim() || null,
