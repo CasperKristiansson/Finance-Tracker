@@ -177,9 +177,12 @@ class InvestmentSnapshotService:
             account.id: [] for account in investment_accounts if account.id
         }
 
+        latest_by_account: dict[UUID, Decimal] = {}
         for point_date in dates:
             bucket = values_by_date.get(point_date) or {}
-            total = sum((entry[0] for entry in bucket.values()), Decimal(0))
+            for account_id, (value, _updated_at) in bucket.items():
+                latest_by_account[account_id] = value
+            total = sum(latest_by_account.values(), Decimal(0)) if latest_by_account else Decimal(0)
             portfolio_series_base.append((point_date, total))
             for account_id, (value, _updated_at) in bucket.items():
                 series = account_series_base.get(account_id)
