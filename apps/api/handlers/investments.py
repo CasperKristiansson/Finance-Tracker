@@ -105,11 +105,11 @@ def create_investment_snapshot(event: Dict[str, Any], _context: Any) -> Dict[str
             bedrock_metadata=None,
         )
         session.add(snapshot)
-        session.commit()
-        session.refresh(snapshot)
+        session.flush()
+        snapshot_id = snapshot.id
 
     response = InvestmentSnapshotCreateResponse(
-        snapshot_id=snapshot.id,
+        snapshot_id=snapshot_id,
         account_id=data.account_id,
         snapshot_date=data.snapshot_date,
         balance=data.balance,
