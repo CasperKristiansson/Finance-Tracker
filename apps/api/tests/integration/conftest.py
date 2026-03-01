@@ -2,12 +2,23 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable, Literal, Sequence
 from urllib import error, request
+from uuid import uuid4
 
 import boto3
 import pytest
+
+from apps.api.tests.integration.helpers import (
+    CleanupRegistry,
+)
+from apps.api.tests.integration.helpers import (
+    exercise_serverless_function as run_serverless_function,
+)
+
+# pylint: disable=redefined-outer-name,too-many-positional-arguments
+
 
 ExplicitAuthFlow = Literal[
     "ADMIN_NO_SRP_AUTH",
@@ -108,7 +119,6 @@ def _get_cognito_params() -> tuple[str, str]:
     session = boto3.Session(profile_name=profile)
     ssm = session.client("ssm", region_name=region)
     base = f"/finance-tracker/{stage}/auth"
-    keys = ["user_pool_id", "user_pool_client_id"]
     params = ssm.get_parameters(Names=[f"{base}/user_pool_id", f"{base}/user_pool_client_id"])[
         "Parameters"
     ]
@@ -116,9 +126,11 @@ def _get_cognito_params() -> tuple[str, str]:
     return mapping["user_pool_id"], mapping["user_pool_client_id"]
 
 
-def _ensure_test_user(user_pool_id: str, client_id: str) -> tuple[str, str]:
+def _ensure_test_user(user_pool_id: str, _client_id: str) -> tuple[str, str]:
     username = os.getenv("INTEGRATION_USERNAME", "integration-tester@example.com")
     password = os.getenv("INTEGRATION_PASSWORD", "ItestP@ssw0rd!")
+    approval_attribute = os.getenv("INTEGRATION_APPROVAL_ATTRIBUTE", "custom:approved")
+    approval_value = os.getenv("INTEGRATION_APPROVAL_VALUE", "true")
     profile = os.getenv("AWS_PROFILE", "Personal")
     region = os.getenv("AWS_REGION", "eu-north-1")
     session = boto3.Session(profile_name=profile)
@@ -142,6 +154,15 @@ def _ensure_test_user(user_pool_id: str, client_id: str) -> tuple[str, str]:
         Username=username,
         Password=password,
         Permanent=True,
+    )
+    # Pre-token lambda requires explicit user approval.
+    idp.admin_update_user_attributes(
+        UserPoolId=user_pool_id,
+        Username=username,
+        UserAttributes=[
+            {"Name": "email_verified", "Value": "true"},
+            {"Name": approval_attribute, "Value": approval_value},
+        ],
     )
     return username, password
 
@@ -217,6 +238,44 @@ def api_call(api_base_url: str, api_headers: dict[str, str]):
             body = exc.read().decode()
             status = exc.code
         return {"statusCode": status, "body": body}
+
+    return _inner
+
+
+@pytest.fixture(scope="session")
+def integration_run_namespace() -> str:
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    return f"it-{timestamp}-{uuid4().hex[:8]}"
+
+
+@pytest.fixture
+def cleanup_registry() -> CleanupRegistry:
+    registry = CleanupRegistry()
+    yield registry
+    registry.run()
+
+
+@pytest.fixture
+def exercise_serverless_function(
+    api_call,
+    json_body,
+    invoke_lambda,
+    lambda_name,
+    integration_run_namespace,
+    api_base_url,
+    cleanup_registry,
+):
+    def _inner(function_name: str) -> None:
+        run_serverless_function(
+            function_name,
+            api_call=api_call,
+            json_body=json_body,
+            invoke_lambda=invoke_lambda,
+            lambda_name=lambda_name,
+            run_namespace=integration_run_namespace,
+            api_base_url=api_base_url,
+            cleanup_registry=cleanup_registry,
+        )
 
     return _inner
 

@@ -138,3 +138,24 @@ Authentication is handled via AWS Amplify and Cognito-backed configuration with 
 - `apps/api` - Python API handlers, services, repositories, and schemas
 - `infra/terraform` - Infrastructure definitions
 - `docs` - Supporting documentation and assets
+
+## Backend testing
+
+- Run full backend test suite (includes static integration coverage gate):
+  - `PYTHONPATH=. pytest apps/api/tests`
+- Run only the serverless integration coverage gate:
+  - `PYTHONPATH=. pytest apps/api/tests/test_integration_function_coverage.py`
+- Run cloud integration tests (explicit target required):
+  - `PYTHONPATH=. pytest apps/api/tests/integration/functions`
+
+### Cloud integration env
+
+- `AWS_PROFILE` (default `Personal`)
+- `AWS_REGION` (default `eu-north-1`)
+- `INTEGRATION_STAGE` or `ENV` (default `default`)
+- Optional overrides:
+  - `INTEGRATION_API_BASE`
+  - `INTEGRATION_STACK_NAME`
+  - `INTEGRATION_SERVICE_NAME`
+  - `INTEGRATION_USERNAME`
+  - `INTEGRATION_PASSWORD`

@@ -415,9 +415,7 @@ class ImportService:
                     suggested_subscription_confidence=row_payload.get(
                         "suggested_subscription_confidence"
                     ),
-                    suggested_subscription_reason=row_payload.get(
-                        "suggested_subscription_reason"
-                    ),
+                    suggested_subscription_reason=row_payload.get("suggested_subscription_reason"),
                     transfer_match=row_payload.get("transfer_match"),
                     rule_applied=bool(row_payload.get("rule_applied")),
                     rule_type=row_payload.get("rule_type"),
@@ -539,9 +537,7 @@ class ImportService:
                 amount = str(row_data.get("amount") or "")
                 description = str(row_data.get("description") or "")
                 rows_by_account.setdefault(account_id, []).append((row.id, description))
-                suggested_category_id = self._coerce_uuid(
-                    row_data.get("suggested_category_id")
-                )
+                suggested_category_id = self._coerce_uuid(row_data.get("suggested_category_id"))
 
                 response_rows.append(
                     {
