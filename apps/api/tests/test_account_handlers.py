@@ -10,9 +10,11 @@ import pytest
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel
 
+from apps.api.handlers import accounts as account_handlers
 from apps.api.handlers import (
     create_account,
     list_accounts,
+    reconcile_account,
     reset_account_handler_state,
     update_account,
 )
@@ -26,6 +28,8 @@ from apps.api.shared import (
     get_engine,
     scope_session_to_user,
 )
+
+# pylint: disable=protected-access
 
 
 @pytest.fixture(autouse=True)
@@ -187,3 +191,164 @@ def test_list_accounts_respects_as_of_date():
     body = _json_body(response)
     tracked_entry = next(acc for acc in body["accounts"] if acc["id"] == str(tracked_id))
     assert Decimal(tracked_entry["balance"]) == Decimal("100")
+
+
+def test_reconcile_account_creates_adjustment_transaction() -> None:
+    create_event = {
+        "body": json.dumps({"account_type": "normal"}),
+        "isBase64Encoded": False,
+    }
+    created_response = create_account(create_event, None)
+    account_id = _json_body(created_response)["id"]
+
+    event = {
+        "pathParameters": {"account_id": account_id},
+        "body": json.dumps(
+            {
+                "captured_at": "2024-06-01T00:00:00+00:00",
+                "reported_balance": "150.00",
+                "description": "Manual reconcile",
+            }
+        ),
+        "isBase64Encoded": False,
+    }
+    response = reconcile_account(event, None)
+    assert response["statusCode"] == 201
+    body = _json_body(response)
+    assert Decimal(body["reported_balance"]) == Decimal("150.00")
+    assert Decimal(body["delta_posted"]) == Decimal("150.00")
+    assert body["snapshot_id"]
+    assert body["transaction_id"]
+
+
+def test_reconcile_account_validation_and_not_found() -> None:
+    missing_id_response = reconcile_account({"pathParameters": {}, "body": "{}"}, None)
+    assert missing_id_response["statusCode"] == 400
+
+    invalid_payload_response = reconcile_account(
+        {
+            "pathParameters": {"account_id": str(UUID(int=1))},
+            "body": json.dumps({"captured_at": "bad", "reported_balance": "x"}),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert invalid_payload_response["statusCode"] == 400
+
+    not_found_response = reconcile_account(
+        {
+            "pathParameters": {"account_id": str(UUID(int=1))},
+            "body": json.dumps(
+                {"captured_at": "2024-01-01T00:00:00+00:00", "reported_balance": "1"}
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert not_found_response["statusCode"] == 404
+
+
+def test_needs_reconciliation_helper_branches() -> None:
+    now = datetime(2024, 6, 1, tzinfo=timezone.utc)
+    account = Account(
+        name="Checking",
+        account_type=AccountType.NORMAL,
+        is_active=True,
+    )
+    offset = Account(
+        name="Offset",
+        account_type=AccountType.NORMAL,
+        is_active=True,
+    )
+    inactive = Account(
+        name="Inactive",
+        account_type=AccountType.NORMAL,
+        is_active=False,
+    )
+    investment = Account(
+        name="Broker",
+        account_type=AccountType.INVESTMENT,
+        is_active=True,
+    )
+
+    assert not account_handlers._needs_reconciliation(
+        account=offset,
+        balance=Decimal("10"),
+        reconciliation={"delta_since_snapshot": Decimal("20")},
+        now=now,
+    )
+    assert not account_handlers._needs_reconciliation(
+        account=inactive,
+        balance=Decimal("10"),
+        reconciliation={"delta_since_snapshot": Decimal("20")},
+        now=now,
+    )
+    assert account_handlers._needs_reconciliation(
+        account=account,
+        balance=Decimal("10"),
+        reconciliation={"delta_since_snapshot": Decimal("2")},
+        now=now,
+    )
+    assert account_handlers._needs_reconciliation(
+        account=account,
+        balance=Decimal("10"),
+        reconciliation={"last_captured_at": None, "delta_since_snapshot": Decimal("0")},
+        now=now,
+    )
+    assert account_handlers._needs_reconciliation(
+        account=account,
+        balance=Decimal("2"),
+        reconciliation={
+            "last_captured_at": datetime(2024, 1, 1, tzinfo=timezone.utc),
+            "delta_since_snapshot": Decimal("0"),
+        },
+        now=now,
+    )
+    assert not account_handlers._needs_reconciliation(
+        account=investment,
+        balance=Decimal("50"),
+        reconciliation={
+            "last_captured_at": datetime(2024, 1, 1, tzinfo=timezone.utc),
+            "delta_since_snapshot": Decimal("0"),
+        },
+        now=now,
+    )
+    assert account_handlers._needs_reconciliation(
+        account=account,
+        balance=Decimal("0"),
+        reconciliation={"last_captured_at": "invalid", "delta_since_snapshot": Decimal("0")},
+        now=now,
+    )
+    assert not account_handlers._needs_reconciliation(
+        account=account,
+        balance=Decimal("0"),
+        reconciliation={
+            "last_captured_at": datetime(2024, 5, 25, tzinfo=timezone.utc),
+            "delta_since_snapshot": Decimal("0"),
+        },
+        now=now,
+    )
+
+
+def test_account_handler_validation_paths() -> None:
+    list_invalid = list_accounts({"queryStringParameters": {"as_of_date": "bad-date"}}, None)
+    assert list_invalid["statusCode"] == 400
+
+    create_invalid = create_account({"body": "{}", "isBase64Encoded": False}, None)
+    assert create_invalid["statusCode"] == 400
+
+    missing_path = update_account(
+        {"body": json.dumps({"name": "x"}), "isBase64Encoded": False, "pathParameters": {}},
+        None,
+    )
+    assert missing_path["statusCode"] == 400
+
+    invalid_payload = update_account(
+        {
+            "body": json.dumps({"bank_import_type": "bad-type"}),
+            "isBase64Encoded": False,
+            "pathParameters": {"account_id": str(UUID(int=1))},
+        },
+        None,
+    )
+    assert invalid_payload["statusCode"] == 400

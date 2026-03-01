@@ -9,6 +9,7 @@ import pytest
 from sqlalchemy.pool import StaticPool
 from sqlmodel import SQLModel
 
+from apps.api.handlers import categories as category_handlers
 from apps.api.handlers import (
     create_category,
     list_categories,
@@ -204,3 +205,107 @@ def test_merge_categories_moves_transactions():
         target = session.get(Category, target_id)
         assert source is not None and source.is_archived
         assert target is not None and target.name == "Consolidated"
+
+
+def test_category_handler_error_paths():
+    invalid_list = list_categories({"queryStringParameters": {"include_archived": "x"}}, None)
+    assert invalid_list["statusCode"] == 400
+
+    missing_path = update_category(
+        {"body": json.dumps({"name": "x"}), "isBase64Encoded": False, "pathParameters": {}},
+        None,
+    )
+    assert missing_path["statusCode"] == 400
+
+    invalid_payload = update_category(
+        {
+            "body": json.dumps({"category_type": "bad-type"}),
+            "isBase64Encoded": False,
+            "pathParameters": {"category_id": str(UUID(int=1))},
+        },
+        None,
+    )
+    assert invalid_payload["statusCode"] == 400
+
+    created = create_category(
+        {
+            "body": json.dumps({"name": "TypeColor", "category_type": "expense"}),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    category_id = _json_body(created)["id"]
+    type_color_update = update_category(
+        {
+            "body": json.dumps({"category_type": "income", "color_hex": "#112233"}),
+            "isBase64Encoded": False,
+            "pathParameters": {"category_id": category_id},
+        },
+        None,
+    )
+    assert type_color_update["statusCode"] == 200
+    updated = _json_body(type_color_update)
+    assert updated["category_type"] == "income"
+    assert updated["color_hex"] == "#112233"
+
+    src_resp = create_category(
+        {
+            "body": json.dumps({"name": "MergeSrc", "category_type": "expense"}),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    source_id = _json_body(src_resp)["id"]
+    missing_target = merge_categories(
+        {
+            "body": json.dumps(
+                {
+                    "source_category_id": source_id,
+                    "target_category_id": str(UUID(int=999)),
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert missing_target["statusCode"] == 404
+
+    same_ids = merge_categories(
+        {
+            "body": json.dumps(
+                {
+                    "source_category_id": source_id,
+                    "target_category_id": source_id,
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert same_ids["statusCode"] == 400
+
+    class _ServiceValueError:
+        def __init__(self, _session) -> None:
+            pass
+
+        def merge_categories(self, *_args, **_kwargs):
+            raise ValueError("no merge")
+
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(category_handlers, "CategoryService", _ServiceValueError)
+    try:
+        value_error = merge_categories(
+            {
+                "body": json.dumps(
+                    {
+                        "source_category_id": str(UUID(int=2)),
+                        "target_category_id": str(UUID(int=3)),
+                    }
+                ),
+                "isBase64Encoded": False,
+            },
+            None,
+        )
+        assert value_error["statusCode"] == 400
+    finally:
+        monkeypatch.undo()

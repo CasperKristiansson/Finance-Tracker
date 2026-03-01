@@ -608,19 +608,19 @@ def _extract_output_text(parsed: Any) -> str:
 
 def _extract_json(text: str) -> Any:
     cleaned = text.strip()
-    cleaned = re.sub(r"^```(json)?\\s*", "", cleaned, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\\s*```$", "", cleaned)
+    cleaned = re.sub(r"^```(json)?\s*", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
     parsed = _safe_json_loads(cleaned)
     if parsed is not None:
         return parsed
 
-    obj_match = re.search(r"\\{.*\\}", cleaned, flags=re.DOTALL)
+    obj_match = re.search(r"\{.*\}", cleaned, flags=re.DOTALL)
     if obj_match:
         parsed_obj = _safe_json_loads(obj_match.group(0))
         if parsed_obj is not None:
             return parsed_obj
 
-    arr_match = re.search(r"\\[.*\\]", cleaned, flags=re.DOTALL)
+    arr_match = re.search(r"\[.*\]", cleaned, flags=re.DOTALL)
     if arr_match:
         return _safe_json_loads(arr_match.group(0))
 
@@ -640,9 +640,10 @@ def _get_bedrock_client():
 
 
 def _signature(description: str) -> str:
-    cleaned = re.sub(r"[^a-zA-Z0-9\\s]", " ", (description or "")).lower()
-    cleaned = re.sub(r"\\s+", " ", cleaned).strip()
-    cleaned = re.sub(r"\\b\\d+\\b", "", cleaned).strip()
+    cleaned = re.sub(r"[^a-zA-Z0-9\s]", " ", (description or "")).lower()
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    cleaned = re.sub(r"\b\d+\b", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned[:120]
 
 

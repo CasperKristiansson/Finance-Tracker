@@ -13,6 +13,7 @@ from openpyxl import Workbook
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, select
 
+from apps.api.handlers import imports as import_handlers
 from apps.api.handlers.imports import (
     commit_imports,
     delete_import_draft,
@@ -687,3 +688,189 @@ def test_commit_creates_batch_and_transactions():
     body = _json_body(response)
     assert body["import_batch_id"]
     assert body["transaction_ids"] and len(body["transaction_ids"]) == 1
+
+
+def test_import_handler_validation_and_error_paths(monkeypatch: pytest.MonkeyPatch):
+    preview_invalid = preview_imports({"body": "{}", "isBase64Encoded": False}, None)
+    assert preview_invalid["statusCode"] == 400
+
+    commit_invalid = commit_imports({"body": "{}", "isBase64Encoded": False}, None)
+    assert commit_invalid["statusCode"] == 400
+
+    missing_draft_id = get_import_draft({"pathParameters": {}}, None)
+    assert missing_draft_id["statusCode"] == 400
+
+    missing_save_id = save_import_draft(
+        {"pathParameters": {}, "body": json.dumps({"rows": []}), "isBase64Encoded": False},
+        None,
+    )
+    assert missing_save_id["statusCode"] == 400
+
+    save_invalid = save_import_draft(
+        {
+            "pathParameters": {"importBatchId": str(UUID(int=1))},
+            "body": "{}",
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert save_invalid["statusCode"] == 400
+
+    class _PreviewLookupErrorService:
+        def __init__(self, _session) -> None:
+            pass
+
+        def preview_import(self, _data):
+            raise LookupError("missing")
+
+        def commit_import(self, _data):
+            raise LookupError("missing")
+
+        def get_import_draft(self, _batch_id):
+            raise LookupError("missing")
+
+        def save_import_draft(self, _batch_id, _data):
+            raise LookupError("missing")
+
+        def list_import_drafts(self):
+            return {"drafts": []}
+
+    monkeypatch.setattr(import_handlers, "ImportService", _PreviewLookupErrorService)
+    preview_lookup = preview_imports(
+        {
+            "body": json.dumps(
+                {
+                    "files": [
+                        {"filename": "f", "account_id": str(UUID(int=1)), "content_base64": "Zg=="}
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert preview_lookup["statusCode"] == 404
+
+    commit_lookup = commit_imports(
+        {
+            "body": json.dumps(
+                {
+                    "rows": [
+                        {
+                            "id": str(UUID(int=1)),
+                            "account_id": str(UUID(int=1)),
+                            "occurred_at": "2024-01-01",
+                            "amount": "1",
+                            "description": "x",
+                        }
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert commit_lookup["statusCode"] == 404
+
+    draft_lookup = get_import_draft(
+        {"pathParameters": {"importBatchId": str(UUID(int=1))}},
+        None,
+    )
+    assert draft_lookup["statusCode"] == 404
+
+    save_lookup = save_import_draft(
+        {
+            "pathParameters": {"importBatchId": str(UUID(int=1))},
+            "body": json.dumps(
+                {
+                    "rows": [
+                        {
+                            "id": str(UUID(int=1)),
+                            "account_id": str(UUID(int=1)),
+                            "occurred_at": "2024-01-01",
+                            "amount": "1",
+                            "description": "x",
+                        }
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert save_lookup["statusCode"] == 404
+
+    class _PreviewValueErrorService(_PreviewLookupErrorService):
+        def preview_import(self, _data):
+            raise ValueError("bad preview")
+
+        def commit_import(self, _data):
+            raise ValueError("bad commit")
+
+        def get_import_draft(self, _batch_id):
+            raise ValueError("bad draft")
+
+        def save_import_draft(self, _batch_id, _data):
+            raise ValueError("bad save")
+
+    monkeypatch.setattr(import_handlers, "ImportService", _PreviewValueErrorService)
+    preview_value = preview_imports(
+        {
+            "body": json.dumps(
+                {
+                    "files": [
+                        {"filename": "f", "account_id": str(UUID(int=1)), "content_base64": "Zg=="}
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert preview_value["statusCode"] == 400
+    commit_value = commit_imports(
+        {
+            "body": json.dumps(
+                {
+                    "rows": [
+                        {
+                            "id": str(UUID(int=1)),
+                            "account_id": str(UUID(int=1)),
+                            "occurred_at": "2024-01-01",
+                            "amount": "1",
+                            "description": "x",
+                        }
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert commit_value["statusCode"] == 400
+    draft_value = get_import_draft(
+        {"pathParameters": {"importBatchId": str(UUID(int=1))}},
+        None,
+    )
+    assert draft_value["statusCode"] == 400
+    save_value = save_import_draft(
+        {
+            "pathParameters": {"importBatchId": str(UUID(int=1))},
+            "body": json.dumps(
+                {
+                    "rows": [
+                        {
+                            "id": str(UUID(int=1)),
+                            "account_id": str(UUID(int=1)),
+                            "occurred_at": "2024-01-01",
+                            "amount": "1",
+                            "description": "x",
+                        }
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert save_value["statusCode"] == 400

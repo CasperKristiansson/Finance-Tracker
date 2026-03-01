@@ -15,6 +15,9 @@ from apps.api.handlers import (
     delete_transaction,
     list_transactions,
     reset_transaction_handler_state,
+)
+from apps.api.handlers import transactions as tx_handlers
+from apps.api.handlers import (
     update_transaction,
 )
 from apps.api.models import Account, Loan, LoanEvent
@@ -265,3 +268,89 @@ def test_update_and_delete_transaction():
     list_response = list_transactions({"queryStringParameters": None}, None)
     transactions = _json_body(list_response)["transactions"]
     assert all(item["id"] != transaction_id for item in transactions)
+
+
+def test_transaction_handler_error_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    list_invalid = list_transactions({"queryStringParameters": {"limit": "x"}}, None)
+    assert list_invalid["statusCode"] == 400
+
+    with Session(get_engine()) as session:
+        scope_session_to_user(session, get_default_user_id())
+        source = _create_account(session)
+        destination = _create_account(session)
+        source_id = source.id
+        destination_id = destination.id
+
+    value_error_create = create_transaction(
+        {
+            "body": json.dumps(
+                {
+                    "occurred_at": "2024-01-01T00:00:00+00:00",
+                    "posted_at": "2024-01-01T00:00:00+00:00",
+                    "legs": [
+                        {"account_id": str(source_id), "amount": "10"},
+                        {"account_id": str(destination_id), "amount": "10"},
+                    ],
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert value_error_create["statusCode"] == 400
+
+    missing_path_update = update_transaction(
+        {"body": json.dumps({"description": "x"}), "isBase64Encoded": False, "pathParameters": {}},
+        None,
+    )
+    assert missing_path_update["statusCode"] == 400
+
+    invalid_payload_update = update_transaction(
+        {
+            "body": json.dumps({"occurred_at": "not-date"}),
+            "isBase64Encoded": False,
+            "pathParameters": {"transaction_id": str(UUID(int=1))},
+        },
+        None,
+    )
+    assert invalid_payload_update["statusCode"] == 400
+
+    not_found_update = update_transaction(
+        {
+            "body": json.dumps({"description": "x"}),
+            "isBase64Encoded": False,
+            "pathParameters": {"transaction_id": str(UUID(int=1))},
+        },
+        None,
+    )
+    assert not_found_update["statusCode"] == 404
+
+    not_found_delete = delete_transaction(
+        {"pathParameters": {"transaction_id": str(UUID(int=999))}},
+        None,
+    )
+    assert not_found_delete["statusCode"] == 404
+
+    class _ServiceUpdateValueError:
+        def __init__(self, _session) -> None:
+            pass
+
+        def update_transaction(self, _transaction_id, **_updates):
+            raise ValueError("bad update")
+
+        def delete_transaction(self, _transaction_id):
+            raise LookupError("missing")
+
+    monkeypatch.setattr(tx_handlers, "TransactionService", _ServiceUpdateValueError)
+    value_error_update = update_transaction(
+        {
+            "body": json.dumps({"description": "x"}),
+            "isBase64Encoded": False,
+            "pathParameters": {"transaction_id": str(UUID(int=2))},
+        },
+        None,
+    )
+    assert value_error_update["statusCode"] == 400
+
+    missing_path_delete = delete_transaction({"pathParameters": {}}, None)
+    assert missing_path_delete["statusCode"] == 400

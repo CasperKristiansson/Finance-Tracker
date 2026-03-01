@@ -58,6 +58,34 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 show_error_codes = true
 
+[tool.pytest.ini_options]
+testpaths = ["apps/api/tests"]
+addopts = [
+  "--cov=apps/api",
+  "--cov-report=term-missing:skip-covered",
+  "--cov-report=xml:coverage.xml",
+  "--cov-branch",
+  "--cov-fail-under=100",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["apps/api"]
+omit = [
+  "*/apps/api/tests/*",
+  "*/apps/api/migrations/*",
+  "*/apps/api/**/__init__.py",
+]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = true
+exclude_also = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+]
+
 [[tool.mypy.overrides]]
 module = "apps.api.tests.*"
 disable_error_code = ["attr-defined"]

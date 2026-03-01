@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -10,8 +11,13 @@ from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, select
 
 from apps.api.handlers import (
+    cashflow_forecast,
+    date_range_report,
+    export_report,
     monthly_report,
     net_worth_history,
+    net_worth_projection,
+    quarterly_report,
     reset_reporting_handler_state,
     total_overview,
     total_report,
@@ -409,3 +415,217 @@ def test_yearly_category_detail_supports_income_flow():
     assert Decimal(jan["amount"]) == Decimal("500.00")
     merchants = body["top_merchants"]
     assert merchants and merchants[0]["merchant"] == "Salary"
+
+
+def test_quarterly_report_returns_results() -> None:
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        tracked = _create_account(session)
+        balancing = _create_account(session)
+    _seed_transactions(engine, tracked, balancing)
+
+    response = quarterly_report(
+        {"queryStringParameters": {"account_ids": str(tracked.id), "year": "2024"}},
+        None,
+    )
+    assert response["statusCode"] == 200
+    body = _json_body(response)
+    assert body["results"]
+    assert body["results"][0]["quarter"] == 1
+
+
+def test_date_range_report_supports_source_filter() -> None:
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        tracked = _create_account(session)
+        balancing = _create_account(session)
+    _seed_transactions(engine, tracked, balancing)
+
+    response = date_range_report(
+        {
+            "queryStringParameters": {
+                "account_ids": str(tracked.id),
+                "start_date": "2024-01-01",
+                "end_date": "2024-01-31",
+                "source": "COOP ODENPLAN",
+            }
+        },
+        None,
+    )
+    assert response["statusCode"] == 200
+    body = _json_body(response)
+    assert len(body["results"]) == 1
+    assert Decimal(body["results"][0]["income"]) == Decimal("0")
+    assert Decimal(body["results"][0]["expense"]) == Decimal("200")
+
+
+def test_cashflow_forecast_and_projection_endpoints() -> None:
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        tracked = _create_account(session)
+        balancing = _create_account(session)
+    _seed_transactions(engine, tracked, balancing)
+
+    forecast_response = cashflow_forecast(
+        {"queryStringParameters": {"account_ids": str(tracked.id), "days": "7", "model": "simple"}},
+        None,
+    )
+    assert forecast_response["statusCode"] == 200
+    forecast = _json_body(forecast_response)
+    assert forecast["model"] == "simple"
+    assert len(forecast["points"]) == 7
+
+    projection_response = net_worth_projection(
+        {"queryStringParameters": {"account_ids": str(tracked.id), "months": "6"}},
+        None,
+    )
+    assert projection_response["statusCode"] == 200
+    projection = _json_body(projection_response)
+    assert "current" in projection
+    assert "points" in projection
+
+
+def test_export_report_supports_csv_and_xlsx() -> None:
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        tracked = _create_account(session)
+        balancing = _create_account(session)
+    _seed_transactions(engine, tracked, balancing)
+
+    csv_response = export_report(
+        {
+            "body": json.dumps(
+                {
+                    "granularity": "monthly",
+                    "format": "csv",
+                    "year": 2024,
+                    "account_ids": [str(tracked.id)],
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert csv_response["statusCode"] == 200
+    csv_body = _json_body(csv_response)
+    assert csv_body["filename"].endswith(".csv")
+    csv_data = base64.b64decode(csv_body["data_base64"]).decode("utf-8")
+    assert "period,income,expense,net" in csv_data
+
+    xlsx_response = export_report(
+        {
+            "body": json.dumps(
+                {
+                    "granularity": "yearly",
+                    "format": "xlsx",
+                    "account_ids": [str(tracked.id)],
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert xlsx_response["statusCode"] == 200
+    xlsx_body = _json_body(xlsx_response)
+    assert xlsx_body["filename"].endswith(".xlsx")
+    xlsx_data = base64.b64decode(xlsx_body["data_base64"])
+    assert len(xlsx_data) > 100
+
+
+def test_export_report_other_granularities_and_workbook_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        tracked = _create_account(session)
+        balancing = _create_account(session)
+    _seed_transactions(engine, tracked, balancing)
+
+    for granularity in ("quarterly", "total", "net_worth"):
+        response = export_report(
+            {
+                "body": json.dumps(
+                    {
+                        "granularity": granularity,
+                        "format": "csv",
+                        "year": 2024,
+                        "account_ids": [str(tracked.id)],
+                    }
+                ),
+                "isBase64Encoded": False,
+            },
+            None,
+        )
+        assert response["statusCode"] == 200
+        body = _json_body(response)
+        decoded = base64.b64decode(body["data_base64"]).decode("utf-8")
+        assert decoded
+
+    class _WorkbookWithoutSheet:
+        def __init__(self) -> None:
+            self.active = None
+
+        def save(self, _stream) -> None:
+            return None
+
+    monkeypatch.setattr("openpyxl.Workbook", _WorkbookWithoutSheet)
+    error_response = export_report(
+        {
+            "body": json.dumps(
+                {
+                    "granularity": "monthly",
+                    "format": "xlsx",
+                    "year": 2024,
+                    "account_ids": [str(tracked.id)],
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert error_response["statusCode"] == 500
+
+
+@pytest.mark.parametrize(
+    ("handler", "event"),
+    [
+        (monthly_report, {"queryStringParameters": {"account_ids": "not-a-uuid"}}),
+        (yearly_report, {"queryStringParameters": {"account_ids": "not-a-uuid"}}),
+        (total_report, {"queryStringParameters": {"account_ids": "not-a-uuid"}}),
+        (quarterly_report, {"queryStringParameters": {"account_ids": "not-a-uuid"}}),
+        (date_range_report, {"queryStringParameters": {"start_date": "bad", "end_date": "bad"}}),
+        (net_worth_history, {"queryStringParameters": {"account_ids": "not-a-uuid"}}),
+        (cashflow_forecast, {"queryStringParameters": {"days": "0"}}),
+        (net_worth_projection, {"queryStringParameters": {"months": "0"}}),
+        (yearly_overview, {"queryStringParameters": {"year": "1899"}}),
+        (
+            yearly_category_detail,
+            {"queryStringParameters": {"year": "2024", "category_id": "not-a-uuid"}},
+        ),
+        (total_overview, {"queryStringParameters": {"account_ids": "not-a-uuid"}}),
+    ],
+)
+def test_reporting_handlers_return_400_on_invalid_query(
+    handler, event: dict[str, dict[str, str]]
+) -> None:
+    response = handler(event, None)
+    assert response["statusCode"] == 400
+    assert "error" in _json_body(response)
+
+
+def test_export_report_invalid_payload_returns_400() -> None:
+    response = export_report(
+        {
+            "body": json.dumps({"granularity": "not-supported", "format": "csv"}),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert response["statusCode"] == 400
+    body = _json_body(response)
+    assert "error" in body

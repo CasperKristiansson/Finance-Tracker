@@ -101,7 +101,8 @@ def validate_transaction_legs(
 
         if amount > zero_amount:
             has_positive = True
-        elif amount < zero_amount:
+        else:
+            # zero amounts are rejected above, so the remainder is strictly negative.
             has_negative = True
 
     if not (has_positive and has_negative):
