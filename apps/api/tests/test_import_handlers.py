@@ -15,6 +15,7 @@ from sqlmodel import Session, SQLModel, select
 
 from apps.api.handlers.imports import (
     commit_imports,
+    delete_import_draft,
     get_import_draft,
     list_import_drafts,
     preview_imports,
@@ -498,6 +499,107 @@ def test_list_import_drafts_excludes_committed_batches():
     )
     after_drafts = _json_body(after_commit)["drafts"]
     assert all(draft["import_batch_id"] != import_batch_id for draft in after_drafts)
+
+
+def test_delete_import_draft_removes_session():
+    account_id = _create_account(bank_import_type="swedbank")
+    payload = _swedbank_workbook()
+    preview_response = preview_imports(
+        {
+            "body": json.dumps(
+                {
+                    "files": [
+                        {
+                            "filename": "swedbank.xlsx",
+                            "account_id": str(account_id),
+                            "content_base64": payload,
+                        }
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    import_batch_id = _json_body(preview_response)["import_batch_id"]
+
+    delete_response = delete_import_draft(
+        {
+            "pathParameters": {"importBatchId": import_batch_id},
+            "requestContext": {"authorizer": {"jwt": {"claims": {}}}},
+        },
+        None,
+    )
+    assert delete_response["statusCode"] == 200
+
+    drafts_response = list_import_drafts(
+        {"requestContext": {"authorizer": {"jwt": {"claims": {}}}}},
+        None,
+    )
+    drafts = _json_body(drafts_response)["drafts"]
+    assert all(draft["import_batch_id"] != import_batch_id for draft in drafts)
+
+
+def test_delete_import_draft_fails_for_committed_batch():
+    account_id = _create_account(bank_import_type="swedbank")
+    payload = _swedbank_workbook()
+    preview_response = preview_imports(
+        {
+            "body": json.dumps(
+                {
+                    "files": [
+                        {
+                            "filename": "swedbank.xlsx",
+                            "account_id": str(account_id),
+                            "content_base64": payload,
+                        }
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    preview_body = _json_body(preview_response)
+    import_batch_id = preview_body["import_batch_id"]
+    row = preview_body["rows"][0]
+
+    commit_response = commit_imports(
+        {
+            "body": json.dumps(
+                {
+                    "import_batch_id": import_batch_id,
+                    "rows": [
+                        {
+                            "id": row["id"],
+                            "file_id": row["file_id"],
+                            "account_id": row["account_id"],
+                            "occurred_at": row["occurred_at"],
+                            "amount": row["amount"],
+                            "description": row["description"],
+                            "category_id": None,
+                            "subscription_id": None,
+                            "transfer_account_id": None,
+                            "tax_event_type": None,
+                            "delete": False,
+                        }
+                    ],
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert commit_response["statusCode"] == 200
+
+    delete_response = delete_import_draft(
+        {
+            "pathParameters": {"importBatchId": import_batch_id},
+            "requestContext": {"authorizer": {"jwt": {"claims": {}}}},
+        },
+        None,
+    )
+    assert delete_response["statusCode"] == 400
 
 
 def test_commit_creates_batch_and_transactions():

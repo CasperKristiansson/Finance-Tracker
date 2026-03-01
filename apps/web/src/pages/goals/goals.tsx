@@ -18,6 +18,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useAppSelector } from "@/app/hooks";
+import { ConfirmDialog } from "@/components/composed/confirm-dialog";
 import {
   fadeInUp,
   MotionPage,
@@ -115,6 +116,9 @@ export const Goals: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [editingGoal, setEditingGoal] = useState<GoalRead | null>(null);
+  const [goalPendingDelete, setGoalPendingDelete] = useState<GoalRead | null>(
+    null,
+  );
   const goalForm = useForm<GoalFormValues>({
     resolver: zodResolver(goalFormSchema),
     defaultValues: defaultGoalValues,
@@ -261,15 +265,12 @@ export const Goals: React.FC = () => {
   });
 
   const deleteGoal = async (goal: GoalRead) => {
-    const confirmed = window.confirm(
-      `Delete "${goal.name}"? This cannot be undone.`,
-    );
-    if (!confirmed) return;
     try {
       if (isDemo) {
         setGoals((prev) => prev.filter((item) => item.id !== goal.id));
         toast.success("Goal deleted (demo mode)");
         setSelectedGoalId(null);
+        setGoalPendingDelete(null);
         return;
       }
       await apiFetch({
@@ -279,6 +280,7 @@ export const Goals: React.FC = () => {
       });
       toast.success("Goal deleted");
       setSelectedGoalId(null);
+      setGoalPendingDelete(null);
       void loadGoals();
     } catch (error) {
       toast.error("Unable to delete goal", {
@@ -932,7 +934,7 @@ export const Goals: React.FC = () => {
                     variant="destructive"
                     size="sm"
                     className="gap-2"
-                    onClick={() => deleteGoal(selectedGoal)}
+                    onClick={() => setGoalPendingDelete(selectedGoal)}
                   >
                     <Trash2 className="h-4 w-4" />
                     Delete
@@ -1020,6 +1022,24 @@ export const Goals: React.FC = () => {
           ) : null}
         </SheetContent>
       </Sheet>
+
+      <ConfirmDialog
+        open={Boolean(goalPendingDelete)}
+        onOpenChange={(open) => {
+          if (!open) setGoalPendingDelete(null);
+        }}
+        title="Delete goal?"
+        description={
+          goalPendingDelete
+            ? `Delete "${goalPendingDelete.name}"? This cannot be undone.`
+            : "This action cannot be undone."
+        }
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (!goalPendingDelete) return;
+          void deleteGoal(goalPendingDelete);
+        }}
+      />
 
       <section
         className={cn(

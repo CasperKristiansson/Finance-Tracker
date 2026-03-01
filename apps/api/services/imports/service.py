@@ -338,6 +338,14 @@ class ImportService:
             updated_at=batch.updated_at,
         ).model_dump(mode="python")
 
+    def delete_import_draft(self, import_batch_id: UUID) -> None:
+        """Delete an unfinished import draft session."""
+
+        batch = self._load_batch(import_batch_id)
+        if self._batch_has_transactions(batch.id):
+            raise ValueError("Cannot delete a committed import batch")
+        self.session.delete(batch)
+
     def _persist_preview_batch(
         self,
         *,

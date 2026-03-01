@@ -151,11 +151,36 @@ def save_import_draft(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     return json_response(200, response)
 
 
+def delete_import_draft(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    """HTTP DELETE /imports/{importBatchId}."""
+
+    ensure_engine()
+    user_id = get_user_id(event)
+    import_batch_id = extract_path_uuid(
+        event,
+        param_names=("importBatchId", "import_batch_id"),
+    )
+    if import_batch_id is None:
+        return json_response(400, {"error": "importBatchId is required"})
+
+    try:
+        with session_scope(user_id=user_id) as session:
+            service = ImportService(session)
+            service.delete_import_draft(import_batch_id)
+    except LookupError as exc:
+        return json_response(404, {"error": str(exc)})
+    except ValueError as exc:
+        return json_response(400, {"error": str(exc)})
+
+    return json_response(200, {"import_batch_id": str(import_batch_id), "deleted": True})
+
+
 __all__ = [
     "preview_imports",
     "commit_imports",
     "list_import_drafts",
     "get_import_draft",
     "save_import_draft",
+    "delete_import_draft",
     "reset_handler_state",
 ]

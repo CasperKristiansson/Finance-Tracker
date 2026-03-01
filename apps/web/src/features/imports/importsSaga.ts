@@ -13,6 +13,7 @@ import { selectIsDemo } from "@/features/auth/authSlice";
 import { selectCategories } from "@/features/categories/categoriesSlice";
 import {
   clearImportPreview,
+  selectImportDrafts,
   clearImportsError,
   setImportDraftSaving,
   setImportDrafts,
@@ -83,6 +84,9 @@ export const SaveImportDraft = createAction<{
   importBatchId: string;
   rows: NonNullable<ImportDraftSaveRequest["rows"]>;
 }>("imports/saveDraft");
+export const DeleteImportDraft = createAction<{ importBatchId: string }>(
+  "imports/deleteDraft",
+);
 export const FetchStoredImportFiles = createAction("imports/fetchStoredFiles");
 export const DownloadImportFile = createAction<{ fileId: string }>(
   "imports/downloadFile",
@@ -619,6 +623,44 @@ function* handleSaveDraft(action: ReturnType<typeof SaveImportDraft>) {
   }
 }
 
+function* handleDeleteDraft(action: ReturnType<typeof DeleteImportDraft>) {
+  yield put(setImportDraftsLoading(true));
+  yield put(setImportDraftsError(undefined));
+  const isDemo: boolean = yield select(selectIsDemo);
+  try {
+    if (isDemo) {
+      const currentDrafts: ImportDraftListResponse["drafts"] =
+        yield select(selectImportDrafts);
+      yield put(
+        setImportDrafts(
+          currentDrafts.filter(
+            (draft) => draft.import_batch_id !== action.payload.importBatchId,
+          ),
+        ),
+      );
+      return;
+    }
+
+    yield call(
+      callApiWithAuth,
+      {
+        path: `/imports/${action.payload.importBatchId}`,
+        method: "DELETE",
+      },
+      { loadingKey: `import-draft-delete-${action.payload.importBatchId}` },
+    );
+    yield put(FetchImportDrafts());
+    toast.success("Import draft removed");
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to remove import draft.";
+    yield put(setImportDraftsError(message));
+    toast.error("Could not remove import draft", { description: message });
+  } finally {
+    yield put(setImportDraftsLoading(false));
+  }
+}
+
 function* handleFetchStoredFiles() {
   yield put(setStoredImportFilesLoading(true));
   yield put(setStoredImportFilesError(undefined));
@@ -691,6 +733,7 @@ export function* ImportsSaga() {
   yield takeLatest(FetchImportDrafts.type, handleFetchDrafts);
   yield takeLatest(LoadImportDraft.type, handleLoadDraft);
   yield takeLatest(SaveImportDraft.type, handleSaveDraft);
+  yield takeLatest(DeleteImportDraft.type, handleDeleteDraft);
   yield takeLatest(FetchStoredImportFiles.type, handleFetchStoredFiles);
   yield takeLatest(DownloadImportFile.type, handleDownloadImportFile);
   yield takeLatest(ResetImports.type, function* () {

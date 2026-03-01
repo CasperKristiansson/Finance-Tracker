@@ -25,6 +25,7 @@ import {
 } from "@/features/categories/categoriesSlice";
 import {
   CommitImports,
+  DeleteImportDraft,
   FetchImportDrafts,
   PreviewImports,
   FetchStoredImportFiles,
@@ -493,6 +494,11 @@ export const useImportsApi = () => {
     [dispatch],
   );
 
+  const deleteImportDraft = useCallback(
+    (importBatchId: string) => dispatch(DeleteImportDraft({ importBatchId })),
+    [dispatch],
+  );
+
   const downloadImportFile = useCallback(
     (fileId: string) => dispatch(DownloadImportFile({ fileId })),
     [dispatch],
@@ -521,6 +527,7 @@ export const useImportsApi = () => {
     fetchImportDrafts,
     loadImportDraft,
     saveImportDraft,
+    deleteImportDraft,
     downloadImportFile,
   };
 };

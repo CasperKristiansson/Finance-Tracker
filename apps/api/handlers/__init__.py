@@ -16,6 +16,7 @@ from .categories import (
 from .goals import create_goal, delete_goal, list_goals, update_goal
 from .imports import (
     commit_imports,
+    delete_import_draft,
     get_import_draft,
     list_import_drafts,
     preview_imports,
@@ -106,6 +107,7 @@ __all__ = [
     "list_import_drafts",
     "get_import_draft",
     "save_import_draft",
+    "delete_import_draft",
     "reset_import_handler_state",
     "run_transactions_backup",
     "reset_account_handler_state",

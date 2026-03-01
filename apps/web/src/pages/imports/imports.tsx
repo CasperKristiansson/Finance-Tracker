@@ -26,6 +26,7 @@ import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useAppSelector } from "@/app/hooks";
+import { ConfirmDialog } from "@/components/composed/confirm-dialog";
 import { MotionPage } from "@/components/motion-presets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -345,6 +346,7 @@ export const Imports: React.FC = () => {
     fetchImportDrafts,
     loadImportDraft,
     saveImportDraft,
+    deleteImportDraft,
   } = useImportsApi();
 
   const [step, setStep] = useState<StepKey>(1);
@@ -388,6 +390,9 @@ export const Imports: React.FC = () => {
   const [reimbursementsByRow, setReimbursementsByRow] = useState<
     Record<string, ReimbursementState>
   >({});
+  const [draftPendingDeleteId, setDraftPendingDeleteId] = useState<
+    string | null
+  >(null);
   const importIdFromUrl = searchParams.get("importId");
   const draftLoadRequestRef = useRef<string | null>(null);
   const lastDraftSnapshotRef = useRef<string | null>(null);
@@ -723,6 +728,13 @@ export const Imports: React.FC = () => {
         (draft) => draft.import_batch_id !== preview?.import_batch_id,
       ),
     [drafts, preview?.import_batch_id],
+  );
+  const draftPendingDelete = useMemo(
+    () =>
+      resumableDrafts.find(
+        (draft) => draft.import_batch_id === draftPendingDeleteId,
+      ) ?? null,
+    [draftPendingDeleteId, resumableDrafts],
   );
   const unmappedCount = useMemo(
     () => files.filter((f) => !f.accountId).length,
@@ -1565,23 +1577,38 @@ export const Imports: React.FC = () => {
                             {new Date(draft.updated_at).toLocaleString()}
                           </p>
                         </div>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            draftLoadRequestRef.current = draft.import_batch_id;
-                            setSearchParams((current) => {
-                              const next = new URLSearchParams(current);
-                              next.set("importId", draft.import_batch_id);
-                              return next;
-                            });
-                            loadImportDraft(draft.import_batch_id);
-                          }}
-                          disabled={loading}
-                        >
-                          Resume
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              draftLoadRequestRef.current =
+                                draft.import_batch_id;
+                              setSearchParams((current) => {
+                                const next = new URLSearchParams(current);
+                                next.set("importId", draft.import_batch_id);
+                                return next;
+                              });
+                              loadImportDraft(draft.import_batch_id);
+                            }}
+                            disabled={loading || draftsLoading}
+                          >
+                            Resume
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            className="text-rose-600 hover:text-rose-700"
+                            onClick={() =>
+                              setDraftPendingDeleteId(draft.import_batch_id)
+                            }
+                            disabled={loading || draftsLoading}
+                          >
+                            Remove
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1593,6 +1620,35 @@ export const Imports: React.FC = () => {
               </div>
             </>
           ) : null}
+
+          <ConfirmDialog
+            open={Boolean(draftPendingDelete)}
+            onOpenChange={(open) => {
+              if (!open) setDraftPendingDeleteId(null);
+            }}
+            title="Remove unfinished import?"
+            description={
+              draftPendingDelete
+                ? `Remove "${draftPendingDelete.file_names.join(", ")}"? You won’t be able to resume it.`
+                : "You won’t be able to resume this import after removal."
+            }
+            confirmLabel="Remove"
+            loading={draftsLoading}
+            onConfirm={() => {
+              if (!draftPendingDelete) return;
+              setSearchParams((current) => {
+                const next = new URLSearchParams(current);
+                if (
+                  next.get("importId") === draftPendingDelete.import_batch_id
+                ) {
+                  next.delete("importId");
+                }
+                return next;
+              });
+              deleteImportDraft(draftPendingDelete.import_batch_id);
+              setDraftPendingDeleteId(null);
+            }}
+          />
 
           {step === 2 ? (
             <>
