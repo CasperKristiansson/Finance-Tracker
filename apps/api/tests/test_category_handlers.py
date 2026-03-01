@@ -16,10 +16,9 @@ from apps.api.handlers import (
     reset_category_handler_state,
     update_category,
 )
-from apps.api.models import Account, Budget, Category, Transaction, TransactionLeg
+from apps.api.models import Account, Category, Transaction, TransactionLeg
 from apps.api.shared import (
     AccountType,
-    BudgetPeriod,
     TransactionType,
     configure_engine,
     get_engine,
@@ -141,7 +140,7 @@ def test_update_category_not_found():
     assert response["statusCode"] == 404
 
 
-def test_merge_categories_moves_transactions_and_budgets():
+def test_merge_categories_moves_transactions():
     # Create source and target categories
     src_resp = create_category(
         {
@@ -179,8 +178,6 @@ def test_merge_categories_moves_transactions_and_budgets():
         session.add(txn)
         session.flush()
         txn_id = txn.id
-        session.add(Budget(category_id=source_id, period=BudgetPeriod.MONTHLY, amount=100))
-        session.add(Budget(category_id=target_id, period=BudgetPeriod.MONTHLY, amount=20))
         session.commit()
 
     merge_response = merge_categories(
@@ -202,10 +199,6 @@ def test_merge_categories_moves_transactions_and_budgets():
         moved_txn = session.get(Transaction, txn_id)
         assert moved_txn is not None
         assert moved_txn.category_id == target_id
-
-        budgets = list(session.exec(select(Budget).where(Budget.category_id == target_id)))
-        assert len(budgets) == 1
-        assert float(budgets[0].amount) == 120.0
 
         source = session.get(Category, source_id)
         target = session.get(Category, target_id)

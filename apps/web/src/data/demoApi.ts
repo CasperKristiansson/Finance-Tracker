@@ -1,6 +1,5 @@
 import {
   demoGoals,
-  demoSubscriptions,
   demoTaxEvents,
   demoTaxTotalSummary,
   demoTransactionsResponse,
@@ -104,7 +103,6 @@ export const resolveDemoRequest = (request: DemoApiRequest) => {
         const transactionTypes = getStringArray(
           request.query?.transaction_types ?? request.query?.transaction_type,
         );
-        const subscriptionIds = getStringArray(request.query?.subscription_ids);
         const startDate = request.query?.start_date
           ? new Date(String(request.query.start_date))
           : null;
@@ -136,12 +134,6 @@ export const resolveDemoRequest = (request: DemoApiRequest) => {
             if (
               categoryIds.length &&
               !categoryIds.includes(tx.category_id ?? "")
-            ) {
-              return false;
-            }
-            if (
-              subscriptionIds.length &&
-              !subscriptionIds.includes(tx.subscription_id ?? "")
             ) {
               return false;
             }
@@ -183,9 +175,6 @@ export const resolveDemoRequest = (request: DemoApiRequest) => {
           running_balances: demoTransactionsResponse.running_balances,
         };
       }
-      case "/subscriptions/summary": {
-        return demoSubscriptions;
-      }
       case "/goals": {
         return demoGoals;
       }
@@ -212,7 +201,6 @@ export const resolveDemoRequest = (request: DemoApiRequest) => {
     return {
       id: `demo-tx-${Date.now()}`,
       category_id: null,
-      subscription_id: null,
       transaction_type: TransactionType.EXPENSE,
       description: "Demo transaction",
       notes: null,

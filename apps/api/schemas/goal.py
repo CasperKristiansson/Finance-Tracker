@@ -18,7 +18,6 @@ class GoalCreate(BaseModel):
     target_date: Optional[date] = None
     category_id: Optional[UUID] = None
     account_id: Optional[UUID] = None
-    subscription_id: Optional[UUID] = None
     note: Optional[str] = Field(default=None, max_length=255)
 
 
@@ -30,7 +29,6 @@ class GoalUpdate(BaseModel):
     target_date: Optional[date] = None
     category_id: Optional[UUID] = None
     account_id: Optional[UUID] = None
-    subscription_id: Optional[UUID] = None
     note: Optional[str] = Field(default=None, max_length=255)
 
 
@@ -45,7 +43,6 @@ class GoalRead(BaseModel):
     target_date: Optional[date] = None
     category_id: Optional[UUID] = None
     account_id: Optional[UUID] = None
-    subscription_id: Optional[UUID] = None
     note: Optional[str] = None
     created_at: datetime
     updated_at: datetime

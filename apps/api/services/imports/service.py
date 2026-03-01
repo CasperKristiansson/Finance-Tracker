@@ -22,7 +22,6 @@ from ...models import (
     ImportFile,
     ImportRow,
     ImportRule,
-    Subscription,
     TaxEvent,
     Transaction,
     TransactionImportBatch,
@@ -51,9 +50,7 @@ from .storage import ImportFileStorage
 from .suggestions import (
     CategorySuggestion,
     RuleMatch,
-    SubscriptionSuggestion,
     suggest_categories,
-    suggest_subscriptions,
 )
 from .transfers import match_transfers
 from .utils import is_date_like, is_decimal, parse_iso_date, safe_decimal
@@ -70,10 +67,7 @@ class ImportService:
         """Parse files, persist draft state, and return import preview data."""
 
         category_lookup_by_id = self._category_lookup_by_id()
-        subscription_lookup_by_id = self._subscription_lookup_by_id()
         category_by_name = self._category_lookup()
-        active_subscriptions = self._active_subscriptions()
-        last_subscription_amounts = self._subscription_amount_lookup()
 
         response_files: list[dict[str, Any]] = []
         response_rows: list[dict[str, Any]] = []
@@ -110,16 +104,8 @@ class ImportService:
                 rows,
                 column_map or {},
                 category_lookup_by_id,
-                subscription_lookup_by_id,
             )
             category_suggestions = suggest_categories(rows, column_map or {}, rule_matches)
-            subscription_suggestions = suggest_subscriptions(
-                rows,
-                column_map or {},
-                active_subscriptions,
-                last_subscription_amounts,
-                rule_matches,
-            )
             transfers = match_transfers(rows, column_map or {})
 
             preview_rows = rows[:5]
@@ -127,7 +113,6 @@ class ImportService:
             for idx, row in enumerate(preview_rows):
                 decorated = dict(row)
                 suggestion = category_suggestions.get(idx)
-                subscription_hint = subscription_suggestions.get(idx)
                 transfer = transfers.get(idx)
                 rule_match = rule_matches.get(idx)
                 if suggestion:
@@ -135,14 +120,6 @@ class ImportService:
                     decorated["suggested_confidence"] = round(suggestion.confidence, 2)
                     if suggestion.reason:
                         decorated["suggested_reason"] = suggestion.reason
-                if subscription_hint:
-                    decorated["suggested_subscription_id"] = str(subscription_hint.subscription_id)
-                    decorated["suggested_subscription_name"] = subscription_hint.subscription_name
-                    decorated["suggested_subscription_confidence"] = round(
-                        subscription_hint.confidence, 2
-                    )
-                    if subscription_hint.reason:
-                        decorated["suggested_subscription_reason"] = subscription_hint.reason
                 if transfer:
                     decorated["transfer_match"] = transfer
                 if rule_match:
@@ -190,7 +167,6 @@ class ImportService:
                         if category is not None:
                             suggested_category_id = category.id
 
-                subscription_hint = subscription_suggestions.get(idx - 1)
                 rule_match = rule_matches.get(idx - 1)
 
                 response_rows.append(
@@ -206,18 +182,6 @@ class ImportService:
                         "suggested_category_name": suggested_category_name,
                         "suggested_confidence": suggested_confidence,
                         "suggested_reason": suggested_reason,
-                        "suggested_subscription_id": (
-                            subscription_hint.subscription_id if subscription_hint else None
-                        ),
-                        "suggested_subscription_name": (
-                            subscription_hint.subscription_name if subscription_hint else None
-                        ),
-                        "suggested_subscription_confidence": (
-                            round(subscription_hint.confidence, 2) if subscription_hint else None
-                        ),
-                        "suggested_subscription_reason": (
-                            subscription_hint.reason if subscription_hint else None
-                        ),
                         "transfer_match": transfers.get(idx - 1),
                         "rule_applied": bool(rule_match),
                         "rule_type": rule_match.rule_type if rule_match else None,
@@ -890,7 +854,6 @@ class ImportService:
 
             tax_event_type: TaxEventType | None = row.tax_event_type
             category_id = row.category_id if tax_event_type is None else None
-            subscription_id = row.subscription_id if tax_event_type is None else None
 
             target_account_id = row.account_id
             counterparty_account_id = row.transfer_account_id
@@ -922,7 +885,6 @@ class ImportService:
                 external_id=None,
                 occurred_at=occurred_at,
                 posted_at=occurred_at,
-                subscription_id=subscription_id,
                 created_source=CreatedSource.IMPORT,
                 import_batch_id=batch.id,
                 import_file_id=(
@@ -960,7 +922,6 @@ class ImportService:
                     amount,
                     occurred_at,
                     category_id,
-                    subscription_id,
                 )
 
         if tax_events:
@@ -1045,7 +1006,6 @@ class ImportService:
         rows: List[dict],
         column_map: Dict[str, str],
         category_lookup: Dict[UUID, Category],
-        subscription_lookup: Dict[UUID, Subscription],
     ) -> Dict[int, RuleMatch]:
         rules = self._active_rules()
         description_header = column_map.get("description")
@@ -1067,7 +1027,6 @@ class ImportService:
                     amount,
                     occurred_at,
                     category_lookup,
-                    subscription_lookup,
                 )
                 if candidate and (best is None or candidate.score > best.score):
                     best = candidate
@@ -1083,7 +1042,6 @@ class ImportService:
         amount: Optional[Decimal],
         occurred_at: Optional[datetime],
         category_lookup: Dict[UUID, Category],
-        subscription_lookup: Dict[UUID, Subscription],
     ) -> Optional[RuleMatch]:
         if not rule.is_active:
             return None
@@ -1114,27 +1072,16 @@ class ImportService:
                 return None
 
         category = category_lookup.get(rule.category_id) if rule.category_id else None
-        subscription = (
-            subscription_lookup.get(rule.subscription_id) if rule.subscription_id else None
-        )
-        if category is None and subscription is None:
+        if category is None:
             return None
-
-        rule_type = "category"
-        if category and subscription:
-            rule_type = "category+subscription"
-        elif subscription and not category:
-            rule_type = "subscription"
 
         return RuleMatch(
             rule_id=rule.id,
-            category_id=category.id if category else None,
-            category_name=category.name if category else None,
-            subscription_id=subscription.id if subscription else None,
-            subscription_name=subscription.name if subscription else None,
+            category_id=category.id,
+            category_name=category.name,
             summary="; ".join(summary),
             score=float(score),
-            rule_type=rule_type,
+            rule_type="category",
         )
 
     def _active_rules(self) -> List[ImportRule]:
@@ -1144,45 +1091,6 @@ class ImportService:
     def _category_lookup_by_id(self) -> dict[UUID, Category]:
         categories = self.session.exec(select(Category)).all()
         return {cat.id: cat for cat in categories if getattr(cat, "id", None) is not None}
-
-    def _subscription_lookup_by_id(self) -> dict[UUID, Subscription]:
-        subscriptions = self.session.exec(select(Subscription)).all()
-        return {sub.id: sub for sub in subscriptions if getattr(sub, "id", None) is not None}
-
-    def _active_subscriptions(self) -> List[Subscription]:
-        statement = select(Subscription).where(cast(Any, Subscription.is_active).is_(True))
-        return list(self.session.exec(statement).all())
-
-    def _subscription_amount_lookup(self) -> dict[UUID, Decimal]:
-        latest = (
-            select(
-                cast(Any, Transaction.id).label("txn_id"),
-                cast(Any, Transaction.subscription_id).label("subscription_id"),
-                func.row_number()
-                .over(
-                    partition_by=cast(Any, Transaction.subscription_id),
-                    order_by=cast(Any, Transaction.occurred_at).desc(),
-                )
-                .label("rn"),
-            ).where(cast(Any, Transaction.subscription_id).isnot(None))
-        ).subquery()
-
-        amounts = (
-            select(
-                latest.c.subscription_id,
-                func.max(func.abs(TransactionLeg.amount)).label("amount"),
-            )
-            .join(TransactionLeg, cast(Any, TransactionLeg.transaction_id == latest.c.txn_id))
-            .where(latest.c.rn == 1)
-            .group_by(latest.c.subscription_id)
-        )
-        results = self.session.exec(amounts).all()
-        lookup: dict[UUID, Decimal] = {}
-        for sub_id, amount in results:
-            if sub_id is None or amount is None:
-                continue
-            lookup[sub_id] = Decimal(str(amount))
-        return lookup
 
     def _get_or_create_offset_account(self) -> Account:
         if hasattr(self, "_offset_account"):
@@ -1217,9 +1125,8 @@ class ImportService:
         amount: Optional[Decimal],
         occurred_at: Optional[datetime],
         category_id: Optional[UUID],
-        subscription_id: Optional[UUID],
     ) -> None:
-        if not description or (category_id is None and subscription_id is None):
+        if not description or category_id is None:
             return
 
         matcher_text = description.lower().strip()
@@ -1237,8 +1144,6 @@ class ImportService:
         if existing:
             if category_id:
                 existing.category_id = category_id
-            if subscription_id:
-                existing.subscription_id = subscription_id
             if amount_abs is not None and existing.matcher_amount is None:
                 existing.matcher_amount = amount_abs
             if tolerance and existing.amount_tolerance is None:
@@ -1254,7 +1159,6 @@ class ImportService:
             amount_tolerance=tolerance,
             matcher_day_of_month=day_of_month,
             category_id=category_id,
-            subscription_id=subscription_id,
         )
         self.session.add(rule)
 
@@ -1270,4 +1174,4 @@ class ImportService:
         return parse_iso_date(value)
 
 
-__all__ = ["ImportService", "CategorySuggestion", "SubscriptionSuggestion", "RuleMatch"]
+__all__ = ["ImportService", "CategorySuggestion", "RuleMatch"]

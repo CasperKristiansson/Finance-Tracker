@@ -27,7 +27,6 @@ from ..shared import TimestampMixin, UserOwnedMixin, UUIDPrimaryKeyMixin
 if TYPE_CHECKING:  # pragma: no cover
     from .account import Account
     from .category import Category
-    from .subscription import Subscription
     from .transaction import Transaction
 
 
@@ -130,22 +129,6 @@ class ImportRow(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, t
         sa_column=Column(Numeric(5, 2), nullable=True),
     )
     suggested_reason: Optional[str] = Field(default=None, sa_column=Column(String(500)))
-    suggested_subscription_id: Optional[UUID] = Field(
-        default=None,
-        sa_column=Column(PGUUID(as_uuid=True), nullable=True),
-    )
-    suggested_subscription_name: Optional[str] = Field(
-        default=None,
-        sa_column=Column(String(160), nullable=True),
-    )
-    suggested_subscription_confidence: Optional[float] = Field(
-        default=None,
-        sa_column=Column(Numeric(5, 2), nullable=True),
-    )
-    suggested_subscription_reason: Optional[str] = Field(
-        default=None,
-        sa_column=Column(String(500), nullable=True),
-    )
     transfer_match: Optional[dict[str, Any]] = Field(
         default=None,
         sa_column=Column(JSON, nullable=True),
@@ -213,10 +196,6 @@ class ImportRule(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, 
         default=None,
         sa_column=Column(PGUUID(as_uuid=True), ForeignKey("categories.id", ondelete="SET NULL")),
     )
-    subscription_id: Optional[UUID] = Field(
-        default=None,
-        sa_column=Column(PGUUID(as_uuid=True), ForeignKey("subscriptions.id", ondelete="SET NULL")),
-    )
     hit_count: int = Field(
         default=0,
         sa_column=Column(Integer, nullable=False, server_default="0"),
@@ -231,12 +210,8 @@ class ImportRule(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, 
 
     if TYPE_CHECKING:  # pragma: no cover
         category: Optional["Category"]
-        subscription: Optional["Subscription"]
 
     category: Optional["Category"] = Relationship(sa_relationship=relationship("Category"))
-    subscription: Optional["Subscription"] = Relationship(
-        sa_relationship=relationship("Subscription")
-    )
 
     __table_args__ = (
         UniqueConstraint("user_id", "matcher_text", name="uq_import_rule_user_matcher_text"),

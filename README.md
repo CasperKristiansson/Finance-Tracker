@@ -18,7 +18,7 @@ Personal finance intelligence built as an end-to-end product: ingestion, categor
 
 ## Product snapshot
 
-- Unified view of transactions, accounts, budgets, goals, loans, investments, and taxes.
+- Unified view of transactions, accounts, goals, loans, investments, and taxes.
 - Rich reporting with net-worth, cash-flow, and category analytics.
 - Spreadsheet import workflows with preview, mapping, and reconciliation.
 - UX-first interface with motion, progressive loading states, and data-dense layouts.
@@ -69,7 +69,7 @@ It is built as a portfolio-grade app, not a tutorial. Every screen is meant to b
 ## Highlights
 
 - Data-rich reporting (yearly and total views, net worth trajectory, category mix, cash-flow forecasts).
-- Full CRUD flows across domains like accounts, budgets, loans, investments, and subscriptions.
+- Full CRUD flows across domains like accounts, categories, transactions, goals, loans, investments, and taxes.
 - Authenticated experience with AWS Amplify and Cognito-ready configuration.
 - Async data orchestration via Redux Toolkit + Saga for predictable client state.
 - Import pipelines powered by pandas and openpyxl for real-world bank data.
@@ -88,10 +88,6 @@ Maintain a category system that scales: income vs expense types, icon and color 
 
 Track every account and balance, including debt accounts with embedded loan metadata. Reconciliation creates explicit adjustments with captured balances, reconciliation gaps, and timestamps so ledger state always aligns with reality.
 
-### Budgets & subscriptions
-
-Define budgets per category and time period, then track spent vs remaining with progress metrics. Subscription matching uses merchant text, tolerance, and day-of-month rules to attach recurring transactions and visualize spend trends.
-
 ### Debt & loans
 
 Model loans with principal, interest, minimum payments, and expected maturity dates. Generate amortization schedules and derive loan events from transactions to visualize liability changes over time.
@@ -102,7 +98,7 @@ Record investment snapshots, holdings, and cashflows, then roll them into portfo
 
 ### Goals
 
-Set goals with target amounts and dates, optionally linked to accounts, categories, or subscriptions. Progress is computed from current balances so goals stay grounded in actual ledger data.
+Set goals with target amounts and dates, optionally linked to accounts or categories. Progress is computed from current balances so goals stay grounded in actual ledger data.
 
 ### Taxes
 

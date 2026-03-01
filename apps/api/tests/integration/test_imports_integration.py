@@ -76,7 +76,6 @@ def test_imports_preview_and_commit_flow(api_call, json_body) -> None:
                     "amount": row["amount"],
                     "description": row["description"],
                     "category_id": None,
-                    "subscription_id": None,
                     "transfer_account_id": None,
                     "tax_event_type": None,
                     "delete": False,

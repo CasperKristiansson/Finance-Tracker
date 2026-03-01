@@ -73,8 +73,7 @@ export const Landing: React.FC = () => {
             Money clarity in one calm space
           </h1>
           <h2 className="text-lg font-medium text-white/90 sm:text-2xl">
-            Track accounts, budgets, and goals with a focused, beautiful
-            overview.
+            Track accounts and goals with a focused, beautiful overview.
           </h2>
         </div>
 

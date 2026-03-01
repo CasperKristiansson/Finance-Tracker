@@ -48,11 +48,6 @@ const data = {
       icon: Layers,
     },
     {
-      title: "Budgets",
-      url: PageRoutes.budgets,
-      icon: PieChart,
-    },
-    {
       title: "Imports",
       url: PageRoutes.imports,
       icon: Upload,
@@ -61,11 +56,6 @@ const data = {
       title: "Import files",
       url: PageRoutes.importFiles,
       icon: Archive,
-    },
-    {
-      title: "Subscriptions",
-      url: PageRoutes.subscriptions,
-      icon: Layers,
     },
     {
       title: "Transactions",

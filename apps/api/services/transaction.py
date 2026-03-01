@@ -15,7 +15,6 @@ from ..models import (
     InvestmentSnapshot,
     Loan,
     LoanEvent,
-    Subscription,
     Transaction,
     TransactionImportBatch,
     TransactionLeg,
@@ -46,7 +45,6 @@ class TransactionService:
         end_date: Optional[datetime] = None,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
-        subscription_ids: Optional[Iterable[UUID]] = None,
         transaction_types: Optional[Iterable["TransactionType"]] = None,
         tax_event: Optional[bool] = None,
         min_amount: Optional[Decimal] = None,
@@ -62,7 +60,6 @@ class TransactionService:
             end_date=end_date,
             account_ids=account_ids,
             category_ids=category_ids,
-            subscription_ids=subscription_ids,
             transaction_types=transaction_types,
             tax_event=tax_event,
             min_amount=min_amount,
@@ -87,7 +84,6 @@ class TransactionService:
             transaction.posted_at = transaction.occurred_at
 
         category = self._get_category(transaction.category_id)
-        self._ensure_subscription_exists(transaction.subscription_id)
         transaction.transaction_type = self._infer_transaction_type(
             prepared_legs,
             category,
@@ -115,14 +111,10 @@ class TransactionService:
         occurred_at: Optional[datetime] = None,
         posted_at: Optional[datetime] = None,
         category_id: Optional[UUID] = None,
-        subscription_id: Optional[UUID] = None,
-        update_subscription: bool = False,
     ) -> Transaction:
         transaction = self.repository.get(transaction_id)
         if transaction is None:
             raise LookupError("Transaction not found")
-        if update_subscription and subscription_id is not None:
-            self._ensure_subscription_exists(subscription_id)
         updated = self.repository.update(
             transaction,
             description=description,
@@ -130,8 +122,6 @@ class TransactionService:
             occurred_at=occurred_at,
             posted_at=posted_at,
             category_id=category_id,
-            subscription_id=subscription_id,
-            update_subscription=update_subscription,
         )
         self._sync_investment_snapshot(
             updated,
@@ -191,13 +181,6 @@ class TransactionService:
             return None
         statement = select(Category).where(Category.id == category_id)
         return self.session.exec(statement).one_or_none()
-
-    def _ensure_subscription_exists(self, subscription_id: Optional[UUID]) -> None:
-        if subscription_id is None:
-            return
-        subscription = self.session.get(Subscription, subscription_id)
-        if subscription is None:
-            raise ValueError("Subscription not found")
 
     def _infer_transaction_type(
         self,

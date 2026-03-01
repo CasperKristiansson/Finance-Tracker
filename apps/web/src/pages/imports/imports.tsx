@@ -265,7 +265,6 @@ const commitRowSchema = z.object({
   amount: z.string(),
   description: z.string(),
   category_id: z.string().nullable().optional(),
-  subscription_id: z.string().nullable().optional(),
   transfer_account_id: z.string().nullable().optional(),
   tax_event_type: z.enum(TaxEventTypeEnum).nullable().optional(),
   delete: z.boolean().optional(),
@@ -287,7 +286,6 @@ const normalizeDraftRow = (
   amount: row.amount,
   description: row.description,
   category_id: row.category_id ?? null,
-  subscription_id: row.subscription_id ?? null,
   transfer_account_id: row.transfer_account_id ?? null,
   tax_event_type:
     (row.tax_event_type as TaxEventType | null | undefined) ?? null,
@@ -503,8 +501,6 @@ export const Imports: React.FC = () => {
         category_id:
           draft?.category_id ??
           (row.rule_applied ? (row.suggested_category_id ?? null) : null),
-        subscription_id:
-          draft?.subscription_id ?? row.suggested_subscription_id ?? null,
         transfer_account_id: draft?.transfer_account_id ?? null,
         tax_event_type: draft?.tax_event_type ?? null,
         delete: Boolean(draft?.delete),
@@ -1198,12 +1194,6 @@ export const Imports: React.FC = () => {
           basePreviewRow?.suggested_category_name ?? null,
         suggested_confidence: null,
         suggested_reason: null,
-        suggested_subscription_id:
-          basePreviewRow?.suggested_subscription_id ?? null,
-        suggested_subscription_name:
-          basePreviewRow?.suggested_subscription_name ?? null,
-        suggested_subscription_confidence: null,
-        suggested_subscription_reason: null,
         transfer_match: null,
         rule_applied: false,
         rule_type: null,
@@ -1328,9 +1318,6 @@ export const Imports: React.FC = () => {
         shouldDirty: true,
       });
       commitForm.setValue(`rows.${commitIndex}.category_id`, null, {
-        shouldDirty: true,
-      });
-      commitForm.setValue(`rows.${commitIndex}.subscription_id`, null, {
         shouldDirty: true,
       });
     }
@@ -2992,7 +2979,7 @@ export const Imports: React.FC = () => {
               <DialogFooter className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-slate-600">
                   Only one transfer target can be active. Applying will clear
-                  category and subscription.
+                  category.
                 </p>
                 <div className="flex items-center gap-2">
                   <Button

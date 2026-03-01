@@ -4,7 +4,6 @@ from .auth import INTEGRATION_USER_ID_ENV, get_default_user_id
 from .enums import (
     AccountType,
     BankImportType,
-    BudgetPeriod,
     CategoryType,
     CreatedSource,
     InterestCompound,
@@ -52,7 +51,6 @@ __all__ = [
     "InterestCompound",
     "LoanEventType",
     "TaxEventType",
-    "BudgetPeriod",
     "SystemAccountCode",
     "TransactionType",
     "ThemePreference",

@@ -42,7 +42,6 @@ class MonthlyReportQuery(_CsvUUIDMixin):
     year: Optional[int] = Field(default=None, ge=1900, le=3000)
     account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
     category_ids: Optional[List[UUID]] = Field(default=None, alias="category_ids")
-    subscription_ids: Optional[List[UUID]] = Field(default=None, alias="subscription_ids")
 
     @model_validator(mode="before")
     @classmethod
@@ -52,8 +51,6 @@ class MonthlyReportQuery(_CsvUUIDMixin):
                 values["account_ids"] = cls._parse_uuid_list(values.get("account_ids"))
             if "category_ids" in values:
                 values["category_ids"] = cls._parse_uuid_list(values.get("category_ids"))
-            if "subscription_ids" in values:
-                values["subscription_ids"] = cls._parse_uuid_list(values.get("subscription_ids"))
         return values
 
 
@@ -62,7 +59,6 @@ class YearlyReportQuery(_CsvUUIDMixin):
 
     account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
     category_ids: Optional[List[UUID]] = Field(default=None, alias="category_ids")
-    subscription_ids: Optional[List[UUID]] = Field(default=None, alias="subscription_ids")
 
     @model_validator(mode="before")
     @classmethod
@@ -72,8 +68,6 @@ class YearlyReportQuery(_CsvUUIDMixin):
                 values["account_ids"] = cls._parse_uuid_list(values.get("account_ids"))
             if "category_ids" in values:
                 values["category_ids"] = cls._parse_uuid_list(values.get("category_ids"))
-            if "subscription_ids" in values:
-                values["subscription_ids"] = cls._parse_uuid_list(values.get("subscription_ids"))
         return values
 
 
@@ -105,7 +99,6 @@ class DateRangeReportQuery(_CsvUUIDMixin):
     end_date: date
     account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
     category_ids: Optional[List[UUID]] = Field(default=None, alias="category_ids")
-    subscription_ids: Optional[List[UUID]] = Field(default=None, alias="subscription_ids")
     source: Optional[str] = None
 
     @model_validator(mode="before")
@@ -116,8 +109,6 @@ class DateRangeReportQuery(_CsvUUIDMixin):
                 values["account_ids"] = cls._parse_uuid_list(values.get("account_ids"))
             if "category_ids" in values:
                 values["category_ids"] = cls._parse_uuid_list(values.get("category_ids"))
-            if "subscription_ids" in values:
-                values["subscription_ids"] = cls._parse_uuid_list(values.get("subscription_ids"))
         return values
 
 
@@ -684,7 +675,6 @@ class ExportReportRequest(BaseModel):
     end_date: Optional[date] = None
     account_ids: Optional[Sequence[UUID]] = None
     category_ids: Optional[Sequence[UUID]] = None
-    subscription_ids: Optional[Sequence[UUID]] = None
 
     @classmethod
     def from_payload(cls, payload: dict) -> "ExportReportRequest":
@@ -702,8 +692,6 @@ class ExportReportRequest(BaseModel):
             normalized["account_ids"] = parse_ids(normalized.get("account_ids"))
         if "category_ids" in normalized:
             normalized["category_ids"] = parse_ids(normalized.get("category_ids"))
-        if "subscription_ids" in normalized:
-            normalized["subscription_ids"] = parse_ids(normalized.get("subscription_ids"))
         return cls.model_validate(normalized)
 
 

@@ -67,12 +67,6 @@ class TaxEventType(StrEnum):
     REFUND = "refund"
 
 
-class BudgetPeriod(StrEnum):
-    MONTHLY = "monthly"
-    QUARTERLY = "quarterly"
-    YEARLY = "yearly"
-
-
 class BankImportType(StrEnum):
     CIRCLE_K_MASTERCARD = "circle_k_mastercard"
     SEB = "seb"
@@ -97,7 +91,6 @@ __all__ = [
     "InterestCompound",
     "LoanEventType",
     "TaxEventType",
-    "BudgetPeriod",
     "BankImportType",
     "ThemePreference",
 ]

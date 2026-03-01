@@ -52,7 +52,6 @@ def list_transactions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             end_date=query.end_date,
             account_ids=query.account_ids,
             category_ids=query.category_ids,
-            subscription_ids=query.subscription_ids,
             transaction_types=query.transaction_type,
             tax_event=query.tax_event,
             min_amount=query.min_amount,
@@ -84,7 +83,6 @@ def create_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
     transaction = Transaction(
         category_id=data.category_id,
-        subscription_id=data.subscription_id,
         transaction_type=data.transaction_type,
         description=data.description,
         notes=data.notes,
@@ -128,18 +126,11 @@ def update_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         return json_response(400, {"error": exc.errors()})
 
     updates = data.model_dump(exclude_unset=True)
-    subscription_in_payload = "subscription_id" in data.model_fields_set
-    subscription_id = updates.pop("subscription_id", None)
 
     with session_scope(user_id=user_id) as session:
         service = TransactionService(session)
         try:
-            updated = service.update_transaction(
-                transaction_id,
-                update_subscription=subscription_in_payload,
-                subscription_id=subscription_id,
-                **updates,
-            )
+            updated = service.update_transaction(transaction_id, **updates)
         except LookupError:
             return json_response(404, {"error": "Transaction not found"})
         except ValueError as exc:

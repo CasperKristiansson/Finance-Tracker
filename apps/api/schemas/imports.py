@@ -102,10 +102,6 @@ class ImportPreviewRowRead(BaseModel):
     suggested_category_name: Optional[str] = None
     suggested_confidence: Optional[float] = None
     suggested_reason: Optional[str] = None
-    suggested_subscription_id: Optional[UUID] = None
-    suggested_subscription_name: Optional[str] = None
-    suggested_subscription_confidence: Optional[float] = None
-    suggested_subscription_reason: Optional[str] = None
     transfer_match: Optional[dict[str, Any]] = None
     rule_applied: bool = False
     rule_type: Optional[str] = None
@@ -132,7 +128,6 @@ class ImportCommitRow(BaseModel):
     amount: str
     description: str
     category_id: Optional[UUID] = None
-    subscription_id: Optional[UUID] = None
     transfer_account_id: Optional[UUID] = None
     tax_event_type: Optional[TaxEventType] = None
     delete: bool = False

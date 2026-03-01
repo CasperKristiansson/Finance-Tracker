@@ -1,7 +1,6 @@
 import { z } from "zod";
 import {
   AccountType,
-  BudgetPeriod,
   CategoryType,
   InterestCompound,
   LoanEventType,
@@ -192,41 +191,6 @@ export const categoryListSchema = z.object({
   categories: z.array(categorySchema),
 });
 
-export const budgetSchema = z.object({
-  id: z.string(),
-  category_id: z.string(),
-  period: z.enum(BudgetPeriod),
-  amount: z.string(),
-  note: nullableString,
-});
-
-export const budgetProgressSchema = budgetSchema.extend({
-  spent: z.string(),
-  remaining: z.string(),
-  percent_used: z.string(),
-});
-
-export const budgetProgressListSchema = z.object({
-  budgets: z.array(budgetProgressSchema),
-});
-
-export const budgetListSchema = z.object({
-  budgets: z.array(budgetSchema),
-});
-
-export const budgetCreateRequestSchema = z.object({
-  category_id: z.string(),
-  period: z.enum(BudgetPeriod),
-  amount: z.string(),
-  note: nullableString,
-});
-
-export const budgetUpdateRequestSchema = z.object({
-  period: z.enum(BudgetPeriod).optional(),
-  amount: z.string().optional(),
-  note: nullableString,
-});
-
 export const transactionLegSchema = z.object({
   id: z.string(),
   account_id: z.string(),
@@ -239,7 +203,6 @@ export const transactionLegCreateSchema = transactionLegSchema.omit({
 
 export const transactionCreateSchema = z.object({
   category_id: nullableString,
-  subscription_id: nullableString,
   description: nullableString,
   notes: nullableString,
   external_id: nullableString,
@@ -255,13 +218,11 @@ export const transactionUpdateRequestSchema = z.object({
   occurred_at: dateString.optional(),
   posted_at: z.string().nullable().optional(),
   category_id: nullableString,
-  subscription_id: nullableString,
 });
 
 export const transactionSchema = z.object({
   id: z.string(),
   category_id: nullableString,
-  subscription_id: nullableString,
   transaction_type: z.enum(TransactionType),
   description: nullableString,
   notes: nullableString,
@@ -758,35 +719,6 @@ export const yearlyCategoryDetailSchema = z.object({
   ),
 });
 
-export const subscriptionSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  matcher_text: z.string(),
-  matcher_amount_tolerance: z.number().nullable().optional(),
-  matcher_day_of_month: z.number().nullable().optional(),
-  category_id: z.string().nullable().optional(),
-  is_active: z.boolean(),
-  created_at: z.string(),
-  updated_at: z.string(),
-});
-
-export const subscriptionSummarySchema = subscriptionSchema.extend({
-  current_month_spend: money,
-  trailing_three_month_spend: money,
-  trailing_twelve_month_spend: money,
-  trend: z.array(money),
-  last_charge_at: z.string().nullable().optional(),
-  category_name: z.string().nullable().optional(),
-});
-
-export const subscriptionSummaryResponseSchema = z.object({
-  subscriptions: z.array(subscriptionSummarySchema),
-});
-
-export const subscriptionListSchema = z.object({
-  subscriptions: z.array(subscriptionSchema),
-});
-
 export const taxEventTypeSchema = z.enum(TaxEventType);
 
 export const importErrorSchema = z.object({
@@ -828,10 +760,6 @@ export const importPreviewRowReadSchema = z.object({
   suggested_category_name: nullableString,
   suggested_confidence: optionalNumeric.nullable(),
   suggested_reason: nullableString,
-  suggested_subscription_id: nullableString,
-  suggested_subscription_name: nullableString,
-  suggested_subscription_confidence: optionalNumeric.nullable(),
-  suggested_subscription_reason: nullableString,
   transfer_match: z.record(z.string(), z.unknown()).nullable().optional(),
   rule_applied: z.boolean().nullable().optional(),
   rule_type: nullableString,
@@ -892,7 +820,6 @@ export const importCommitRowSchema = z.object({
   amount: z.string(),
   description: z.string(),
   category_id: nullableString,
-  subscription_id: nullableString,
   transfer_account_id: nullableString,
   tax_event_type: taxEventTypeSchema.nullable().optional(),
   delete: z.boolean().optional(),
@@ -1249,7 +1176,6 @@ export const goalSchema = z.object({
   target_date: nullableString,
   category_id: nullableString,
   account_id: nullableString,
-  subscription_id: nullableString,
   note: nullableString,
   created_at: z.string(),
   updated_at: z.string(),
@@ -1269,7 +1195,6 @@ export const goalCreateRequestSchema = z.object({
   target_date: nullableString,
   category_id: nullableString,
   account_id: nullableString,
-  subscription_id: nullableString,
   note: nullableString,
 });
 
@@ -1374,14 +1299,6 @@ export type CategoryCreateRequest = z.infer<typeof categoryCreateRequestSchema>;
 export type CategoryUpdateRequest = z.infer<typeof categoryUpdateRequestSchema>;
 export type CategoryRead = z.infer<typeof categorySchema>;
 export type CategoryListResponse = z.infer<typeof categoryListSchema>;
-export type BudgetCreateRequest = z.infer<typeof budgetCreateRequestSchema>;
-export type BudgetUpdateRequest = z.infer<typeof budgetUpdateRequestSchema>;
-export type BudgetRead = z.infer<typeof budgetSchema>;
-export type BudgetProgress = z.infer<typeof budgetProgressSchema>;
-export type BudgetListResponse = z.infer<typeof budgetListSchema>;
-export type BudgetProgressListResponse = z.infer<
-  typeof budgetProgressListSchema
->;
 export type TransactionLegCreate = z.infer<typeof transactionLegCreateSchema>;
 export type TransactionLegRead = z.infer<typeof transactionLegSchema>;
 export type TransactionCreate = z.infer<typeof transactionCreateSchema>;
@@ -1409,12 +1326,6 @@ export type YearlyOverviewResponse = z.infer<typeof yearlyOverviewSchema>;
 export type YearlyCategoryDetailResponse = z.infer<
   typeof yearlyCategoryDetailSchema
 >;
-export type SubscriptionRead = z.infer<typeof subscriptionSchema>;
-export type SubscriptionSummaryRead = z.infer<typeof subscriptionSummarySchema>;
-export type SubscriptionSummaryResponse = z.infer<
-  typeof subscriptionSummaryResponseSchema
->;
-export type SubscriptionListResponse = z.infer<typeof subscriptionListSchema>;
 export type ImportError = z.infer<typeof importErrorSchema>;
 export type ImportPreviewRequest = z.infer<typeof importPreviewRequestSchema>;
 export type ImportPreviewFileRead = z.infer<typeof importPreviewFileReadSchema>;

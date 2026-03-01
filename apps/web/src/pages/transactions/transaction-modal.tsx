@@ -293,7 +293,6 @@ export const TransactionModal: React.FC<{
         posted_at: values.posted_at
           ? new Date(values.posted_at).toISOString()
           : null,
-        subscription_id: transaction.subscription_id ?? null,
       });
       onClose();
       return;

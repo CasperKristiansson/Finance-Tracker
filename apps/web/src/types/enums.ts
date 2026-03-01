@@ -20,12 +20,6 @@ export enum TransactionType {
   INVESTMENT_EVENT = "investment_event",
 }
 
-export enum BudgetPeriod {
-  MONTHLY = "monthly",
-  QUARTERLY = "quarterly",
-  YEARLY = "yearly",
-}
-
 export enum InterestCompound {
   DAILY = "daily",
   MONTHLY = "monthly",

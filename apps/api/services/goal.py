@@ -64,8 +64,6 @@ class GoalService:
             current = self.account_repository.calculate_balance(goal.account_id)
         elif goal.category_id:
             current = self._sum_for_category(goal.category_id)
-        elif goal.subscription_id:
-            current = self._sum_for_subscription(goal.subscription_id)
         else:
             history = self._get_net_worth_history()
             if history:
@@ -86,15 +84,6 @@ class GoalService:
             select(func.coalesce(func.sum(TransactionLeg.amount), 0))
             .join(Transaction, cast(Any, Transaction.id == TransactionLeg.transaction_id))
             .where(Transaction.category_id == category_id)
-        )
-        result = cast(Any, self.session.exec(statement)).scalar_one()
-        return coerce_decimal(result)
-
-    def _sum_for_subscription(self, subscription_id: UUID) -> Decimal:
-        statement = (
-            select(func.coalesce(func.sum(TransactionLeg.amount), 0))
-            .join(Transaction, cast(Any, Transaction.id == TransactionLeg.transaction_id))
-            .where(Transaction.subscription_id == subscription_id)
         )
         result = cast(Any, self.session.exec(statement)).scalar_one()
         return coerce_decimal(result)

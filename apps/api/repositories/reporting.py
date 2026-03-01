@@ -94,7 +94,6 @@ class TransactionAmountRow:
     category_name: Optional[str]
     category_icon: Optional[str]
     category_color_hex: Optional[str]
-    subscription_id: Optional[UUID]
     amount: Decimal
     inflow: Decimal
     outflow: Decimal
@@ -131,14 +130,12 @@ class ReportingRepository:
         year: Optional[int] = None,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
-        subscription_ids: Optional[Iterable[UUID]] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> List[MonthlyTotals]:
         legs = self._fetch_legs(
             account_ids=account_ids,
             category_ids=category_ids,
-            subscription_ids=subscription_ids,
             start_date=start_date,
             end_date=end_date,
         )
@@ -181,14 +178,12 @@ class ReportingRepository:
         *,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
-        subscription_ids: Optional[Iterable[UUID]] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> List[YearlyTotals]:
         legs = self._fetch_legs(
             account_ids=account_ids,
             category_ids=category_ids,
-            subscription_ids=subscription_ids,
             start_date=start_date,
             end_date=end_date,
         )
@@ -227,14 +222,12 @@ class ReportingRepository:
         *,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
-        subscription_ids: Optional[Iterable[UUID]] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> LifetimeTotals:
         legs = self._fetch_legs(
             account_ids=account_ids,
             category_ids=category_ids,
-            subscription_ids=subscription_ids,
             start_date=start_date,
             end_date=end_date,
         )
@@ -474,7 +467,6 @@ class ReportingRepository:
             cast(Any, category_table.c.name).label("category_name"),
             cast(Any, category_table.c.icon).label("category_icon"),
             cast(Any, category_table.c.color_hex).label("category_color_hex"),
-            cast(Any, transaction_table.c.subscription_id).label("subscription_id"),
             func.sum(leg_table.c.amount).label("amount"),
             func.coalesce(
                 func.sum(
@@ -518,7 +510,6 @@ class ReportingRepository:
                 category_table.c.name,
                 category_table.c.icon,
                 category_table.c.color_hex,
-                transaction_table.c.subscription_id,
             )
             .order_by(transaction_table.c.occurred_at.asc())
         )
@@ -545,7 +536,6 @@ class ReportingRepository:
             category_name,
             category_icon,
             category_color_hex,
-            subscription_id,
             amount,
             inflow,
             outflow,
@@ -561,7 +551,6 @@ class ReportingRepository:
                     category_name=cast(Optional[str], category_name),
                     category_icon=cast(Optional[str], category_icon),
                     category_color_hex=cast(Optional[str], category_color_hex),
-                    subscription_id=cast(Optional[UUID], subscription_id),
                     amount=coerce_decimal(amount),
                     inflow=coerce_decimal(inflow),
                     outflow=coerce_decimal(outflow),
@@ -712,12 +701,10 @@ class ReportingRepository:
         year: Optional[int] = None,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
-        subscription_ids: Optional[Iterable[UUID]] = None,
     ) -> List[QuarterlyTotals]:
         legs = self._fetch_legs(
             account_ids=account_ids,
             category_ids=category_ids,
-            subscription_ids=subscription_ids,
         )
 
         buckets: Dict[tuple[int, int], DecimalTotals] = {}
@@ -761,12 +748,10 @@ class ReportingRepository:
         end_date: date,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
-        subscription_ids: Optional[Iterable[UUID]] = None,
     ) -> List[MonthlyTotals]:
         return self.get_monthly_totals(
             account_ids=account_ids,
             category_ids=category_ids,
-            subscription_ids=subscription_ids,
             start_date=start_date,
             end_date=end_date,
         )
@@ -776,7 +761,6 @@ class ReportingRepository:
         *,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
-        subscription_ids: Optional[Iterable[UUID]] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> Sequence[Tuple[datetime, Decimal, TransactionType]]:
@@ -805,10 +789,6 @@ class ReportingRepository:
             )
         if category_ids:
             statement = statement.where(transaction_table.c.category_id.in_(list(category_ids)))
-        if subscription_ids:
-            statement = statement.where(
-                transaction_table.c.subscription_id.in_(list(subscription_ids))
-            )
         if start_date:
             statement = statement.where(transaction_table.c.occurred_at >= start_date)
         if end_date:

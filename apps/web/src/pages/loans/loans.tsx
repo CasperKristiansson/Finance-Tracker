@@ -701,7 +701,6 @@ export const Loans: React.FC = () => {
         schema: transactionSchema,
         body: {
           category_id: null,
-          subscription_id: null,
           description: activityDescription.trim()
             ? activityDescription.trim()
             : activityKind === "payment"
