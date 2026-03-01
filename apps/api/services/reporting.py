@@ -239,8 +239,6 @@ class ReportingService:
         all_days = sorted(
             set(ledger_by_day.keys()) | set(investment_ledger_by_day.keys()) | snapshot_days
         )
-        if not all_days:
-            return []
 
         results: List[NetWorthPoint] = []
         running_ledger = Decimal("0")
@@ -346,9 +344,8 @@ class ReportingService:
             weekday_totals[w] += delta
             weekday_counts[w] += 1
             md_idx = day.day - 1
-            if 0 <= md_idx < 31:
-                monthday_totals[md_idx] += delta
-                monthday_counts[md_idx] += 1
+            monthday_totals[md_idx] += delta
+            monthday_counts[md_idx] += 1
 
         overall = total / Decimal(len(series)) if series else Decimal("0")
         weekday_means = [
@@ -396,11 +393,8 @@ class ReportingService:
             _ = seasonal
             residuals.append(actual - predicted)
 
-        if residuals:
-            mean_sq = sum((r * r for r in residuals), Decimal("0")) / Decimal(len(residuals))
-            residual_std = mean_sq.sqrt() if mean_sq > 0 else Decimal("0")
-        else:
-            residual_std = Decimal("0")
+        mean_sq = sum((r * r for r in residuals), Decimal("0")) / Decimal(len(residuals))
+        residual_std = mean_sq.sqrt() if mean_sq > 0 else Decimal("0")
 
         z = Decimal("1.28")  # ~80% interval
         alert_at: Optional[str] = None
@@ -514,35 +508,28 @@ class ReportingService:
             if months_span and start_value > 0 and end_value > 0:
                 try:
                     years = Decimal(str(months_span / 12))
-                    if years > 0:
-                        cagr = (end_value / start_value) ** (Decimal("1") / years) - Decimal("1")
+                    cagr = (end_value / start_value) ** (Decimal("1") / years) - Decimal("1")
                 except (InvalidOperation, ZeroDivisionError, OverflowError):  # pragma: no cover
                     cagr = None
 
         def _median(values: list[Decimal]) -> Decimal:
             ordered = sorted(values)
             n = len(ordered)
-            if n == 0:
-                return Decimal("0")
             mid = n // 2
             if n % 2 == 1:
                 return ordered[mid]
             return (ordered[mid - 1] + ordered[mid]) / Decimal("2")
 
-        def _linear_fit(values: list[Decimal]) -> tuple[Decimal, Decimal] | None:
+        def _linear_fit(values: list[Decimal]) -> tuple[Decimal, Decimal]:
             """Return (intercept, slope) for y=a+b*t via closed-form OLS."""
 
             n = len(values)
-            if n < 2:
-                return None
             t = list(range(n))
             sum_t = Decimal(sum(t))
             sum_y = sum(values, Decimal("0"))
             sum_tt = Decimal(sum(i * i for i in t))
             sum_ty = sum((Decimal(i) * y for i, y in zip(t, values)), Decimal("0"))
             denom = (Decimal(n) * sum_tt) - (sum_t * sum_t)
-            if denom == 0:
-                return None
             slope = (Decimal(n) * sum_ty - sum_t * sum_y) / denom
             intercept = (sum_y - slope * sum_t) / Decimal(n)
             return intercept, slope
@@ -553,7 +540,7 @@ class ReportingService:
             train_values: list[Decimal],
             train_deltas: list[Decimal],
             steps: int,
-        ) -> list[Decimal] | None:
+        ) -> list[Decimal]:
             if not train_values or steps <= 0:
                 return []
 
@@ -561,21 +548,15 @@ class ReportingService:
 
             if method == "median_delta":
                 window = train_deltas[-min(len(train_deltas), 12) :]
-                if not window:
-                    return None
                 delta = _median(window)
                 return [last + (delta * Decimal(i)) for i in range(1, steps + 1)]
 
             if method == "sma_delta":
                 window = train_deltas[-min(len(train_deltas), 12) :]
-                if not window:
-                    return None
                 delta = sum(window, Decimal("0")) / Decimal(len(window))
                 return [last + (delta * Decimal(i)) for i in range(1, steps + 1)]
 
             if method == "ewma_delta":
-                if not train_deltas:
-                    return None
                 alpha = Decimal("0.35")
                 smoothed = train_deltas[0]
                 for item in train_deltas[1:]:
@@ -585,26 +566,22 @@ class ReportingService:
             if method == "linear":
                 window_len = min(len(train_values), 36)
                 fit = _linear_fit(train_values[-window_len:])
-                if fit is None:
-                    return None
                 intercept, slope = fit
                 start_t = Decimal(window_len - 1)
                 # Predict future points relative to end of the window.
                 return [intercept + slope * (start_t + Decimal(i)) for i in range(1, steps + 1)]
 
             if method == "cagr":
-                if len(train_values) < 2:
-                    return None
                 first = train_values[0]
                 if first <= 0 or last <= 0:
-                    return None
+                    return []
                 try:
                     growth = (last / first) ** (Decimal("1") / Decimal(len(train_values) - 1))
                 except (InvalidOperation, ZeroDivisionError, OverflowError):  # pragma: no cover
-                    return None
+                    return []
                 return [last * (growth ** Decimal(i)) for i in range(1, steps + 1)]
 
-            return None
+            return []  # pragma: no cover
 
         methods = ["median_delta", "sma_delta", "ewma_delta", "linear", "cagr"]
 
@@ -646,22 +623,13 @@ class ReportingService:
                 mae_by_method[method] = sum(errors, Decimal("0")) / Decimal(len(errors))
                 residuals_by_method[method] = residuals
 
-        recommended_method = None
         weights: dict[str, Decimal] = {}
         if mae_by_method:
-            # Lower MAE => higher weight.
-            best = min(mae_by_method.items(), key=lambda kv: kv[1])[0]
-            if len(mae_by_method) >= 2 and holdout:
-                eps = max(Decimal("1"), _median(list(mae_by_method.values())) * Decimal("0.05"))
-                raw_weights = {m: Decimal("1") / (mae + eps) for m, mae in mae_by_method.items()}
-                total_weight = sum(raw_weights.values(), Decimal("0"))
-                if total_weight > 0:
-                    weights = {m: w / total_weight for m, w in raw_weights.items()}
-                    recommended_method = "ensemble"
-                else:
-                    recommended_method = best
-            else:
-                recommended_method = best
+            eps = max(Decimal("1"), _median(list(mae_by_method.values())) * Decimal("0.05"))
+            raw_weights = {m: Decimal("1") / (mae + eps) for m, mae in mae_by_method.items()}
+            total_weight = sum(raw_weights.values(), Decimal("0"))
+            weights = {m: w / total_weight for m, w in raw_weights.items()}
+            recommended_method = "ensemble"
         else:
             recommended_method = "sma_delta"
 
@@ -685,29 +653,18 @@ class ReportingService:
             ]
 
         # Compute ensemble series if applicable.
-        def _ensemble_at(step_idx: int) -> Optional[Decimal]:
-            if not weights:
-                return None
+        def _ensemble_at(step_idx: int) -> Decimal:
             total = Decimal("0")
-            used = Decimal("0")
             for method, weight in weights.items():
-                rows = projection_methods.get(method)
-                if not rows or step_idx >= len(rows):
-                    continue
+                rows = projection_methods[method]
                 total += weight * coerce_decimal(cast(Decimal, rows[step_idx]["net_worth"]))
-                used += weight
-            if used == 0:
-                return None
-            return total / used
+            return total
 
         points: list[dict[str, object]] = []
         point_values: list[Decimal] = []
         if recommended_method == "ensemble":
             for idx in range(1, months + 1):
-                value = _ensemble_at(idx - 1)
-                if value is None:
-                    break
-                point_values.append(value)
+                point_values.append(_ensemble_at(idx - 1))
         else:
             rows = projection_methods.get(recommended_method or "", [])
             if rows:
@@ -723,7 +680,6 @@ class ReportingService:
                 train_vals = monthly_values[:idx]
                 train_dels = [b - a for a, b in zip(train_vals, train_vals[1:])]
                 pred_total = Decimal("0")
-                used = Decimal("0")
                 for method, weight in weights.items():
                     pred_series = _forecast_series(
                         method,
@@ -731,13 +687,8 @@ class ReportingService:
                         train_deltas=train_dels,
                         steps=1,
                     )
-                    if not pred_series:
-                        continue
                     pred_total += weight * pred_series[0]
-                    used += weight
-                if used == 0:
-                    continue
-                predicted = pred_total / used
+                predicted = pred_total
                 actual = monthly_values[idx]
                 residuals.append(actual - predicted)
         else:
@@ -767,13 +718,11 @@ class ReportingService:
         insights: list[str] = []
         recent_delta = Decimal("0")
         recent_window = monthly_deltas[-min(len(monthly_deltas), 6) :]
-        if recent_window:
-            recent_delta = sum(recent_window, Decimal("0")) / Decimal(len(recent_window))
-            insights.append(f"Recent average monthly change: {recent_delta:.0f}")
+        recent_delta = sum(recent_window, Decimal("0")) / Decimal(len(recent_window))
+        insights.append(f"Recent average monthly change: {recent_delta:.0f}")
         if cagr is not None:
             insights.append(f"Approx CAGR: {(cagr * Decimal('100')):.1f}%")
-        if recommended_method:
-            insights.append(f"Recommended method: {recommended_method}")
+        insights.append(f"Recommended method: {recommended_method}")
         if mae_by_method:
             best_method = min(mae_by_method.items(), key=lambda kv: kv[1])[0]
             insights.append(f"Backtest best MAE: {best_method}")

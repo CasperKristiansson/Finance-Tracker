@@ -342,3 +342,81 @@ def test_create_loan_rejects_duplicate():
 
     response = create_loan({"body": json.dumps(payload), "isBase64Encoded": False}, None)
     assert response["statusCode"] == 400
+
+
+def test_loan_handler_validation_paths():
+    invalid_create = create_loan({"body": "{}", "isBase64Encoded": False}, None)
+    assert invalid_create["statusCode"] == 400
+
+    invalid_update = update_loan(
+        {
+            "body": json.dumps({"interest_rate_annual": "bad"}),
+            "isBase64Encoded": False,
+            "pathParameters": {"account_id": str(UUID(int=1))},
+        },
+        None,
+    )
+    assert invalid_update["statusCode"] == 400
+
+    missing_update_path = update_loan(
+        {
+            "body": json.dumps({"minimum_payment": "10"}),
+            "isBase64Encoded": False,
+            "pathParameters": {},
+        },
+        None,
+    )
+    assert missing_update_path["statusCode"] == 400
+
+    missing_events_path = list_loan_events(
+        {"pathParameters": {}, "queryStringParameters": {}}, None
+    )
+    assert missing_events_path["statusCode"] == 400
+
+    invalid_events_query = list_loan_events(
+        {
+            "pathParameters": {"account_id": str(UUID(int=1))},
+            "queryStringParameters": {"limit": "bad"},
+        },
+        None,
+    )
+    assert invalid_events_query["statusCode"] == 400
+
+    invalid_portfolio_query = list_loan_portfolio_series(
+        {"queryStringParameters": {"start_date": "bad"}},
+        None,
+    )
+    assert invalid_portfolio_query["statusCode"] == 400
+
+    missing_schedule_path = get_loan_schedule(
+        {"pathParameters": {}, "queryStringParameters": {}}, None
+    )
+    assert missing_schedule_path["statusCode"] == 400
+
+    invalid_schedule_query = get_loan_schedule(
+        {
+            "pathParameters": {"account_id": str(UUID(int=1))},
+            "queryStringParameters": {"periods": "bad"},
+        },
+        None,
+    )
+    assert invalid_schedule_query["statusCode"] == 400
+
+
+def test_create_loan_returns_404_for_unknown_account():
+    response = create_loan(
+        {
+            "body": json.dumps(
+                {
+                    "account_id": str(UUID(int=999)),
+                    "origin_principal": "1000",
+                    "current_principal": "1000",
+                    "interest_rate_annual": "0.05",
+                    "interest_compound": "monthly",
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert response["statusCode"] == 404

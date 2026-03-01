@@ -415,9 +415,7 @@ class ImportService:
                     suggested_subscription_confidence=row_payload.get(
                         "suggested_subscription_confidence"
                     ),
-                    suggested_subscription_reason=row_payload.get(
-                        "suggested_subscription_reason"
-                    ),
+                    suggested_subscription_reason=row_payload.get("suggested_subscription_reason"),
                     transfer_match=row_payload.get("transfer_match"),
                     rule_applied=bool(row_payload.get("rule_applied")),
                     rule_type=row_payload.get("rule_type"),
@@ -480,6 +478,12 @@ class ImportService:
             preview_rows: list[dict[str, Any]] = []
             for row in file_rows[:5]:
                 data = row.data or {}
+                suggested_subscription_id = getattr(row, "suggested_subscription_id", None)
+                suggested_subscription_name = getattr(row, "suggested_subscription_name", None)
+                suggested_subscription_confidence = getattr(
+                    row, "suggested_subscription_confidence", None
+                )
+                suggested_subscription_reason = getattr(row, "suggested_subscription_reason", None)
                 preview_row: dict[str, Any] = {
                     "date": data.get("occurred_at") or data.get("date") or "",
                     "description": data.get("description") or "",
@@ -491,16 +495,16 @@ class ImportService:
                     preview_row["suggested_confidence"] = float(row.suggested_confidence)
                 if row.suggested_reason:
                     preview_row["suggested_reason"] = row.suggested_reason
-                if row.suggested_subscription_id is not None:
-                    preview_row["suggested_subscription_id"] = str(row.suggested_subscription_id)
-                if row.suggested_subscription_name:
-                    preview_row["suggested_subscription_name"] = row.suggested_subscription_name
-                if row.suggested_subscription_confidence is not None:
+                if suggested_subscription_id is not None:
+                    preview_row["suggested_subscription_id"] = str(suggested_subscription_id)
+                if suggested_subscription_name:
+                    preview_row["suggested_subscription_name"] = suggested_subscription_name
+                if suggested_subscription_confidence is not None:
                     preview_row["suggested_subscription_confidence"] = float(
-                        row.suggested_subscription_confidence
+                        suggested_subscription_confidence
                     )
-                if row.suggested_subscription_reason:
-                    preview_row["suggested_subscription_reason"] = row.suggested_subscription_reason
+                if suggested_subscription_reason:
+                    preview_row["suggested_subscription_reason"] = suggested_subscription_reason
                 if row.transfer_match:
                     preview_row["transfer_match"] = row.transfer_match
                 if row.rule_applied:
@@ -530,6 +534,12 @@ class ImportService:
                 account_id = self._coerce_uuid(row_data.get("account_id")) or file.account_id
                 if account_id is None:
                     continue
+                suggested_subscription_id = getattr(row, "suggested_subscription_id", None)
+                suggested_subscription_name = getattr(row, "suggested_subscription_name", None)
+                suggested_subscription_confidence = getattr(
+                    row, "suggested_subscription_confidence", None
+                )
+                suggested_subscription_reason = getattr(row, "suggested_subscription_reason", None)
                 occurred_at = str(
                     row_data.get("occurred_at")
                     or row_data.get("date")
@@ -539,9 +549,7 @@ class ImportService:
                 amount = str(row_data.get("amount") or "")
                 description = str(row_data.get("description") or "")
                 rows_by_account.setdefault(account_id, []).append((row.id, description))
-                suggested_category_id = self._coerce_uuid(
-                    row_data.get("suggested_category_id")
-                )
+                suggested_category_id = self._coerce_uuid(row_data.get("suggested_category_id"))
 
                 response_rows.append(
                     {
@@ -560,14 +568,14 @@ class ImportService:
                             else None
                         ),
                         "suggested_reason": row.suggested_reason,
-                        "suggested_subscription_id": row.suggested_subscription_id,
-                        "suggested_subscription_name": row.suggested_subscription_name,
+                        "suggested_subscription_id": suggested_subscription_id,
+                        "suggested_subscription_name": suggested_subscription_name,
                         "suggested_subscription_confidence": (
-                            float(row.suggested_subscription_confidence)
-                            if row.suggested_subscription_confidence is not None
+                            float(suggested_subscription_confidence)
+                            if suggested_subscription_confidence is not None
                             else None
                         ),
-                        "suggested_subscription_reason": row.suggested_subscription_reason,
+                        "suggested_subscription_reason": suggested_subscription_reason,
                         "transfer_match": row.transfer_match,
                         "rule_applied": row.rule_applied,
                         "rule_type": row.rule_type,

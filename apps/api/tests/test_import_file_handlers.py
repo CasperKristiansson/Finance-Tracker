@@ -7,6 +7,7 @@ from typing import Iterator
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel
 
@@ -19,6 +20,7 @@ from apps.api.models import (
     TransactionImportBatch,
     TransactionLeg,
 )
+from apps.api.schemas import ImportFileDownloadResponse
 from apps.api.services.imports.storage import ImportFileStorage
 from apps.api.shared import (
     AccountType,
@@ -140,3 +142,78 @@ def test_download_import_file_returns_presigned_url(monkeypatch: pytest.MonkeyPa
     assert response["statusCode"] == 200
     body = _json_body(response)
     assert body["url"].startswith("https://example.com/")
+
+
+def test_download_import_file_requires_file_id() -> None:
+    response = download_import_file(
+        {
+            "body": json.dumps({}),
+            "requestContext": {"authorizer": {"jwt": {"claims": {}}}},
+        },
+        None,
+    )
+    assert response["statusCode"] == 400
+    assert _json_body(response)["error"] == "file_id is required"
+
+
+def test_download_import_file_handles_service_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    created_file = _create_file_with_transactions()
+
+    class _FakeService:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def build_download_url(self, _file_id):
+            raise LookupError("missing")
+
+    monkeypatch.setattr("apps.api.handlers.import_files.ImportFileService", _FakeService)
+    lookup_resp = download_import_file(
+        {
+            "body": json.dumps({"file_id": str(created_file.id)}),
+            "requestContext": {"authorizer": {"jwt": {"claims": {}}}},
+        },
+        None,
+    )
+    assert lookup_resp["statusCode"] == 404
+
+    class _FakeServiceValue(_FakeService):
+        def build_download_url(self, _file_id):
+            raise ValueError("invalid")
+
+    monkeypatch.setattr("apps.api.handlers.import_files.ImportFileService", _FakeServiceValue)
+    value_resp = download_import_file(
+        {
+            "body": json.dumps({"file_id": str(created_file.id)}),
+            "requestContext": {"authorizer": {"jwt": {"claims": {}}}},
+        },
+        None,
+    )
+    assert value_resp["statusCode"] == 400
+
+
+def test_download_import_file_handles_validation_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    created_file = _create_file_with_transactions()
+    validation_error = None
+    try:
+        ImportFileDownloadResponse.model_validate({})
+    except ValidationError as exc:
+        validation_error = exc
+    assert validation_error is not None
+    final_error: ValidationError = validation_error
+
+    class _FakeService:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def build_download_url(self, _file_id):
+            raise final_error
+
+    monkeypatch.setattr("apps.api.handlers.import_files.ImportFileService", _FakeService)
+    response = download_import_file(
+        {
+            "body": json.dumps({"file_id": str(created_file.id)}),
+            "requestContext": {"authorizer": {"jwt": {"claims": {}}}},
+        },
+        None,
+    )
+    assert response["statusCode"] == 400

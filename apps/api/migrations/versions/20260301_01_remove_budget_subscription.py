@@ -36,6 +36,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
+    budget_period_type: sa.types.TypeEngine
     if bind.dialect.name == "postgresql":
         budget_period_type = postgresql.ENUM(
             "MONTHLY",

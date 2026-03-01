@@ -82,3 +82,9 @@ def test_settings_are_scoped_per_user():
 
     assert _json_body(resp_a)["settings"]["first_name"] == "Ada"
     assert _json_body(resp_b)["settings"]["first_name"] == "Grace"
+
+
+def test_save_settings_validation_error() -> None:
+    response = save_settings(_event_with_user(body={"invalid": "payload"}), None)
+    assert response["statusCode"] == 400
+    assert "error" in _json_body(response)

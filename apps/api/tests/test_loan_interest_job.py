@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Iterator
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy.pool import StaticPool
@@ -146,3 +146,49 @@ def test_accrue_interest_ignores_zero_rate_loans() -> None:
 
         loan = session.exec(select(Loan).where(Loan.account_id == debt_id)).one()
         assert loan.current_principal == Decimal("5000.00")
+
+
+def test_accrue_interest_filters_loan_ids_and_handles_no_loans() -> None:
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        _, expense_id, _, category_id = _create_accounts_and_category(session)
+
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        created = accrue_interest(
+            session,
+            as_of=date(2024, 4, 1),
+            interest_category_id=category_id,
+            expense_account_id=expense_id,
+            loan_ids=[uuid4()],
+        )
+        assert not created
+
+
+def test_accrue_interest_ignores_non_positive_principal() -> None:
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        debt_id, expense_id, offset_id, category_id = _create_accounts_and_category(session)
+        _prime_existing_activity(session, debt_id, offset_id)
+
+        loan = Loan(
+            account_id=debt_id,
+            origin_principal=Decimal("5000.00"),
+            current_principal=Decimal("0.00"),
+            interest_rate_annual=Decimal("0.10"),
+            interest_compound=InterestCompound.MONTHLY,
+        )
+        session.add(loan)
+        session.commit()
+
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        created = accrue_interest(
+            session,
+            as_of=date(2024, 5, 1),
+            interest_category_id=category_id,
+            expense_account_id=expense_id,
+        )
+        assert not created

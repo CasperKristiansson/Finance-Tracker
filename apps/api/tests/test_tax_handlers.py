@@ -4,15 +4,18 @@ import json
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Iterator
+from uuid import UUID
 
 import pytest
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, select
 
+from apps.api.handlers import tax as tax_handlers
 from apps.api.handlers.reporting import monthly_report
 from apps.api.handlers.reporting import reset_handler_state as reset_reporting_handler_state
 from apps.api.handlers.tax import (
     create_tax_event,
+    list_tax_events,
     reset_handler_state,
     tax_summary,
     tax_total_summary,
@@ -282,3 +285,88 @@ def test_reports_exclude_tax_transactions_from_income_and_expense():
     assert after["income"] == baseline["income"]
     assert after["expense"] == baseline["expense"]
     assert after["net"] == baseline["net"]
+
+
+def test_list_tax_events_success_response() -> None:
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        account = Account(name="Tax account", account_type=AccountType.NORMAL, is_active=True)
+        session.add(account)
+        session.commit()
+        session.refresh(account)
+        account_id = str(account.id)
+
+    create_tax_event(
+        {
+            "body": json.dumps(
+                {
+                    "account_id": account_id,
+                    "occurred_at": "2024-03-01T00:00:00Z",
+                    "amount": "80.00",
+                    "event_type": "payment",
+                    "description": "Skatteverket",
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+
+    response = list_tax_events({"queryStringParameters": {"limit": "10"}}, None)
+    assert response["statusCode"] == 200
+    body = _json_body(response)
+    assert body["events"]
+
+
+def test_tax_handlers_validation_and_error_paths(monkeypatch: pytest.MonkeyPatch):
+    invalid_create = create_tax_event({"body": "{}", "isBase64Encoded": False}, None)
+    assert invalid_create["statusCode"] == 400
+
+    list_invalid = list_tax_events({"queryStringParameters": {"limit": "bad"}}, None)
+    assert list_invalid["statusCode"] == 400
+
+    summary_invalid = tax_summary({"queryStringParameters": {"year": "bad"}}, None)
+    assert summary_invalid["statusCode"] == 400
+
+    not_found = create_tax_event(
+        {
+            "body": json.dumps(
+                {
+                    "account_id": str(UUID(int=1)),
+                    "occurred_at": "2024-01-10T00:00:00Z",
+                    "amount": "10.00",
+                    "event_type": "payment",
+                    "description": "Skatteverket",
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert not_found["statusCode"] == 404
+
+    class _ServiceValueError:
+        def __init__(self, _session) -> None:
+            pass
+
+        def create_tax_event(self, **_kwargs):
+            raise ValueError("bad tax event")
+
+    monkeypatch.setattr(tax_handlers, "TaxService", _ServiceValueError)
+    value_error = create_tax_event(
+        {
+            "body": json.dumps(
+                {
+                    "account_id": str(UUID(int=2)),
+                    "occurred_at": "2024-01-10T00:00:00Z",
+                    "amount": "10.00",
+                    "event_type": "payment",
+                    "description": "Skatteverket",
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert value_error["statusCode"] == 400

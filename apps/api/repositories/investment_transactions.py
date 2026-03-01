@@ -58,13 +58,16 @@ class InvestmentTransactionRepository:
         return list(self.session.exec(statement))
 
     def mark_linked(self, investment_tx_id: str, ledger_transaction_id: str) -> None:
-        statement = select(InvestmentTransaction).where(
-            InvestmentTransaction.id == investment_tx_id
-        )
+        try:
+            target_id = UUID(str(investment_tx_id))
+            ledger_id = UUID(str(ledger_transaction_id))
+        except (TypeError, ValueError):
+            return
+        statement = select(InvestmentTransaction).where(InvestmentTransaction.id == target_id)
         model = self.session.exec(statement).one_or_none()
         if model is None:  # pragma: no cover - defensive
             return
-        model.ledger_transaction_id = UUID(str(ledger_transaction_id))
+        model.ledger_transaction_id = ledger_id
         self.session.add(model)
         self.session.commit()
 

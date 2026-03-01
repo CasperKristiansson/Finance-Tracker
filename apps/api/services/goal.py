@@ -85,7 +85,7 @@ class GoalService:
             .join(Transaction, cast(Any, Transaction.id == TransactionLeg.transaction_id))
             .where(Transaction.category_id == category_id)
         )
-        result = cast(Any, self.session.exec(statement)).scalar_one()
+        result = cast(Any, self.session.exec(statement)).one()
         return coerce_decimal(result)
 
     def _get_net_worth_history(self) -> List[NetWorthPoint]:

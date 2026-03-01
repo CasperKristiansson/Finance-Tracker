@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from uuid import UUID
 
 import pytest
 from sqlmodel import select
@@ -192,3 +193,69 @@ def test_account_service_investment_balance_uses_snapshots(session):
 
     _, balance = service.get_account_with_balance(created.id)
     assert balance == Decimal("123456.78")
+
+
+def test_account_repository_and_service_edge_branches(session):
+    repo = AccountRepository(session)
+    service = AccountService(session)
+
+    with pytest.raises(ValueError, match="not found"):
+        repo.attach_loan(
+            UUID(int=9999),
+            Loan(
+                account_id=UUID(int=9999),
+                origin_principal=Decimal("100"),
+                current_principal=Decimal("100"),
+                interest_rate_annual=Decimal("0.01"),
+                interest_compound=InterestCompound.MONTHLY,
+            ),
+        )
+    with pytest.raises(LookupError, match="not found"):
+        service.attach_loan(
+            UUID(int=9999),
+            {
+                "origin_principal": Decimal("100"),
+                "current_principal": Decimal("100"),
+                "interest_rate_annual": Decimal("0.01"),
+                "interest_compound": InterestCompound.MONTHLY,
+            },
+        )
+    with pytest.raises(LookupError, match="not found"):
+        service.reconciliation_state(UUID(int=9999))
+
+    base = Account(name="Base", account_type=AccountType.NORMAL, icon="piggy-bank")
+    debt = Account(name="Debt Attach", account_type=AccountType.DEBT)
+    session.add_all([base, debt])
+    session.commit()
+    session.refresh(base)
+    session.refresh(debt)
+
+    attached_loan = service.attach_loan(
+        debt.id,
+        {
+            "origin_principal": Decimal("100"),
+            "current_principal": Decimal("100"),
+            "interest_rate_annual": Decimal("0.01"),
+            "interest_compound": InterestCompound.MONTHLY,
+        },
+    )
+    assert attached_loan.account_id == debt.id
+
+    updated = repo.update_fields(base, name="Updated Base", icon=None)
+    assert updated.name == "Updated Base"
+    assert updated.icon is None
+
+    repo.delete(updated)
+    assert session.get(Account, updated.id) is None
+
+    # _investment_balance: matched key with non-numeric value returns zero.
+    weird_snapshot = InvestmentSnapshot(
+        provider="manual",
+        report_type="portfolio_report",
+        account_name="Broker",
+        snapshot_date=date(2025, 1, 2),
+        portfolio_value=None,
+        raw_text="",
+        parsed_payload={"accounts": {"Broker": "not-numeric"}},
+    )
+    assert service._investment_balance("Broker", weird_snapshot) == Decimal("0")
