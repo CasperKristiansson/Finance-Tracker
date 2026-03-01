@@ -11,7 +11,7 @@ class CleanupRegistry:
     def __init__(self) -> None:
         self._actions: list[Callable[[], None]] = []
 
-    def add(self, action: Callable[..., None], *args, **kwargs) -> None:
+    def add(self, action: Callable[..., object], *args, **kwargs) -> None:
         def _runner() -> None:
             action(*args, **kwargs)
 

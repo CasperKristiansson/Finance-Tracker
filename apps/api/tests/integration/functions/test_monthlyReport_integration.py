@@ -7,5 +7,15 @@ COVERS_HTTP_PATH = "/reports/monthly"
 COVERS_ROUTE = None
 
 
-def test_monthlyReport_integration(exercise_serverless_function) -> None:
-    exercise_serverless_function(COVERS_SERVERLESS_FUNCTION)
+def test_monthlyReport_integration(integration_context) -> None:
+    context = integration_context
+    data = context.create_transfer()
+    year = data["occurred"].year
+    account_id = data["target"]["id"]
+    body = context.call(
+        "GET",
+        f"/reports/monthly?account_ids={account_id}&year={year}",
+        None,
+        expected=200,
+    )
+    assert isinstance(body.get("results"), list)

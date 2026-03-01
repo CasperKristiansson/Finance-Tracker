@@ -7,5 +7,8 @@ COVERS_HTTP_PATH = "/tax/events"
 COVERS_ROUTE = None
 
 
-def test_listTaxEvents_integration(exercise_serverless_function) -> None:
-    exercise_serverless_function(COVERS_SERVERLESS_FUNCTION)
+def test_listTaxEvents_integration(integration_context) -> None:
+    context = integration_context
+    context.create_tax_event()
+    body = context.call("GET", "/tax/events", None, expected=200)
+    assert isinstance(body.get("events"), list)

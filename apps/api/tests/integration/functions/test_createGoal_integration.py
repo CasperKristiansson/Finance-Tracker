@@ -7,5 +7,7 @@ COVERS_HTTP_PATH = "/goals"
 COVERS_ROUTE = None
 
 
-def test_createGoal_integration(exercise_serverless_function) -> None:
-    exercise_serverless_function(COVERS_SERVERLESS_FUNCTION)
+def test_createGoal_integration(integration_context) -> None:
+    context = integration_context
+    goal = context.create_goal()
+    assert goal["id"]

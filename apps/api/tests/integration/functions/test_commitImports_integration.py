@@ -7,5 +7,7 @@ COVERS_HTTP_PATH = "/imports/commit"
 COVERS_ROUTE = None
 
 
-def test_commitImports_integration(exercise_serverless_function) -> None:
-    exercise_serverless_function(COVERS_SERVERLESS_FUNCTION)
+def test_commitImports_integration(integration_context) -> None:
+    context = integration_context
+    data = context.commit_import(include_files=False)
+    assert data["commit"]["import_batch_id"]

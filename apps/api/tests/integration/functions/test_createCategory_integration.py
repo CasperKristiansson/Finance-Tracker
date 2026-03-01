@@ -7,5 +7,7 @@ COVERS_HTTP_PATH = "/categories"
 COVERS_ROUTE = None
 
 
-def test_createCategory_integration(exercise_serverless_function) -> None:
-    exercise_serverless_function(COVERS_SERVERLESS_FUNCTION)
+def test_createCategory_integration(integration_context) -> None:
+    context = integration_context
+    category = context.create_category()
+    assert category["id"]

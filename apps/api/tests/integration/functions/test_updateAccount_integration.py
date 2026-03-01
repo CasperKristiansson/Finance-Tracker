@@ -7,5 +7,13 @@ COVERS_HTTP_PATH = "/accounts/{accountId}"
 COVERS_ROUTE = None
 
 
-def test_updateAccount_integration(exercise_serverless_function) -> None:
-    exercise_serverless_function(COVERS_SERVERLESS_FUNCTION)
+def test_updateAccount_integration(integration_context) -> None:
+    context = integration_context
+    account = context.create_account()
+    body = context.call(
+        "PATCH",
+        f"/accounts/{account['id']}",
+        {"name": context.unique("updated"), "is_active": False},
+        expected=200,
+    )
+    assert body["is_active"] is False

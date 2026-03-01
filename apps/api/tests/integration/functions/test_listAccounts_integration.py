@@ -7,5 +7,9 @@ COVERS_HTTP_PATH = "/accounts"
 COVERS_ROUTE = None
 
 
-def test_listAccounts_integration(exercise_serverless_function) -> None:
-    exercise_serverless_function(COVERS_SERVERLESS_FUNCTION)
+def test_listAccounts_integration(integration_context) -> None:
+    context = integration_context
+    created = context.create_account()
+    body = context.call("GET", "/accounts", None, expected=200)
+    account_ids = {account["id"] for account in body.get("accounts", [])}
+    assert created["id"] in account_ids

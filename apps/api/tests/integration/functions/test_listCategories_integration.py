@@ -7,5 +7,9 @@ COVERS_HTTP_PATH = "/categories"
 COVERS_ROUTE = None
 
 
-def test_listCategories_integration(exercise_serverless_function) -> None:
-    exercise_serverless_function(COVERS_SERVERLESS_FUNCTION)
+def test_listCategories_integration(integration_context) -> None:
+    context = integration_context
+    category = context.create_category()
+    body = context.call("GET", "/categories", None, expected=200)
+    ids = {item["id"] for item in body.get("categories", [])}
+    assert category["id"] in ids

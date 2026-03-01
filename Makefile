@@ -39,6 +39,7 @@ type-check:
 	PYLINTHOME="$(PYLINTHOME)" PYTHONPATH=. pylint apps/api
 	pyright apps/api
 	mypy apps/api
+	PYTHONPATH=. $(PYTHON) scripts/check_integration_function_coverage.py
 
 format:
 	isort apps/api

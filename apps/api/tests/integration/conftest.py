@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Generator
 from datetime import datetime, timezone
 from typing import Callable, Literal, Sequence
 from urllib import error, request
@@ -12,9 +13,7 @@ import pytest
 
 from apps.api.tests.integration.helpers import (
     CleanupRegistry,
-)
-from apps.api.tests.integration.helpers import (
-    exercise_serverless_function as run_serverless_function,
+    IntegrationExerciseContext,
 )
 
 # pylint: disable=redefined-outer-name,too-many-positional-arguments
@@ -249,14 +248,14 @@ def integration_run_namespace() -> str:
 
 
 @pytest.fixture
-def cleanup_registry() -> CleanupRegistry:
+def cleanup_registry() -> Generator[CleanupRegistry, None, None]:
     registry = CleanupRegistry()
     yield registry
     registry.run()
 
 
 @pytest.fixture
-def exercise_serverless_function(
+def integration_context(
     api_call,
     json_body,
     invoke_lambda,
@@ -264,20 +263,16 @@ def exercise_serverless_function(
     integration_run_namespace,
     api_base_url,
     cleanup_registry,
-):
-    def _inner(function_name: str) -> None:
-        run_serverless_function(
-            function_name,
-            api_call=api_call,
-            json_body=json_body,
-            invoke_lambda=invoke_lambda,
-            lambda_name=lambda_name,
-            run_namespace=integration_run_namespace,
-            api_base_url=api_base_url,
-            cleanup_registry=cleanup_registry,
-        )
-
-    return _inner
+) -> IntegrationExerciseContext:
+    return IntegrationExerciseContext(
+        api_call=api_call,
+        json_body=json_body,
+        invoke_lambda=invoke_lambda,
+        lambda_name=lambda_name,
+        run_namespace=integration_run_namespace,
+        api_base_url=api_base_url,
+        cleanup_registry=cleanup_registry,
+    )
 
 
 @pytest.fixture(autouse=True)

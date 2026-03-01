@@ -33,6 +33,40 @@ Purpose-built notes for automation agents working on this repo. Assume you often
 - Validation/contracts: Pydantic drives input/output schemas; align service/repository boundaries with these models to keep type-safety and validation centralized.
 - Patterns: Keep SQLModel models thin; map to Pydantic schemas for API IO; keep side effects inside services/repositories, not handlers; reuse existing auth/settings utilities under `shared`.
 
+## Integration Coverage Rules
+
+- Every serverless function must have a matching declaration file under `apps/api/tests/integration/functions` named exactly `test_<functionName>_integration.py`.
+- Each declaration file must define the required constants:
+  - `COVERS_SERVERLESS_FUNCTION`
+  - `COVERS_EVENT_TYPE`
+  - `COVERS_HTTP_METHOD`
+  - `COVERS_HTTP_PATH`
+  - `COVERS_ROUTE`
+- Integration tests must be isolated and independently runnable:
+  - No cross-test ordering assumptions.
+  - Build required data inside the scenario/helper for that function.
+  - Use cleanup helpers/registry for teardown; never rely on shared mutable global state.
+  - Keep one function coverage declaration per file.
+- Coverage is enforced by a non-pytest script in type-check:
+  - Script: `scripts/check_integration_function_coverage.py`
+  - Wired via: `make type-check`
+  - If the script exits non-zero, treat it as a blocking failure.
+
+## API Contract Typegen Pattern
+
+- Keep backend and frontend API contracts in sync via generated types, not manual DTO duplication.
+- Source-of-truth inputs for generation:
+  - Serverless routes/events: `infra/serverless/serverless.yml`
+  - Handler-to-schema mapping: `apps/api/contracts/http.py`
+  - Backend Pydantic schemas: `apps/api/schemas/*` (plus operation models)
+- Generate contracts with:
+  - `npm run generate:api-contracts`
+- Generated outputs used by frontend:
+  - `apps/web/src/types/generated/contracts/*`
+  - `apps/web/src/types/contracts.ts`
+  - Endpoint request builder: `apps/web/src/lib/apiEndpoints.ts`
+- When changing handlers/routes/request-response schemas, regenerate contracts in the same change and update frontend usage to consume generated contract types.
+
 ## Required Workflow for Any Change
 
 - Understand & plan: skim relevant code, confirm entrypoints, capture assumptions.
@@ -54,6 +88,7 @@ Purpose-built notes for automation agents working on this repo. Assume you often
 - Dev server: `npm run dev -w apps/web`
 - Format/lint (frontend): `npm run format -w apps/web` && `npm run lint -w apps/web`
 - Format/type-check (backend): `make format` && `make type-check`
+- Generate API contracts: `npm run generate:api-contracts`
 - Tests (backend): `pytest apps/api/tests`
 - Terraform helpers: `make tf-plan` / `make tf-apply` / `make tf-destroy` (profile `Personal`)
 

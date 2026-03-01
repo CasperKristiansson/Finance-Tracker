@@ -7,5 +7,7 @@ COVERS_HTTP_PATH = "/accounts"
 COVERS_ROUTE = None
 
 
-def test_createAccount_integration(exercise_serverless_function) -> None:
-    exercise_serverless_function(COVERS_SERVERLESS_FUNCTION)
+def test_createAccount_integration(integration_context) -> None:
+    context = integration_context
+    account = context.create_account()
+    assert account["id"]

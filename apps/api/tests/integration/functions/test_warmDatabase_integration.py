@@ -7,5 +7,7 @@ COVERS_HTTP_PATH = "/warmup"
 COVERS_ROUTE = None
 
 
-def test_warmDatabase_integration(exercise_serverless_function) -> None:
-    exercise_serverless_function(COVERS_SERVERLESS_FUNCTION)
+def test_warmDatabase_integration(integration_context) -> None:
+    context = integration_context
+    body = context.call("GET", "/warmup", None, expected=200)
+    assert body.get("status") in {"ready", "starting"}
