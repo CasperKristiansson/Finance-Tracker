@@ -66,6 +66,7 @@ def test_imports_preview_and_commit_flow(api_call, json_body) -> None:
         "POST",
         "/imports/commit",
         {
+            "import_batch_id": preview["import_batch_id"],
             "note": "integration commit",
             "rows": [
                 {

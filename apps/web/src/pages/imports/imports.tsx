@@ -14,8 +14,15 @@ import {
   Trash2,
   UploadCloud,
 } from "lucide-react";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useFieldArray, useForm } from "react-hook-form";
+import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { z } from "zod";
 import { useAppSelector } from "@/app/hooks";
@@ -67,6 +74,7 @@ import type {
   AccountWithBalance,
   CategoryRead,
   ImportCommitRequest,
+  ImportCommitRow,
   ImportPreviewResponse,
   ImportPreviewRequest,
   TaxEventType,
@@ -269,6 +277,23 @@ const commitFormSchema = z.object({
 
 export type CommitFormValues = z.infer<typeof commitFormSchema>;
 
+const normalizeDraftRow = (
+  row: CommitFormValues["rows"][number],
+): ImportCommitRow => ({
+  id: row.id,
+  file_id: row.file_id ?? null,
+  account_id: row.account_id,
+  occurred_at: row.occurred_at,
+  amount: row.amount,
+  description: row.description,
+  category_id: row.category_id ?? null,
+  subscription_id: row.subscription_id ?? null,
+  transfer_account_id: row.transfer_account_id ?? null,
+  tax_event_type:
+    (row.tax_event_type as TaxEventType | null | undefined) ?? null,
+  delete: Boolean(row.delete),
+});
+
 const steps: Array<{ key: StepKey; label: string; description: string }> = [
   { key: 1, label: "Upload", description: "Choose one or more XLSX files." },
   { key: 2, label: "Map accounts", description: "Pick an account per file." },
@@ -292,6 +317,7 @@ const bankLabel = (
 };
 
 export const Imports: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const token = useAppSelector(selectToken);
   const { items: accounts, fetchAccounts } = useAccountsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
@@ -310,10 +336,17 @@ export const Imports: React.FC = () => {
     suggestions,
     suggestionsError,
     error,
+    drafts,
+    draftsLoading,
+    draftsError,
+    draftSaving,
     previewImports,
     commitImports,
     suggestCategories,
     resetImports,
+    fetchImportDrafts,
+    loadImportDraft,
+    saveImportDraft,
   } = useImportsApi();
 
   const [step, setStep] = useState<StepKey>(1);
@@ -357,6 +390,9 @@ export const Imports: React.FC = () => {
   const [reimbursementsByRow, setReimbursementsByRow] = useState<
     Record<string, ReimbursementState>
   >({});
+  const importIdFromUrl = searchParams.get("importId");
+  const draftLoadRequestRef = useRef<string | null>(null);
+  const lastDraftSnapshotRef = useRef<string | null>(null);
 
   const commitForm = useForm<CommitFormValues>({
     resolver: zodResolver(commitFormSchema),
@@ -385,6 +421,7 @@ export const Imports: React.FC = () => {
   useEffect(() => {
     fetchAccounts({});
     fetchCategories();
+    fetchImportDrafts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -395,6 +432,7 @@ export const Imports: React.FC = () => {
 
   useEffect(() => {
     if (preview) return;
+    lastDraftSnapshotRef.current = null;
     setSplitRows([]);
     setSplitRowIdsBySource({});
     setSplitBaseRow(null);
@@ -450,23 +488,33 @@ export const Imports: React.FC = () => {
   useEffect(() => {
     if (!preview) return;
     if (commitRows.length) return;
-    const defaults: CommitFormValues["rows"] = preview.rows.map((row) => ({
-      id: row.id,
-      file_id: row.file_id ?? null,
-      account_id: row.account_id,
-      occurred_at: row.occurred_at,
-      amount: row.amount,
-      description: row.description,
-      category_id: row.rule_applied
-        ? (row.suggested_category_id ?? null)
-        : null,
-      subscription_id: row.suggested_subscription_id ?? null,
-      transfer_account_id: null,
-      tax_event_type: null,
-      delete: false,
-    }));
+    const defaults: CommitFormValues["rows"] = preview.rows.map((row) => {
+      const draft =
+        row.draft && typeof row.draft === "object"
+          ? (row.draft as Partial<ImportCommitRow>)
+          : null;
+      return {
+        id: draft?.id ?? row.id,
+        file_id: draft?.file_id ?? row.file_id ?? null,
+        account_id: draft?.account_id ?? row.account_id,
+        occurred_at: draft?.occurred_at ?? row.occurred_at,
+        amount: draft?.amount ?? row.amount,
+        description: draft?.description ?? row.description,
+        category_id:
+          draft?.category_id ??
+          (row.rule_applied ? (row.suggested_category_id ?? null) : null),
+        subscription_id:
+          draft?.subscription_id ?? row.suggested_subscription_id ?? null,
+        transfer_account_id: draft?.transfer_account_id ?? null,
+        tax_event_type: draft?.tax_event_type ?? null,
+        delete: Boolean(draft?.delete),
+      };
+    });
     replaceCommitRows(defaults);
     commitForm.reset({ rows: defaults });
+    lastDraftSnapshotRef.current = JSON.stringify(
+      defaults.map(normalizeDraftRow),
+    );
   }, [preview, commitRows.length, commitForm, replaceCommitRows]);
 
   useEffect(() => {
@@ -489,6 +537,41 @@ export const Imports: React.FC = () => {
   }, [preview]);
 
   useEffect(() => {
+    if (!importIdFromUrl) {
+      draftLoadRequestRef.current = null;
+      return;
+    }
+    if (preview?.import_batch_id === importIdFromUrl) return;
+    if (draftLoadRequestRef.current === importIdFromUrl) return;
+
+    draftLoadRequestRef.current = importIdFromUrl;
+    loadImportDraft(importIdFromUrl);
+  }, [importIdFromUrl, loadImportDraft, preview?.import_batch_id]);
+
+  useEffect(() => {
+    const activeBatchId = preview?.import_batch_id;
+    if (!activeBatchId) return;
+    if (importIdFromUrl === activeBatchId) return;
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("importId", activeBatchId);
+      return next;
+    });
+  }, [importIdFromUrl, preview?.import_batch_id, setSearchParams]);
+
+  useEffect(() => {
+    if (!importIdFromUrl) return;
+    if (preview) return;
+    if (!error) return;
+    if (!error.toLowerCase().includes("not found")) return;
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("importId");
+      return next;
+    });
+  }, [error, importIdFromUrl, preview, setSearchParams]);
+
+  useEffect(() => {
     if (!commitTriggered) return;
     if (saving) return;
     if (error) {
@@ -502,7 +585,13 @@ export const Imports: React.FC = () => {
     setFiles([]);
     commitForm.reset({ rows: [] });
     setSuggestionsRequested(false);
-  }, [commitTriggered, saving, preview, error, commitForm]);
+    lastDraftSnapshotRef.current = null;
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("importId");
+      return next;
+    });
+  }, [commitTriggered, saving, preview, error, commitForm, setSearchParams]);
 
   useEffect(() => {
     const hasErrors = preview
@@ -557,12 +646,57 @@ export const Imports: React.FC = () => {
     });
   }, [suggestions, commitRows, commitForm]);
 
+  const draftRowsPayload = useMemo(
+    () =>
+      Array.isArray(watchedRows)
+        ? watchedRows.map((row) => normalizeDraftRow(row))
+        : [],
+    [watchedRows],
+  );
+  const draftSnapshot = useMemo(
+    () => JSON.stringify(draftRowsPayload),
+    [draftRowsPayload],
+  );
+
+  useEffect(() => {
+    if (!preview?.import_batch_id) return;
+    if (step !== 4) return;
+    if (!draftRowsPayload.length) return;
+    if (saving) return;
+    if (draftSaving) return;
+    if (draftSnapshot === lastDraftSnapshotRef.current) return;
+
+    const timeout = setTimeout(() => {
+      saveImportDraft({
+        importBatchId: preview.import_batch_id,
+        rows: draftRowsPayload,
+      });
+      lastDraftSnapshotRef.current = draftSnapshot;
+    }, 900);
+
+    return () => clearTimeout(timeout);
+  }, [
+    draftRowsPayload,
+    draftSaving,
+    draftSnapshot,
+    preview?.import_batch_id,
+    saveImportDraft,
+    saving,
+    step,
+  ]);
+
   useEffect(() => {
     if (!preview) return;
     if (step !== 3) return;
     if (preview.files.some((file) => (file.error_count ?? 0) > 0)) return;
     setStep(4);
   }, [preview, step]);
+
+  useEffect(() => {
+    if (!preview || !importIdFromUrl) return;
+    if (preview.import_batch_id !== importIdFromUrl) return;
+    setStep(4);
+  }, [preview, importIdFromUrl]);
 
   useEffect(() => {
     if (!preview) return;
@@ -586,6 +720,13 @@ export const Imports: React.FC = () => {
   const mappedFilesReady = useMemo(
     () => files.length > 0 && files.every((f) => Boolean(f.accountId)),
     [files],
+  );
+  const resumableDrafts = useMemo(
+    () =>
+      drafts.filter(
+        (draft) => draft.import_batch_id !== preview?.import_batch_id,
+      ),
+    [drafts, preview?.import_batch_id],
   );
   const unmappedCount = useMemo(
     () => files.filter((f) => !f.accountId).length,
@@ -722,6 +863,11 @@ export const Imports: React.FC = () => {
     }
     if (step === 3) {
       resetImports();
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.delete("importId");
+        return next;
+      });
       setStep(2);
       return;
     }
@@ -1254,20 +1400,8 @@ export const Imports: React.FC = () => {
         })
         .filter(Boolean) ?? [];
     const payload: ImportCommitRequest = {
-      rows: values.rows.map((row) => ({
-        id: row.id,
-        file_id: row.file_id ?? null,
-        account_id: row.account_id,
-        occurred_at: row.occurred_at,
-        amount: row.amount,
-        description: row.description,
-        category_id: row.category_id ?? null,
-        subscription_id: row.subscription_id ?? null,
-        transfer_account_id: row.transfer_account_id ?? null,
-        tax_event_type:
-          (row.tax_event_type as TaxEventType | null | undefined) ?? null,
-        delete: Boolean(row.delete),
-      })),
+      import_batch_id: preview?.import_batch_id,
+      rows: values.rows.map((row) => normalizeDraftRow(row)),
     };
     if (commitFiles.length) {
       payload.files = commitFiles as NonNullable<ImportCommitRequest["files"]>;
@@ -1320,8 +1454,8 @@ export const Imports: React.FC = () => {
             Upload, map, parse, audit, submit
           </h1>
           <p className="text-sm text-slate-500">
-            Files are never stored. Transactions are created only when you
-            submit.
+            Imports are auto-saved as drafts, so you can leave and resume later.
+            Transactions are created only when you submit.
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-600">
@@ -1335,6 +1469,12 @@ export const Imports: React.FC = () => {
             <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
               <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
               Submitting
+            </span>
+          ) : null}
+          {draftSaving ? (
+            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1">
+              <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+              Saving draft
             </span>
           ) : null}
         </div>
@@ -1405,6 +1545,65 @@ export const Imports: React.FC = () => {
               ) : (
                 <p className="text-sm text-slate-500">No files selected yet.</p>
               )}
+
+              <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold text-slate-800">
+                    Resume unfinished imports
+                  </p>
+                  {draftsLoading ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      Loading
+                    </span>
+                  ) : null}
+                </div>
+                {draftsError ? (
+                  <p className="text-xs text-rose-600">{draftsError}</p>
+                ) : null}
+                {resumableDrafts.length ? (
+                  <div className="space-y-2">
+                    {resumableDrafts.map((draft) => (
+                      <div
+                        key={draft.import_batch_id}
+                        className="flex flex-col gap-2 rounded border border-slate-200 bg-slate-50 px-3 py-2 md:flex-row md:items-center md:justify-between"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-slate-800">
+                            {draft.file_names.join(", ")}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {draft.row_count} rows • {draft.error_count} errors
+                            • Updated{" "}
+                            {new Date(draft.updated_at).toLocaleString()}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            draftLoadRequestRef.current = draft.import_batch_id;
+                            setSearchParams((current) => {
+                              const next = new URLSearchParams(current);
+                              next.set("importId", draft.import_batch_id);
+                              return next;
+                            });
+                            loadImportDraft(draft.import_batch_id);
+                          }}
+                          disabled={loading}
+                        >
+                          Resume
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    No unfinished import drafts.
+                  </p>
+                )}
+              </div>
             </>
           ) : null}
 
@@ -1633,6 +1832,11 @@ export const Imports: React.FC = () => {
                   ) : suggestionsError ? (
                     <p className="mt-1 text-xs text-rose-600">
                       Category suggestions unavailable: {suggestionsError}
+                    </p>
+                  ) : null}
+                  {draftsError && step === 4 ? (
+                    <p className="mt-1 text-xs text-rose-600">
+                      Draft autosave failed: {draftsError}
                     </p>
                   ) : null}
                 </div>

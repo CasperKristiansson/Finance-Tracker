@@ -13,7 +13,14 @@ from openpyxl import Workbook
 from sqlalchemy.pool import StaticPool
 from sqlmodel import Session, SQLModel, select
 
-from apps.api.handlers.imports import commit_imports, preview_imports, reset_handler_state
+from apps.api.handlers.imports import (
+    commit_imports,
+    get_import_draft,
+    list_import_drafts,
+    preview_imports,
+    reset_handler_state,
+    save_import_draft,
+)
 from apps.api.models import Account, Category, Transaction, TransactionImportBatch, TransactionLeg
 from apps.api.shared import (
     AccountType,
@@ -188,6 +195,7 @@ def test_preview_parses_swedbank_and_returns_rows():
     )
     assert response["statusCode"] == 200
     body = _json_body(response)
+    assert body["import_batch_id"]
     assert body["files"][0]["bank_import_type"] == "swedbank"
     assert body["files"][0]["row_count"] == 2
     assert body["rows"] and len(body["rows"]) == 2
@@ -318,7 +326,178 @@ def test_commit_is_all_or_nothing():
     with Session(engine) as session:
         scope_session_to_user(session, get_default_user_id())
         assert session.exec(select(Transaction)).all() == []
-        assert session.exec(select(TransactionImportBatch)).all() == []
+
+
+def test_get_import_draft_returns_persisted_preview():
+    account_id = _create_account(bank_import_type="swedbank")
+    payload = _swedbank_workbook()
+    preview_response = preview_imports(
+        {
+            "body": json.dumps(
+                {
+                    "files": [
+                        {
+                            "filename": "swedbank.xlsx",
+                            "account_id": str(account_id),
+                            "content_base64": payload,
+                        }
+                    ],
+                    "note": "draft resume",
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    preview_body = _json_body(preview_response)
+    import_batch_id = preview_body["import_batch_id"]
+
+    resumed_response = get_import_draft(
+        {
+            "pathParameters": {"importBatchId": import_batch_id},
+            "requestContext": {"authorizer": {"jwt": {"claims": {}}}},
+        },
+        None,
+    )
+    assert resumed_response["statusCode"] == 200
+    resumed_body = _json_body(resumed_response)
+    assert resumed_body["import_batch_id"] == import_batch_id
+    assert resumed_body["rows"]
+    assert resumed_body["files"][0]["filename"] == "swedbank.xlsx"
+
+
+def test_save_import_draft_persists_row_edits():
+    account_id = _create_account(bank_import_type="swedbank")
+    payload = _swedbank_workbook()
+    preview_response = preview_imports(
+        {
+            "body": json.dumps(
+                {
+                    "files": [
+                        {
+                            "filename": "swedbank.xlsx",
+                            "account_id": str(account_id),
+                            "content_base64": payload,
+                        }
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    preview_body = _json_body(preview_response)
+    row = preview_body["rows"][0]
+    import_batch_id = preview_body["import_batch_id"]
+
+    save_response = save_import_draft(
+        {
+            "pathParameters": {"importBatchId": import_batch_id},
+            "body": json.dumps(
+                {
+                    "rows": [
+                        {
+                            "id": row["id"],
+                            "file_id": row["file_id"],
+                            "account_id": row["account_id"],
+                            "occurred_at": row["occurred_at"],
+                            "amount": row["amount"],
+                            "description": "Updated draft description",
+                            "category_id": None,
+                            "subscription_id": None,
+                            "transfer_account_id": None,
+                            "tax_event_type": None,
+                            "delete": False,
+                        }
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+            "requestContext": {"authorizer": {"jwt": {"claims": {}}}},
+        },
+        None,
+    )
+    assert save_response["statusCode"] == 200
+
+    resumed_response = get_import_draft(
+        {
+            "pathParameters": {"importBatchId": import_batch_id},
+            "requestContext": {"authorizer": {"jwt": {"claims": {}}}},
+        },
+        None,
+    )
+    resumed_body = _json_body(resumed_response)
+    resumed_row = resumed_body["rows"][0]
+    assert resumed_row["draft"] is not None
+    assert resumed_row["draft"]["description"] == "Updated draft description"
+
+
+def test_list_import_drafts_excludes_committed_batches():
+    account_id = _create_account(bank_import_type="swedbank")
+    payload = _swedbank_workbook()
+    preview_response = preview_imports(
+        {
+            "body": json.dumps(
+                {
+                    "files": [
+                        {
+                            "filename": "swedbank.xlsx",
+                            "account_id": str(account_id),
+                            "content_base64": payload,
+                        }
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    preview_body = _json_body(preview_response)
+    import_batch_id = preview_body["import_batch_id"]
+    row = preview_body["rows"][0]
+
+    before_commit = list_import_drafts(
+        {"requestContext": {"authorizer": {"jwt": {"claims": {}}}}},
+        None,
+    )
+    assert before_commit["statusCode"] == 200
+    before_drafts = _json_body(before_commit)["drafts"]
+    assert any(draft["import_batch_id"] == import_batch_id for draft in before_drafts)
+
+    commit_response = commit_imports(
+        {
+            "body": json.dumps(
+                {
+                    "import_batch_id": import_batch_id,
+                    "rows": [
+                        {
+                            "id": row["id"],
+                            "file_id": row["file_id"],
+                            "account_id": row["account_id"],
+                            "occurred_at": row["occurred_at"],
+                            "amount": row["amount"],
+                            "description": row["description"],
+                            "category_id": None,
+                            "subscription_id": None,
+                            "transfer_account_id": None,
+                            "tax_event_type": None,
+                            "delete": False,
+                        }
+                    ],
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert commit_response["statusCode"] == 200
+
+    after_commit = list_import_drafts(
+        {"requestContext": {"authorizer": {"jwt": {"claims": {}}}}},
+        None,
+    )
+    after_drafts = _json_body(after_commit)["drafts"]
+    assert all(draft["import_batch_id"] != import_batch_id for draft in after_drafts)
 
 
 def test_commit_creates_batch_and_transactions():

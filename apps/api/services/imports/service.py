@@ -1,4 +1,4 @@
-"""Service layer for imports (stateless preview + atomic commit)."""
+"""Service layer for staged imports and atomic commit."""
 
 # pylint: disable=broad-exception-caught,too-many-lines
 
@@ -11,13 +11,16 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple, cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, or_
+from sqlalchemy import desc, func, or_
+from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select
 
 from ...models import (
     Account,
     Category,
+    ImportErrorRecord,
     ImportFile,
+    ImportRow,
     ImportRule,
     Subscription,
     TaxEvent,
@@ -28,6 +31,10 @@ from ...models import (
 from ...schemas import (
     ImportCommitRequest,
     ImportCommitResponse,
+    ImportDraftListResponse,
+    ImportDraftRead,
+    ImportDraftSaveRequest,
+    ImportDraftSaveResponse,
     ImportPreviewRequest,
     ImportPreviewResponse,
 )
@@ -53,14 +60,14 @@ from .utils import is_date_like, is_decimal, parse_iso_date, safe_decimal
 
 
 class ImportService:
-    """Coordinates stateless import preview and atomic commit."""
+    """Coordinates staged import preview drafts and atomic commit."""
 
     def __init__(self, session: Session, *, storage: ImportFileStorage | None = None):
         self.session = session
         self.storage = storage
 
     def preview_import(self, payload: ImportPreviewRequest) -> dict[str, Any]:
-        """Parse files and return draft rows + suggestions without persisting."""
+        """Parse files, persist draft state, and return import preview data."""
 
         category_lookup_by_id = self._category_lookup_by_id()
         subscription_lookup_by_id = self._subscription_lookup_by_id()
@@ -228,9 +235,429 @@ class ImportService:
                 )
             )
 
+        batch_id = self._persist_preview_batch(
+            note=payload.note,
+            files=response_files,
+            rows=response_rows,
+        )
         return ImportPreviewResponse.model_validate(
-            {"files": response_files, "rows": response_rows, "accounts": response_accounts}
+            {
+                "import_batch_id": batch_id,
+                "files": response_files,
+                "rows": response_rows,
+                "accounts": response_accounts,
+            }
         ).model_dump(mode="python")
+
+    def list_import_drafts(self) -> dict[str, Any]:
+        """Return incomplete draft import sessions for the current user."""
+
+        files_attr = cast(Any, TransactionImportBatch.files)
+        statement = (
+            select(TransactionImportBatch)
+            .options(selectinload(files_attr))
+            .order_by(desc(cast(Any, TransactionImportBatch.updated_at)))
+        )
+        batches = list(self.session.exec(statement).all())
+
+        drafts: list[ImportDraftRead] = []
+        for batch in batches:
+            files = list(batch.files or [])
+            if not files:
+                continue
+            if self._batch_has_transactions(batch.id):
+                continue
+
+            drafts.append(
+                ImportDraftRead(
+                    import_batch_id=batch.id,
+                    note=batch.note,
+                    created_at=batch.created_at,
+                    updated_at=batch.updated_at,
+                    file_count=len(files),
+                    row_count=sum(file.row_count or 0 for file in files),
+                    error_count=sum(file.error_count or 0 for file in files),
+                    file_names=[file.filename for file in files],
+                )
+            )
+
+        return ImportDraftListResponse(drafts=drafts).model_dump(mode="python")
+
+    def get_import_draft(self, import_batch_id: UUID) -> dict[str, Any]:
+        """Load a persisted import draft and return it as preview payload."""
+
+        batch = self._load_batch(import_batch_id)
+        return self._build_preview_from_batch(batch)
+
+    def save_import_draft(
+        self, import_batch_id: UUID, payload: ImportDraftSaveRequest
+    ) -> dict[str, Any]:
+        """Persist in-progress import row edits for a draft import batch."""
+
+        if not payload.rows:
+            raise ValueError("No rows provided")
+
+        batch = self._load_batch(import_batch_id)
+        if self._batch_has_transactions(batch.id):
+            raise ValueError("Import batch is already committed")
+
+        now = datetime.now(timezone.utc)
+        file_by_id = {file.id: file for file in batch.files or []}
+        if not file_by_id:
+            raise LookupError("Import batch not found")
+
+        existing_rows_stmt = (
+            select(ImportRow)
+            .join(ImportFile, cast(Any, ImportRow.file_id) == cast(Any, ImportFile.id))
+            .where(cast(Any, ImportFile.batch_id) == import_batch_id)
+        )
+        existing_rows = list(self.session.exec(existing_rows_stmt).all())
+        existing_by_id = {row.id: row for row in existing_rows}
+        touched_row_ids: set[UUID] = set()
+        row_count_by_file: dict[UUID, int] = {file_id: 0 for file_id in file_by_id}
+
+        for index, draft_row in enumerate(payload.rows, start=1):
+            persisted = existing_by_id.get(draft_row.id)
+            file_id = self._resolve_draft_row_file_id(
+                row=draft_row,
+                file_by_id=file_by_id,
+                persisted=persisted,
+            )
+            if persisted is not None and persisted.file_id != file_id:
+                persisted.file_id = file_id
+            if persisted is None:
+                persisted = ImportRow(
+                    id=draft_row.id,
+                    file_id=file_id,
+                    row_index=index,
+                    data={},
+                )
+                self.session.add(persisted)
+
+            row_count_by_file[file_id] = row_count_by_file.get(file_id, 0) + 1
+            persisted.row_index = row_count_by_file[file_id]
+            persisted.updated_at = now
+
+            current_data = dict(persisted.data or {})
+            current_data["account_id"] = str(draft_row.account_id)
+            current_data["occurred_at"] = draft_row.occurred_at
+            current_data["amount"] = draft_row.amount
+            current_data["description"] = draft_row.description
+            current_data["draft"] = draft_row.model_dump(mode="json")
+            if draft_row.id not in existing_by_id:
+                current_data["is_draft_row"] = True
+            persisted.data = current_data
+            touched_row_ids.add(draft_row.id)
+
+        for stale_row in existing_rows:
+            if stale_row.id in touched_row_ids:
+                continue
+            row_data = stale_row.data or {}
+            if bool(row_data.get("is_draft_row")):
+                self.session.delete(stale_row)
+                continue
+            if row_data.get("draft") is not None:
+                next_data = dict(row_data)
+                next_data.pop("draft", None)
+                stale_row.data = next_data
+                stale_row.updated_at = now
+
+        for file_id, file_row_count in row_count_by_file.items():
+            file_model = file_by_id[file_id]
+            file_model.row_count = file_row_count
+            file_model.updated_at = now
+
+        batch.updated_at = now
+
+        return ImportDraftSaveResponse(
+            import_batch_id=batch.id,
+            updated_at=batch.updated_at,
+        ).model_dump(mode="python")
+
+    def _persist_preview_batch(
+        self,
+        *,
+        note: str | None,
+        files: list[dict[str, Any]],
+        rows: list[dict[str, Any]],
+    ) -> UUID:
+        now = datetime.now(timezone.utc)
+        batch = TransactionImportBatch(
+            source_name="import_draft",
+            note=note,
+            created_at=now,
+            updated_at=now,
+        )
+        self.session.add(batch)
+        self.session.flush()
+
+        file_models: list[ImportFile] = []
+        error_models: list[ImportErrorRecord] = []
+        for file_payload in files:
+            bank_type = file_payload.get("bank_import_type")
+            bank_type_text = bank_type.value if isinstance(bank_type, BankImportType) else ""
+            file_id = cast(UUID, file_payload["id"])
+            file_model = ImportFile(
+                id=file_id,
+                batch_id=batch.id,
+                filename=str(file_payload["filename"]),
+                account_id=cast(UUID, file_payload["account_id"]),
+                row_count=int(file_payload.get("row_count") or 0),
+                error_count=int(file_payload.get("error_count") or 0),
+                status="draft",
+                bank_type=bank_type_text,
+                created_at=now,
+                updated_at=now,
+            )
+            file_models.append(file_model)
+
+            for error in file_payload.get("errors") or []:
+                error_models.append(
+                    ImportErrorRecord(
+                        file_id=file_id,
+                        row_number=int(error.get("row_number") or 0),
+                        message=str(error.get("message") or "Unknown import error"),
+                    )
+                )
+
+        if file_models:
+            self.session.add_all(file_models)
+        if error_models:
+            self.session.add_all(error_models)
+
+        row_models: list[ImportRow] = []
+        for row_payload in rows:
+            row_models.append(
+                ImportRow(
+                    id=cast(UUID, row_payload["id"]),
+                    file_id=cast(UUID, row_payload["file_id"]),
+                    row_index=int(row_payload["row_index"]),
+                    data={
+                        "account_id": str(row_payload["account_id"]),
+                        "occurred_at": str(row_payload["occurred_at"]),
+                        "amount": str(row_payload["amount"]),
+                        "description": str(row_payload["description"]),
+                        "suggested_category_id": (
+                            str(row_payload["suggested_category_id"])
+                            if row_payload.get("suggested_category_id")
+                            else None
+                        ),
+                    },
+                    suggested_category=row_payload.get("suggested_category_name"),
+                    suggested_confidence=row_payload.get("suggested_confidence"),
+                    suggested_reason=row_payload.get("suggested_reason"),
+                    suggested_subscription_id=row_payload.get("suggested_subscription_id"),
+                    suggested_subscription_name=row_payload.get("suggested_subscription_name"),
+                    suggested_subscription_confidence=row_payload.get(
+                        "suggested_subscription_confidence"
+                    ),
+                    suggested_subscription_reason=row_payload.get(
+                        "suggested_subscription_reason"
+                    ),
+                    transfer_match=row_payload.get("transfer_match"),
+                    rule_applied=bool(row_payload.get("rule_applied")),
+                    rule_type=row_payload.get("rule_type"),
+                    rule_summary=row_payload.get("rule_summary"),
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+
+        if row_models:
+            self.session.add_all(row_models)
+
+        return batch.id
+
+    def _load_batch(self, import_batch_id: UUID) -> TransactionImportBatch:
+        files_attr = cast(Any, TransactionImportBatch.files)
+        statement = (
+            select(TransactionImportBatch)
+            .where(cast(Any, TransactionImportBatch.id) == import_batch_id)
+            .options(
+                selectinload(files_attr).selectinload(cast(Any, ImportFile.errors)),
+                selectinload(files_attr).selectinload(cast(Any, ImportFile.rows)),
+            )
+        )
+        batch = self.session.exec(statement).one_or_none()
+        if batch is None or not batch.files:
+            raise LookupError("Import batch not found")
+        return batch
+
+    def _batch_has_transactions(self, import_batch_id: UUID) -> bool:
+        statement = (
+            select(cast(Any, Transaction.id))
+            .where(cast(Any, Transaction.import_batch_id) == import_batch_id)
+            .limit(1)
+        )
+        return self.session.exec(statement).first() is not None
+
+    def _build_preview_from_batch(self, batch: TransactionImportBatch) -> dict[str, Any]:
+        category_lookup_by_id = self._category_lookup_by_id()
+
+        response_files: list[dict[str, Any]] = []
+        response_rows: list[dict[str, Any]] = []
+        rows_by_account: dict[UUID, list[tuple[UUID, str]]] = {}
+
+        files = sorted(
+            list(batch.files or []),
+            key=lambda file: (str(file.created_at), str(file.id)),
+        )
+        for file in files:
+            file_rows = sorted(
+                list(file.rows or []),
+                key=lambda row: (row.row_index, str(row.id)),
+            )
+            file_errors = sorted(
+                list(file.errors or []),
+                key=lambda err: (err.row_number, str(err.id)),
+            )
+            bank_import_type = self._coerce_bank_import_type(file.bank_type)
+
+            preview_rows: list[dict[str, Any]] = []
+            for row in file_rows[:5]:
+                data = row.data or {}
+                preview_row: dict[str, Any] = {
+                    "date": data.get("occurred_at") or data.get("date") or "",
+                    "description": data.get("description") or "",
+                    "amount": data.get("amount") or "",
+                }
+                if row.suggested_category:
+                    preview_row["suggested_category"] = row.suggested_category
+                if row.suggested_confidence is not None:
+                    preview_row["suggested_confidence"] = float(row.suggested_confidence)
+                if row.suggested_reason:
+                    preview_row["suggested_reason"] = row.suggested_reason
+                if row.suggested_subscription_id is not None:
+                    preview_row["suggested_subscription_id"] = str(row.suggested_subscription_id)
+                if row.suggested_subscription_name:
+                    preview_row["suggested_subscription_name"] = row.suggested_subscription_name
+                if row.suggested_subscription_confidence is not None:
+                    preview_row["suggested_subscription_confidence"] = float(
+                        row.suggested_subscription_confidence
+                    )
+                if row.suggested_subscription_reason:
+                    preview_row["suggested_subscription_reason"] = row.suggested_subscription_reason
+                if row.transfer_match:
+                    preview_row["transfer_match"] = row.transfer_match
+                if row.rule_applied:
+                    preview_row["rule_applied"] = True
+                    preview_row["rule_type"] = row.rule_type
+                    preview_row["rule_summary"] = row.rule_summary
+                preview_rows.append(preview_row)
+
+            response_files.append(
+                {
+                    "id": file.id,
+                    "filename": file.filename,
+                    "account_id": file.account_id,
+                    "bank_import_type": bank_import_type,
+                    "row_count": file.row_count,
+                    "error_count": file.error_count,
+                    "errors": [
+                        {"row_number": err.row_number, "message": err.message}
+                        for err in file_errors
+                    ],
+                    "preview_rows": preview_rows,
+                }
+            )
+
+            for row in file_rows:
+                row_data = dict(row.data or {})
+                account_id = self._coerce_uuid(row_data.get("account_id")) or file.account_id
+                if account_id is None:
+                    continue
+                occurred_at = str(
+                    row_data.get("occurred_at")
+                    or row_data.get("date")
+                    or row_data.get("posted_at")
+                    or ""
+                )
+                amount = str(row_data.get("amount") or "")
+                description = str(row_data.get("description") or "")
+                rows_by_account.setdefault(account_id, []).append((row.id, description))
+                suggested_category_id = self._coerce_uuid(
+                    row_data.get("suggested_category_id")
+                )
+
+                response_rows.append(
+                    {
+                        "id": row.id,
+                        "file_id": file.id,
+                        "row_index": row.row_index,
+                        "account_id": account_id,
+                        "occurred_at": occurred_at,
+                        "amount": amount,
+                        "description": description,
+                        "suggested_category_id": suggested_category_id,
+                        "suggested_category_name": row.suggested_category,
+                        "suggested_confidence": (
+                            float(row.suggested_confidence)
+                            if row.suggested_confidence is not None
+                            else None
+                        ),
+                        "suggested_reason": row.suggested_reason,
+                        "suggested_subscription_id": row.suggested_subscription_id,
+                        "suggested_subscription_name": row.suggested_subscription_name,
+                        "suggested_subscription_confidence": (
+                            float(row.suggested_subscription_confidence)
+                            if row.suggested_subscription_confidence is not None
+                            else None
+                        ),
+                        "suggested_subscription_reason": row.suggested_subscription_reason,
+                        "transfer_match": row.transfer_match,
+                        "rule_applied": row.rule_applied,
+                        "rule_type": row.rule_type,
+                        "rule_summary": row.rule_summary,
+                        "draft": row_data.get("draft"),
+                    }
+                )
+
+        response_accounts: list[dict[str, Any]] = []
+        for account_id, row_entries in rows_by_account.items():
+            response_accounts.append(
+                self._build_account_context(
+                    account_id=account_id,
+                    row_entries=row_entries,
+                    category_lookup_by_id=category_lookup_by_id,
+                )
+            )
+
+        return ImportPreviewResponse.model_validate(
+            {
+                "import_batch_id": batch.id,
+                "files": response_files,
+                "rows": response_rows,
+                "accounts": response_accounts,
+            }
+        ).model_dump(mode="python")
+
+    def _resolve_draft_row_file_id(
+        self,
+        *,
+        row: Any,
+        file_by_id: dict[UUID, ImportFile],
+        persisted: ImportRow | None,
+    ) -> UUID:
+        if row.file_id is not None:
+            file_id = row.file_id
+            if file_id not in file_by_id:
+                raise ValueError("Draft row references unknown file")
+            return file_id
+        if persisted is not None:
+            return persisted.file_id
+        if len(file_by_id) == 1:
+            return next(iter(file_by_id.keys()))
+        raise ValueError("Draft row must include file_id")
+
+    def _coerce_uuid(self, value: Any) -> UUID | None:
+        if isinstance(value, UUID):
+            return value
+        if value is None:
+            return None
+        try:
+            return UUID(str(value))
+        except (TypeError, ValueError):
+            return None
 
     def _build_account_context(
         self,
@@ -356,14 +783,25 @@ class ImportService:
             raise ValueError("No rows provided")
 
         now = datetime.now(timezone.utc)
-        batch = TransactionImportBatch(
-            source_name=payload.note or "import",
-            note=payload.note,
-            created_at=now,
-            updated_at=now,
-        )
-        self.session.add(batch)
-        self.session.flush()
+        if payload.import_batch_id is not None:
+            batch = self.session.get(TransactionImportBatch, payload.import_batch_id)
+            if batch is None:
+                raise LookupError("Import batch not found")
+            if self._batch_has_transactions(batch.id):
+                raise ValueError("Import batch is already committed")
+            if payload.note is not None:
+                batch.note = payload.note
+            batch.source_name = payload.note or batch.source_name or "import"
+            batch.updated_at = now
+        else:
+            batch = TransactionImportBatch(
+                source_name=payload.note or "import",
+                note=payload.note,
+                created_at=now,
+                updated_at=now,
+            )
+            self.session.add(batch)
+            self.session.flush()
 
         transaction_service = TransactionService(self.session)
         offset_account = self._get_or_create_offset_account()
@@ -371,6 +809,9 @@ class ImportService:
         created_ids: list[UUID] = []
         tax_events: list[TaxEvent] = []
         user_id = self.session.info.get("user_id") or ""
+
+        existing_files_stmt = select(ImportFile).where(cast(Any, ImportFile.batch_id) == batch.id)
+        existing_files = {file.id: file for file in self.session.exec(existing_files_stmt).all()}
 
         storage = self.storage
         if payload.files:
@@ -392,29 +833,44 @@ class ImportService:
                 file_id=file_id,
                 filename=commit_file.filename,
             )
-            stored_files[file_id] = ImportFile(
-                id=file_id,
-                batch_id=batch.id,
-                filename=commit_file.filename,
-                account_id=commit_file.account_id,
-                row_count=commit_file.row_count,
-                error_count=commit_file.error_count,
-                status="stored",
-                bank_type=str(commit_file.bank_import_type or ""),
-                object_key=object_key,
-                content_type=commit_file.content_type,
-                size_bytes=len(content),
-                created_at=now,
-                updated_at=now,
-            )
+            file_model = existing_files.get(file_id)
+            if file_model is None:
+                file_model = ImportFile(
+                    id=file_id,
+                    batch_id=batch.id,
+                    filename=commit_file.filename,
+                    account_id=commit_file.account_id,
+                    row_count=commit_file.row_count,
+                    error_count=commit_file.error_count,
+                    status="stored",
+                    bank_type=str(commit_file.bank_import_type or ""),
+                    object_key=object_key,
+                    content_type=commit_file.content_type,
+                    size_bytes=len(content),
+                    created_at=now,
+                    updated_at=now,
+                )
+                existing_files[file_id] = file_model
+                self.session.add(file_model)
+            else:
+                file_model.filename = commit_file.filename
+                file_model.account_id = commit_file.account_id
+                file_model.row_count = commit_file.row_count
+                file_model.error_count = commit_file.error_count
+                file_model.status = "stored"
+                file_model.bank_type = str(commit_file.bank_import_type or "")
+                file_model.object_key = object_key
+                file_model.content_type = commit_file.content_type
+                file_model.size_bytes = len(content)
+                file_model.updated_at = now
+            stored_files[file_id] = file_model
             file_uploads[file_id] = {
                 "key": object_key,
                 "content": content,
                 "content_type": commit_file.content_type,
             }
 
-        if stored_files:
-            self.session.add_all(stored_files.values())
+        valid_file_ids = set(existing_files.keys())
 
         for row in payload.rows:
             if row.delete:
@@ -469,10 +925,17 @@ class ImportService:
                 subscription_id=subscription_id,
                 created_source=CreatedSource.IMPORT,
                 import_batch_id=batch.id,
-                import_file_id=row.file_id if row.file_id in stored_files else None,
+                import_file_id=(
+                    row.file_id
+                    if row.file_id is not None and row.file_id in valid_file_ids
+                    else None
+                ),
                 created_at=now,
                 updated_at=now,
             )
+
+            if row.file_id is not None and row.file_id not in valid_file_ids:
+                raise ValueError("Row references unknown import file")
 
             created_tx = transaction_service.create_transaction(
                 transaction,
@@ -513,6 +976,12 @@ class ImportService:
                 )
             except RuntimeError as exc:
                 raise ValueError("Unable to persist import files") from exc
+
+        if existing_files:
+            for file_model in existing_files.values():
+                file_model.status = "processed"
+                file_model.updated_at = now
+        batch.updated_at = now
 
         return ImportCommitResponse(
             import_batch_id=batch.id,

@@ -1,6 +1,7 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type {
   ImportCategorySuggestionRead,
+  ImportDraftRead,
   ImportFileRead,
   ImportPreviewResponse,
 } from "@/types/api";
@@ -16,6 +17,10 @@ export interface ImportsState {
   storedFiles: ImportFileRead[];
   storedFilesLoading: boolean;
   storedFilesError?: string;
+  drafts: ImportDraftRead[];
+  draftsLoading: boolean;
+  draftsError?: string;
+  draftSaving: boolean;
 }
 
 const initialState: ImportsState = {
@@ -26,6 +31,9 @@ const initialState: ImportsState = {
   suggestions: {},
   storedFiles: [],
   storedFilesLoading: false,
+  drafts: [],
+  draftsLoading: false,
+  draftSaving: false,
 };
 
 const importsSlice = createSlice({
@@ -87,6 +95,19 @@ const importsSlice = createSlice({
     ) {
       state.storedFilesError = action.payload;
     },
+    setImportDrafts(state, action: PayloadAction<ImportDraftRead[]>) {
+      state.drafts = action.payload;
+      state.draftsError = undefined;
+    },
+    setImportDraftsLoading(state, action: PayloadAction<boolean>) {
+      state.draftsLoading = action.payload;
+    },
+    setImportDraftsError(state, action: PayloadAction<string | undefined>) {
+      state.draftsError = action.payload;
+    },
+    setImportDraftSaving(state, action: PayloadAction<boolean>) {
+      state.draftSaving = action.payload;
+    },
   },
   selectors: {
     selectImportPreview: (state) => state.preview,
@@ -99,6 +120,10 @@ const importsSlice = createSlice({
     selectStoredImportFiles: (state) => state.storedFiles,
     selectStoredImportFilesLoading: (state) => state.storedFilesLoading,
     selectStoredImportFilesError: (state) => state.storedFilesError,
+    selectImportDrafts: (state) => state.drafts,
+    selectImportDraftsLoading: (state) => state.draftsLoading,
+    selectImportDraftsError: (state) => state.draftsError,
+    selectImportDraftSaving: (state) => state.draftSaving,
   },
 });
 
@@ -115,6 +140,10 @@ export const {
   setStoredImportFiles,
   setStoredImportFilesLoading,
   setStoredImportFilesError,
+  setImportDrafts,
+  setImportDraftsLoading,
+  setImportDraftsError,
+  setImportDraftSaving,
 } = importsSlice.actions;
 
 export const {
@@ -128,6 +157,10 @@ export const {
   selectStoredImportFiles,
   selectStoredImportFilesLoading,
   selectStoredImportFilesError,
+  selectImportDrafts,
+  selectImportDraftsLoading,
+  selectImportDraftsError,
+  selectImportDraftSaving,
 } = importsSlice.selectors;
 
 export const ImportsReducer = importsSlice.reducer;

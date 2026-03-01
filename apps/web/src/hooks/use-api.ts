@@ -39,13 +39,20 @@ import {
 } from "@/features/categories/categoriesSlice";
 import {
   CommitImports,
+  FetchImportDrafts,
   PreviewImports,
   FetchStoredImportFiles,
+  LoadImportDraft,
   DownloadImportFile,
   ResetImports,
+  SaveImportDraft,
   SuggestImportCategories,
 } from "@/features/imports/importsSaga";
 import {
+  selectImportDraftSaving,
+  selectImportDrafts,
+  selectImportDraftsError,
+  selectImportDraftsLoading,
   selectImportsError,
   selectImportsLoading,
   selectImportPreview,
@@ -458,6 +465,10 @@ export const useImportsApi = () => {
   const storedFiles = useAppSelector(selectStoredImportFiles);
   const storedFilesLoading = useAppSelector(selectStoredImportFilesLoading);
   const storedFilesError = useAppSelector(selectStoredImportFilesError);
+  const drafts = useAppSelector(selectImportDrafts);
+  const draftsLoading = useAppSelector(selectImportDraftsLoading);
+  const draftsError = useAppSelector(selectImportDraftsError);
+  const draftSaving = useAppSelector(selectImportDraftSaving);
 
   const previewImports = useCallback(
     (payload: ImportPreviewRequest) => dispatch(PreviewImports(payload)),
@@ -482,6 +493,22 @@ export const useImportsApi = () => {
     [dispatch],
   );
 
+  const fetchImportDrafts = useCallback(
+    () => dispatch(FetchImportDrafts()),
+    [dispatch],
+  );
+
+  const loadImportDraft = useCallback(
+    (importBatchId: string) => dispatch(LoadImportDraft({ importBatchId })),
+    [dispatch],
+  );
+
+  const saveImportDraft = useCallback(
+    (payload: Parameters<typeof SaveImportDraft>[0]) =>
+      dispatch(SaveImportDraft(payload)),
+    [dispatch],
+  );
+
   const downloadImportFile = useCallback(
     (fileId: string) => dispatch(DownloadImportFile({ fileId })),
     [dispatch],
@@ -498,11 +525,18 @@ export const useImportsApi = () => {
     storedFiles,
     storedFilesLoading,
     storedFilesError,
+    drafts,
+    draftsLoading,
+    draftsError,
+    draftSaving,
     previewImports,
     commitImports,
     suggestCategories,
     resetImports,
     fetchStoredFiles,
+    fetchImportDrafts,
+    loadImportDraft,
+    saveImportDraft,
     downloadImportFile,
   };
 };

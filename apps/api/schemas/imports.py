@@ -110,11 +110,13 @@ class ImportPreviewRowRead(BaseModel):
     rule_applied: bool = False
     rule_type: Optional[str] = None
     rule_summary: Optional[str] = None
+    draft: Optional[dict[str, Any]] = None
 
 
 class ImportPreviewResponse(BaseModel):
     """Response payload for import preview."""
 
+    import_batch_id: UUID
     files: List[ImportPreviewFileRead]
     rows: List[ImportPreviewRowRead]
     accounts: List[ImportPreviewAccountContextRead] = Field(default_factory=list)
@@ -163,6 +165,7 @@ class ImportCommitFile(BaseModel):
 class ImportCommitRequest(BaseModel):
     """Payload to commit a previewed import (persists transactions)."""
 
+    import_batch_id: Optional[UUID] = None
     note: Optional[str] = Field(default=None, max_length=255)
     rows: List[ImportCommitRow]
     files: Optional[List[ImportCommitFile]] = None
@@ -267,6 +270,38 @@ class ImportFileDownloadResponse(BaseModel):
     url: str
 
 
+class ImportDraftRead(BaseModel):
+    """Metadata for an incomplete import draft session."""
+
+    import_batch_id: UUID
+    note: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    file_count: int
+    row_count: int
+    error_count: int
+    file_names: List[str] = Field(default_factory=list)
+
+
+class ImportDraftListResponse(BaseModel):
+    """List response for incomplete import drafts."""
+
+    drafts: List[ImportDraftRead]
+
+
+class ImportDraftSaveRequest(BaseModel):
+    """Save in-progress draft edits for an import batch."""
+
+    rows: List[ImportCommitRow]
+
+
+class ImportDraftSaveResponse(BaseModel):
+    """Confirmation payload for draft save."""
+
+    import_batch_id: UUID
+    updated_at: datetime
+
+
 __all__ = [
     "ImportErrorRead",
     "ImportPreviewFile",
@@ -292,4 +327,8 @@ __all__ = [
     "ImportFileRead",
     "ImportFileListResponse",
     "ImportFileDownloadResponse",
+    "ImportDraftRead",
+    "ImportDraftListResponse",
+    "ImportDraftSaveRequest",
+    "ImportDraftSaveResponse",
 ]

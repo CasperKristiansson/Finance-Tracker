@@ -836,9 +836,11 @@ export const importPreviewRowReadSchema = z.object({
   rule_applied: z.boolean().nullable().optional(),
   rule_type: nullableString,
   rule_summary: nullableString,
+  draft: z.record(z.string(), z.unknown()).nullable().optional(),
 });
 
 export const importPreviewResponseSchema = z.object({
+  import_batch_id: z.string(),
   files: z.array(importPreviewFileReadSchema),
   rows: z.array(importPreviewRowReadSchema),
   accounts: z
@@ -897,6 +899,7 @@ export const importCommitRowSchema = z.object({
 });
 
 export const importCommitRequestSchema = z.object({
+  import_batch_id: z.string().optional(),
   note: z.string().optional(),
   rows: z.array(importCommitRowSchema),
   files: z
@@ -942,6 +945,30 @@ export const importFileListResponseSchema = z.object({
 
 export const importFileDownloadResponseSchema = z.object({
   url: z.string(),
+});
+
+export const importDraftSchema = z.object({
+  import_batch_id: z.string(),
+  note: z.string().nullable().optional(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  file_count: numeric,
+  row_count: numeric,
+  error_count: numeric,
+  file_names: z.array(z.string()).default([]),
+});
+
+export const importDraftListResponseSchema = z.object({
+  drafts: z.array(importDraftSchema).default([]),
+});
+
+export const importDraftSaveRequestSchema = z.object({
+  rows: z.array(importCommitRowSchema).min(1),
+});
+
+export const importDraftSaveResponseSchema = z.object({
+  import_batch_id: z.string(),
+  updated_at: z.string(),
 });
 
 export const importCategoryOptionSchema = z.object({
@@ -1402,6 +1429,16 @@ export type ImportFileListResponse = z.infer<
 >;
 export type ImportFileDownloadResponse = z.infer<
   typeof importFileDownloadResponseSchema
+>;
+export type ImportDraftRead = z.infer<typeof importDraftSchema>;
+export type ImportDraftListResponse = z.infer<
+  typeof importDraftListResponseSchema
+>;
+export type ImportDraftSaveRequest = z.infer<
+  typeof importDraftSaveRequestSchema
+>;
+export type ImportDraftSaveResponse = z.infer<
+  typeof importDraftSaveResponseSchema
 >;
 export type ImportCategoryOption = z.infer<typeof importCategoryOptionSchema>;
 export type ImportCategoryHistoryItem = z.infer<

@@ -3,6 +3,7 @@ import { END, eventChannel, type EventChannel } from "redux-saga";
 import { call, put, select, take, takeLatest } from "redux-saga/effects";
 import { toast } from "sonner";
 import {
+  demoImportDrafts,
   demoImportFiles,
   demoImportPreview,
   demoImportSuggestions,
@@ -13,6 +14,10 @@ import { selectCategories } from "@/features/categories/categoriesSlice";
 import {
   clearImportPreview,
   clearImportsError,
+  setImportDraftSaving,
+  setImportDrafts,
+  setImportDraftsError,
+  setImportDraftsLoading,
   setImportSuggestions,
   setImportPreview,
   setImportsError,
@@ -27,6 +32,9 @@ import {
 import type {
   ImportCommitRequest,
   ImportCommitResponse,
+  ImportDraftListResponse,
+  ImportDraftSaveRequest,
+  ImportDraftSaveResponse,
   ImportCategorySuggestJobRequest,
   ImportCategorySuggestJobResponse,
   ImportCategorySuggestRequest,
@@ -42,6 +50,9 @@ import type { BankImportType } from "@/types/enums";
 import {
   importCommitRequestSchema,
   importCommitResponseSchema,
+  importDraftListResponseSchema,
+  importDraftSaveRequestSchema,
+  importDraftSaveResponseSchema,
   importCategorySuggestJobRequestSchema,
   importCategorySuggestJobResponseSchema,
   importCategorySuggestRequestSchema,
@@ -64,6 +75,14 @@ export const CommitImports =
 export const SuggestImportCategories = createAction<{
   preview: ImportPreviewResponse;
 }>("imports/suggestCategories");
+export const FetchImportDrafts = createAction("imports/fetchDrafts");
+export const LoadImportDraft = createAction<{ importBatchId: string }>(
+  "imports/loadDraft",
+);
+export const SaveImportDraft = createAction<{
+  importBatchId: string;
+  rows: NonNullable<ImportDraftSaveRequest["rows"]>;
+}>("imports/saveDraft");
 export const FetchStoredImportFiles = createAction("imports/fetchStoredFiles");
 export const DownloadImportFile = createAction<{ fileId: string }>(
   "imports/downloadFile",
@@ -330,6 +349,7 @@ function* handlePreview(action: ReturnType<typeof PreviewImports>) {
     const body = importPreviewRequestSchema.parse(action.payload);
     if (isDemo) {
       yield put(setImportPreview(demoImportPreview));
+      yield put(FetchImportDrafts());
       toast.success("Files parsed", {
         description: "Review transactions and submit when ready.",
       });
@@ -346,6 +366,7 @@ function* handlePreview(action: ReturnType<typeof PreviewImports>) {
       );
 
       yield put(setImportPreview(response));
+      yield put(FetchImportDrafts());
       toast.success("Files parsed", {
         description: "Review transactions and submit when ready.",
       });
@@ -378,6 +399,7 @@ function* handleCommit(action: ReturnType<typeof CommitImports>) {
         description: "Demo import saved locally.",
       });
       yield put(clearImportPreview());
+      yield put(FetchImportDrafts());
     } else {
       const response: ImportCommitResponse = yield call(
         callApiWithAuth,
@@ -395,6 +417,7 @@ function* handleCommit(action: ReturnType<typeof CommitImports>) {
         description: `Batch ${parsed.import_batch_id.slice(0, 8)} created.`,
       });
       yield put(clearImportPreview());
+      yield put(FetchImportDrafts());
     }
   } catch (error) {
     yield put(
@@ -499,6 +522,103 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
   }
 }
 
+function* handleFetchDrafts() {
+  yield put(setImportDraftsLoading(true));
+  yield put(setImportDraftsError(undefined));
+  const isDemo: boolean = yield select(selectIsDemo);
+  try {
+    if (isDemo) {
+      yield put(setImportDrafts(demoImportDrafts.drafts ?? []));
+      return;
+    }
+
+    const response: ImportDraftListResponse = yield call(
+      callApiWithAuth,
+      {
+        path: "/imports/drafts",
+        method: "GET",
+        schema: importDraftListResponseSchema,
+      },
+      { loadingKey: "import-drafts" },
+    );
+    const parsed = importDraftListResponseSchema.parse(response);
+    yield put(setImportDrafts(parsed.drafts ?? []));
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load import drafts.";
+    yield put(setImportDraftsError(message));
+  } finally {
+    yield put(setImportDraftsLoading(false));
+  }
+}
+
+function* handleLoadDraft(action: ReturnType<typeof LoadImportDraft>) {
+  yield put(setImportsLoading(true));
+  yield put(clearImportsError());
+  const isDemo: boolean = yield select(selectIsDemo);
+
+  try {
+    if (isDemo) {
+      if (action.payload.importBatchId !== demoImportPreview.import_batch_id) {
+        throw new Error("Import draft not found.");
+      }
+      yield put(setImportPreview(demoImportPreview));
+      return;
+    }
+
+    const response: ImportPreviewResponse = yield call(
+      callApiWithAuth,
+      {
+        path: `/imports/${action.payload.importBatchId}`,
+        method: "GET",
+        schema: importPreviewResponseSchema,
+      },
+      { loadingKey: `import-draft-${action.payload.importBatchId}` },
+    );
+    const parsed = importPreviewResponseSchema.parse(response);
+    yield put(setImportPreview(parsed));
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to load import draft.";
+    yield put(setImportsError(message));
+    toast.error("Could not load import", { description: message });
+  } finally {
+    yield put(setImportsLoading(false));
+  }
+}
+
+function* handleSaveDraft(action: ReturnType<typeof SaveImportDraft>) {
+  yield put(setImportDraftSaving(true));
+  yield put(setImportDraftsError(undefined));
+  const isDemo: boolean = yield select(selectIsDemo);
+  try {
+    if (isDemo) {
+      return;
+    }
+
+    const body: ImportDraftSaveRequest = importDraftSaveRequestSchema.parse({
+      rows: action.payload.rows,
+    });
+    const response: ImportDraftSaveResponse = yield call(
+      callApiWithAuth,
+      {
+        path: `/imports/${action.payload.importBatchId}/draft`,
+        method: "POST",
+        body,
+        schema: importDraftSaveResponseSchema,
+      },
+      { loadingKey: `import-draft-save-${action.payload.importBatchId}` },
+    );
+    importDraftSaveResponseSchema.parse(response);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to save import draft.";
+    yield put(setImportDraftsError(message));
+  } finally {
+    yield put(setImportDraftSaving(false));
+  }
+}
+
 function* handleFetchStoredFiles() {
   yield put(setStoredImportFilesLoading(true));
   yield put(setStoredImportFilesError(undefined));
@@ -568,6 +688,9 @@ export function* ImportsSaga() {
   yield takeLatest(PreviewImports.type, handlePreview);
   yield takeLatest(CommitImports.type, handleCommit);
   yield takeLatest(SuggestImportCategories.type, handleSuggest);
+  yield takeLatest(FetchImportDrafts.type, handleFetchDrafts);
+  yield takeLatest(LoadImportDraft.type, handleLoadDraft);
+  yield takeLatest(SaveImportDraft.type, handleSaveDraft);
   yield takeLatest(FetchStoredImportFiles.type, handleFetchStoredFiles);
   yield takeLatest(DownloadImportFile.type, handleDownloadImportFile);
   yield takeLatest(ResetImports.type, function* () {
@@ -575,5 +698,7 @@ export function* ImportsSaga() {
     yield put(clearImportsError());
     yield put(setImportsSuggesting(false));
     yield put(setImportsSuggestionsError(undefined));
+    yield put(setImportDraftSaving(false));
+    yield put(setImportDraftsError(undefined));
   });
 }

@@ -4,6 +4,7 @@ import type {
   CashflowForecastResponse,
   CategoryListResponse,
   GoalListResponse,
+  ImportDraftListResponse,
   ImportFileListResponse,
   ImportCategorySuggestResponse,
   ImportPreviewResponse,
@@ -767,6 +768,7 @@ export const demoInvestmentOverview: InvestmentOverviewResponse = {
 };
 
 export const demoImportPreview: ImportPreviewResponse = {
+  import_batch_id: "draft-demo-1",
   files: [
     {
       id: "file-1",
@@ -853,6 +855,21 @@ export const demoImportPreview: ImportPreviewResponse = {
         { row_id: "row-1", transaction_ids: ["tx-recent-coffee"] },
         { row_id: "row-2", transaction_ids: ["tx-similar-payroll"] },
       ],
+    },
+  ],
+};
+
+export const demoImportDrafts: ImportDraftListResponse = {
+  drafts: [
+    {
+      import_batch_id: "draft-demo-1",
+      note: "December import",
+      created_at: demoDate(-1, 15),
+      updated_at: demoDate(-1, 16),
+      file_count: 1,
+      row_count: 2,
+      error_count: 0,
+      file_names: ["december.csv"],
     },
   ],
 };

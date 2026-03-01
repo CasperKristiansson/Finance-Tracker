@@ -215,6 +215,42 @@ functions:
           method: POST
           authorizer: cognitoJwt
 
+  listImportDrafts:
+    handler: apps/api/handlers/imports.list_import_drafts
+    memorySize: 512
+    timeout: 29
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /imports/drafts
+          method: GET
+          authorizer: cognitoJwt
+
+  getImportDraft:
+    handler: apps/api/handlers/imports.get_import_draft
+    memorySize: 512
+    timeout: 29
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /imports/{importBatchId}
+          method: GET
+          authorizer: cognitoJwt
+
+  saveImportDraft:
+    handler: apps/api/handlers/imports.save_import_draft
+    memorySize: 512
+    timeout: 29
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /imports/{importBatchId}/draft
+          method: POST
+          authorizer: cognitoJwt
+
   listImportFiles:
     handler: apps/api/handlers/import_files.list_import_files
     memorySize: 512
