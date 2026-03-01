@@ -23,6 +23,7 @@ import {
   Cell,
   Pie,
   PieChart,
+  ReferenceDot,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -80,6 +81,8 @@ type KPI = {
   helper?: string;
 };
 
+type SavingsMonthStatus = "normal" | "no-income" | "no-activity";
+
 const numberFromString = (value?: string): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -105,15 +108,73 @@ const MONTH_LABELS = [
   "Dec",
 ];
 
+const ROLLING_MONTH_COUNT = 12;
+
+type RollingMonthSlot = {
+  year: number;
+  monthIndex: number;
+  monthKey: string;
+  label: string;
+};
+
+const toMonthKey = (year: number, monthIndex: number) =>
+  `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+
+const buildRollingMonthSlots = (
+  count = ROLLING_MONTH_COUNT,
+  anchor = new Date(),
+): RollingMonthSlot[] => {
+  const anchorYear = anchor.getFullYear();
+  const anchorMonth = anchor.getMonth();
+  return Array.from({ length: count }, (_, index) => {
+    const offset = count - 1 - index;
+    const date = new Date(anchorYear, anchorMonth - offset, 1);
+    const year = date.getFullYear();
+    const monthIndex = date.getMonth();
+    return {
+      year,
+      monthIndex,
+      monthKey: toMonthKey(year, monthIndex),
+      label: `${MONTH_LABELS[monthIndex] ?? ""} ${String(year).slice(-2)}`,
+    };
+  });
+};
+
+const parsePeriodYearMonth = (period: string) => {
+  const match = period.match(/^(\d{4})-(\d{2})/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  if (!Number.isFinite(year) || monthIndex < 0 || monthIndex > 11) {
+    return null;
+  }
+  return { year, monthIndex };
+};
+
 const parsePeriodDate = (period: string) => {
   const normalized = period.includes("T") ? period : `${period}T00:00:00`;
   const parsed = new Date(normalized);
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 };
 
-const getPeriodYear = (period: string) => parsePeriodDate(period).getFullYear();
-const getPeriodMonthIndex = (period: string) =>
-  parsePeriodDate(period).getMonth();
+const getPeriodYear = (period: string) =>
+  parsePeriodYearMonth(period)?.year ?? parsePeriodDate(period).getFullYear();
+const getPeriodMonthKey = (period: string) => {
+  const parsed = parsePeriodYearMonth(period);
+  if (parsed) return toMonthKey(parsed.year, parsed.monthIndex);
+  const fallback = parsePeriodDate(period);
+  return toMonthKey(fallback.getFullYear(), fallback.getMonth());
+};
+
+const dedupeMonthlyEntries = (entries: MonthlyReportEntry[]) => {
+  const byMonth = new Map<string, MonthlyReportEntry>();
+  entries.forEach((entry) => {
+    byMonth.set(getPeriodMonthKey(entry.period), entry);
+  });
+  return Array.from(byMonth.values()).sort((a, b) =>
+    getPeriodMonthKey(a.period).localeCompare(getPeriodMonthKey(b.period)),
+  );
+};
 
 const renderAccountIcon = (icon: string | null | undefined, name: string) => {
   if (icon?.startsWith("lucide:")) {
@@ -172,11 +233,9 @@ const ChartCard: React.FC<{
 export const Dashboard: React.FC = () => {
   const {
     monthly,
-    yearly,
     total,
     netWorth,
     fetchMonthlyReport,
-    fetchYearlyReport,
     fetchTotalReport,
     fetchNetWorthReport,
   } = useReportsApi();
@@ -193,6 +252,12 @@ export const Dashboard: React.FC = () => {
   const [filteredMonthly, setFilteredMonthly] = useState<MonthlyReportEntry[]>(
     [],
   );
+  const [monthlyWindowData, setMonthlyWindowData] = useState<
+    MonthlyReportEntry[]
+  >([]);
+  const [yearlyOverviewsByYear, setYearlyOverviewsByYear] = useState<
+    Record<number, YearlyOverviewResponse>
+  >({});
   const [yearlyOverview, setYearlyOverview] =
     useState<YearlyOverviewResponse | null>(null);
   const [yearlyOverviewLoading, setYearlyOverviewLoading] = useState(false);
@@ -223,14 +288,12 @@ export const Dashboard: React.FC = () => {
     hasFetched.current = true;
     const year = new Date().getFullYear();
     fetchMonthlyReport({ year });
-    fetchYearlyReport();
     fetchTotalReport();
     fetchNetWorthReport();
     fetchAccounts();
     fetchCategories();
   }, [
     fetchMonthlyReport,
-    fetchYearlyReport,
     fetchTotalReport,
     fetchNetWorthReport,
     fetchAccounts,
@@ -252,42 +315,76 @@ export const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const loadFilteredMonthly = async () => {
-      if (!accounts.length || !token) return;
+      if (!token) return;
       const nonInvestmentIds = accounts
         .filter((acc) => acc.account_type !== AccountType.INVESTMENT)
         .map((acc) => acc.id);
-      if (!nonInvestmentIds.length) return;
-      const year = new Date().getFullYear();
+      const currentYear = new Date().getFullYear();
+      const years = [currentYear - 1, currentYear];
+      const collectMonthly = async (accountIds?: string[]) => {
+        const responses = await Promise.all(
+          years.map((year) =>
+            apiFetch<{ results: MonthlyReportEntry[] }>({
+              path: "/reports/monthly",
+              query: {
+                year,
+                ...(accountIds?.length ? { account_ids: accountIds } : {}),
+              },
+              token,
+              schema: monthlyReportSchema,
+            }),
+          ),
+        );
+        return responses.flatMap((response) => response.data.results ?? []);
+      };
+
       try {
-        const { data } = await apiFetch<{ results: MonthlyReportEntry[] }>({
-          path: "/reports/monthly",
-          query: { year, account_ids: nonInvestmentIds },
-          token,
-          schema: monthlyReportSchema,
-        });
-        setFilteredMonthly(data.results ?? []);
+        const [windowEntries, filteredEntries] = await Promise.all([
+          collectMonthly(),
+          nonInvestmentIds.length
+            ? collectMonthly(nonInvestmentIds)
+            : Promise.resolve([]),
+        ]);
+        setMonthlyWindowData(dedupeMonthlyEntries(windowEntries));
+        setFilteredMonthly(dedupeMonthlyEntries(filteredEntries));
       } catch (err) {
-        console.error("Failed to fetch filtered monthly report", err);
+        console.error("Failed to fetch rolling monthly report", err);
+        setMonthlyWindowData([]);
+        setFilteredMonthly([]);
       }
     };
-    loadFilteredMonthly();
+    void loadFilteredMonthly();
   }, [accounts, token]);
 
   useEffect(() => {
     const loadYearlyOverview = async () => {
       if (!token) return;
-      const year = new Date().getFullYear();
+      const currentYear = new Date().getFullYear();
+      const years = [currentYear - 1, currentYear];
       setYearlyOverviewLoading(true);
       try {
-        const { data } = await apiFetch<YearlyOverviewResponse>({
-          path: "/reports/yearly-overview",
-          query: { year },
-          token,
-          schema: yearlyOverviewSchema,
-        });
-        setYearlyOverview(data);
+        const responses = await Promise.all(
+          years.map((year) =>
+            apiFetch<YearlyOverviewResponse>({
+              path: "/reports/yearly-overview",
+              query: { year },
+              token,
+              schema: yearlyOverviewSchema,
+            }),
+          ),
+        );
+        const byYear = responses.reduce<Record<number, YearlyOverviewResponse>>(
+          (acc, response) => {
+            acc[response.data.year] = response.data;
+            return acc;
+          },
+          {},
+        );
+        setYearlyOverviewsByYear(byYear);
+        setYearlyOverview(byYear[currentYear] ?? null);
       } catch (err) {
         console.error("Failed to fetch yearly overview", err);
+        setYearlyOverviewsByYear({});
         setYearlyOverview(null);
       } finally {
         setYearlyOverviewLoading(false);
@@ -332,21 +429,31 @@ export const Dashboard: React.FC = () => {
   }, [activeAccounts, token]);
 
   const kpis: KPI[] = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    const ytdSrc = filteredMonthly.length
+    const rollingSlots = buildRollingMonthSlots();
+    const cashFlowSource = filteredMonthly.length
       ? filteredMonthly
-      : monthly.data || [];
-    const ytd = ytdSrc.filter(
-      (entry) => getPeriodYear(entry.period) === currentYear,
-    );
-    const ytdIncome = ytd.reduce((sum, entry) => sum + Number(entry.income), 0);
-    const ytdExpense = ytd.reduce(
-      (sum, entry) => sum + Number(entry.expense),
+      : monthlyWindowData.length
+        ? monthlyWindowData
+        : monthly.data || [];
+    const byMonth = new Map<string, { income: number; expense: number }>();
+    cashFlowSource.forEach((entry) => {
+      byMonth.set(getPeriodMonthKey(entry.period), {
+        income: Number(entry.income),
+        expense: Number(entry.expense),
+      });
+    });
+    const trailing = rollingSlots.map((slot) => byMonth.get(slot.monthKey));
+    const trailingIncome = trailing.reduce(
+      (sum, entry) => sum + (entry?.income ?? 0),
       0,
     );
-    const ytdNet = ytdIncome - ytdExpense;
-    const ytdSavingsRate =
-      ytdIncome > 0 ? Math.round((ytdNet / ytdIncome) * 100) : 0;
+    const trailingExpense = trailing.reduce(
+      (sum, entry) => sum + (entry?.expense ?? 0),
+      0,
+    );
+    const trailingNet = trailingIncome - trailingExpense;
+    const trailingSavingsRate =
+      trailingIncome > 0 ? Math.round((trailingNet / trailingIncome) * 100) : 0;
     const netWorthNow = netWorth.data?.length
       ? Number(netWorth.data[netWorth.data.length - 1]?.net_worth)
       : numberFromString(total.data?.net);
@@ -359,85 +466,171 @@ export const Dashboard: React.FC = () => {
         helper: "As of now",
       },
       {
-        title: "Cash flow (YTD)",
-        value: currency(ytdNet),
-        delta: formatDelta(ytdNet),
-        trend: ytdNet >= 0 ? "up" : "down",
-        helper: `Year to date (${currentYear})`,
+        title: "Cash flow (12m)",
+        value: currency(trailingNet),
+        delta: formatDelta(trailingNet),
+        trend: trailingNet >= 0 ? "up" : "down",
+        helper: "Last 12 months",
       },
       {
         title: "Savings rate",
-        value: `${ytdSavingsRate}%`,
-        helper: `Income retained YTD (${currentYear})`,
-        trend: ytdSavingsRate >= 0 ? "up" : "down",
+        value: `${trailingSavingsRate}%`,
+        helper: "Income retained (last 12 months)",
+        trend: trailingSavingsRate >= 0 ? "up" : "down",
       },
     ];
-  }, [filteredMonthly, monthly.data, netWorth.data, total.data]);
+  }, [
+    filteredMonthly,
+    monthly.data,
+    monthlyWindowData,
+    netWorth.data,
+    total.data,
+  ]);
 
   const incomeExpenseChart = useMemo(() => {
-    const src = filteredMonthly.length ? filteredMonthly : monthly.data || [];
-    const byMonth = new Map<
-      number,
-      {
-        income: number;
-        expense: number;
-      }
-    >();
+    const rollingSlots = buildRollingMonthSlots();
+    const source = filteredMonthly.length
+      ? filteredMonthly
+      : monthlyWindowData.length
+        ? monthlyWindowData
+        : monthly.data || [];
+    const byMonth = new Map<string, { income: number; expense: number }>();
 
-    src.forEach((entry) => {
-      byMonth.set(getPeriodMonthIndex(entry.period), {
+    source.forEach((entry) => {
+      byMonth.set(getPeriodMonthKey(entry.period), {
         income: Number(entry.income),
         expense: Number(entry.expense),
       });
     });
 
-    return Array.from({ length: 12 }, (_, monthIndex) => {
-      const entry = byMonth.get(monthIndex);
+    return rollingSlots.map((slot) => {
+      const entry = byMonth.get(slot.monthKey);
       return {
-        month: MONTH_LABELS[monthIndex] ?? "",
-        monthIndex,
-        income: entry?.income ?? null,
-        expense: entry?.expense ?? null,
+        month: MONTH_LABELS[slot.monthIndex] ?? "",
+        label: slot.label,
+        monthIndex: slot.monthIndex,
+        year: slot.year,
+        monthKey: slot.monthKey,
+        income: entry?.income ?? 0,
+        expense: entry?.expense ?? 0,
       };
     });
-  }, [monthly.data, filteredMonthly]);
+  }, [monthly.data, filteredMonthly, monthlyWindowData]);
+
+  const rollingCategoryBreakdown = useMemo(() => {
+    const rollingSlots = buildRollingMonthSlots();
+    const incomeTotals = new Map<
+      string,
+      { name: string; total: number; color?: string }
+    >();
+    const expenseTotals = new Map<
+      string,
+      { name: string; total: number; color?: string }
+    >();
+
+    const addTotals = (
+      rows:
+        | YearlyOverviewResponse["income_category_breakdown"]
+        | YearlyOverviewResponse["category_breakdown"],
+      monthIndex: number,
+      target: Map<string, { name: string; total: number; color?: string }>,
+    ) => {
+      rows.forEach((row) => {
+        const amount = Math.abs(Number(row.monthly[monthIndex] ?? 0));
+        if (!Number.isFinite(amount) || amount <= 0) return;
+        const key = row.category_id ?? row.name;
+        const existing = target.get(key);
+        if (existing) {
+          existing.total += amount;
+          return;
+        }
+        target.set(key, {
+          name: row.name,
+          total: amount,
+          color: row.color_hex ?? undefined,
+        });
+      });
+    };
+
+    rollingSlots.forEach((slot) => {
+      const overview = yearlyOverviewsByYear[slot.year];
+      if (!overview) return;
+      addTotals(
+        overview.income_category_breakdown,
+        slot.monthIndex,
+        incomeTotals,
+      );
+      addTotals(overview.category_breakdown, slot.monthIndex, expenseTotals);
+    });
+
+    const income = Array.from(incomeTotals.values()).sort(
+      (a, b) => b.total - a.total,
+    );
+    const expense = Array.from(expenseTotals.values()).sort(
+      (a, b) => b.total - a.total,
+    );
+    const incomeTotal = income.reduce((sum, row) => sum + row.total, 0);
+    const expenseTotal = expense.reduce((sum, row) => sum + row.total, 0);
+
+    return { income, expense, incomeTotal, expenseTotal };
+  }, [yearlyOverviewsByYear]);
 
   const categoryBreakdown = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    const yearlyTotals =
-      (yearly.data || []).filter(
-        (item) => "year" in item && Number(item.year) === currentYear,
-      ) || [];
-    const income = yearlyTotals.reduce(
-      (acc, item) => acc + Number(item.income),
-      0,
-    );
-    const expense = yearlyTotals.reduce(
-      (acc, item) => acc + Number(item.expense),
-      0,
-    );
-    return income || expense
+    const { incomeTotal, expenseTotal } = rollingCategoryBreakdown;
+    return incomeTotal || expenseTotal
       ? [
-          { name: "Income", value: income },
-          { name: "Expenses", value: expense },
+          { name: "Income", value: incomeTotal },
+          { name: "Expenses", value: expenseTotal },
         ]
       : [];
-  }, [yearly.data]);
+  }, [rollingCategoryBreakdown]);
 
   const savingsRateData = useMemo(() => {
-    const data = filteredMonthly.length ? filteredMonthly : monthly.data || [];
-    return data.map((entry) => {
-      const income = Number(entry.income);
-      const expense = Number(entry.expense);
+    const rollingSlots = buildRollingMonthSlots();
+    const source = filteredMonthly.length
+      ? filteredMonthly
+      : monthlyWindowData.length
+        ? monthlyWindowData
+        : monthly.data || [];
+    const byMonth = new Map<string, { income: number; expense: number }>();
+    source.forEach((entry) => {
+      byMonth.set(getPeriodMonthKey(entry.period), {
+        income: Number(entry.income),
+        expense: Number(entry.expense),
+      });
+    });
+    return rollingSlots.map((slot) => {
+      const income = byMonth.get(slot.monthKey)?.income ?? 0;
+      const expense = byMonth.get(slot.monthKey)?.expense ?? 0;
+      const status: SavingsMonthStatus =
+        income <= 0 && expense <= 0
+          ? "no-activity"
+          : income <= 0
+            ? "no-income"
+            : "normal";
       const rate =
         income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
-      const monthIndex = getPeriodMonthIndex(entry.period);
       return {
-        month: MONTH_LABELS[monthIndex] ?? "",
+        month: MONTH_LABELS[slot.monthIndex] ?? "",
+        label: slot.label,
         rate,
+        income,
+        expense,
+        status,
       };
     });
-  }, [monthly.data, filteredMonthly]);
+  }, [monthly.data, filteredMonthly, monthlyWindowData]);
+
+  const savingsStatusSummary = useMemo(() => {
+    return savingsRateData.reduce(
+      (acc, point) => {
+        if (point.status === "no-income") acc.noIncomeMonths += 1;
+        if (point.status === "no-activity") acc.noActivityMonths += 1;
+        return acc;
+      },
+      { noIncomeMonths: 0, noActivityMonths: 0 },
+    );
+  }, [savingsRateData]);
 
   const netWorthData = useMemo(() => {
     const points = netWorth.data || [];
@@ -470,49 +663,48 @@ export const Dashboard: React.FC = () => {
   );
 
   const runwayMetrics = useMemo(() => {
-    const entries = monthly.data ? [...monthly.data] : [];
-    if (!entries.length) {
+    const rollingSlots = buildRollingMonthSlots();
+    const source = filteredMonthly.length
+      ? filteredMonthly
+      : monthlyWindowData.length
+        ? monthlyWindowData
+        : monthly.data || [];
+    const byMonth = new Map<string, { income: number; expense: number }>();
+    source.forEach((entry) => {
+      byMonth.set(getPeriodMonthKey(entry.period), {
+        income: Number(entry.income),
+        expense: Number(entry.expense),
+      });
+    });
+    const rollingData = rollingSlots.map((slot) => {
+      const entry = byMonth.get(slot.monthKey);
+      const income = entry?.income ?? 0;
+      const expense = entry?.expense ?? 0;
       return {
-        avgBurn: 0,
-        avgIncome: 0,
-        months: null as number | null,
-        trend: "neutral" as "up" | "down" | "neutral",
-        lastNet: 0,
-        prevNet: 0,
-        sparkline: [] as { month: string; balance: number }[],
+        month: slot.label,
+        income,
+        expense,
+        net: income - expense,
       };
-    }
-
-    const sorted = entries.sort(
-      (a, b) =>
-        parsePeriodDate(a.period).getTime() -
-        parsePeriodDate(b.period).getTime(),
-    );
+    });
 
     const avgBurn =
-      sorted.reduce(
-        (sum, entry) => sum + Math.max(Number(entry.expense), 0),
-        0,
-      ) / sorted.length;
+      rollingData.reduce((sum, entry) => sum + Math.max(entry.expense, 0), 0) /
+      rollingData.length;
     const avgIncome =
-      sorted.reduce(
-        (sum, entry) => sum + Math.max(Number(entry.income), 0),
-        0,
-      ) / sorted.length;
-    const nets = sorted.map(
-      (entry) => Number(entry.income) - Number(entry.expense),
-    );
+      rollingData.reduce((sum, entry) => sum + Math.max(entry.income, 0), 0) /
+      rollingData.length;
+    const nets = rollingData.map((entry) => entry.net);
     const lastNet = nets[nets.length - 1] ?? 0;
     const prevNet = nets[nets.length - 2] ?? lastNet;
     const trend =
       lastNet > prevNet ? "up" : lastNet < prevNet ? "down" : "neutral";
 
     let running = 0;
-    const sparkline = sorted.slice(-6).map((entry) => {
-      running += Number(entry.income) - Number(entry.expense);
-      const monthIndex = getPeriodMonthIndex(entry.period);
+    const sparkline = rollingData.map((entry) => {
+      running += entry.net;
       return {
-        month: MONTH_LABELS[monthIndex] ?? "",
+        month: entry.month,
         balance: running,
       };
     });
@@ -520,7 +712,7 @@ export const Dashboard: React.FC = () => {
     const months = avgBurn > 0 ? cashOnHand / avgBurn : null;
 
     return { avgBurn, avgIncome, months, trend, lastNet, prevNet, sparkline };
-  }, [cashOnHand, monthly.data]);
+  }, [cashOnHand, filteredMonthly, monthly.data, monthlyWindowData]);
 
   const recentTransactions = useMemo(() => {
     return recent.items.map((tx) => {
@@ -680,7 +872,7 @@ export const Dashboard: React.FC = () => {
         <motion.div variants={fadeInUp}>
           <ChartCard
             title="Income vs Expense"
-            description="Stacked by month"
+            description="Last 12 months"
             loading={monthly.loading}
           >
             <ChartContainer
@@ -753,13 +945,18 @@ export const Dashboard: React.FC = () => {
                     if (!active || !payload?.length) return null;
 
                     const monthLabel =
-                      typeof payload[0]?.payload?.month === "string"
-                        ? payload[0].payload.month
+                      typeof payload[0]?.payload?.label === "string"
+                        ? payload[0].payload.label
                         : "";
                     const monthIndex =
                       typeof payload[0]?.payload?.monthIndex === "number"
                         ? payload[0].payload.monthIndex
                         : null;
+                    const monthYear =
+                      typeof payload[0]?.payload?.year === "number"
+                        ? payload[0].payload.year
+                        : null;
+                    const overviewYear = yearlyOverview?.year ?? null;
 
                     const incomeItem = payload.find(
                       (p) => p.dataKey === "income",
@@ -787,7 +984,10 @@ export const Dashboard: React.FC = () => {
                       fallbackColor: string,
                     ) => {
                       const sorted =
-                        breakdown && monthIndex !== null
+                        breakdown &&
+                        monthIndex !== null &&
+                        monthYear !== null &&
+                        overviewYear === monthYear
                           ? breakdown
                               .map((row) => ({
                                 name: row.name,
@@ -846,6 +1046,13 @@ export const Dashboard: React.FC = () => {
                         {yearlyOverviewLoading ? (
                           <p className="mt-2 text-slate-500">
                             Loading breakdown…
+                          </p>
+                        ) : monthYear !== null &&
+                          overviewYear !== null &&
+                          monthYear !== overviewYear ? (
+                          <p className="mt-2 text-slate-500">
+                            Category breakdown is available for {overviewYear}{" "}
+                            months only.
                           </p>
                         ) : monthIndex !== null ? (
                           <div className="mt-2 space-y-2">
@@ -1045,8 +1252,8 @@ export const Dashboard: React.FC = () => {
         <motion.div variants={fadeInUp}>
           <ChartCard
             title="Category mix"
-            description="Income vs expenses"
-            loading={yearly.loading}
+            description="Income vs expenses (last 12 months)"
+            loading={yearlyOverviewLoading}
             action={
               <div className="flex items-center gap-2 text-xs text-slate-500">
                 <span className="flex items-center gap-1">
@@ -1121,21 +1328,10 @@ export const Dashboard: React.FC = () => {
                       item.name === "Income"
                         ? ("income" as const)
                         : ("expense" as const);
-                    const breakdown =
-                      flow === "income"
-                        ? yearlyOverview?.income_category_breakdown
-                        : yearlyOverview?.category_breakdown;
                     const sorted =
-                      breakdown
-                        ?.map((row) => ({
-                          name: row.name,
-                          total: Number(row.total),
-                          color: row.color_hex ?? undefined,
-                        }))
-                        .filter(
-                          (row) => Number.isFinite(row.total) && row.total,
-                        )
-                        .sort((a, b) => b.total - a.total) ?? [];
+                      flow === "income"
+                        ? rollingCategoryBreakdown.income
+                        : rollingCategoryBreakdown.expense;
                     const top = sorted.slice(0, 5);
                     const otherTotal = sorted
                       .slice(5)
@@ -1199,8 +1395,27 @@ export const Dashboard: React.FC = () => {
         <motion.div variants={fadeInUp}>
           <ChartCard
             title="Savings rate"
-            description="Per month"
+            description="Last 12 months"
             loading={monthly.loading}
+            action={
+              savingsStatusSummary.noIncomeMonths ||
+              savingsStatusSummary.noActivityMonths ? (
+                <div className="space-y-1 text-[11px] text-slate-500">
+                  {savingsStatusSummary.noIncomeMonths ? (
+                    <p className="flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-full bg-amber-400" />
+                      {savingsStatusSummary.noIncomeMonths} no-income months
+                    </p>
+                  ) : null}
+                  {savingsStatusSummary.noActivityMonths ? (
+                    <p className="flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-full bg-slate-300" />
+                      {savingsStatusSummary.noActivityMonths} no-activity months
+                    </p>
+                  ) : null}
+                </div>
+              ) : null
+            }
           >
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={savingsRateData}>
@@ -1227,16 +1442,54 @@ export const Dashboard: React.FC = () => {
                   tickLine={false}
                   axisLine={false}
                 />
+                <ReferenceLine y={0} stroke="#cbd5e1" />
+                {savingsRateData
+                  .filter((point) => point.status !== "normal")
+                  .map((point) => (
+                    <ReferenceDot
+                      key={`${point.label}-${point.status}`}
+                      x={point.month}
+                      y={0}
+                      r={point.status === "no-activity" ? 4 : 3}
+                      fill={
+                        point.status === "no-activity" ? "#cbd5e1" : "#fbbf24"
+                      }
+                      stroke={
+                        point.status === "no-activity" ? "#64748b" : "#b45309"
+                      }
+                    />
+                  ))}
                 <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const item = payload[0];
+                    const status =
+                      item.payload?.status === "no-income" ||
+                      item.payload?.status === "no-activity"
+                        ? (item.payload.status as SavingsMonthStatus)
+                        : "normal";
                     return (
                       <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
                         <p className="font-semibold text-slate-800">
-                          {item.payload.month}
+                          {item.payload.label}
                         </p>
-                        <p className="text-slate-600">{item.value}%</p>
+                        <p className="text-slate-600">
+                          Savings rate: {item.value}%
+                        </p>
+                        <p className="text-slate-500">
+                          Income: {currency(Number(item.payload.income ?? 0))} -
+                          Expense: {currency(Number(item.payload.expense ?? 0))}
+                        </p>
+                        {status === "no-income" ? (
+                          <p className="text-amber-700">
+                            No income recorded this month.
+                          </p>
+                        ) : null}
+                        {status === "no-activity" ? (
+                          <p className="text-slate-600">
+                            No income or expense recorded this month.
+                          </p>
+                        ) : null}
                       </div>
                     );
                   }}
@@ -1416,7 +1669,8 @@ export const Dashboard: React.FC = () => {
                   Cash runway
                 </CardTitle>
                 <p className="text-sm text-slate-500">
-                  Based on average burn (non-investment accounts)
+                  Based on average burn (last 12 months, non-investment
+                  accounts)
                 </p>
               </div>
               {runwayMetrics.trend === "up" ? (
