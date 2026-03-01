@@ -233,12 +233,19 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
         });
 
         setTotalDrilldownSeries(
-          data.results.map((row) => ({
-            period: row.period,
-            income: Number(row.income),
-            expense: Number(row.expense),
-            net: Number(row.net),
-          })),
+          data.results.map(
+            (row: {
+              period: string;
+              income: number | string;
+              expense: number | string;
+              net: number | string;
+            }) => ({
+              period: row.period,
+              income: Number(row.income),
+              expense: Number(row.expense),
+              net: Number(row.net),
+            }),
+          ),
         );
       } catch (error) {
         console.error(error);

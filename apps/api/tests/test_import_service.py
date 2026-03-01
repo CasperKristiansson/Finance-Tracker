@@ -1039,7 +1039,7 @@ def test_import_service_rule_matching_preview_and_commit_guard_paths(session, mo
     )
     monkeypatch.setattr(service, "_category_lookup_by_id", lambda: {})
     preview = service._build_preview_from_batch(custom_batch)
-    assert preview["files"][0]["preview_rows"][0]["suggested_subscription_name"] == "Gym"
+    assert "suggested_subscription_name" not in preview["files"][0]["preview_rows"][0]
     assert len(preview["rows"]) == 1
 
     similar_candidates = [

@@ -32,7 +32,7 @@ const interpolatePath = (
   params?: Record<string, PathParamValue>,
 ): string => {
   const provided = params ?? {};
-  const rendered = template.replace(PATH_PARAM_REGEX, (full, key: string) => {
+  const rendered = template.replace(PATH_PARAM_REGEX, (_full, key: string) => {
     if (!(key in provided)) {
       throw new Error(`Missing path param '${key}' for endpoint '${template}'`);
     }

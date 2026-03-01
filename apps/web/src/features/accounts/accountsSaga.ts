@@ -1,4 +1,5 @@
 import { createAction } from "@reduxjs/toolkit";
+import type { SagaIterator } from "redux-saga";
 import { call, put, select, takeLatest } from "redux-saga/effects";
 import { demoAccounts } from "@/data/demoPayloads";
 import {
@@ -58,7 +59,9 @@ export const ReconcileAccounts = createAction<{
   }>;
 }>("accounts/reconcile");
 
-function* handleFetchAccounts(action: ReturnType<typeof FetchAccounts>) {
+function* handleFetchAccounts(
+  action: ReturnType<typeof FetchAccounts>,
+): SagaIterator {
   const stored: AccountsState = yield select(selectAccountsState);
   const filters =
     action.payload ??
@@ -103,7 +106,9 @@ function* handleFetchAccounts(action: ReturnType<typeof FetchAccounts>) {
   }
 }
 
-function* handleCreateAccount(action: ReturnType<typeof CreateAccount>) {
+function* handleCreateAccount(
+  action: ReturnType<typeof CreateAccount>,
+): SagaIterator {
   yield put(setAccountCreateLoading(true));
   yield put(setAccountMutationError(undefined));
   const isDemo: boolean = yield select(selectIsDemo);
@@ -161,7 +166,9 @@ function* handleCreateAccount(action: ReturnType<typeof CreateAccount>) {
   }
 }
 
-function* handleUpdateAccount(action: ReturnType<typeof UpdateAccount>) {
+function* handleUpdateAccount(
+  action: ReturnType<typeof UpdateAccount>,
+): SagaIterator {
   const { accountId, data } = action.payload;
   yield put(setAccountUpdateLoading(true));
   yield put(setAccountMutationError(undefined));
@@ -203,8 +210,11 @@ function* handleUpdateAccount(action: ReturnType<typeof UpdateAccount>) {
   }
 }
 
-function* handleArchiveAccount(action: ReturnType<typeof ArchiveAccount>) {
-  yield* handleUpdateAccount(
+function* handleArchiveAccount(
+  action: ReturnType<typeof ArchiveAccount>,
+): SagaIterator {
+  yield call(
+    handleUpdateAccount,
     UpdateAccount({
       accountId: action.payload.accountId,
       data: { is_active: false },
@@ -212,7 +222,9 @@ function* handleArchiveAccount(action: ReturnType<typeof ArchiveAccount>) {
   );
 }
 
-function* handleAttachLoan(action: ReturnType<typeof AttachLoan>) {
+function* handleAttachLoan(
+  action: ReturnType<typeof AttachLoan>,
+): SagaIterator {
   const { account_id, ...loanData } = action.payload;
   yield put(setAccountUpdateLoading(true));
   yield put(setAccountMutationError(undefined));
@@ -261,7 +273,9 @@ function* handleAttachLoan(action: ReturnType<typeof AttachLoan>) {
   }
 }
 
-function* handleUpdateLoan(action: ReturnType<typeof UpdateLoan>) {
+function* handleUpdateLoan(
+  action: ReturnType<typeof UpdateLoan>,
+): SagaIterator {
   const { accountId, data } = action.payload;
   yield put(setAccountUpdateLoading(true));
   yield put(setAccountMutationError(undefined));
@@ -318,7 +332,7 @@ function* handleUpdateLoan(action: ReturnType<typeof UpdateLoan>) {
 
 function* handleReconcileAccounts(
   action: ReturnType<typeof ReconcileAccounts>,
-) {
+): SagaIterator {
   yield put(setAccountReconcileLoading(true));
   yield put(setAccountReconcileError(undefined));
   const isDemo: boolean = yield select(selectIsDemo);
@@ -372,7 +386,7 @@ function* handleReconcileAccounts(
   }
 }
 
-export function* AccountsSaga() {
+export function* AccountsSaga(): SagaIterator {
   yield takeLatest(FetchAccounts.type, handleFetchAccounts);
   yield takeLatest(CreateAccount.type, handleCreateAccount);
   yield takeLatest(UpdateAccount.type, handleUpdateAccount);

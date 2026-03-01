@@ -296,6 +296,8 @@ class ImportDraftSaveRequest(BaseModel):
     """Save in-progress draft edits for an import batch."""
 
     rows: List[ImportCommitRow]
+    snapshot: Optional[ImportPreviewResponse] = None
+    note: Optional[str] = Field(default=None, max_length=255)
 
 
 class ImportDraftSaveResponse(BaseModel):

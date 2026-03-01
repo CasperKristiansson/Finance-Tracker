@@ -25,7 +25,6 @@ from apps.api.handlers.imports import (
 )
 from apps.api.models import Account, Category, Transaction, TransactionLeg
 from apps.api.schemas import ImportCategorySuggestionRead
-from apps.api.services import ImportService
 from apps.api.shared import (
     AccountType,
     CategoryType,
@@ -33,8 +32,11 @@ from apps.api.shared import (
     configure_engine,
     get_default_user_id,
     get_engine,
+    import_draft_state,
+    import_suggestions_state,
     scope_session_to_user,
 )
+from apps.api.shared.import_suggestions_state import save_import_suggestions_state
 
 
 @pytest.fixture(autouse=True)
@@ -52,6 +54,40 @@ def configure_sqlite(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         yield
     finally:
         SQLModel.metadata.drop_all(engine)
+
+
+class _FakeDraftStoreTable:
+    def __init__(self) -> None:
+        self.items: dict[str, dict] = {}
+
+    def get_item(self, *, Key: dict) -> dict:
+        item = self.items.get(str(Key["connection_id"]))
+        if item is None:
+            return {}
+        return {"Item": item}
+
+    def put_item(self, *, Item: dict) -> None:
+        self.items[str(Item["connection_id"])] = Item
+
+    def delete_item(self, *, Key: dict) -> None:
+        self.items.pop(str(Key["connection_id"]), None)
+
+    def scan(self, *, FilterExpression, **_kwargs):  # noqa: N803 - boto style
+        _ = FilterExpression
+        items = [
+            item
+            for item in self.items.values()
+            if item.get("item_type") == "import_draft" and item.get("status") == "draft"
+        ]
+        return {"Items": items}
+
+
+@pytest.fixture(autouse=True)
+def configure_import_draft_store(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    table = _FakeDraftStoreTable()
+    monkeypatch.setattr(import_draft_state, "_get_table", lambda: table)
+    monkeypatch.setattr(import_suggestions_state, "_get_table", lambda: table)
+    yield
 
 
 def _json_body(response: dict) -> dict:
@@ -543,7 +579,7 @@ def test_delete_import_draft_removes_session():
     assert all(draft["import_batch_id"] != import_batch_id for draft in drafts)
 
 
-def test_delete_import_draft_fails_for_committed_batch():
+def test_delete_import_draft_allows_committed_batch_cleanup():
     account_id = _create_account(bank_import_type="swedbank")
     payload = _swedbank_workbook()
     preview_response = preview_imports(
@@ -602,7 +638,7 @@ def test_delete_import_draft_fails_for_committed_batch():
         },
         None,
     )
-    assert delete_response["statusCode"] == 400
+    assert delete_response["statusCode"] == 200
 
 
 def test_persisted_suggestions_are_returned_on_draft_reload():
@@ -630,23 +666,19 @@ def test_persisted_suggestions_are_returned_on_draft_reload():
     import_batch_id = UUID(preview_body["import_batch_id"])
     target_row_id = UUID(preview_body["rows"][0]["id"])
 
-    engine = get_engine()
-    with Session(engine) as session:
-        scope_session_to_user(session, get_default_user_id())
-        service = ImportService(session)
-        service.mark_import_suggestions_running(import_batch_id)
-        service.persist_import_suggestions(
-            import_batch_id,
-            suggestions=[
-                ImportCategorySuggestionRead(
-                    id=target_row_id,
-                    category_id=category_id,
-                    confidence=0.81,
-                    reason="Matched prior grocery merchant",
-                )
-            ],
-        )
-        session.commit()
+    save_import_suggestions_state(
+        import_batch_id=import_batch_id,
+        user_id=get_default_user_id(),
+        status="completed",
+        suggestions=[
+            ImportCategorySuggestionRead(
+                id=target_row_id,
+                category_id=category_id,
+                confidence=0.81,
+                reason="Matched prior grocery merchant",
+            )
+        ],
+    )
 
     resumed_response = get_import_draft(
         {
@@ -726,15 +758,6 @@ def test_import_handler_validation_and_error_paths(monkeypatch: pytest.MonkeyPat
         def commit_import(self, _data):
             raise LookupError("missing")
 
-        def get_import_draft(self, _batch_id):
-            raise LookupError("missing")
-
-        def save_import_draft(self, _batch_id, _data):
-            raise LookupError("missing")
-
-        def list_import_drafts(self):
-            return {"drafts": []}
-
     monkeypatch.setattr(import_handlers, "ImportService", _PreviewLookupErrorService)
     preview_lookup = preview_imports(
         {
@@ -807,12 +830,6 @@ def test_import_handler_validation_and_error_paths(monkeypatch: pytest.MonkeyPat
         def commit_import(self, _data):
             raise ValueError("bad commit")
 
-        def get_import_draft(self, _batch_id):
-            raise ValueError("bad draft")
-
-        def save_import_draft(self, _batch_id, _data):
-            raise ValueError("bad save")
-
     monkeypatch.setattr(import_handlers, "ImportService", _PreviewValueErrorService)
     preview_value = preview_imports(
         {
@@ -852,7 +869,7 @@ def test_import_handler_validation_and_error_paths(monkeypatch: pytest.MonkeyPat
         {"pathParameters": {"importBatchId": str(UUID(int=1))}},
         None,
     )
-    assert draft_value["statusCode"] == 400
+    assert draft_value["statusCode"] == 404
     save_value = save_import_draft(
         {
             "pathParameters": {"importBatchId": str(UUID(int=1))},
@@ -873,4 +890,4 @@ def test_import_handler_validation_and_error_paths(monkeypatch: pytest.MonkeyPat
         },
         None,
     )
-    assert save_value["statusCode"] == 400
+    assert save_value["statusCode"] == 404

@@ -51,6 +51,19 @@ Purpose-built notes for automation agents working on this repo. Assume you often
   - Script: `scripts/check_integration_function_coverage.py`
   - Wired via: `make type-check`
   - If the script exits non-zero, treat it as a blocking failure.
+- Important: `make type-check` must not run integration tests. It should only run static/type/lint checks + the integration coverage declaration checker above.
+- Do not run `make test` and `make test-unit` back-to-back in the same verification pass:
+  - `make test` already executes the full backend test suite.
+  - Preferred split workflow is `make test-unit` + `make test-integration` when you need separate signals.
+- Never commit test coverage artifacts:
+  - Keep `.coverage`, `coverage.xml`, and `htmlcov/` out of git.
+
+## Import Flow Architecture Rules
+
+- Import preview drafts + async suggestion state are DynamoDB-backed.
+- For non-VPC import endpoints (`listImportDrafts`, `getImportDraft`, `saveImportDraft`, `deleteImportDraft`, suggestion websocket/job endpoints), do not add RDS fallbacks.
+- Going forward, keep these routes and related services fully operational with Bedrock + DynamoDB only.
+- If DynamoDB is unavailable or misconfigured, return an explicit API error; do not silently fallback to Aurora.
 
 ## API Contract Typegen Pattern
 
@@ -75,6 +88,10 @@ Purpose-built notes for automation agents working on this repo. Assume you often
   - Frontend: `npm run format -w apps/web` then `npm run lint -w apps/web`.
   - Backend: `make format` then `make type-check` (runs isort/black/pylint/pyright/mypy).
 - Validate: run targeted tests when touched areas have coverage (e.g., `pytest apps/api/tests` or component-level checks as applicable).
+- Testing order guidance:
+  - Run `make type-check` for static gates and integration coverage declaration checks.
+  - Run `make test-unit` for backend behavior validation.
+  - Run `make test-integration` separately when API/integration-facing behavior changes or before deployment sign-off.
 - Summarize: report what changed, commands run, and remaining risks/todos.
 
 ## Access & Safety Notes

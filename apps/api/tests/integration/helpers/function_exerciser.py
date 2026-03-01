@@ -235,6 +235,29 @@ class IntegrationExerciseContext:
 
         assert preview["files"], "preview response should include files"
         assert preview["rows"], "preview response should include rows"
+        self.call(
+            "POST",
+            f"/imports/{preview['import_batch_id']}/draft",
+            {
+                "rows": [
+                    {
+                        "id": row["id"],
+                        "file_id": row["file_id"],
+                        "account_id": row["account_id"],
+                        "occurred_at": row["occurred_at"],
+                        "amount": row["amount"],
+                        "description": row["description"],
+                        "category_id": row.get("suggested_category_id"),
+                        "transfer_account_id": None,
+                        "tax_event_type": None,
+                        "delete": False,
+                    }
+                    for row in preview["rows"]
+                ],
+                "snapshot": preview,
+            },
+            expected=200,
+        )
         return {"account": account, "preview": preview, "workbook_b64": workbook_b64}
 
     def commit_import(self, *, include_files: bool) -> dict:

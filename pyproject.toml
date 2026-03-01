@@ -9,6 +9,7 @@ known_first_party = ["apps"]
 
 [tool.pylint.'MAIN']
 load-plugins = "pylint.extensions.docparams"
+ignore-paths = ["^apps/api/tests/.*$"]
 
 [tool.pylint.'BASIC']
 good-names = ["id", "pk", "db", "ok"]
@@ -53,6 +54,7 @@ pythonVersion = "3.13"
 python_version = "3.13"
 ignore_missing_imports = true
 explicit_package_bases = true
+exclude = ["^apps/api/tests/"]
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true

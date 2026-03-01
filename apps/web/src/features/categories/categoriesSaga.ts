@@ -1,4 +1,5 @@
 import { createAction } from "@reduxjs/toolkit";
+import type { SagaIterator } from "redux-saga";
 import { call, put, select, takeLatest } from "redux-saga/effects";
 import { demoCategories } from "@/data/demoPayloads";
 import { callApiWithAuth } from "@/features/api/apiSaga";
@@ -38,7 +39,9 @@ export const MergeCategory = createAction<{
   renameTargetTo?: string;
 }>("categories/merge");
 
-function* handleFetchCategories(action: ReturnType<typeof FetchCategories>) {
+function* handleFetchCategories(
+  action: ReturnType<typeof FetchCategories>,
+): SagaIterator {
   const filters = action.payload ?? {};
   yield put(setCategoriesLoading(true));
   const isDemo: boolean = yield select(selectIsDemo);
@@ -77,7 +80,9 @@ function* handleFetchCategories(action: ReturnType<typeof FetchCategories>) {
   }
 }
 
-function* handleCreateCategory(action: ReturnType<typeof CreateCategory>) {
+function* handleCreateCategory(
+  action: ReturnType<typeof CreateCategory>,
+): SagaIterator {
   const isDemo: boolean = yield select(selectIsDemo);
   yield put(setCategoryCreateLoading(true));
   yield put(setCategoryMutationError(undefined));
@@ -86,7 +91,7 @@ function* handleCreateCategory(action: ReturnType<typeof CreateCategory>) {
     if (isDemo) {
       const current = (yield select(
         selectCategories,
-      )) as EndpointResponse<"listCategories">["categories"];
+      )) as CategoriesState["items"];
       const now = new Date().toISOString();
       yield put(
         setCategories([
@@ -131,7 +136,9 @@ function* handleCreateCategory(action: ReturnType<typeof CreateCategory>) {
   }
 }
 
-function* handleUpdateCategory(action: ReturnType<typeof UpdateCategory>) {
+function* handleUpdateCategory(
+  action: ReturnType<typeof UpdateCategory>,
+): SagaIterator {
   const isDemo: boolean = yield select(selectIsDemo);
   yield put(setCategoryUpdateLoading(true));
   yield put(setCategoryMutationError(undefined));
@@ -140,7 +147,7 @@ function* handleUpdateCategory(action: ReturnType<typeof UpdateCategory>) {
     if (isDemo) {
       const current = (yield select(
         selectCategories,
-      )) as EndpointResponse<"listCategories">["categories"];
+      )) as CategoriesState["items"];
       yield put(
         setCategories(
           current.map((cat) =>
@@ -183,14 +190,16 @@ function* handleUpdateCategory(action: ReturnType<typeof UpdateCategory>) {
   }
 }
 
-function* handleMergeCategory(action: ReturnType<typeof MergeCategory>) {
+function* handleMergeCategory(
+  action: ReturnType<typeof MergeCategory>,
+): SagaIterator {
   const isDemo: boolean = yield select(selectIsDemo);
   yield put(setCategoryMutationError(undefined));
   try {
     if (isDemo) {
       const current = (yield select(
         selectCategories,
-      )) as EndpointResponse<"listCategories">["categories"];
+      )) as CategoriesState["items"];
       const merged = current.filter(
         (cat) => cat.id !== action.payload.sourceCategoryId,
       );
@@ -233,7 +242,7 @@ function* handleMergeCategory(action: ReturnType<typeof MergeCategory>) {
   }
 }
 
-export function* CategoriesSaga() {
+export function* CategoriesSaga(): SagaIterator {
   yield takeLatest(FetchCategories.type, handleFetchCategories);
   yield takeLatest(CreateCategory.type, handleCreateCategory);
   yield takeLatest(UpdateCategory.type, handleUpdateCategory);

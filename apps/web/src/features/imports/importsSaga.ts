@@ -85,6 +85,8 @@ export const LoadImportDraft = createAction<{ importBatchId: string }>(
 export const SaveImportDraft = createAction<{
   importBatchId: string;
   rows: NonNullable<ImportDraftSaveRequest["rows"]>;
+  snapshot?: ImportDraftSaveRequest["snapshot"];
+  note?: string;
 }>("imports/saveDraft");
 export const DeleteImportDraft = createAction<{ importBatchId: string }>(
   "imports/deleteDraft",
@@ -343,6 +345,22 @@ const mapPersistedSuggestions = (preview: ImportPreviewResponse) => {
   return mapped;
 };
 
+const buildDraftRowsFromPreview = (
+  preview: ImportPreviewResponse,
+): NonNullable<ImportDraftSaveRequest["rows"]> =>
+  preview.rows.map((row) => ({
+    id: row.id,
+    file_id: row.file_id,
+    account_id: row.account_id,
+    occurred_at: row.occurred_at,
+    amount: row.amount,
+    description: row.description,
+    category_id: row.suggested_category_id ?? null,
+    transfer_account_id: null,
+    tax_event_type: null,
+    delete: false,
+  }));
+
 function* suggestSync(request: ImportCategorySuggestRequest) {
   const mapped: Record<
     string,
@@ -387,6 +405,22 @@ function* handlePreview(action: ReturnType<typeof PreviewImports>) {
         }),
         { loadingKey: "imports" },
       );
+      const draftRows = buildDraftRowsFromPreview(response);
+      const bootstrapDraft: ImportDraftSaveRequest =
+        importDraftSaveRequestSchema.parse({
+          rows: draftRows,
+          snapshot: response,
+        });
+      const bootstrapResponse: ImportDraftSaveResponse = yield call(
+        callApiWithAuth,
+        buildEndpointRequest("saveImportDraft", {
+          pathParams: { importBatchId: response.import_batch_id },
+          body: bootstrapDraft,
+          schema: importDraftSaveResponseSchema,
+        }),
+        { loadingKey: `import-draft-bootstrap-${response.import_batch_id}` },
+      );
+      importDraftSaveResponseSchema.parse(bootstrapResponse);
 
       yield put(setImportPreview(response));
       yield put(FetchImportDrafts());
@@ -633,6 +667,8 @@ function* handleSaveDraft(action: ReturnType<typeof SaveImportDraft>) {
 
     const body: ImportDraftSaveRequest = importDraftSaveRequestSchema.parse({
       rows: action.payload.rows,
+      snapshot: action.payload.snapshot,
+      note: action.payload.note,
     });
     const response: ImportDraftSaveResponse = yield call(
       callApiWithAuth,

@@ -1,4 +1,5 @@
 import { createAction } from "@reduxjs/toolkit";
+import type { SagaIterator } from "redux-saga";
 import { call, put, select, takeLatest } from "redux-saga/effects";
 import { demoTransactionsResponse } from "@/data/demoPayloads";
 import { callApiWithAuth } from "@/features/api/apiSaga";
@@ -58,7 +59,7 @@ const serializeAccounts = (ids?: string[]) => {
 
 function* handleFetchTransactions(
   action: ReturnType<typeof FetchTransactions>,
-) {
+): SagaIterator {
   const stored: TransactionFilters = yield select(selectTransactionFilters);
   const filters = { ...stored, ...(action.payload ?? {}) };
   yield put(setTransactionsLoading(true));
@@ -152,7 +153,7 @@ function* handleFetchTransactions(
 
 function* handleFetchRecentTransactions(
   action: ReturnType<typeof FetchRecentTransactions>,
-) {
+): SagaIterator {
   const limit = action.payload?.limit ?? 5;
   yield put(setRecentLimit(limit));
   yield put(setRecentLoading(true));
@@ -200,7 +201,7 @@ function* handleFetchRecentTransactions(
 
 function* handleCreateTransaction(
   action: ReturnType<typeof CreateTransaction>,
-) {
+): SagaIterator {
   const isDemo: boolean = yield select(selectIsDemo);
   try {
     const body = transactionCreateSchema.parse(action.payload);
@@ -259,7 +260,7 @@ function* handleCreateTransaction(
 
 function* handleUpdateTransaction(
   action: ReturnType<typeof UpdateTransaction>,
-) {
+): SagaIterator {
   const isDemo: boolean = yield select(selectIsDemo);
   try {
     const body = transactionUpdateRequestSchema.parse(action.payload.data);
@@ -302,7 +303,7 @@ function* handleUpdateTransaction(
 
 function* handleDeleteTransaction(
   action: ReturnType<typeof DeleteTransaction>,
-) {
+): SagaIterator {
   const isDemo: boolean = yield select(selectIsDemo);
   try {
     if (isDemo) {
@@ -327,7 +328,7 @@ function* handleDeleteTransaction(
   }
 }
 
-export function* TransactionsSaga() {
+export function* TransactionsSaga(): SagaIterator {
   yield takeLatest(FetchTransactions.type, handleFetchTransactions);
   yield takeLatest(FetchRecentTransactions.type, handleFetchRecentTransactions);
   yield takeLatest(CreateTransaction.type, handleCreateTransaction);

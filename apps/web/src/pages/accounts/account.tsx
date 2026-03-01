@@ -264,9 +264,9 @@ export const AccountDetails: React.FC = () => {
           token,
         });
         const years = (data.results ?? [])
-          .map((row) => Number(row.year))
-          .filter((y) => Number.isFinite(y))
-          .sort((a, b) => a - b);
+          .map((row: { year: number | string }) => Number(row.year))
+          .filter((y: number) => Number.isFinite(y))
+          .sort((a: number, b: number) => a - b);
         setAvailableYears(years);
       } catch (err) {
         console.error("Failed to fetch yearly totals for account", err);

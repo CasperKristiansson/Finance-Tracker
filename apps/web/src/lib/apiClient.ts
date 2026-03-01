@@ -1,6 +1,6 @@
 import { resolveDemoRequest } from "@/data/demoApi";
 
-type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+type HttpMethod = "GET" | "POST" | "PATCH" | "PUT" | "DELETE" | "OPTIONS";
 
 export interface ApiRequest {
   path: string;

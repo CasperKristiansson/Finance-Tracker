@@ -1,6 +1,6 @@
 .PHONY: tf-init tf-plan tf-apply tf-destroy tf-fmt tf-validate tf-write-web-env \
         tf-enable-public-db tf-disable-public-db \
-        type-check format test deploy-layer deploy-api deploy deployWebsite
+        type-check format test test-unit test-integration deploy-layer deploy-api deploy deployWebsite
 
 TF_DIR ?= infra/terraform
 TF_CMD = terraform -chdir=$(TF_DIR)
@@ -47,6 +47,12 @@ format:
 
 test:
 	PYTHONPATH=. $(PYTHON) -m pytest apps/api/tests
+
+test-unit:
+	PYTHONPATH=. $(PYTHON) -m pytest apps/api/tests --ignore=apps/api/tests/integration --no-cov
+
+test-integration:
+	AWS_PROFILE="$(AWS_PROFILE)" AWS_REGION="$(AWS_REGION)" PYTHONPATH=. $(PYTHON) -m pytest apps/api/tests/integration --no-cov
 
 deploy-layer:
 	$(MAKE) -C infra/layers build

@@ -18,3 +18,6 @@ apps/web/dist
 apps/web/.env.production
 apps/web/.env.local
 .cache/pylint/api_1.stats
+.coverage
+coverage.xml
+htmlcov/

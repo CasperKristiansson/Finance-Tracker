@@ -23,9 +23,12 @@ from ..schemas import (
     ImportCategorySuggestRequest,
     ImportCategorySuggestResponse,
 )
-from ..services import ImportService
-from ..shared import get_default_user_id, session_scope
-from .utils import ensure_engine, get_user_id, json_response, parse_body
+from ..shared import get_default_user_id
+from ..shared.import_suggestions_state import (
+    load_import_suggestions_state,
+    save_import_suggestions_state,
+)
+from .utils import get_user_id, json_response, parse_body
 
 BEDROCK_MODEL_ID_DEFAULT = "anthropic.claude-3-haiku-20240307-v1:0"
 _MAX_HISTORY = 200
@@ -125,21 +128,21 @@ def enqueue_import_category_suggestions(event: Dict[str, Any], _context: Any) ->
         return json_response(403, {"error": "Client token mismatch"})
 
     if request.import_batch_id is not None:
-        ensure_engine()
-        try:
-            with session_scope(user_id=user_id) as session:
-                service = ImportService(session)
-                status = service.get_import_suggestions_status(request.import_batch_id)
-                if status in {"running", "completed"}:
-                    return json_response(
-                        409,
-                        {"error": ("Suggestions already requested for this import batch.")},
-                    )
-                service.mark_import_suggestions_running(request.import_batch_id)
-        except LookupError as exc:
-            return json_response(404, {"error": str(exc)})
-        except ValueError as exc:
-            return json_response(400, {"error": str(exc)})
+        status_payload = load_import_suggestions_state(
+            request.import_batch_id,
+            user_id=user_id,
+        )
+        if status_payload and status_payload.get("status") in {"running", "completed"}:
+            return json_response(
+                409,
+                {"error": ("Suggestions already requested for this import batch.")},
+            )
+        if not save_import_suggestions_state(
+            import_batch_id=request.import_batch_id,
+            user_id=user_id,
+            status="running",
+        ):
+            return json_response(503, {"error": "Suggestion state store unavailable"})
 
     job_id = uuid4()
     message_payload = request.model_dump(mode="json")
@@ -215,10 +218,12 @@ def _persist_suggestions_success(
     user_id: str,
     suggestions: list[ImportCategorySuggestionRead],
 ) -> None:
-    ensure_engine()
-    with session_scope(user_id=user_id) as session:
-        service = ImportService(session)
-        service.persist_import_suggestions(import_batch_id, suggestions)
+    save_import_suggestions_state(
+        import_batch_id=import_batch_id,
+        user_id=user_id,
+        status="completed",
+        suggestions=suggestions,
+    )
 
 
 def _persist_suggestions_failure(
@@ -227,10 +232,12 @@ def _persist_suggestions_failure(
     user_id: str,
     error: str,
 ) -> None:
-    ensure_engine()
-    with session_scope(user_id=user_id) as session:
-        service = ImportService(session)
-        service.mark_import_suggestions_failed(import_batch_id, error=error)
+    save_import_suggestions_state(
+        import_batch_id=import_batch_id,
+        user_id=user_id,
+        status="failed",
+        error=error,
+    )
 
 
 def _suggest_with_bedrock(

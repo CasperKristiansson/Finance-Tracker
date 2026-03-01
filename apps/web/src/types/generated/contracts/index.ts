@@ -3,4 +3,13 @@
 
 export * from "./models";
 export * from "./endpoint";
-export * from "./endpoints";
+export { endpoints } from "./endpoints";
+export type {
+  EndpointMap,
+  EndpointName,
+  EndpointPath,
+  EndpointPathParams,
+  EndpointQuery,
+  EndpointRequest,
+  EndpointResponse,
+} from "./endpoints";

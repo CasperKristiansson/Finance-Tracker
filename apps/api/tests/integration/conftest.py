@@ -126,9 +126,13 @@ def _get_cognito_params() -> tuple[str, str]:
     return mapping["user_pool_id"], mapping["user_pool_client_id"]
 
 
-def _ensure_test_user(user_pool_id: str, _client_id: str) -> tuple[str, str]:
-    username = os.getenv("INTEGRATION_USERNAME", "integration-tester@example.com")
-    password = os.getenv("INTEGRATION_PASSWORD", "ItestP@ssw0rd!")
+def _ensure_test_user(
+    user_pool_id: str,
+    _client_id: str,
+    *,
+    username: str,
+    password: str,
+) -> tuple[str, str]:
     approval_attribute = os.getenv("INTEGRATION_APPROVAL_ATTRIBUTE", "custom:approved")
     approval_value = os.getenv("INTEGRATION_APPROVAL_VALUE", "true")
     profile = os.getenv("AWS_PROFILE", "Personal")
@@ -169,7 +173,7 @@ def _ensure_test_user(user_pool_id: str, _client_id: str) -> tuple[str, str]:
 
 def _issue_auth_token(*, username: str, password: str) -> str:
     user_pool_id, client_id = _get_cognito_params()
-    _ensure_test_user(user_pool_id, client_id)
+    _ensure_test_user(user_pool_id, client_id, username=username, password=password)
     profile = os.getenv("AWS_PROFILE", "Personal")
     region = os.getenv("AWS_REGION", "eu-north-1")
     session = boto3.Session(profile_name=profile)

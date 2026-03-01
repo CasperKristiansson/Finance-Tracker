@@ -893,7 +893,9 @@ export const importDraftListResponseSchema = z.object({
 });
 
 export const importDraftSaveRequestSchema = z.object({
-  rows: z.array(importCommitRowSchema).min(1),
+  rows: z.array(importCommitRowSchema),
+  snapshot: importPreviewResponseSchema.optional(),
+  note: z.string().optional(),
 });
 
 export const importDraftSaveResponseSchema = z.object({

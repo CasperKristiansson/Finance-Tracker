@@ -1,4 +1,5 @@
 import { createAction } from "@reduxjs/toolkit";
+import type { SagaIterator } from "redux-saga";
 import { call, put, select, takeLatest } from "redux-saga/effects";
 import { demoReportPayloads } from "@/data/demoPayloads";
 import { callApiWithAuth } from "@/features/api/apiSaga";
@@ -79,7 +80,9 @@ const toCsv = (values?: string[]) => {
   return values.join(",");
 };
 
-function* handleFetchMonthly(action: ReturnType<typeof FetchMonthlyReport>) {
+function* handleFetchMonthly(
+  action: ReturnType<typeof FetchMonthlyReport>,
+): SagaIterator {
   const filters = action.payload ?? {};
   const key = buildReportKey(filters);
   yield put(setMonthlyCurrentKey(key));
@@ -124,7 +127,9 @@ function* handleFetchMonthly(action: ReturnType<typeof FetchMonthlyReport>) {
   }
 }
 
-function* handleFetchYearly(action: ReturnType<typeof FetchYearlyReport>) {
+function* handleFetchYearly(
+  action: ReturnType<typeof FetchYearlyReport>,
+): SagaIterator {
   const filters = action.payload ?? {};
   const key = buildReportKey(filters);
   yield put(setYearlyCurrentKey(key));
@@ -166,7 +171,9 @@ function* handleFetchYearly(action: ReturnType<typeof FetchYearlyReport>) {
   }
 }
 
-function* handleFetchTotal(action: ReturnType<typeof FetchTotalReport>) {
+function* handleFetchTotal(
+  action: ReturnType<typeof FetchTotalReport>,
+): SagaIterator {
   const filters = action.payload ?? {};
   const key = buildReportKey(filters);
   yield put(setTotalCurrentKey(key));
@@ -208,7 +215,9 @@ function* handleFetchTotal(action: ReturnType<typeof FetchTotalReport>) {
   }
 }
 
-function* handleFetchNetWorth(action: ReturnType<typeof FetchNetWorthHistory>) {
+function* handleFetchNetWorth(
+  action: ReturnType<typeof FetchNetWorthHistory>,
+): SagaIterator {
   const filters = action.payload ?? {};
   const key = buildReportKey(filters);
   yield put(setNetWorthCurrentKey(key));
@@ -253,7 +262,7 @@ function* handleFetchNetWorth(action: ReturnType<typeof FetchNetWorthHistory>) {
 
 function* handleFetchQuarterly(
   action: ReturnType<typeof FetchQuarterlyReport>,
-) {
+): SagaIterator {
   const filters = action.payload ?? {};
   const key = buildReportKey(filters);
   yield put(setQuarterlyCurrentKey(key));
@@ -298,7 +307,9 @@ function* handleFetchQuarterly(
   }
 }
 
-function* handleFetchCustom(action: ReturnType<typeof FetchCustomReport>) {
+function* handleFetchCustom(
+  action: ReturnType<typeof FetchCustomReport>,
+): SagaIterator {
   const params = action.payload;
   const key = JSON.stringify(params);
   yield put(setCustomCurrentKey(key));
@@ -337,7 +348,9 @@ function* handleFetchCustom(action: ReturnType<typeof FetchCustomReport>) {
   }
 }
 
-function* handleExportReport(action: ReturnType<typeof ExportReport>) {
+function* handleExportReport(
+  action: ReturnType<typeof ExportReport>,
+): SagaIterator {
   yield put(setExportLoading(true));
   const isDemo: boolean = yield select(selectIsDemo);
   try {
@@ -378,7 +391,7 @@ function* handleExportReport(action: ReturnType<typeof ExportReport>) {
   }
 }
 
-export function* ReportsSaga() {
+export function* ReportsSaga(): SagaIterator {
   yield takeLatest(FetchMonthlyReport.type, handleFetchMonthly);
   yield takeLatest(FetchYearlyReport.type, handleFetchYearly);
   yield takeLatest(FetchTotalReport.type, handleFetchTotal);

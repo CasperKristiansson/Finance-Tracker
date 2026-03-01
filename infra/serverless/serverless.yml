@@ -21,6 +21,7 @@ provider:
     IMPORT_FILES_BUCKET: ${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/bucket}
     IMPORT_FILES_PREFIX: ${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/prefix}
     IMPORT_FILES_URL_EXPIRES_SECONDS: ${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/url_expires_seconds}
+    IMPORT_SUGGESTIONS_CONNECTIONS_TABLE: ${ssm:/finance-tracker/${self:provider.stage}/imports/suggestions/connections_table}
   iam:
     role:
       statements:
@@ -47,7 +48,9 @@ provider:
           Action:
             - dynamodb:PutItem
             - dynamodb:DeleteItem
+            - dynamodb:GetItem
             - dynamodb:Query
+            - dynamodb:Scan
           Resource:
             - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${ssm:/finance-tracker/${self:provider.stage}/imports/suggestions/connections_table}
             - arn:aws:dynamodb:${aws:region}:${aws:accountId}:table/${ssm:/finance-tracker/${self:provider.stage}/imports/suggestions/connections_table}/index/client_id-index
@@ -219,6 +222,7 @@ functions:
     handler: apps/api/handlers/imports.list_import_drafts
     memorySize: 512
     timeout: 29
+    vpc: ~
     layers:
       - ${self:custom.backendLayerArn}
     events:
@@ -231,6 +235,7 @@ functions:
     handler: apps/api/handlers/imports.get_import_draft
     memorySize: 512
     timeout: 29
+    vpc: ~
     layers:
       - ${self:custom.backendLayerArn}
     events:
@@ -243,6 +248,7 @@ functions:
     handler: apps/api/handlers/imports.save_import_draft
     memorySize: 512
     timeout: 29
+    vpc: ~
     layers:
       - ${self:custom.backendLayerArn}
     events:
@@ -255,6 +261,7 @@ functions:
     handler: apps/api/handlers/imports.delete_import_draft
     memorySize: 512
     timeout: 29
+    vpc: ~
     layers:
       - ${self:custom.backendLayerArn}
     events:

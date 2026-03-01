@@ -374,6 +374,64 @@ def test_enqueue_import_category_suggestions_paths(monkeypatch: pytest.MonkeyPat
     assert sent["QueueUrl"] == "https://sqs.example/queue"
 
 
+def test_enqueue_import_category_suggestions_batch_state_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(bs._SUGGESTIONS_QUEUE_ENV, "https://sqs.example/queue")
+    monkeypatch.setattr(
+        bs,
+        "_fetch_connection_by_client",
+        lambda _client_id: SuggestionConnection("c1", "https://endpoint", "token-1234567890"),
+    )
+    monkeypatch.setattr(
+        bs,
+        "load_import_suggestions_state",
+        lambda _batch_id, user_id: {"status": "running"},
+    )
+
+    duplicate = enqueue_import_category_suggestions(
+        {
+            "body": json.dumps(
+                {
+                    "client_id": str(UUID(int=1)),
+                    "client_token": "token-1234567890",
+                    "import_batch_id": str(UUID(int=4)),
+                    "categories": [
+                        {"id": str(UUID(int=2)), "name": "Groceries", "category_type": "expense"}
+                    ],
+                    "history": [],
+                    "transactions": [{"id": str(UUID(int=3)), "description": "x"}],
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert duplicate["statusCode"] == 409
+
+    monkeypatch.setattr(bs, "load_import_suggestions_state", lambda _batch_id, user_id: None)
+    monkeypatch.setattr(bs, "save_import_suggestions_state", lambda **_kwargs: False)
+    unavailable = enqueue_import_category_suggestions(
+        {
+            "body": json.dumps(
+                {
+                    "client_id": str(UUID(int=1)),
+                    "client_token": "token-1234567890",
+                    "import_batch_id": str(UUID(int=4)),
+                    "categories": [
+                        {"id": str(UUID(int=2)), "name": "Groceries", "category_type": "expense"}
+                    ],
+                    "history": [],
+                    "transactions": [{"id": str(UUID(int=3)), "description": "x"}],
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert unavailable["statusCode"] == 503
+
+
 def test_process_import_category_suggestions_success_and_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

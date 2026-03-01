@@ -1,4 +1,5 @@
 import { createAction } from "@reduxjs/toolkit";
+import type { SagaIterator } from "redux-saga";
 import { call, put, select, takeLatest } from "redux-saga/effects";
 import {
   demoLoanEvents,
@@ -39,7 +40,9 @@ export const FetchLoanPortfolioSeries = createAction<{
   endDate?: string;
 }>("loans/fetchPortfolioSeries");
 
-function* handleFetchSchedule(action: ReturnType<typeof FetchLoanSchedule>) {
+function* handleFetchSchedule(
+  action: ReturnType<typeof FetchLoanSchedule>,
+): SagaIterator {
   const { accountId, asOfDate, periods } = action.payload;
   const loadingKey = `loan-schedule-${accountId}`;
   yield put(setLoanLoading({ key: loadingKey, isLoading: true }));
@@ -80,7 +83,9 @@ function* handleFetchSchedule(action: ReturnType<typeof FetchLoanSchedule>) {
   }
 }
 
-function* handleFetchEvents(action: ReturnType<typeof FetchLoanEvents>) {
+function* handleFetchEvents(
+  action: ReturnType<typeof FetchLoanEvents>,
+): SagaIterator {
   const { accountId, limit, offset } = action.payload;
   const loadingKey = `loan-events-${accountId}`;
   yield put(setLoanLoading({ key: loadingKey, isLoading: true }));
@@ -121,7 +126,7 @@ function* handleFetchEvents(action: ReturnType<typeof FetchLoanEvents>) {
 
 function* handleFetchPortfolioSeries(
   action: ReturnType<typeof FetchLoanPortfolioSeries>,
-) {
+): SagaIterator {
   const { startDate, endDate } = action.payload;
   const loadingKey = "loan-portfolio-series";
   yield put(setLoanLoading({ key: loadingKey, isLoading: true }));
@@ -162,7 +167,7 @@ function* handleFetchPortfolioSeries(
   }
 }
 
-export function* LoansSaga() {
+export function* LoansSaga(): SagaIterator {
   yield takeLatest(FetchLoanSchedule.type, handleFetchSchedule);
   yield takeLatest(FetchLoanEvents.type, handleFetchEvents);
   yield takeLatest(FetchLoanPortfolioSeries.type, handleFetchPortfolioSeries);

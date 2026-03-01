@@ -113,12 +113,25 @@ class AccountService:
         ledger_balance = self.repository.calculate_balance(account_id, as_of=captured_at)
         delta = reported_balance - ledger_balance
 
-        snapshot = BalanceSnapshot(
-            account_id=account_id,
-            captured_at=captured_at,
-            balance=reported_balance,
-        )
-        snapshot_saved = self.repository.create_snapshot(snapshot)
+        existing_snapshot = self.session.exec(
+            select(BalanceSnapshot).where(
+                BalanceSnapshot.account_id == account_id,
+                BalanceSnapshot.captured_at == captured_at,
+            )
+        ).one_or_none()
+        if existing_snapshot is None:
+            snapshot = BalanceSnapshot(
+                account_id=account_id,
+                captured_at=captured_at,
+                balance=reported_balance,
+            )
+            snapshot_saved = self.repository.create_snapshot(snapshot)
+        else:
+            existing_snapshot.balance = reported_balance
+            self.session.add(existing_snapshot)
+            self.session.commit()
+            self.session.refresh(existing_snapshot)
+            snapshot_saved = existing_snapshot
 
         adjustment_transaction: Transaction | None = None
 
