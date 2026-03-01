@@ -8,7 +8,7 @@ from typing import Any, Dict, List, cast
 from uuid import UUID
 
 from sqlalchemy import update
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from ..models import Category, Transaction
 from ..repositories.category import CategoryRepository, CategoryUsage

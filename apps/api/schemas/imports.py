@@ -265,6 +265,12 @@ class ImportFileDownloadResponse(BaseModel):
     url: str
 
 
+class ImportFileDownloadRequest(BaseModel):
+    """Request payload for downloading a stored import file."""
+
+    file_id: UUID
+
+
 class ImportDraftRead(BaseModel):
     """Metadata for an incomplete import draft session."""
 
@@ -297,6 +303,13 @@ class ImportDraftSaveResponse(BaseModel):
     updated_at: datetime
 
 
+class ImportDraftDeleteResponse(BaseModel):
+    """Confirmation payload for draft deletion."""
+
+    import_batch_id: UUID
+    deleted: bool
+
+
 __all__ = [
     "ImportErrorRead",
     "ImportPreviewFile",
@@ -321,9 +334,11 @@ __all__ = [
     "ImportCategorySuggestJobResponse",
     "ImportFileRead",
     "ImportFileListResponse",
+    "ImportFileDownloadRequest",
     "ImportFileDownloadResponse",
     "ImportDraftRead",
     "ImportDraftListResponse",
     "ImportDraftSaveRequest",
     "ImportDraftSaveResponse",
+    "ImportDraftDeleteResponse",
 ]

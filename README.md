@@ -138,3 +138,22 @@ Authentication is handled via AWS Amplify and Cognito-backed configuration with 
 - `apps/api` - Python API handlers, services, repositories, and schemas
 - `infra/terraform` - Infrastructure definitions
 - `docs` - Supporting documentation and assets
+
+## API Contract Generation
+
+This repo includes generated TypeScript contracts synced from backend Pydantic models and Serverless route wiring.
+
+- Source route definitions: `infra/serverless/serverless.yml`
+- Source handler model mapping: `apps/api/contracts/http.py`
+- Generator script: `scripts/generate_api_contract_types.py`
+- Generated frontend output: `apps/web/src/types/generated/contracts/*`
+
+Run:
+
+```bash
+npm run generate:api-contracts
+```
+
+Frontend usage entrypoint:
+
+- `apps/web/src/types/contracts.ts`

@@ -3,7 +3,8 @@ import { call, delay, put, takeLatest } from "redux-saga/effects";
 import { TypedSelect } from "@/app/rootSaga";
 import { selectToken } from "@/features/auth/authSlice";
 import { apiFetch, ApiError } from "@/lib/apiClient";
-import type { WarmupResponse } from "@/types/api";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
+import type { EndpointResponse } from "@/types/contracts";
 import { warmupResponseSchema } from "@/types/schemas";
 import {
   recordWarmupAttempt,
@@ -53,13 +54,14 @@ function* performWarmup() {
     yield put(recordWarmupAttempt({ attempt, note: attemptNote }));
 
     try {
-      const { data } = (yield call(apiFetch<WarmupResponse>, {
-        path: "/warmup",
-        method: "GET",
-        retryCount: 1,
-        token,
-        schema: warmupResponseSchema,
-      })) as { data: WarmupResponse };
+      const { data } = (yield call(
+        apiFetch<EndpointResponse<"warmDatabase">>,
+        buildEndpointRequest("warmDatabase", {
+          retryCount: 1,
+          token,
+          schema: warmupResponseSchema,
+        }),
+      )) as { data: EndpointResponse<"warmDatabase"> };
 
       if (data?.status === "ready") {
         yield put(warmupReady());

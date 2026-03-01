@@ -1,5 +1,5 @@
-import createSagaMiddleware from "@redux-saga/core";
 import { configureStore } from "@reduxjs/toolkit";
+import createSagaMiddleware from "redux-saga";
 import { AccountsReducer } from "@/features/accounts/accountsSlice";
 import { AppReducer } from "@/features/app/appSlice";
 import { AuthReducer } from "@/features/auth/authSlice";

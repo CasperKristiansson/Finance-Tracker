@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -69,6 +69,13 @@ class TaxEventListResponse(BaseModel):
     events: List[TaxEventListItem]
 
 
+class TaxEventCreateResponse(BaseModel):
+    """Response payload after creating a tax event."""
+
+    tax_event: TaxEventRead
+    transaction: dict[str, Any] = Field(default_factory=dict)
+
+
 class TaxSummaryMonthlyEntry(BaseModel):
     month: int = Field(ge=1, le=12)
     net_tax_paid: Decimal
@@ -118,6 +125,7 @@ class TaxSummaryQuery(BaseModel):
 __all__ = [
     "TaxEventCreateRequest",
     "TaxEventRead",
+    "TaxEventCreateResponse",
     "TaxEventListItem",
     "TaxEventListQuery",
     "TaxEventListResponse",

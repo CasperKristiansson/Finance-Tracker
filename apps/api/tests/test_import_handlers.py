@@ -22,7 +22,7 @@ from apps.api.handlers.imports import (
     reset_handler_state,
     save_import_draft,
 )
-from apps.api.models import Account, Category, Transaction, TransactionImportBatch, TransactionLeg
+from apps.api.models import Account, Category, Transaction, TransactionLeg
 from apps.api.shared import (
     AccountType,
     CategoryType,

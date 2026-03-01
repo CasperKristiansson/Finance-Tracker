@@ -14,11 +14,8 @@ import {
   setLoanPortfolioSeries,
   setLoanSchedule,
 } from "@/features/loans/loansSlice";
-import type {
-  LoanEventRead,
-  LoanPortfolioSeriesResponse,
-  LoanScheduleRead,
-} from "@/types/api";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
+import type { EndpointResponse } from "@/types/contracts";
 import {
   loanEventsResponseSchema,
   loanPortfolioSeriesResponseSchema,
@@ -60,13 +57,13 @@ function* handleFetchSchedule(action: ReturnType<typeof FetchLoanSchedule>) {
         yield put(setLoanSchedule({ accountId, schedule }));
       }
     } else {
-      const response: LoanScheduleRead = yield call(
+      const response: EndpointResponse<"getLoanSchedule"> = yield call(
         callApiWithAuth,
-        {
-          path: `/loans/${accountId}/schedule`,
+        buildEndpointRequest("getLoanSchedule", {
+          pathParams: { accountId },
           query,
           schema: loanScheduleSchema,
-        },
+        }),
         { loadingKey },
       );
 
@@ -99,13 +96,13 @@ function* handleFetchEvents(action: ReturnType<typeof FetchLoanEvents>) {
       const events = demoLoanEvents[accountId] ?? [];
       yield put(setLoanEvents({ accountId, events }));
     } else {
-      const response: { events: LoanEventRead[] } = yield call(
+      const response: EndpointResponse<"listLoanEvents"> = yield call(
         callApiWithAuth,
-        {
-          path: `/loans/${accountId}/events`,
+        buildEndpointRequest("listLoanEvents", {
+          pathParams: { accountId },
           query,
           schema: loanEventsResponseSchema,
-        },
+        }),
         { loadingKey },
       );
 
@@ -141,13 +138,12 @@ function* handleFetchPortfolioSeries(
         setLoanPortfolioSeries({ series: demoLoanPortfolioSeries.series }),
       );
     } else {
-      const response: LoanPortfolioSeriesResponse = yield call(
+      const response: EndpointResponse<"listLoanPortfolioSeries"> = yield call(
         callApiWithAuth,
-        {
-          path: "/loans/events/series",
+        buildEndpointRequest("listLoanPortfolioSeries", {
           query,
           schema: loanPortfolioSeriesResponseSchema,
-        },
+        }),
         { loadingKey },
       );
 

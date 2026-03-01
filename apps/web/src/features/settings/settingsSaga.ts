@@ -4,11 +4,13 @@ import { toast } from "sonner";
 import { TypedSelect } from "@/app/rootSaga";
 import { callApiWithAuth } from "@/features/api/apiSaga";
 import { ApiError } from "@/lib/apiClient";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
 import type {
-  BackupRunResponse,
+  EndpointRequest,
+  EndpointResponse,
   SettingsPayload,
   SettingsResponse,
-} from "@/types/api";
+} from "@/types/contracts";
 import {
   backupRunResponseSchema,
   settingsPayloadSchema,
@@ -79,7 +81,7 @@ function* handleLoadSettings() {
     try {
       const response: SettingsResponse = yield call(
         callApiWithAuth,
-        { path: "/settings", schema: settingsResponseSchema },
+        buildEndpointRequest("getSettings", { schema: settingsResponseSchema }),
         { loadingKey: "settings", silent: true },
       );
       if (response?.settings) {
@@ -126,13 +128,10 @@ function* handleSaveSettings() {
         last_name: state.lastName,
         currency_code: state.currencyCode,
       });
+      const request: EndpointRequest<"saveSettings"> = { settings: payload };
       yield call(
         callApiWithAuth,
-        {
-          path: "/settings",
-          method: "PUT",
-          body: { settings: payload },
-        },
+        buildEndpointRequest("saveSettings", { body: request }),
         { loadingKey: "settings", silent: true },
       );
       persistLocalSettings(state, timestamp);
@@ -171,12 +170,10 @@ function* handleRunBackup() {
 
     try {
       yield call(
-        callApiWithAuth<BackupRunResponse>,
-        {
-          path: "/backups/transactions",
-          method: "POST",
+        callApiWithAuth<EndpointResponse<"runTransactionsBackup">>,
+        buildEndpointRequest("runTransactionsBackup", {
           schema: backupRunResponseSchema,
-        },
+        }),
         { loadingKey: "settings", silent: true },
       );
       toast.success("Backup created", {

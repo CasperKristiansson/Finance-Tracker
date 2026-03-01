@@ -14,11 +14,8 @@ import {
   setTransactions,
   setOverview,
 } from "@/features/investments/investmentsSlice";
-import type {
-  InvestmentOverviewResponse,
-  InvestmentSnapshotCreateRequest,
-  InvestmentTransactionListResponse,
-} from "@/types/api";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
+import type { EndpointRequest, EndpointResponse } from "@/types/contracts";
 import {
   investmentOverviewResponseSchema,
   investmentSnapshotCreateResponseSchema,
@@ -32,7 +29,7 @@ export const FetchInvestmentOverview = createAction(
   "investments/fetchOverview",
 );
 export const CreateInvestmentSnapshot = createAction<{
-  data: InvestmentSnapshotCreateRequest;
+  data: EndpointRequest<"createInvestmentSnapshot">;
 }>("investments/createSnapshot");
 
 function* handleFetchTransactions(): Generator {
@@ -43,13 +40,12 @@ function* handleFetchTransactions(): Generator {
       return;
     }
 
-    const response: InvestmentTransactionListResponse = yield call(
+    const response: EndpointResponse<"listInvestmentTransactions"> = yield call(
       callApiWithAuth,
-      {
-        path: "/investments/transactions",
+      buildEndpointRequest("listInvestmentTransactions", {
         query: { limit: 500 },
         schema: investmentTransactionListSchema,
-      },
+      }),
       { loadingKey: "investments", silent: true },
     );
     if (response?.transactions) {
@@ -73,12 +69,11 @@ function* handleFetchOverview(): Generator {
     if (isDemo) {
       yield put(setOverview(demoInvestmentOverview));
     } else {
-      const response: InvestmentOverviewResponse = yield call(
+      const response: EndpointResponse<"investmentOverview"> = yield call(
         callApiWithAuth,
-        {
-          path: "/investments/overview",
+        buildEndpointRequest("investmentOverview", {
           schema: investmentOverviewResponseSchema,
-        },
+        }),
         { loadingKey: "investments", silent: true },
       );
       yield put(setOverview(response));
@@ -106,12 +101,10 @@ function* handleCreateSnapshot(
     if (!isDemo) {
       yield call(
         callApiWithAuth,
-        {
-          path: "/investments/snapshots",
-          method: "POST",
+        buildEndpointRequest("createInvestmentSnapshot", {
           body: action.payload.data,
           schema: investmentSnapshotCreateResponseSchema,
-        },
+        }),
         { loadingKey: "investments-create-snapshot" },
       );
     }
