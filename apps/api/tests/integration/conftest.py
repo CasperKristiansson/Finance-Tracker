@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 from collections.abc import Generator
@@ -166,10 +167,9 @@ def _ensure_test_user(user_pool_id: str, _client_id: str) -> tuple[str, str]:
     return username, password
 
 
-@pytest.fixture(scope="session")
-def auth_token() -> str:
+def _issue_auth_token(*, username: str, password: str) -> str:
     user_pool_id, client_id = _get_cognito_params()
-    username, password = _ensure_test_user(user_pool_id, client_id)
+    _ensure_test_user(user_pool_id, client_id)
     profile = os.getenv("AWS_PROFILE", "Personal")
     region = os.getenv("AWS_REGION", "eu-north-1")
     session = boto3.Session(profile_name=profile)
@@ -201,6 +201,44 @@ def auth_token() -> str:
     return resp["AuthenticationResult"]["IdToken"]
 
 
+def _decode_jwt_claims(token: str) -> dict[str, str]:
+    parts = token.split(".")
+    if len(parts) < 2:
+        return {}
+    payload = parts[1]
+    payload += "=" * (-len(payload) % 4)
+    try:
+        raw = base64.urlsafe_b64decode(payload.encode("utf-8")).decode("utf-8")
+        parsed = json.loads(raw)
+    except (ValueError, json.JSONDecodeError):
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return {str(key): str(value) for key, value in parsed.items()}
+
+
+@pytest.fixture(scope="session")
+def auth_token() -> str:
+    username = os.getenv("INTEGRATION_USERNAME", "integration-tester@example.com")
+    password = os.getenv("INTEGRATION_PASSWORD", "ItestP@ssw0rd!")
+    return _issue_auth_token(username=username, password=password)
+
+
+@pytest.fixture(scope="session")
+def auth_user_id(auth_token: str) -> str:
+    claims = _decode_jwt_claims(auth_token)
+    return (
+        claims.get("username") or claims.get("cognito:username") or claims.get("sub") or "default"
+    )
+
+
+@pytest.fixture(scope="session")
+def secondary_auth_token() -> str:
+    username = os.getenv("INTEGRATION_ALT_USERNAME", "integration-alt@example.com")
+    password = os.getenv("INTEGRATION_ALT_PASSWORD", "ItestP@ssw0rd!")
+    return _issue_auth_token(username=username, password=password)
+
+
 @pytest.fixture
 def api_headers(auth_token: str) -> dict[str, str]:
     return {
@@ -223,22 +261,43 @@ def invoke_lambda(lambda_client):
 
 
 @pytest.fixture
-def api_call(api_base_url: str, api_headers: dict[str, str]):
-    def _inner(method: str, path: str, json_body: dict | None = None) -> dict:
-        url = f"{api_base_url}/{path.lstrip('/')}"
-        data = json.dumps(json_body).encode() if json_body is not None else None
-        headers = dict(api_headers)
-        req = request.Request(url, data=data, method=method, headers=headers)
-        try:
-            with request.urlopen(req, timeout=90) as resp:
-                body = resp.read().decode()
-                status = resp.getcode()
-        except error.HTTPError as exc:
-            body = exc.read().decode()
-            status = exc.code
-        return {"statusCode": status, "body": body}
+def api_call_factory(api_base_url: str):
+    def _factory(headers: dict[str, str]):
+        def _inner(method: str, path: str, json_body: dict | None = None) -> dict:
+            url = f"{api_base_url}/{path.lstrip('/')}"
+            data = json.dumps(json_body).encode() if json_body is not None else None
+            req_headers = dict(headers)
+            req = request.Request(url, data=data, method=method, headers=req_headers)
+            try:
+                with request.urlopen(req, timeout=90) as resp:
+                    body = resp.read().decode()
+                    status = resp.getcode()
+            except error.HTTPError as exc:
+                body = exc.read().decode()
+                status = exc.code
+            return {"statusCode": status, "body": body}
 
-    return _inner
+        return _inner
+
+    return _factory
+
+
+@pytest.fixture
+def api_call(api_call_factory, api_headers: dict[str, str]):
+    return api_call_factory(api_headers)
+
+
+@pytest.fixture
+def api_call_other_user(
+    api_call_factory,
+    secondary_auth_token: str,
+):
+    return api_call_factory(
+        {
+            "Authorization": f"Bearer {secondary_auth_token}",
+            "Content-Type": "application/json",
+        }
+    )
 
 
 @pytest.fixture(scope="session")
@@ -260,6 +319,7 @@ def integration_context(
     json_body,
     invoke_lambda,
     lambda_name,
+    auth_user_id,
     integration_run_namespace,
     api_base_url,
     cleanup_registry,
@@ -269,6 +329,7 @@ def integration_context(
         json_body=json_body,
         invoke_lambda=invoke_lambda,
         lambda_name=lambda_name,
+        user_id=auth_user_id,
         run_namespace=integration_run_namespace,
         api_base_url=api_base_url,
         cleanup_registry=cleanup_registry,

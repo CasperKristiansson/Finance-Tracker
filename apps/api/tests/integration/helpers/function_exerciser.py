@@ -26,6 +26,7 @@ class IntegrationExerciseContext:
     json_body: JsonBody
     invoke_lambda: InvokeLambda
     lambda_name: LambdaName
+    user_id: str
     run_namespace: str
     api_base_url: str
     cleanup_registry: CleanupRegistry
