@@ -8,6 +8,7 @@ import {
   Loader2,
   MoreHorizontal,
   MoveRight,
+  Save,
   Scissors,
   Square,
   Sparkles,
@@ -51,6 +52,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -393,9 +395,11 @@ export const Imports: React.FC = () => {
   const [draftPendingDeleteId, setDraftPendingDeleteId] = useState<
     string | null
   >(null);
+  const [isHydratingImportId, setIsHydratingImportId] = useState(false);
   const importIdFromUrl = searchParams.get("importId");
   const draftLoadRequestRef = useRef<string | null>(null);
   const lastDraftSnapshotRef = useRef<string | null>(null);
+  const pendingDraftSnapshotRef = useRef<string | null>(null);
 
   const commitForm = useForm<CommitFormValues>({
     resolver: zodResolver(commitFormSchema),
@@ -436,6 +440,7 @@ export const Imports: React.FC = () => {
   useEffect(() => {
     if (preview) return;
     lastDraftSnapshotRef.current = null;
+    pendingDraftSnapshotRef.current = null;
     setSplitRows([]);
     setSplitRowIdsBySource({});
     setSplitBaseRow(null);
@@ -519,6 +524,10 @@ export const Imports: React.FC = () => {
   }, [preview, commitRows.length, commitForm, replaceCommitRows]);
 
   useEffect(() => {
+    setIsHydratingImportId(Boolean(importIdFromUrl));
+  }, [importIdFromUrl]);
+
+  useEffect(() => {
     if (!preview) return;
     setFiles((current) =>
       current.map((file) => {
@@ -546,6 +555,7 @@ export const Imports: React.FC = () => {
     if (draftLoadRequestRef.current === importIdFromUrl) return;
 
     draftLoadRequestRef.current = importIdFromUrl;
+    setIsHydratingImportId(true);
     loadImportDraft(importIdFromUrl);
   }, [importIdFromUrl, loadImportDraft, preview?.import_batch_id]);
 
@@ -559,6 +569,18 @@ export const Imports: React.FC = () => {
       return next;
     });
   }, [importIdFromUrl, preview?.import_batch_id, setSearchParams]);
+
+  useEffect(() => {
+    if (!importIdFromUrl) return;
+    if (preview?.import_batch_id !== importIdFromUrl) return;
+    setIsHydratingImportId(false);
+  }, [importIdFromUrl, preview?.import_batch_id]);
+
+  useEffect(() => {
+    if (!importIdFromUrl) return;
+    if (!error) return;
+    setIsHydratingImportId(false);
+  }, [error, importIdFromUrl]);
 
   useEffect(() => {
     if (!importIdFromUrl) return;
@@ -599,6 +621,10 @@ export const Imports: React.FC = () => {
       ? preview.files.some((file) => (file.error_count ?? 0) > 0)
       : false;
     if (!preview || hasErrors) {
+      setSuggestionsRequested(false);
+      return;
+    }
+    if (preview.suggestions_status !== "not_started") {
       setSuggestionsRequested(false);
       return;
     }
@@ -658,33 +684,20 @@ export const Imports: React.FC = () => {
     () => JSON.stringify(draftRowsPayload),
     [draftRowsPayload],
   );
+  const hasUnsavedDraftChanges =
+    step === 4 &&
+    Boolean(preview?.import_batch_id) &&
+    draftRowsPayload.length > 0 &&
+    draftSnapshot !== lastDraftSnapshotRef.current;
 
   useEffect(() => {
-    if (!preview?.import_batch_id) return;
-    if (step !== 4) return;
-    if (!draftRowsPayload.length) return;
-    if (saving) return;
     if (draftSaving) return;
-    if (draftSnapshot === lastDraftSnapshotRef.current) return;
-
-    const timeout = setTimeout(() => {
-      saveImportDraft({
-        importBatchId: preview.import_batch_id,
-        rows: draftRowsPayload,
-      });
-      lastDraftSnapshotRef.current = draftSnapshot;
-    }, 900);
-
-    return () => clearTimeout(timeout);
-  }, [
-    draftRowsPayload,
-    draftSaving,
-    draftSnapshot,
-    preview?.import_batch_id,
-    saveImportDraft,
-    saving,
-    step,
-  ]);
+    if (!pendingDraftSnapshotRef.current) return;
+    if (!draftsError) {
+      lastDraftSnapshotRef.current = pendingDraftSnapshotRef.current;
+    }
+    pendingDraftSnapshotRef.current = null;
+  }, [draftSaving, draftsError]);
 
   useEffect(() => {
     if (!preview) return;
@@ -698,6 +711,10 @@ export const Imports: React.FC = () => {
     if (preview.import_batch_id !== importIdFromUrl) return;
     setStep(4);
   }, [preview, importIdFromUrl]);
+
+  useEffect(() => {
+    setSuggestionsRequested(false);
+  }, [preview?.import_batch_id]);
 
   useEffect(() => {
     if (!preview) return;
@@ -1409,6 +1426,22 @@ export const Imports: React.FC = () => {
     setCommitTriggered(true);
   });
 
+  const saveDraftNow = () => {
+    if (!preview?.import_batch_id) return;
+    if (step !== 4) return;
+    if (!draftRowsPayload.length) return;
+    if (saving || draftSaving) return;
+
+    pendingDraftSnapshotRef.current = draftSnapshot;
+    saveImportDraft({
+      importBatchId: preview.import_batch_id,
+      rows: draftRowsPayload,
+    });
+  };
+
+  const showInitialImportSkeleton =
+    Boolean(importIdFromUrl) && !preview && (loading || isHydratingImportId);
+
   const stepper = (
     <div className="grid gap-3 md:grid-cols-4">
       {steps.map((s) => {
@@ -1442,6 +1475,40 @@ export const Imports: React.FC = () => {
     </div>
   );
 
+  if (showInitialImportSkeleton) {
+    return (
+      <MotionPage className="space-y-4">
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="h-8 w-80 max-w-full" />
+          <Skeleton className="h-4 w-[560px] max-w-full" />
+        </div>
+        <div className="grid gap-3 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={`imports-step-skeleton-${index}`}
+              className="rounded-lg border border-slate-200 bg-white p-3"
+            >
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="mt-2 h-4 w-24" />
+              <Skeleton className="mt-2 h-3 w-full" />
+            </div>
+          ))}
+        </div>
+        <Card className="border-slate-200">
+          <CardHeader className="pb-2">
+            <Skeleton className="h-4 w-36" />
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-80 w-full" />
+          </CardContent>
+        </Card>
+      </MotionPage>
+    );
+  }
+
   return (
     <MotionPage className="space-y-4">
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
@@ -1453,8 +1520,8 @@ export const Imports: React.FC = () => {
             Upload, map, parse, audit, submit
           </h1>
           <p className="text-sm text-slate-500">
-            Imports are auto-saved as drafts, so you can leave and resume later.
-            Transactions are created only when you submit.
+            Save a draft anytime to leave and resume later. Transactions are
+            created only when you submit.
           </p>
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-600">
@@ -1872,6 +1939,14 @@ export const Imports: React.FC = () => {
                     <p className="mt-1 text-xs text-slate-500">
                       Suggesting categories with Bedrock…
                     </p>
+                  ) : preview.suggestions_status === "running" ? (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Bedrock suggestions are running in the background…
+                    </p>
+                  ) : preview.suggestions_status === "failed" ? (
+                    <p className="mt-1 text-xs text-rose-600">
+                      Bedrock suggestions failed in the background.
+                    </p>
                   ) : suggestionsError ? (
                     <p className="mt-1 text-xs text-rose-600">
                       Category suggestions unavailable: {suggestionsError}
@@ -1879,7 +1954,7 @@ export const Imports: React.FC = () => {
                   ) : null}
                   {draftsError && step === 4 ? (
                     <p className="mt-1 text-xs text-rose-600">
-                      Draft autosave failed: {draftsError}
+                      Draft save failed: {draftsError}
                     </p>
                   ) : null}
                 </div>
@@ -1890,19 +1965,19 @@ export const Imports: React.FC = () => {
                 onValueChange={setActiveAuditFileId}
               >
                 {preview.files.length > 1 ? (
-                  <TabsList className="h-auto w-full flex-wrap justify-start">
+                  <TabsList className="h-auto w-full flex-wrap justify-start gap-1">
                     {preview.files.map((file) => {
                       const account = accountById.get(file.account_id);
                       return (
                         <TabsTrigger
                           key={file.id}
                           value={file.id}
-                          className="max-w-[280px] flex-none flex-col items-start justify-start gap-0.5 px-3 py-2"
+                          className="flex w-full max-w-[280px] min-w-0 flex-none flex-col items-start justify-start gap-0.5 overflow-hidden px-3 py-2 md:w-[280px]"
                         >
-                          <span className="truncate">
+                          <span className="block w-full truncate text-left">
                             {account?.name ?? "Account"}
                           </span>
-                          <span className="truncate text-xs text-muted-foreground">
+                          <span className="block w-full truncate text-left text-xs text-muted-foreground">
                             {file.filename}
                           </span>
                         </TabsTrigger>
@@ -2416,23 +2491,44 @@ export const Imports: React.FC = () => {
                   <ChevronRight className="ml-2 h-4 w-4" />
                 </Button>
               ) : step === 4 ? (
-                <Button
-                  className="gap-2"
-                  onClick={() => void submit()}
-                  disabled={
-                    loading ||
-                    saving ||
-                    previewHasErrors ||
-                    hasMissingCategories
-                  }
-                >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Check className="h-4 w-4" />
-                  )}
-                  Submit
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={saveDraftNow}
+                    disabled={
+                      loading ||
+                      saving ||
+                      draftSaving ||
+                      !hasUnsavedDraftChanges
+                    }
+                  >
+                    {draftSaving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    Save draft
+                  </Button>
+                  <Button
+                    className="gap-2"
+                    onClick={() => void submit()}
+                    disabled={
+                      loading ||
+                      saving ||
+                      draftSaving ||
+                      previewHasErrors ||
+                      hasMissingCategories
+                    }
+                  >
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Check className="h-4 w-4" />
+                    )}
+                    Submit
+                  </Button>
+                </>
               ) : step < 4 ? (
                 <Button
                   onClick={goNext}

@@ -21,6 +21,7 @@ import {
   setImportDraftsLoading,
   setImportSuggestions,
   setImportPreview,
+  setImportPreviewSuggestionsStatus,
   setImportsError,
   setImportsLoading,
   setImportsSuggestionsError,
@@ -253,17 +254,13 @@ function buildSuggestPayload(
     rowsByAccount.set(row.account_id, list);
   });
 
-  const payloads: Array<{
-    accountId: string;
-    request: ImportCategorySuggestRequest;
-  }> = [];
+  const transactions: ImportCategorySuggestRequest["transactions"] = [];
+  const seenTransactionIds = new Set<string>();
 
   for (const ctx of contexts) {
     const accountRows = rowsByAccount.get(ctx.account_id) ?? [];
     const bankImportType = bankImportTypeByAccount.get(ctx.account_id);
     const isSwedbankAccount = bankImportType === "swedbank";
-
-    const transactions: ImportCategorySuggestRequest["transactions"] = [];
     for (const row of accountRows) {
       if (row.rule_applied) continue;
       if (
@@ -272,6 +269,8 @@ function buildSuggestPayload(
       ) {
         continue;
       }
+      if (seenTransactionIds.has(row.id)) continue;
+      seenTransactionIds.add(row.id);
       transactions.push({
         id: row.id,
         description: row.description,
@@ -280,10 +279,12 @@ function buildSuggestPayload(
       });
       if (transactions.length >= 200) break;
     }
-    if (!transactions.length) continue;
+    if (transactions.length >= 200) break;
+  }
 
-    const history: ImportCategorySuggestRequest["history"] = [];
-    const seenHistory = new Set<string>();
+  const history: ImportCategorySuggestRequest["history"] = [];
+  const seenHistory = new Set<string>();
+  for (const ctx of contexts) {
     const candidates = [
       ...(ctx.recent_transactions ?? []),
       ...(ctx.similar_transactions ?? []),
@@ -299,48 +300,69 @@ function buildSuggestPayload(
       });
       if (history.length >= 200) break;
     }
-
-    const payload: ImportCategorySuggestRequest = {
-      categories: available.map((cat) => ({
-        id: cat.id,
-        name: cat.name,
-        category_type: cat.category_type,
-      })),
-      history,
-      transactions,
-    };
-
-    payloads.push({ accountId: ctx.account_id, request: payload });
+    if (history.length >= 200) break;
   }
 
-  return payloads;
+  return {
+    categories: available.map((cat) => ({
+      id: cat.id,
+      name: cat.name,
+      category_type: cat.category_type,
+    })),
+    history,
+    transactions,
+  };
 }
 
-function* suggestSync(
-  payloads: Array<{ accountId: string; request: ImportCategorySuggestRequest }>,
-) {
+const mapPersistedSuggestions = (preview: ImportPreviewResponse) => {
+  if (preview.suggestions_status !== "completed") {
+    return {} as Record<string, ImportCategorySuggestionRead>;
+  }
+  const mapped: Record<string, ImportCategorySuggestionRead> = {};
+  preview.rows.forEach((row) => {
+    if (
+      row.suggested_category_id == null &&
+      row.suggested_reason == null &&
+      row.suggested_confidence == null
+    ) {
+      return;
+    }
+    const confidenceRaw =
+      typeof row.suggested_confidence === "number"
+        ? row.suggested_confidence
+        : 0.6;
+    const confidence = Math.max(0, Math.min(confidenceRaw, 0.99));
+    mapped[row.id] = {
+      id: row.id,
+      category_id: row.suggested_category_id ?? null,
+      confidence,
+      reason: row.suggested_reason ?? null,
+    };
+  });
+  return mapped;
+};
+
+function* suggestSync(request: ImportCategorySuggestRequest) {
   const mapped: Record<
     string,
     ImportCategorySuggestResponse["suggestions"][number]
   > = {};
 
-  for (const { accountId, request } of payloads) {
-    const body = importCategorySuggestRequestSchema.parse(request);
-    const response: ImportCategorySuggestResponse = yield call(
-      callApiWithAuth,
-      {
-        path: "/imports/suggest-categories",
-        method: "POST",
-        body,
-        schema: importCategorySuggestResponseSchema,
-      },
-      { loadingKey: `imports-suggest-${accountId}` },
-    );
-    const parsed = importCategorySuggestResponseSchema.parse(response);
-    parsed.suggestions.forEach((suggestion) => {
-      mapped[suggestion.id] = suggestion;
-    });
-  }
+  const body = importCategorySuggestRequestSchema.parse(request);
+  const response: ImportCategorySuggestResponse = yield call(
+    callApiWithAuth,
+    {
+      path: "/imports/suggest-categories",
+      method: "POST",
+      body,
+      schema: importCategorySuggestResponseSchema,
+    },
+    { loadingKey: "imports-suggest" },
+  );
+  const parsed = importCategorySuggestResponseSchema.parse(response);
+  parsed.suggestions.forEach((suggestion) => {
+    mapped[suggestion.id] = suggestion;
+  });
 
   return mapped;
 }
@@ -442,8 +464,14 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
   yield put(setImportsSuggesting(true));
   yield put(setImportsSuggestionsError(undefined));
   let channel: EventChannel<SuggestionSocketEvent> | null = null;
+  const preview = action.payload.preview;
+  const shouldTrackStatus = Boolean(preview.import_batch_id);
   const isDemo: boolean = yield select(selectIsDemo);
   try {
+    if (shouldTrackStatus) {
+      yield put(setImportPreviewSuggestionsStatus("running"));
+    }
+
     const categories: Array<{
       id: string;
       name: string;
@@ -455,9 +483,8 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
       throw new Error("No categories available for suggestions.");
     }
 
-    const preview = action.payload.preview;
-    const payloads = buildSuggestPayload(preview, available);
-    if (!payloads.length) {
+    const payload = buildSuggestPayload(preview, available);
+    if (!payload.transactions.length) {
       throw new Error("No transactions available for suggestions.");
     }
 
@@ -470,52 +497,62 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
         {} as Record<string, ImportCategorySuggestionRead>,
       );
       yield put(setImportSuggestions(mapped));
+      if (shouldTrackStatus) {
+        yield put(setImportPreviewSuggestionsStatus("completed"));
+      }
     } else if (!WS_API_BASE_URL) {
-      const mapped = yield* suggestSync(payloads);
+      const mapped = yield* suggestSync(payload);
       yield put(setImportSuggestions(mapped));
+      if (shouldTrackStatus) {
+        yield put(setImportPreviewSuggestionsStatus("completed"));
+      }
     } else {
       const clientId = crypto.randomUUID();
       const clientToken = createClientToken();
       channel = createSuggestionsChannel(clientId, clientToken);
       yield* waitForSocketOpen(channel);
 
+      const jobRequest: ImportCategorySuggestJobRequest = {
+        ...payload,
+        import_batch_id: preview.import_batch_id,
+        client_id: clientId,
+        client_token: clientToken,
+      };
+      const body = importCategorySuggestJobRequestSchema.parse(jobRequest);
+
+      const response: ImportCategorySuggestJobResponse = yield call(
+        callApiWithAuth,
+        {
+          path: "/imports/suggest-categories/jobs",
+          method: "POST",
+          body,
+          schema: importCategorySuggestJobResponseSchema,
+        },
+        { loadingKey: "imports-suggest" },
+      );
+      const parsed = importCategorySuggestJobResponseSchema.parse(response);
+
+      const jobResponse: ImportCategorySuggestResponse =
+        yield* waitForSuggestionJob(channel, parsed.job_id);
       const mapped: Record<
         string,
         ImportCategorySuggestResponse["suggestions"][number]
       > = {};
-
-      for (const { accountId, request } of payloads) {
-        const jobRequest: ImportCategorySuggestJobRequest = {
-          ...request,
-          client_id: clientId,
-          client_token: clientToken,
-        };
-        const body = importCategorySuggestJobRequestSchema.parse(jobRequest);
-
-        const response: ImportCategorySuggestJobResponse = yield call(
-          callApiWithAuth,
-          {
-            path: "/imports/suggest-categories/jobs",
-            method: "POST",
-            body,
-            schema: importCategorySuggestJobResponseSchema,
-          },
-          { loadingKey: `imports-suggest-${accountId}` },
-        );
-        const parsed = importCategorySuggestJobResponseSchema.parse(response);
-
-        const jobResponse: ImportCategorySuggestResponse =
-          yield* waitForSuggestionJob(channel, parsed.job_id);
-        jobResponse.suggestions.forEach((suggestion) => {
-          mapped[suggestion.id] = suggestion;
-        });
-      }
-
+      jobResponse.suggestions.forEach((suggestion) => {
+        mapped[suggestion.id] = suggestion;
+      });
       yield put(setImportSuggestions(mapped));
+      if (shouldTrackStatus) {
+        yield put(setImportPreviewSuggestionsStatus("completed"));
+      }
     }
+    toast.success("Category suggestions ready");
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to suggest categories.";
+    if (shouldTrackStatus) {
+      yield put(setImportPreviewSuggestionsStatus("failed"));
+    }
     yield put(setImportsSuggestionsError(message));
     toast.error("Category suggestions unavailable", { description: message });
   } finally {
@@ -567,6 +604,9 @@ function* handleLoadDraft(action: ReturnType<typeof LoadImportDraft>) {
         throw new Error("Import draft not found.");
       }
       yield put(setImportPreview(demoImportPreview));
+      yield put(
+        setImportSuggestions(mapPersistedSuggestions(demoImportPreview)),
+      );
       return;
     }
 
@@ -581,6 +621,7 @@ function* handleLoadDraft(action: ReturnType<typeof LoadImportDraft>) {
     );
     const parsed = importPreviewResponseSchema.parse(response);
     yield put(setImportPreview(parsed));
+    yield put(setImportSuggestions(mapPersistedSuggestions(parsed)));
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to load import draft.";

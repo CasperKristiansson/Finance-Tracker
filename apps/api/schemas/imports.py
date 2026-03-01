@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 from datetime import datetime
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -113,6 +113,7 @@ class ImportPreviewResponse(BaseModel):
     """Response payload for import preview."""
 
     import_batch_id: UUID
+    suggestions_status: Literal["not_started", "running", "completed", "failed"] = "not_started"
     files: List[ImportPreviewFileRead]
     rows: List[ImportPreviewRowRead]
     accounts: List[ImportPreviewAccountContextRead] = Field(default_factory=list)
@@ -225,6 +226,7 @@ class ImportCategorySuggestResponse(BaseModel):
 class ImportCategorySuggestJobRequest(ImportCategorySuggestRequest):
     """Async suggestion request payload tied to a websocket client."""
 
+    import_batch_id: Optional[UUID] = None
     client_id: UUID
     client_token: str = Field(min_length=16, max_length=160)
 

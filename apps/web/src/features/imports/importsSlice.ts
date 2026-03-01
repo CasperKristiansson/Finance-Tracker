@@ -70,6 +70,13 @@ const importsSlice = createSlice({
       state.suggestions = action.payload;
       state.suggestionsError = undefined;
     },
+    setImportPreviewSuggestionsStatus(
+      state,
+      action: PayloadAction<ImportPreviewResponse["suggestions_status"]>,
+    ) {
+      if (!state.preview) return;
+      state.preview.suggestions_status = action.payload;
+    },
     setImportsSuggestionsError(
       state,
       action: PayloadAction<string | undefined>,
@@ -134,6 +141,7 @@ export const {
   setImportsSaving,
   setImportsSuggesting,
   setImportSuggestions,
+  setImportPreviewSuggestionsStatus,
   setImportsSuggestionsError,
   setImportsError,
   clearImportsError,

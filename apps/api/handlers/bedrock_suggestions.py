@@ -23,7 +23,9 @@ from ..schemas import (
     ImportCategorySuggestRequest,
     ImportCategorySuggestResponse,
 )
-from .utils import get_user_id, json_response, parse_body
+from ..services import ImportService
+from ..shared import get_default_user_id, session_scope
+from .utils import ensure_engine, get_user_id, json_response, parse_body
 
 BEDROCK_MODEL_ID_DEFAULT = "anthropic.claude-3-haiku-20240307-v1:0"
 _MAX_HISTORY = 200
@@ -104,7 +106,7 @@ def disconnect_import_suggestions(event: Dict[str, Any], _context: Any) -> Dict[
 
 
 def enqueue_import_category_suggestions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
-    _ = get_user_id(event)
+    user_id = get_user_id(event)
     parsed_body = parse_body(event)
 
     try:
@@ -122,9 +124,27 @@ def enqueue_import_category_suggestions(event: Dict[str, Any], _context: Any) ->
     if connection.client_token != request.client_token:
         return json_response(403, {"error": "Client token mismatch"})
 
+    if request.import_batch_id is not None:
+        ensure_engine()
+        try:
+            with session_scope(user_id=user_id) as session:
+                service = ImportService(session)
+                status = service.get_import_suggestions_status(request.import_batch_id)
+                if status in {"running", "completed"}:
+                    return json_response(
+                        409,
+                        {"error": ("Suggestions already requested for this import batch.")},
+                    )
+                service.mark_import_suggestions_running(request.import_batch_id)
+        except LookupError as exc:
+            return json_response(404, {"error": str(exc)})
+        except ValueError as exc:
+            return json_response(400, {"error": str(exc)})
+
     job_id = uuid4()
     message_payload = request.model_dump(mode="json")
     message_payload["job_id"] = str(job_id)
+    message_payload["user_id"] = user_id
 
     sqs = boto3.client("sqs")
     sqs.send_message(QueueUrl=queue_url, MessageBody=json.dumps(message_payload))
@@ -139,6 +159,7 @@ def process_import_category_suggestions(event: Dict[str, Any], _context: Any) ->
         try:
             payload = json.loads(body) if body else {}
             job_id = payload.get("job_id")
+            user_id = str(payload.get("user_id") or get_default_user_id())
             request = ImportCategorySuggestJobRequest.model_validate(payload)
         except (ValueError, ValidationError):
             continue
@@ -146,23 +167,70 @@ def process_import_category_suggestions(event: Dict[str, Any], _context: Any) ->
         message: dict[str, Any]
         try:
             suggestions = _suggest_with_bedrock(request)
+            if request.import_batch_id is not None:
+                _persist_suggestions_success(
+                    import_batch_id=request.import_batch_id,
+                    user_id=user_id,
+                    suggestions=suggestions,
+                )
             message = {
                 "type": "import_suggestions",
                 "job_id": job_id,
                 "client_id": str(request.client_id),
                 "suggestions": [item.model_dump(mode="json") for item in suggestions],
             }
-        except SuggestionError as exc:
+        except (
+            SuggestionError,
+            LookupError,
+            ValueError,
+            RuntimeError,
+            BotoCoreError,
+            ClientError,
+        ) as exc:
+            error_text = str(exc) or "Unable to suggest categories."
+            if request.import_batch_id is not None:
+                try:
+                    _persist_suggestions_failure(
+                        import_batch_id=request.import_batch_id,
+                        user_id=user_id,
+                        error=error_text,
+                    )
+                except (LookupError, ValueError, RuntimeError, BotoCoreError, ClientError):
+                    pass
             message = {
                 "type": "import_suggestions_error",
                 "job_id": job_id,
                 "client_id": str(request.client_id),
-                "error": str(exc),
+                "error": error_text,
             }
 
         _send_to_client(request.client_id, request.client_token, message)
 
     return {"batchItemFailures": []}
+
+
+def _persist_suggestions_success(
+    *,
+    import_batch_id: UUID,
+    user_id: str,
+    suggestions: list[ImportCategorySuggestionRead],
+) -> None:
+    ensure_engine()
+    with session_scope(user_id=user_id) as session:
+        service = ImportService(session)
+        service.persist_import_suggestions(import_batch_id, suggestions)
+
+
+def _persist_suggestions_failure(
+    *,
+    import_batch_id: UUID,
+    user_id: str,
+    error: str,
+) -> None:
+    ensure_engine()
+    with session_scope(user_id=user_id) as session:
+        service = ImportService(session)
+        service.mark_import_suggestions_failed(import_batch_id, error=error)
 
 
 def _suggest_with_bedrock(

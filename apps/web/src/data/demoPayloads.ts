@@ -726,6 +726,7 @@ export const demoInvestmentOverview: InvestmentOverviewResponse = {
 
 export const demoImportPreview: ImportPreviewResponse = {
   import_batch_id: "draft-demo-1",
+  suggestions_status: "completed",
   files: [
     {
       id: "file-1",

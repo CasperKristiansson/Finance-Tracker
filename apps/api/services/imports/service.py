@@ -28,6 +28,7 @@ from ...models import (
     TransactionLeg,
 )
 from ...schemas import (
+    ImportCategorySuggestionRead,
     ImportCommitRequest,
     ImportCommitResponse,
     ImportDraftListResponse,
@@ -54,6 +55,13 @@ from .suggestions import (
 )
 from .transfers import match_transfers
 from .utils import is_date_like, is_decimal, parse_iso_date, safe_decimal
+
+_AI_SUGGESTIONS_STATUS_KEY = "ai_suggestions_status"
+_AI_SUGGESTIONS_ERROR_KEY = "ai_suggestions_error"
+_AI_SUGGESTIONS_NOT_STARTED = "not_started"
+_AI_SUGGESTIONS_RUNNING = "running"
+_AI_SUGGESTIONS_COMPLETED = "completed"
+_AI_SUGGESTIONS_FAILED = "failed"
 
 
 class ImportService:
@@ -253,6 +261,83 @@ class ImportService:
         batch = self._load_batch(import_batch_id)
         return self._build_preview_from_batch(batch)
 
+    def get_import_suggestions_status(self, import_batch_id: UUID) -> str:
+        """Return persisted Bedrock suggestion status for a draft batch."""
+
+        batch = self._load_batch(import_batch_id)
+        rows = self._rows_for_batch(batch)
+        return self._resolve_suggestions_status(rows)
+
+    def mark_import_suggestions_running(self, import_batch_id: UUID) -> None:
+        """Mark a draft batch as currently processing Bedrock suggestions."""
+
+        batch = self._load_batch(import_batch_id)
+        if self._batch_has_transactions(batch.id):
+            raise ValueError("Import batch is already committed")
+        self._set_suggestions_status(batch, status=_AI_SUGGESTIONS_RUNNING)
+
+    def persist_import_suggestions(
+        self,
+        import_batch_id: UUID,
+        suggestions: list[ImportCategorySuggestionRead],
+    ) -> None:
+        """Persist completed Bedrock suggestions for a draft batch."""
+
+        batch = self._load_batch(import_batch_id)
+        if self._batch_has_transactions(batch.id):
+            raise ValueError("Import batch is already committed")
+
+        rows = self._rows_for_batch(batch)
+        suggestions_by_row_id = {suggestion.id: suggestion for suggestion in suggestions}
+        category_ids = {
+            suggestion.category_id
+            for suggestion in suggestions
+            if suggestion.category_id is not None
+        }
+        category_lookup = (
+            self._category_lookup_by_id(category_ids=category_ids) if category_ids else {}
+        )
+        now = datetime.now(timezone.utc)
+
+        for row in rows:
+            suggestion = suggestions_by_row_id.get(row.id)
+            row_data = dict(row.data or {})
+            if suggestion is not None:
+                category = (
+                    category_lookup.get(suggestion.category_id)
+                    if suggestion.category_id is not None
+                    else None
+                )
+                row.suggested_category = category.name if category is not None else None
+                row.suggested_confidence = suggestion.confidence
+                row.suggested_reason = suggestion.reason
+                row_data["suggested_category_id"] = (
+                    str(suggestion.category_id) if suggestion.category_id is not None else None
+                )
+            row_data[_AI_SUGGESTIONS_STATUS_KEY] = _AI_SUGGESTIONS_COMPLETED
+            row_data.pop(_AI_SUGGESTIONS_ERROR_KEY, None)
+            row.data = row_data
+            row.updated_at = now
+
+        batch.updated_at = now
+
+    def mark_import_suggestions_failed(
+        self,
+        import_batch_id: UUID,
+        *,
+        error: str | None = None,
+    ) -> None:
+        """Persist a failed Bedrock suggestion run for a draft batch."""
+
+        batch = self._load_batch(import_batch_id)
+        if self._batch_has_transactions(batch.id):
+            raise ValueError("Import batch is already committed")
+        self._set_suggestions_status(
+            batch,
+            status=_AI_SUGGESTIONS_FAILED,
+            error=error,
+        )
+
     def save_import_draft(
         self, import_batch_id: UUID, payload: ImportDraftSaveRequest
     ) -> dict[str, Any]:
@@ -409,6 +494,7 @@ class ImportService:
                         "occurred_at": str(row_payload["occurred_at"]),
                         "amount": str(row_payload["amount"]),
                         "description": str(row_payload["description"]),
+                        _AI_SUGGESTIONS_STATUS_KEY: _AI_SUGGESTIONS_NOT_STARTED,
                         "suggested_category_id": (
                             str(row_payload["suggested_category_id"])
                             if row_payload.get("suggested_category_id")
@@ -418,14 +504,6 @@ class ImportService:
                     suggested_category=row_payload.get("suggested_category_name"),
                     suggested_confidence=row_payload.get("suggested_confidence"),
                     suggested_reason=row_payload.get("suggested_reason"),
-                    suggested_subscription_id=row_payload.get("suggested_subscription_id"),
-                    suggested_subscription_name=row_payload.get("suggested_subscription_name"),
-                    suggested_subscription_confidence=row_payload.get(
-                        "suggested_subscription_confidence"
-                    ),
-                    suggested_subscription_reason=row_payload.get(
-                        "suggested_subscription_reason"
-                    ),
                     transfer_match=row_payload.get("transfer_match"),
                     rule_applied=bool(row_payload.get("rule_applied")),
                     rule_type=row_payload.get("rule_type"),
@@ -499,16 +577,6 @@ class ImportService:
                     preview_row["suggested_confidence"] = float(row.suggested_confidence)
                 if row.suggested_reason:
                     preview_row["suggested_reason"] = row.suggested_reason
-                if row.suggested_subscription_id is not None:
-                    preview_row["suggested_subscription_id"] = str(row.suggested_subscription_id)
-                if row.suggested_subscription_name:
-                    preview_row["suggested_subscription_name"] = row.suggested_subscription_name
-                if row.suggested_subscription_confidence is not None:
-                    preview_row["suggested_subscription_confidence"] = float(
-                        row.suggested_subscription_confidence
-                    )
-                if row.suggested_subscription_reason:
-                    preview_row["suggested_subscription_reason"] = row.suggested_subscription_reason
                 if row.transfer_match:
                     preview_row["transfer_match"] = row.transfer_match
                 if row.rule_applied:
@@ -547,9 +615,7 @@ class ImportService:
                 amount = str(row_data.get("amount") or "")
                 description = str(row_data.get("description") or "")
                 rows_by_account.setdefault(account_id, []).append((row.id, description))
-                suggested_category_id = self._coerce_uuid(
-                    row_data.get("suggested_category_id")
-                )
+                suggested_category_id = self._coerce_uuid(row_data.get("suggested_category_id"))
 
                 response_rows.append(
                     {
@@ -568,14 +634,6 @@ class ImportService:
                             else None
                         ),
                         "suggested_reason": row.suggested_reason,
-                        "suggested_subscription_id": row.suggested_subscription_id,
-                        "suggested_subscription_name": row.suggested_subscription_name,
-                        "suggested_subscription_confidence": (
-                            float(row.suggested_subscription_confidence)
-                            if row.suggested_subscription_confidence is not None
-                            else None
-                        ),
-                        "suggested_subscription_reason": row.suggested_subscription_reason,
                         "transfer_match": row.transfer_match,
                         "rule_applied": row.rule_applied,
                         "rule_type": row.rule_type,
@@ -594,14 +652,57 @@ class ImportService:
                 )
             )
 
+        suggestions_status = self._resolve_suggestions_status(self._rows_for_batch(batch))
         return ImportPreviewResponse.model_validate(
             {
                 "import_batch_id": batch.id,
+                "suggestions_status": suggestions_status,
                 "files": response_files,
                 "rows": response_rows,
                 "accounts": response_accounts,
             }
         ).model_dump(mode="python")
+
+    def _rows_for_batch(self, batch: TransactionImportBatch) -> list[ImportRow]:
+        rows: list[ImportRow] = []
+        for file in batch.files or []:
+            rows.extend(list(file.rows or []))
+        return rows
+
+    def _resolve_suggestions_status(self, rows: list[ImportRow]) -> str:
+        statuses = {
+            str((row.data or {}).get(_AI_SUGGESTIONS_STATUS_KEY)).strip().lower()
+            for row in rows
+            if (row.data or {}).get(_AI_SUGGESTIONS_STATUS_KEY) is not None
+        }
+        if _AI_SUGGESTIONS_RUNNING in statuses:
+            return _AI_SUGGESTIONS_RUNNING
+        if _AI_SUGGESTIONS_FAILED in statuses:
+            return _AI_SUGGESTIONS_FAILED
+        if _AI_SUGGESTIONS_COMPLETED in statuses:
+            return _AI_SUGGESTIONS_COMPLETED
+        return _AI_SUGGESTIONS_NOT_STARTED
+
+    def _set_suggestions_status(
+        self,
+        batch: TransactionImportBatch,
+        *,
+        status: str,
+        error: str | None = None,
+    ) -> None:
+        rows = self._rows_for_batch(batch)
+        now = datetime.now(timezone.utc)
+        error_text = (error or "").strip()[:220] or None
+        for row in rows:
+            row_data = dict(row.data or {})
+            row_data[_AI_SUGGESTIONS_STATUS_KEY] = status
+            if status == _AI_SUGGESTIONS_FAILED and error_text:
+                row_data[_AI_SUGGESTIONS_ERROR_KEY] = error_text
+            else:
+                row_data.pop(_AI_SUGGESTIONS_ERROR_KEY, None)
+            row.data = row_data
+            row.updated_at = now
+        batch.updated_at = now
 
     def _resolve_draft_row_file_id(
         self,
@@ -1096,8 +1197,13 @@ class ImportService:
         statement = select(ImportRule).where(cast(Any, ImportRule.is_active).is_(True))
         return list(self.session.exec(statement).all())
 
-    def _category_lookup_by_id(self) -> dict[UUID, Category]:
-        categories = self.session.exec(select(Category)).all()
+    def _category_lookup_by_id(
+        self, *, category_ids: set[UUID] | None = None
+    ) -> dict[UUID, Category]:
+        statement = select(Category)
+        if category_ids:
+            statement = statement.where(cast(Any, Category.id).in_(category_ids))
+        categories = self.session.exec(statement).all()
         return {cat.id: cat for cat in categories if getattr(cat, "id", None) is not None}
 
     def _get_or_create_offset_account(self) -> Account:

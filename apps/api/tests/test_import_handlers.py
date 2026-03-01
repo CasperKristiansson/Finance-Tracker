@@ -22,7 +22,9 @@ from apps.api.handlers.imports import (
     reset_handler_state,
     save_import_draft,
 )
-from apps.api.models import Account, Category, Transaction, TransactionImportBatch, TransactionLeg
+from apps.api.models import Account, Category, Transaction, TransactionLeg
+from apps.api.schemas import ImportCategorySuggestionRead
+from apps.api.services import ImportService
 from apps.api.shared import (
     AccountType,
     CategoryType,
@@ -600,6 +602,63 @@ def test_delete_import_draft_fails_for_committed_batch():
         None,
     )
     assert delete_response["statusCode"] == 400
+
+
+def test_persisted_suggestions_are_returned_on_draft_reload():
+    account_id = _create_account(bank_import_type="swedbank")
+    category_id = _create_category(name="Groceries")
+    payload = _swedbank_workbook()
+    preview_response = preview_imports(
+        {
+            "body": json.dumps(
+                {
+                    "files": [
+                        {
+                            "filename": "swedbank.xlsx",
+                            "account_id": str(account_id),
+                            "content_base64": payload,
+                        }
+                    ]
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    preview_body = _json_body(preview_response)
+    import_batch_id = UUID(preview_body["import_batch_id"])
+    target_row_id = UUID(preview_body["rows"][0]["id"])
+
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        service = ImportService(session)
+        service.mark_import_suggestions_running(import_batch_id)
+        service.persist_import_suggestions(
+            import_batch_id,
+            suggestions=[
+                ImportCategorySuggestionRead(
+                    id=target_row_id,
+                    category_id=category_id,
+                    confidence=0.81,
+                    reason="Matched prior grocery merchant",
+                )
+            ],
+        )
+        session.commit()
+
+    resumed_response = get_import_draft(
+        {
+            "pathParameters": {"importBatchId": str(import_batch_id)},
+            "requestContext": {"authorizer": {"jwt": {"claims": {}}}},
+        },
+        None,
+    )
+    assert resumed_response["statusCode"] == 200
+    resumed_body = _json_body(resumed_response)
+    assert resumed_body["suggestions_status"] == "completed"
+    row = next(item for item in resumed_body["rows"] if item["id"] == str(target_row_id))
+    assert row["suggested_category_id"] == str(category_id)
 
 
 def test_commit_creates_batch_and_transactions():

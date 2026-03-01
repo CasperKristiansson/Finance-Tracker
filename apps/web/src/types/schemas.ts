@@ -769,6 +769,9 @@ export const importPreviewRowReadSchema = z.object({
 
 export const importPreviewResponseSchema = z.object({
   import_batch_id: z.string(),
+  suggestions_status: z
+    .enum(["not_started", "running", "completed", "failed"])
+    .default("not_started"),
   files: z.array(importPreviewFileReadSchema),
   rows: z.array(importPreviewRowReadSchema),
   accounts: z
@@ -926,6 +929,7 @@ export const importCategorySuggestRequestSchema = z.object({
 
 export const importCategorySuggestJobRequestSchema =
   importCategorySuggestRequestSchema.extend({
+    import_batch_id: z.string().optional(),
     client_id: z.string(),
     client_token: z.string().min(16),
   });
