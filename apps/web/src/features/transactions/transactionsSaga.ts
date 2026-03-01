@@ -83,9 +83,6 @@ function* handleFetchTransactions(
       ...(filters.categoryIds?.length
         ? { category_ids: filters.categoryIds.join(",") }
         : {}),
-      ...(filters.subscriptionIds?.length
-        ? { subscription_ids: filters.subscriptionIds.join(",") }
-        : {}),
       ...(filters.minAmount ? { min_amount: filters.minAmount } : {}),
       ...(filters.maxAmount ? { max_amount: filters.maxAmount } : {}),
       ...(filters.search ? { search: filters.search } : {}),
@@ -206,7 +203,6 @@ function* handleCreateTransaction(
       const newTx: TransactionRead = {
         id: `demo-tx-${Date.now()}`,
         category_id: body.category_id ?? null,
-        subscription_id: body.subscription_id ?? null,
         transaction_type: body.transaction_type ?? TransactionType.EXPENSE,
         description: body.description ?? "",
         notes: body.notes ?? null,
@@ -273,7 +269,6 @@ function* handleUpdateTransaction(
               occurred_at: body.occurred_at ?? tx.occurred_at,
               posted_at: body.posted_at ?? tx.posted_at,
               category_id: body.category_id ?? tx.category_id,
-              subscription_id: body.subscription_id ?? tx.subscription_id,
               updated_at: new Date().toISOString(),
             }
           : tx,

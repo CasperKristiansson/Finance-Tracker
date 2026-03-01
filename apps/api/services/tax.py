@@ -85,7 +85,6 @@ class TaxService:
             external_id=None,
             occurred_at=occurred_at,
             posted_at=posted_at or occurred_at,
-            subscription_id=None,
             created_source=created_source,
             import_batch_id=import_batch_id,
         )

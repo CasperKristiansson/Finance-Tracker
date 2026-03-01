@@ -1209,8 +1209,8 @@ export const Categories: React.FC = () => {
                 Merge categories
               </DialogTitle>
               <DialogDescription>
-                Transactions and budgets from the source category will move to
-                the target. The source category will be archived.
+                Transactions from the source category will move to the target.
+                The source category will be archived.
               </DialogDescription>
             </DialogHeader>
 

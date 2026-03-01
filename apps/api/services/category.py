@@ -10,7 +10,7 @@ from uuid import UUID
 from sqlalchemy import update
 from sqlmodel import Session, select
 
-from ..models import Budget, Category, Transaction
+from ..models import Category, Transaction
 from ..repositories.category import CategoryRepository, CategoryUsage
 
 
@@ -71,25 +71,6 @@ class CategoryService:
             .where(cast(Any, Transaction.category_id == source_category_id))
             .values(category_id=target_category_id)
         )
-
-        # Merge budgets for the same period
-        source_budgets = list(
-            self.session.exec(select(Budget).where(Budget.category_id == source_category_id)).all()
-        )
-        for budget in source_budgets:
-            existing = self.session.exec(
-                select(Budget).where(
-                    Budget.category_id == target_category_id,
-                    Budget.period == budget.period,
-                )
-            ).one_or_none()
-            if existing:
-                existing.amount += budget.amount
-                self.session.delete(budget)
-                self.session.add(existing)
-            else:
-                budget.category_id = target_category_id
-                self.session.add(budget)
 
         # Archive the source category
         source.is_archived = True

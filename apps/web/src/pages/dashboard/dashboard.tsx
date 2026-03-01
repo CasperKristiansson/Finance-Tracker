@@ -5,7 +5,6 @@ import {
   FileBarChart,
   PiggyBank,
   Plus,
-  Receipt,
   Settings,
   Upload,
   Wallet,
@@ -1301,19 +1300,6 @@ export const Dashboard: React.FC = () => {
                 >
                   <Wallet className="h-4 w-4" />
                   View accounts
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="w-full justify-start gap-2"
-              >
-                <Link
-                  to={PageRoutes.budgets}
-                  className="flex items-center gap-2"
-                >
-                  <Receipt className="h-4 w-4" />
-                  Budgets
                 </Link>
               </Button>
               <Button

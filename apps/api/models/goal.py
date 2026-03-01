@@ -38,14 +38,6 @@ class Goal(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=
             nullable=True,
         ),
     )
-    subscription_id: Optional[UUID] = Field(
-        default=None,
-        sa_column=Column(
-            PGUUID(as_uuid=True),
-            ForeignKey("subscriptions.id", ondelete="SET NULL"),
-            nullable=True,
-        ),
-    )
     note: Optional[str] = Field(default=None, sa_column=Column(String(255), nullable=True))
 
 

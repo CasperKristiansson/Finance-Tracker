@@ -81,7 +81,6 @@ def monthly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             year=query.year,
             account_ids=query.account_ids,
             category_ids=query.category_ids,
-            subscription_ids=query.subscription_ids,
         )
     payload = MonthlyReportResponse(
         results=[MonthlyReportEntry.model_validate(item) for item in results]
@@ -104,7 +103,6 @@ def yearly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         results = service.yearly_report(
             account_ids=query.account_ids,
             category_ids=query.category_ids,
-            subscription_ids=query.subscription_ids,
         )
     payload = YearlyReportResponse(
         results=[YearlyReportEntry.model_validate(item) for item in results]
@@ -127,7 +125,6 @@ def total_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         result = service.total_report(
             account_ids=query.account_ids,
             category_ids=query.category_ids,
-            subscription_ids=query.subscription_ids,
         )
     payload = TotalReportRead.model_validate(result)
     response = payload.model_dump(mode="json")
@@ -168,7 +165,6 @@ def quarterly_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             year=query.year,
             account_ids=query.account_ids,
             category_ids=query.category_ids,
-            subscription_ids=query.subscription_ids,
         )
         payload = QuarterlyReportResponse(
             results=[QuarterlyReportEntry.model_validate(item) for item in results]
@@ -193,7 +189,6 @@ def date_range_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             end_date=query.end_date,
             account_ids=query.account_ids,
             category_ids=query.category_ids,
-            subscription_ids=query.subscription_ids,
             source=query.source,
         )
         payload = DateRangeReportResponse(
@@ -322,7 +317,6 @@ def export_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                 year=request.year,
                 account_ids=request.account_ids,
                 category_ids=request.category_ids,
-                subscription_ids=request.subscription_ids,
             )
             headers = ["period", "income", "expense", "net"]
             rows = [
@@ -334,7 +328,6 @@ def export_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             yearly_data = service.yearly_report(
                 account_ids=request.account_ids,
                 category_ids=request.category_ids,
-                subscription_ids=request.subscription_ids,
             )
             headers = ["year", "income", "expense", "net"]
             rows = [
@@ -347,7 +340,6 @@ def export_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                 year=request.year,
                 account_ids=request.account_ids,
                 category_ids=request.category_ids,
-                subscription_ids=request.subscription_ids,
             )
             headers = ["year", "quarter", "income", "expense", "net"]
             rows = [
@@ -365,7 +357,6 @@ def export_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             item = service.total_report(
                 account_ids=request.account_ids,
                 category_ids=request.category_ids,
-                subscription_ids=request.subscription_ids,
                 start_date=request.start_date,
                 end_date=request.end_date,
             )

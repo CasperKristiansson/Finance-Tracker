@@ -1,7 +1,7 @@
 # Finance Tracker – Overview
 
 ## Purpose
-- Private-first personal finance tracker to replace spreadsheets with a trustworthy ledger, reporting, and budgeting experience.
+- Private-first personal finance tracker to replace spreadsheets with a trustworthy ledger and reporting experience.
 - Support manual entry and bulk imports from bank exports (CSV/XLSX) with per-bank templates.
 - Deliver clear reporting (month/quarter/year), net worth tracking, and loan awareness.
 
@@ -11,12 +11,12 @@
 - Comfortable with uploading bank exports; expect transparency and auditability.
 
 ## Value Proposition
-- Double-entry backbone for accuracy; loan-aware ledger; category and budget controls.
+- Double-entry backbone for accuracy; loan-aware ledger; category controls.
 - Fast insights: cash flow, category breakdowns, net worth trend, savings rate.
 - Import-friendly: map bank exports once, reuse templates, review/flag imported rows.
 
 ## Scope (near-term)
-- Accounts, transactions, categories, budgets, imports, reports, loans.
+- Accounts, transactions, categories, imports, reports, loans.
 - Auth via Cognito; web UI with shadcn/Radix components; API layer in Python/SQLModel.
 - Single currency (SEK) and single user.
 

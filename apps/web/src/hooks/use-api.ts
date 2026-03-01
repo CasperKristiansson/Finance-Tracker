@@ -14,20 +14,6 @@ import {
   type AccountsState,
 } from "@/features/accounts/accountsSlice";
 import {
-  CreateBudget,
-  DeleteBudget,
-  FetchBudgets,
-  UpdateBudget,
-} from "@/features/budgets/budgetsSaga";
-import {
-  selectBudgets,
-  selectBudgetsError,
-  selectBudgetsLoading,
-  selectBudgetRollups,
-  selectBudgetTotals,
-  selectBudgetsByUsage,
-} from "@/features/budgets/budgetsSlice";
-import {
   FetchCategories,
   CreateCategory,
   UpdateCategory,
@@ -136,8 +122,6 @@ import {
   type TransactionFilters,
 } from "@/features/transactions/transactionsSlice";
 import type {
-  BudgetCreateRequest,
-  BudgetUpdateRequest,
   CategoryCreateRequest,
   CategoryUpdateRequest,
   ImportCommitRequest,
@@ -504,49 +488,6 @@ export const useImportsApi = () => {
     resetImports,
     fetchStoredFiles,
     downloadImportFile,
-  };
-};
-
-export const useBudgetsApi = () => {
-  const dispatch = useAppDispatch();
-  const items = useAppSelector(selectBudgets);
-  const loading = useAppSelector(selectBudgetsLoading);
-  const error = useAppSelector(selectBudgetsError);
-  const totals = useAppSelector(selectBudgetTotals);
-  const rollups = useAppSelector(selectBudgetRollups);
-  const budgetsByUsage = useAppSelector(selectBudgetsByUsage);
-
-  const fetchBudgets = useCallback(() => {
-    dispatch(FetchBudgets());
-  }, [dispatch]);
-
-  const createBudget = useCallback(
-    (payload: BudgetCreateRequest) => dispatch(CreateBudget(payload)),
-    [dispatch],
-  );
-
-  const updateBudget = useCallback(
-    (id: string, data: BudgetUpdateRequest) =>
-      dispatch(UpdateBudget({ id, data })),
-    [dispatch],
-  );
-
-  const deleteBudget = useCallback(
-    (id: string) => dispatch(DeleteBudget(id)),
-    [dispatch],
-  );
-
-  return {
-    items,
-    loading,
-    error,
-    fetchBudgets,
-    createBudget,
-    updateBudget,
-    deleteBudget,
-    totals,
-    rollups,
-    budgetsByUsage,
   };
 };
 

@@ -41,7 +41,6 @@ class ReportingService:
         year: Optional[int] = None,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
-        subscription_ids: Optional[Iterable[UUID]] = None,
     ) -> List[MonthlyTotals]:
         if year is not None:
             start = datetime(year, 1, 1, tzinfo=timezone.utc)
@@ -55,7 +54,6 @@ class ReportingService:
             end=end,
             account_ids=account_ids,
             category_ids=category_ids,
-            subscription_ids=subscription_ids,
         )
 
         buckets: Dict[date, Tuple[Decimal, Decimal, Decimal, Decimal]] = {}
@@ -99,7 +97,6 @@ class ReportingService:
         *,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
-        subscription_ids: Optional[Iterable[UUID]] = None,
     ) -> List[YearlyTotals]:
         start = datetime(1900, 1, 1, tzinfo=timezone.utc)
         end = datetime.now(timezone.utc) + timedelta(days=1)
@@ -108,7 +105,6 @@ class ReportingService:
             end=end,
             account_ids=account_ids,
             category_ids=category_ids,
-            subscription_ids=subscription_ids,
         )
 
         buckets: Dict[int, Tuple[Decimal, Decimal, Decimal, Decimal]] = {}
@@ -151,7 +147,6 @@ class ReportingService:
         *,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
-        subscription_ids: Optional[Iterable[UUID]] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> LifetimeTotals:
@@ -168,7 +163,6 @@ class ReportingService:
             end=end,
             account_ids=account_ids,
             category_ids=category_ids,
-            subscription_ids=subscription_ids,
         )
 
         income_total = Decimal("0")
@@ -905,7 +899,6 @@ class ReportingService:
         income_by_category: Dict[str, Dict[str, object]] = {}
         merchants: Dict[str, Dict[str, object]] = {}
         largest_expenses: List[Dict[str, object]] = []
-        subscriptions_current: Dict[str, Dict[str, object]] = {}
 
         account_scoped = account_id_list is not None
         for row in rows:
@@ -975,17 +968,6 @@ class ReportingService:
                         "notes": row.notes,
                     }
                 )
-
-                if row.subscription_id:
-                    sid = str(row.subscription_id)
-                    if sid not in subscriptions_current:
-                        subscriptions_current[sid] = {"id": sid, "count": 0, "total": Decimal("0")}
-                    subscriptions_current[sid]["count"] = (
-                        cast(int, subscriptions_current[sid]["count"]) + 1
-                    )
-                    subscriptions_current[sid]["total"] = (
-                        cast(Decimal, subscriptions_current[sid]["total"]) + expense
-                    )
 
         total_income = sum(monthly_income, Decimal("0"))
         total_expense = sum(monthly_expense, Decimal("0"))
@@ -1079,23 +1061,6 @@ class ReportingService:
         )
         income_category_breakdown = build_category_breakdown(income_categories_sorted)
 
-        # Prior-year subscription signal inputs.
-        prev_subscriptions: set[str] = set()
-        prev_subscription_avg: Dict[str, Decimal] = {}
-        prev_counts: Dict[str, int] = {}
-        for row in prev_rows:
-            income, expense = self._classify_income_expense(row, account_scoped=account_scoped)
-            if expense <= 0:
-                continue
-            if row.subscription_id:
-                sid = str(row.subscription_id)
-                prev_subscriptions.add(sid)
-                prev_counts[sid] = prev_counts.get(sid, 0) + 1
-                prev_subscription_avg[sid] = prev_subscription_avg.get(sid, Decimal("0")) + expense
-        for sid, total in prev_subscription_avg.items():
-            count = prev_counts.get(sid) or 1
-            prev_subscription_avg[sid] = total / Decimal(count)
-
         merchants_rows = []
         for entry in merchants.values():
             merchant_name = cast(str, entry["merchant"])
@@ -1176,19 +1141,6 @@ class ReportingService:
                 if unusual:
                     month_names = [date(year, idx + 1, 1).strftime("%B") for idx in unusual]
                     insights.append("Unusually high months: " + ", ".join(month_names) + ".")
-        # Subscriptions signal (basic).
-        new_subs = [sid for sid in subscriptions_current if sid not in prev_subscriptions]
-        if new_subs:
-            insights.append(f"Subscriptions: {len(new_subs)} new this year.")
-        increased = 0
-        for sid, payload in subscriptions_current.items():
-            avg_now = cast(Decimal, payload["total"]) / Decimal(cast(int, payload["count"]) or 1)
-            avg_prev = prev_subscription_avg.get(sid)
-            if avg_prev is not None and avg_prev > 0 and avg_now > avg_prev * Decimal("1.15"):
-                increased += 1
-        if increased:
-            insights.append(f"Subscriptions: {increased} appear to have increased price.")
-
         (
             investments_summary,
             debt_overview,
@@ -1347,7 +1299,6 @@ class ReportingService:
         year: Optional[int] = None,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
-        subscription_ids: Optional[Iterable[UUID]] = None,
     ) -> List[QuarterlyTotals]:
         if year is not None:
             start = datetime(year, 1, 1, tzinfo=timezone.utc)
@@ -1361,7 +1312,6 @@ class ReportingService:
             end=end,
             account_ids=account_ids,
             category_ids=category_ids,
-            subscription_ids=subscription_ids,
         )
 
         buckets: Dict[tuple[int, int], Tuple[Decimal, Decimal, Decimal, Decimal]] = {}
@@ -1409,7 +1359,6 @@ class ReportingService:
         end_date: date,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
-        subscription_ids: Optional[Iterable[UUID]] = None,
         source: Optional[str] = None,
     ) -> List[MonthlyTotals]:
         start = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
@@ -1422,7 +1371,6 @@ class ReportingService:
             end=end,
             account_ids=account_ids,
             category_ids=category_ids,
-            subscription_ids=subscription_ids,
         )
         if source:
             rows = [row for row in rows if self._merchant_key(row.description) == source]
@@ -1470,7 +1418,6 @@ class ReportingService:
         end: datetime,
         account_ids: Optional[Iterable[UUID]] = None,
         category_ids: Optional[Iterable[UUID]] = None,
-        subscription_ids: Optional[Iterable[UUID]] = None,
     ) -> List[TransactionAmountRow]:
         rows = self.repository.fetch_transaction_amounts(
             start=start, end=end, account_ids=account_ids
@@ -1478,9 +1425,6 @@ class ReportingService:
         if category_ids:
             allowed = set(category_ids)
             rows = [row for row in rows if row.category_id in allowed]
-        if subscription_ids:
-            allowed = set(subscription_ids)
-            rows = [row for row in rows if row.subscription_id in allowed]
         return rows
 
 

@@ -17,7 +17,6 @@ import { BeginWarmup } from "./features/warmup/warmupSaga.ts";
 import { selectWarmupState } from "./features/warmup/warmupSlice.ts";
 import { AccountDetails } from "./pages/accounts/account.tsx";
 import { Accounts } from "./pages/accounts/accounts.tsx";
-import { Budgets } from "./pages/budgets/budgets.tsx";
 import { CashFlow } from "./pages/cash-flow/cash-flow.tsx";
 import { Categories } from "./pages/categories/categories.tsx";
 import { Cover } from "./pages/cover/cover.tsx";
@@ -35,7 +34,6 @@ import { NotFound } from "./pages/notFound/notFound.tsx";
 import { Redirect } from "./pages/redirect/redirect.tsx";
 import { Reports } from "./pages/reports/reports.tsx";
 import { Settings } from "./pages/settings/settings.tsx";
-import { Subscriptions } from "./pages/subscriptions/subscriptions.tsx";
 import { Taxes } from "./pages/taxes/taxes.tsx";
 import { Transactions } from "./pages/transactions/transactions.tsx";
 
@@ -153,14 +151,6 @@ export const App: React.FC = () => {
           }
         />
         <Route
-          path={PageRoutes.budgets}
-          element={
-            <NavigationWrapper title="Budgets">
-              <Budgets />
-            </NavigationWrapper>
-          }
-        />
-        <Route
           path={PageRoutes.transactions}
           element={
             <NavigationWrapper title="Transactions">
@@ -181,14 +171,6 @@ export const App: React.FC = () => {
           element={
             <NavigationWrapper title="Import files">
               <ImportFiles />
-            </NavigationWrapper>
-          }
-        />
-        <Route
-          path={PageRoutes.subscriptions}
-          element={
-            <NavigationWrapper title="Subscriptions">
-              <Subscriptions />
             </NavigationWrapper>
           }
         />

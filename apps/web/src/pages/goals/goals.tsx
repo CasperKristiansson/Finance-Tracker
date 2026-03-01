@@ -207,7 +207,6 @@ export const Goals: React.FC = () => {
             target_date: values.target_date || null,
             category_id: null,
             account_id: null,
-            subscription_id: null,
             note: values.note || null,
             created_at: now,
             updated_at: now,
@@ -332,8 +331,7 @@ export const Goals: React.FC = () => {
     return goals.map((goal) => {
       const target = Number(goal.target_amount || 0);
       const fallbackCurrent = Number(goal.current_amount || 0);
-      const isTotalAssetsGoal =
-        !goal.category_id && !goal.account_id && !goal.subscription_id;
+      const isTotalAssetsGoal = !goal.category_id && !goal.account_id;
       const current =
         isTotalAssetsGoal && currentTotalAssets !== null
           ? currentTotalAssets

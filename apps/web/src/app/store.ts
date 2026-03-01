@@ -3,7 +3,6 @@ import { configureStore } from "@reduxjs/toolkit";
 import { AccountsReducer } from "@/features/accounts/accountsSlice";
 import { AppReducer } from "@/features/app/appSlice";
 import { AuthReducer } from "@/features/auth/authSlice";
-import { BudgetsReducer } from "@/features/budgets/budgetsSlice";
 import { CategoriesReducer } from "@/features/categories/categoriesSlice";
 import { ImportsReducer } from "@/features/imports/importsSlice";
 import { InvestmentsReducer } from "@/features/investments/investmentsSlice";
@@ -28,7 +27,6 @@ export const Store = configureStore({
     loans: LoansReducer,
     imports: ImportsReducer,
     investments: InvestmentsReducer,
-    budgets: BudgetsReducer,
     settings: SettingsReducer,
   },
   middleware: (getDefaultMiddleware) =>
