@@ -7,7 +7,7 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy.pool import StaticPool
-from sqlmodel import SQLModel, select
+from sqlmodel import SQLModel
 
 from apps.api.handlers import (
     create_category,

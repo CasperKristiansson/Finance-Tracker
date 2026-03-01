@@ -1,13 +1,16 @@
 {
-    "private": true,
-    "workspaces": [
-        "apps/web"
-    ],
-    "scripts": {
-        "start": "npm run dev -w apps/web",
-        "dev": "npm run dev -w apps/web",
-        "build": "npm run build -w apps/web",
-        "lint": "npm run lint -w apps/web",
-        "preview": "npm run preview -w apps/web"
-    }
+  "private": true,
+  "workspaces": [
+    "apps/web"
+  ],
+  "scripts": {
+    "start": "npm run dev -w apps/web",
+    "dev": "npm run dev -w apps/web",
+    "build": "npm run build -w apps/web",
+    "lint": "npm run lint -w apps/web",
+    "preview": "npm run preview -w apps/web",
+    "generate:api-contracts": "python3 scripts/generate_api_contract_types.py",
+    "knip:web": "npm run knip -w apps/web",
+    "knip:web:fix": "npm run knip:fix -w apps/web"
+  }
 }

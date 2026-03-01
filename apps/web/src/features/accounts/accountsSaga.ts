@@ -17,13 +17,8 @@ import {
 } from "@/features/accounts/accountsSlice";
 import { callApiWithAuth } from "@/features/api/apiSaga";
 import { selectIsDemo } from "@/features/auth/authSlice";
-import type {
-  AccountCreateRequest,
-  AccountListResponse,
-  AccountUpdateRequest,
-  LoanCreateRequest,
-  LoanUpdateRequest,
-} from "@/types/api";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
+import type { EndpointRequest, EndpointResponse } from "@/types/contracts";
 import {
   accountCreateRequestSchema,
   accountListSchema,
@@ -38,20 +33,20 @@ export const FetchAccounts = createAction<
   Partial<Pick<AccountsState, "includeInactive" | "asOfDate">> | undefined
 >("accounts/fetch");
 export const CreateAccount =
-  createAction<AccountCreateRequest>("accounts/create");
+  createAction<EndpointRequest<"createAccount">>("accounts/create");
 export const UpdateAccount = createAction<{
   accountId: string;
-  data: AccountUpdateRequest;
+  data: EndpointRequest<"updateAccount">;
 }>("accounts/update");
 export const ArchiveAccount = createAction<{ accountId: string }>(
   "accounts/archive",
 );
-export const AttachLoan = createAction<LoanCreateRequest>(
+export const AttachLoan = createAction<EndpointRequest<"createLoan">>(
   "accounts/attachLoan",
 );
 export const UpdateLoan = createAction<{
   accountId: string;
-  data: LoanUpdateRequest;
+  data: EndpointRequest<"updateLoan">;
 }>("accounts/updateLoan");
 export const ReconcileAccounts = createAction<{
   items: Array<{
@@ -86,9 +81,12 @@ function* handleFetchAccounts(action: ReturnType<typeof FetchAccounts>) {
         ...(filters.asOfDate ? { as_of_date: filters.asOfDate } : {}),
       };
 
-      const response: AccountListResponse = yield call(
+      const response: EndpointResponse<"listAccounts"> = yield call(
         callApiWithAuth,
-        { path: "/accounts", query, schema: accountListSchema },
+        buildEndpointRequest("listAccounts", {
+          query,
+          schema: accountListSchema,
+        }),
         { loadingKey: "accounts" },
       );
 
@@ -148,7 +146,7 @@ function* handleCreateAccount(action: ReturnType<typeof CreateAccount>) {
 
     yield call(
       callApiWithAuth,
-      { path: "/accounts", method: "POST", body },
+      buildEndpointRequest("createAccount", { body }),
       { loadingKey: "accounts-create" },
     );
     yield put(FetchAccounts(undefined));
@@ -187,7 +185,10 @@ function* handleUpdateAccount(action: ReturnType<typeof UpdateAccount>) {
 
     yield call(
       callApiWithAuth,
-      { path: `/accounts/${accountId}`, method: "PATCH", body },
+      buildEndpointRequest("updateAccount", {
+        pathParams: { accountId },
+        body,
+      }),
       { loadingKey: "accounts-update" },
     );
     yield put(FetchAccounts(undefined));
@@ -245,11 +246,9 @@ function* handleAttachLoan(action: ReturnType<typeof AttachLoan>) {
       return;
     }
 
-    yield call(
-      callApiWithAuth,
-      { path: "/loans", method: "POST", body },
-      { loadingKey: "loan-attach" },
-    );
+    yield call(callApiWithAuth, buildEndpointRequest("createLoan", { body }), {
+      loadingKey: "loan-attach",
+    });
     yield put(FetchAccounts(undefined));
   } catch (error) {
     yield put(
@@ -299,7 +298,10 @@ function* handleUpdateLoan(action: ReturnType<typeof UpdateLoan>) {
 
     yield call(
       callApiWithAuth,
-      { path: `/accounts/${accountId}/loan`, method: "PATCH", body },
+      buildEndpointRequest("updateLoan", {
+        pathParams: { accountId },
+        body,
+      }),
       { loadingKey: "loan-update" },
     );
     yield put(FetchAccounts(undefined));
@@ -350,12 +352,11 @@ function* handleReconcileAccounts(
       });
       yield call(
         callApiWithAuth,
-        {
-          path: `/accounts/${item.accountId}/reconcile`,
-          method: "POST",
+        buildEndpointRequest("reconcileAccount", {
+          pathParams: { accountId: item.accountId },
           body,
           schema: reconcileAccountResponseSchema,
-        },
+        }),
         { loadingKey: "accounts-reconcile" },
       );
     }

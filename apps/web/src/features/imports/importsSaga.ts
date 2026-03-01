@@ -31,6 +31,7 @@ import {
   setStoredImportFilesError,
   setStoredImportFilesLoading,
 } from "@/features/imports/importsSlice";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
 import type {
   ImportCommitRequest,
   ImportCommitResponse,
@@ -351,12 +352,10 @@ function* suggestSync(request: ImportCategorySuggestRequest) {
   const body = importCategorySuggestRequestSchema.parse(request);
   const response: ImportCategorySuggestResponse = yield call(
     callApiWithAuth,
-    {
-      path: "/imports/suggest-categories",
-      method: "POST",
+    buildEndpointRequest("suggestImportCategories", {
       body,
       schema: importCategorySuggestResponseSchema,
-    },
+    }),
     { loadingKey: "imports-suggest" },
   );
   const parsed = importCategorySuggestResponseSchema.parse(response);
@@ -382,12 +381,10 @@ function* handlePreview(action: ReturnType<typeof PreviewImports>) {
     } else {
       const response: ImportPreviewResponse = yield call(
         callApiWithAuth,
-        {
-          path: "/imports/preview",
-          method: "POST",
+        buildEndpointRequest("previewImports", {
           body,
           schema: importPreviewResponseSchema,
-        },
+        }),
         { loadingKey: "imports" },
       );
 
@@ -429,12 +426,10 @@ function* handleCommit(action: ReturnType<typeof CommitImports>) {
     } else {
       const response: ImportCommitResponse = yield call(
         callApiWithAuth,
-        {
-          path: "/imports/commit",
-          method: "POST",
+        buildEndpointRequest("commitImports", {
           body,
           schema: importCommitResponseSchema,
-        },
+        }),
         { loadingKey: "imports" },
       );
       const parsed = importCommitResponseSchema.parse(response);
@@ -522,12 +517,10 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
 
       const response: ImportCategorySuggestJobResponse = yield call(
         callApiWithAuth,
-        {
-          path: "/imports/suggest-categories/jobs",
-          method: "POST",
+        buildEndpointRequest("suggestImportCategoriesJob", {
           body,
           schema: importCategorySuggestJobResponseSchema,
-        },
+        }),
         { loadingKey: "imports-suggest" },
       );
       const parsed = importCategorySuggestJobResponseSchema.parse(response);
@@ -575,11 +568,9 @@ function* handleFetchDrafts() {
 
     const response: ImportDraftListResponse = yield call(
       callApiWithAuth,
-      {
-        path: "/imports/drafts",
-        method: "GET",
+      buildEndpointRequest("listImportDrafts", {
         schema: importDraftListResponseSchema,
-      },
+      }),
       { loadingKey: "import-drafts" },
     );
     const parsed = importDraftListResponseSchema.parse(response);
@@ -612,11 +603,10 @@ function* handleLoadDraft(action: ReturnType<typeof LoadImportDraft>) {
 
     const response: ImportPreviewResponse = yield call(
       callApiWithAuth,
-      {
-        path: `/imports/${action.payload.importBatchId}`,
-        method: "GET",
+      buildEndpointRequest("getImportDraft", {
+        pathParams: { importBatchId: action.payload.importBatchId },
         schema: importPreviewResponseSchema,
-      },
+      }),
       { loadingKey: `import-draft-${action.payload.importBatchId}` },
     );
     const parsed = importPreviewResponseSchema.parse(response);
@@ -646,12 +636,11 @@ function* handleSaveDraft(action: ReturnType<typeof SaveImportDraft>) {
     });
     const response: ImportDraftSaveResponse = yield call(
       callApiWithAuth,
-      {
-        path: `/imports/${action.payload.importBatchId}/draft`,
-        method: "POST",
+      buildEndpointRequest("saveImportDraft", {
+        pathParams: { importBatchId: action.payload.importBatchId },
         body,
         schema: importDraftSaveResponseSchema,
-      },
+      }),
       { loadingKey: `import-draft-save-${action.payload.importBatchId}` },
     );
     importDraftSaveResponseSchema.parse(response);
@@ -684,10 +673,9 @@ function* handleDeleteDraft(action: ReturnType<typeof DeleteImportDraft>) {
 
     yield call(
       callApiWithAuth,
-      {
-        path: `/imports/${action.payload.importBatchId}`,
-        method: "DELETE",
-      },
+      buildEndpointRequest("deleteImportDraft", {
+        pathParams: { importBatchId: action.payload.importBatchId },
+      }),
       { loadingKey: `import-draft-delete-${action.payload.importBatchId}` },
     );
     yield put(FetchImportDrafts());
@@ -712,11 +700,9 @@ function* handleFetchStoredFiles() {
     } else {
       const response: ImportFileListResponse = yield call(
         callApiWithAuth,
-        {
-          path: "/import-files",
-          method: "GET",
+        buildEndpointRequest("listImportFiles", {
           schema: importFileListResponseSchema,
-        },
+        }),
         { loadingKey: "import-files" },
       );
       const parsed = importFileListResponseSchema.parse(response);
@@ -747,12 +733,10 @@ function* handleDownloadImportFile(
     } else {
       const response: ImportFileDownloadResponse = yield call(
         callApiWithAuth,
-        {
-          path: "/import-files/download",
-          method: "POST",
+        buildEndpointRequest("downloadImportFile", {
           body: { file_id: action.payload.fileId },
           schema: importFileDownloadResponseSchema,
-        },
+        }),
         { loadingKey: `import-file-${action.payload.fileId}` },
       );
       const parsed = importFileDownloadResponseSchema.parse(response);

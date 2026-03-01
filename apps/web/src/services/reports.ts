@@ -1,10 +1,11 @@
 import { apiFetch } from "@/lib/apiClient";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
 import type {
+  EndpointResponse,
   TotalOverviewResponse,
   YearlyCategoryDetailResponse,
   YearlyOverviewResponse,
-  YearlyReportEntry,
-} from "@/types/api";
+} from "@/types/contracts";
 import {
   monthlyReportSchema,
   totalOverviewSchema,
@@ -16,26 +17,28 @@ import {
 type TokenParam = { token: string | null };
 
 export const fetchTotalOverview = async ({ token }: TokenParam) =>
-  apiFetch<TotalOverviewResponse>({
-    path: "/reports/total-overview",
-    schema: totalOverviewSchema,
-    token,
-  });
+  apiFetch<TotalOverviewResponse>(
+    buildEndpointRequest("totalOverview", {
+      schema: totalOverviewSchema,
+      token,
+    }),
+  );
 
 export const fetchYearlyOverview = async ({
   year,
   token,
   accountIds,
 }: TokenParam & { year: number; accountIds?: string | string[] }) =>
-  apiFetch<YearlyOverviewResponse>({
-    path: "/reports/yearly-overview",
-    schema: yearlyOverviewSchema,
-    query: {
-      year,
-      ...(accountIds ? { account_ids: accountIds } : {}),
-    },
-    token,
-  });
+  apiFetch<YearlyOverviewResponse>(
+    buildEndpointRequest("yearlyOverview", {
+      schema: yearlyOverviewSchema,
+      query: {
+        year,
+        ...(accountIds ? { account_ids: accountIds } : {}),
+      },
+      token,
+    }),
+  );
 
 export const fetchYearlyCategoryDetail = async ({
   year,
@@ -47,56 +50,49 @@ export const fetchYearlyCategoryDetail = async ({
   categoryId: string;
   flow: "expense" | "income";
 }) =>
-  apiFetch<YearlyCategoryDetailResponse>({
-    path: "/reports/yearly-category-detail",
-    schema: yearlyCategoryDetailSchema,
-    query: {
-      year,
-      category_id: categoryId,
-      flow,
-    },
-    token,
-  });
+  apiFetch<YearlyCategoryDetailResponse>(
+    buildEndpointRequest("yearlyCategoryDetail", {
+      schema: yearlyCategoryDetailSchema,
+      query: {
+        year,
+        category_id: categoryId,
+        flow,
+      },
+      token,
+    }),
+  );
 
 export const fetchYearlyReport = async ({
   year,
   accountIds,
   token,
 }: TokenParam & { year?: number; accountIds?: string | string[] }) =>
-  apiFetch<{ results: YearlyReportEntry[] }>({
-    path: "/reports/yearly",
-    schema: yearlyReportSchema,
-    query: {
-      ...(typeof year === "number" ? { year } : {}),
-      ...(accountIds ? { account_ids: accountIds } : {}),
-    },
-    token,
-  });
+  apiFetch<EndpointResponse<"yearlyReport">>(
+    buildEndpointRequest("yearlyReport", {
+      schema: yearlyReportSchema,
+      query: {
+        ...(typeof year === "number" ? { year } : {}),
+        ...(accountIds ? { account_ids: accountIds } : {}),
+      },
+      token,
+    }),
+  );
 
 export const fetchMonthlyReport = async ({
   year,
   accountIds,
   token,
 }: TokenParam & { year: number; accountIds?: string[] }) =>
-  apiFetch<{
-    results: Array<{
-      period: string;
-      income: string;
-      expense: string;
-      adjustment_inflow: string;
-      adjustment_outflow: string;
-      adjustment_net: string;
-      net: string;
-    }>;
-  }>({
-    path: "/reports/monthly",
-    schema: monthlyReportSchema,
-    query: {
-      year,
-      ...(accountIds?.length ? { account_ids: accountIds } : {}),
-    },
-    token,
-  });
+  apiFetch<EndpointResponse<"monthlyReport">>(
+    buildEndpointRequest("monthlyReport", {
+      schema: monthlyReportSchema,
+      query: {
+        year,
+        ...(accountIds?.length ? { account_ids: accountIds } : {}),
+      },
+      token,
+    }),
+  );
 
 export const fetchCustomReport = async ({
   token,
@@ -104,19 +100,10 @@ export const fetchCustomReport = async ({
 }: TokenParam & {
   query: Record<string, string | number | string[]>;
 }) =>
-  apiFetch<{
-    results: Array<{
-      period: string;
-      income: string;
-      expense: string;
-      adjustment_inflow: string;
-      adjustment_outflow: string;
-      adjustment_net: string;
-      net: string;
-    }>;
-  }>({
-    path: "/reports/custom",
-    schema: monthlyReportSchema,
-    query,
-    token,
-  });
+  apiFetch<EndpointResponse<"dateRangeReport">>(
+    buildEndpointRequest("dateRangeReport", {
+      schema: monthlyReportSchema,
+      query,
+      token,
+    }),
+  );

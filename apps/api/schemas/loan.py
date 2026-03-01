@@ -95,6 +95,12 @@ class LoanEventListQuery(BaseModel):
     offset: int = Field(default=0, ge=0)
 
 
+class LoanEventListResponse(BaseModel):
+    """Response payload for loan event listings."""
+
+    events: List[LoanEventRead]
+
+
 class LoanPortfolioSeriesQuery(BaseModel):
     """Query parameters accepted by the loan portfolio series endpoint."""
 
@@ -123,6 +129,7 @@ __all__ = [
     "LoanScheduleRead",
     "LoanEventRead",
     "LoanEventListQuery",
+    "LoanEventListResponse",
     "LoanPortfolioSeriesQuery",
     "LoanPortfolioSeriesPoint",
     "LoanPortfolioSeriesRead",

@@ -33,13 +33,8 @@ import {
   setExportLoading,
 } from "@/features/reports/reportsSlice";
 import { buildReportKey } from "@/features/reports/reportsSlice";
-import type {
-  MonthlyReportEntry,
-  NetWorthHistoryResponse,
-  QuarterlyReportEntry,
-  TotalReportRead,
-  YearlyReportEntry,
-} from "@/types/api";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
+import type { EndpointResponse } from "@/types/contracts";
 import {
   monthlyReportSchema,
   netWorthHistorySchema,
@@ -105,9 +100,12 @@ function* handleFetchMonthly(action: ReturnType<typeof FetchMonthlyReport>) {
     if (isDemo) {
       yield put(setMonthlyReport({ key, data: demoReportPayloads.monthly }));
     } else {
-      const response: { results: MonthlyReportEntry[] } = yield call(
+      const response: EndpointResponse<"monthlyReport"> = yield call(
         callApiWithAuth,
-        { path: "/reports/monthly", query, schema: monthlyReportSchema },
+        buildEndpointRequest("monthlyReport", {
+          query,
+          schema: monthlyReportSchema,
+        }),
         { loadingKey: "report-monthly" },
       );
 
@@ -146,9 +144,12 @@ function* handleFetchYearly(action: ReturnType<typeof FetchYearlyReport>) {
     if (isDemo) {
       yield put(setYearlyReport({ key, data: demoReportPayloads.yearly }));
     } else {
-      const response: { results: YearlyReportEntry[] } = yield call(
+      const response: EndpointResponse<"yearlyReport"> = yield call(
         callApiWithAuth,
-        { path: "/reports/yearly", query, schema: yearlyReportSchema },
+        buildEndpointRequest("yearlyReport", {
+          query,
+          schema: yearlyReportSchema,
+        }),
         { loadingKey: "report-yearly" },
       );
 
@@ -185,9 +186,12 @@ function* handleFetchTotal(action: ReturnType<typeof FetchTotalReport>) {
     if (isDemo) {
       yield put(setTotalReport({ key, data: demoReportPayloads.total }));
     } else {
-      const response: TotalReportRead = yield call(
+      const response: EndpointResponse<"totalReport"> = yield call(
         callApiWithAuth,
-        { path: "/reports/total", query, schema: totalReportSchema },
+        buildEndpointRequest("totalReport", {
+          query,
+          schema: totalReportSchema,
+        }),
         { loadingKey: "report-total" },
       );
 
@@ -223,9 +227,12 @@ function* handleFetchNetWorth(action: ReturnType<typeof FetchNetWorthHistory>) {
         setNetWorthHistory({ key, data: demoReportPayloads.netWorth.points }),
       );
     } else {
-      const response: NetWorthHistoryResponse = yield call(
+      const response: EndpointResponse<"netWorthHistory"> = yield call(
         callApiWithAuth,
-        { path: "/reports/net-worth", query, schema: netWorthHistorySchema },
+        buildEndpointRequest("netWorthHistory", {
+          query,
+          schema: netWorthHistorySchema,
+        }),
         { loadingKey: "report-net-worth" },
       );
 
@@ -268,9 +275,12 @@ function* handleFetchQuarterly(
         setQuarterlyReport({ key, data: demoReportPayloads.quarterly }),
       );
     } else {
-      const response: { results: QuarterlyReportEntry[] } = yield call(
+      const response: EndpointResponse<"quarterlyReport"> = yield call(
         callApiWithAuth,
-        { path: "/reports/quarterly", query, schema: quarterlyReportSchema },
+        buildEndpointRequest("quarterlyReport", {
+          query,
+          schema: quarterlyReportSchema,
+        }),
         { loadingKey: "report-quarterly" },
       );
       yield put(setQuarterlyReport({ key, data: response.results }));
@@ -309,9 +319,9 @@ function* handleFetchCustom(action: ReturnType<typeof FetchCustomReport>) {
     if (isDemo) {
       yield put(setCustomReport({ key, data: demoReportPayloads.monthly }));
     } else {
-      const response: { results: MonthlyReportEntry[] } = yield call(
+      const response: EndpointResponse<"dateRangeReport"> = yield call(
         callApiWithAuth,
-        { path: "/reports/custom", query },
+        buildEndpointRequest("dateRangeReport", { query }),
         { loadingKey: "report-custom" },
       );
       yield put(setCustomReport({ key, data: response.results }));
@@ -347,13 +357,9 @@ function* handleExportReport(action: ReturnType<typeof ExportReport>) {
     if (isDemo) {
       yield put(setExportError("Export is not available in demo mode."));
     } else {
-      const response: {
-        filename: string;
-        content_type: string;
-        data_base64: string;
-      } = yield call(
+      const response: EndpointResponse<"exportReport"> = yield call(
         callApiWithAuth,
-        { path: "/reports/export", method: "POST", body: payload },
+        buildEndpointRequest("exportReport", { body: payload }),
         { loadingKey: "report-export" },
       );
       const link = document.createElement("a");

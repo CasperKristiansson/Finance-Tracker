@@ -192,6 +192,12 @@ class TotalReportRead(BaseModel):
     net: Decimal
 
 
+class TotalReportResponse(TotalReportRead):
+    """Total report payload with generation timestamp."""
+
+    generated_at: str
+
+
 class NetWorthChangeWindow(BaseModel):
     days_30: Decimal
     days_90: Decimal
@@ -717,6 +723,7 @@ __all__ = [
     "QuarterlyReportResponse",
     "DateRangeReportResponse",
     "TotalReportRead",
+    "TotalReportResponse",
     "NetWorthHistoryQuery",
     "NetWorthPoint",
     "NetWorthHistoryResponse",

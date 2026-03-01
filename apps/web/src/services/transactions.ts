@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/apiClient";
-import type { TransactionListResponse } from "@/types/api";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
+import type { EndpointResponse } from "@/types/contracts";
 import { transactionListSchema } from "@/types/schemas";
 
 type TokenParam = { token: string | null };
@@ -10,9 +11,10 @@ export const fetchTransactions = async ({
 }: TokenParam & {
   query: Record<string, string | number | string[] | undefined | null>;
 }) =>
-  apiFetch<TransactionListResponse>({
-    path: "/transactions",
-    schema: transactionListSchema,
-    query,
-    token,
-  });
+  apiFetch<EndpointResponse<"listTransactions">>(
+    buildEndpointRequest("listTransactions", {
+      schema: transactionListSchema,
+      query,
+      token,
+    }),
+  );

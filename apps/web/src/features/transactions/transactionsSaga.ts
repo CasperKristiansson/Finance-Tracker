@@ -20,12 +20,12 @@ import {
   type TransactionFilters,
 } from "@/features/transactions/transactionsSlice";
 import { selectTransactionFilters } from "@/features/transactions/transactionsSlice";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
 import type {
-  TransactionCreate,
-  TransactionListResponse,
+  EndpointRequest,
+  EndpointResponse,
   TransactionRead,
-  TransactionUpdateRequest,
-} from "@/types/api";
+} from "@/types/contracts";
 import { TransactionType } from "@/types/enums";
 import {
   transactionCreateSchema,
@@ -42,12 +42,12 @@ export const FetchRecentTransactions = createAction<{
   accountIds?: string[];
   transactionTypes?: string[];
 }>("transactions/fetchRecent");
-export const CreateTransaction = createAction<TransactionCreate>(
-  "transactions/create",
-);
+export const CreateTransaction = createAction<
+  EndpointRequest<"createTransaction">
+>("transactions/create");
 export const UpdateTransaction = createAction<{
   id: string;
-  data: TransactionUpdateRequest;
+  data: EndpointRequest<"updateTransaction">;
 }>("transactions/update");
 export const DeleteTransaction = createAction<string>("transactions/delete");
 
@@ -113,9 +113,12 @@ function* handleFetchTransactions(
         }),
       );
     } else {
-      const response: TransactionListResponse = yield call(
+      const response: EndpointResponse<"listTransactions"> = yield call(
         callApiWithAuth,
-        { path: "/transactions", query, schema: transactionListSchema },
+        buildEndpointRequest("listTransactions", {
+          query,
+          schema: transactionListSchema,
+        }),
         { loadingKey: "transactions" },
       );
 
@@ -170,9 +173,12 @@ function* handleFetchRecentTransactions(
       const trimmed = demoTransactionsResponse.transactions.slice(0, limit);
       yield put(setRecentTransactions(trimmed));
     } else {
-      const response: TransactionListResponse = yield call(
+      const response: EndpointResponse<"listTransactions"> = yield call(
         callApiWithAuth,
-        { path: "/transactions", query, schema: transactionListSchema },
+        buildEndpointRequest("listTransactions", {
+          query,
+          schema: transactionListSchema,
+        }),
         { loadingKey: "transactions-recent" },
       );
 
@@ -233,12 +239,10 @@ function* handleCreateTransaction(
 
     const response: TransactionRead = yield call(
       callApiWithAuth,
-      {
-        path: "/transactions",
-        method: "POST",
+      buildEndpointRequest("createTransaction", {
         body,
         schema: transactionSchema,
-      },
+      }),
       { loadingKey: "transaction-create" },
     );
     yield put(upsertTransaction(response));
@@ -279,12 +283,11 @@ function* handleUpdateTransaction(
 
     const response: TransactionRead = yield call(
       callApiWithAuth,
-      {
-        path: `/transactions/${action.payload.id}`,
-        method: "PATCH",
+      buildEndpointRequest("updateTransaction", {
+        pathParams: { transactionId: action.payload.id },
         body,
         schema: transactionSchema,
-      },
+      }),
       { loadingKey: "transaction-update" },
     );
     yield put(upsertTransaction(response));
@@ -309,7 +312,9 @@ function* handleDeleteTransaction(
 
     yield call(
       callApiWithAuth,
-      { path: `/transactions/${action.payload}`, method: "DELETE" },
+      buildEndpointRequest("deleteTransaction", {
+        pathParams: { transactionId: action.payload },
+      }),
       { loadingKey: "transaction-delete" },
     );
     yield put(removeTransaction(action.payload));

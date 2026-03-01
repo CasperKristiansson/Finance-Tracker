@@ -15,11 +15,8 @@ import {
   setCategoryUpdateLoading,
   type CategoriesState,
 } from "@/features/categories/categoriesSlice";
-import type {
-  CategoryCreateRequest,
-  CategoryListResponse,
-  CategoryUpdateRequest,
-} from "@/types/api";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
+import type { EndpointRequest, EndpointResponse } from "@/types/contracts";
 import {
   categoryCreateRequestSchema,
   categoryListSchema,
@@ -30,10 +27,10 @@ export const FetchCategories = createAction<
   Partial<Pick<CategoriesState, "includeArchived">> | undefined
 >("categories/fetch");
 export const CreateCategory =
-  createAction<CategoryCreateRequest>("categories/create");
+  createAction<EndpointRequest<"createCategory">>("categories/create");
 export const UpdateCategory = createAction<{
   id: string;
-  data: CategoryUpdateRequest;
+  data: EndpointRequest<"updateCategory">;
 }>("categories/update");
 export const MergeCategory = createAction<{
   sourceCategoryId: string;
@@ -59,9 +56,12 @@ function* handleFetchCategories(action: ReturnType<typeof FetchCategories>) {
       include_archived: filters.includeArchived ?? false,
     };
 
-    const response: CategoryListResponse = yield call(
+    const response: EndpointResponse<"listCategories"> = yield call(
       callApiWithAuth,
-      { path: "/categories", query, schema: categoryListSchema },
+      buildEndpointRequest("listCategories", {
+        query,
+        schema: categoryListSchema,
+      }),
       { loadingKey: "categories" },
     );
 
@@ -86,7 +86,7 @@ function* handleCreateCategory(action: ReturnType<typeof CreateCategory>) {
     if (isDemo) {
       const current = (yield select(
         selectCategories,
-      )) as CategoryListResponse["categories"];
+      )) as EndpointResponse<"listCategories">["categories"];
       const now = new Date().toISOString();
       yield put(
         setCategories([
@@ -112,11 +112,7 @@ function* handleCreateCategory(action: ReturnType<typeof CreateCategory>) {
 
     yield call(
       callApiWithAuth,
-      {
-        path: "/categories",
-        method: "POST",
-        body,
-      },
+      buildEndpointRequest("createCategory", { body }),
       { loadingKey: "categories" },
     );
     const state: CategoriesState = yield select(selectCategoriesState);
@@ -144,7 +140,7 @@ function* handleUpdateCategory(action: ReturnType<typeof UpdateCategory>) {
     if (isDemo) {
       const current = (yield select(
         selectCategories,
-      )) as CategoryListResponse["categories"];
+      )) as EndpointResponse<"listCategories">["categories"];
       yield put(
         setCategories(
           current.map((cat) =>
@@ -165,11 +161,10 @@ function* handleUpdateCategory(action: ReturnType<typeof UpdateCategory>) {
 
     yield call(
       callApiWithAuth,
-      {
-        path: `/categories/${action.payload.id}`,
-        method: "PATCH",
+      buildEndpointRequest("updateCategory", {
+        pathParams: { categoryId: action.payload.id },
         body,
-      },
+      }),
       { loadingKey: "categories" },
     );
     const state: CategoriesState = yield select(selectCategoriesState);
@@ -195,7 +190,7 @@ function* handleMergeCategory(action: ReturnType<typeof MergeCategory>) {
     if (isDemo) {
       const current = (yield select(
         selectCategories,
-      )) as CategoryListResponse["categories"];
+      )) as EndpointResponse<"listCategories">["categories"];
       const merged = current.filter(
         (cat) => cat.id !== action.payload.sourceCategoryId,
       );
@@ -215,15 +210,13 @@ function* handleMergeCategory(action: ReturnType<typeof MergeCategory>) {
 
     yield call(
       callApiWithAuth,
-      {
-        path: "/categories/merge",
-        method: "POST",
+      buildEndpointRequest("mergeCategories", {
         body: {
           source_category_id: action.payload.sourceCategoryId,
           target_category_id: action.payload.targetCategoryId,
           rename_target_to: action.payload.renameTargetTo,
         },
-      },
+      }),
       { loadingKey: "categories" },
     );
     const state: CategoriesState = yield select(selectCategoriesState);

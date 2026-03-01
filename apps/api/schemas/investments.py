@@ -36,6 +36,16 @@ class InvestmentTransactionListResponse(BaseModel):
     transactions: list[InvestmentTransactionRead]
 
 
+class InvestmentTransactionListQuery(BaseModel):
+    """Query parameters for listing investment transactions."""
+
+    start: Optional[datetime] = None
+    end: Optional[datetime] = None
+    holding: Optional[str] = None
+    tx_type: Optional[str] = Field(default=None, alias="type")
+    limit: Optional[int] = Field(default=None, ge=1, le=500)
+
+
 class InvestmentValuePointRead(BaseModel):
     """Value point for an investment account or portfolio."""
 
@@ -149,6 +159,7 @@ class InvestmentSnapshotCreateResponse(BaseModel):
 __all__ = [
     "InvestmentTransactionRead",
     "InvestmentTransactionListResponse",
+    "InvestmentTransactionListQuery",
     "InvestmentValuePointRead",
     "InvestmentCashflowPointRead",
     "InvestmentCashflowSummaryRead",
