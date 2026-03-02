@@ -53,8 +53,6 @@ class Account(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, tab
 
     if TYPE_CHECKING:  # pragma: no cover
         balance_snapshots: List["BalanceSnapshot"]
-        transaction_legs: List["TransactionLeg"]
-        loan: Optional["Loan"]
 
     loan: Optional["Loan"] = Relationship(
         sa_relationship=relationship("Loan", back_populates="account", uselist=False)
@@ -94,8 +92,6 @@ class Loan(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, table=
 
     if TYPE_CHECKING:  # pragma: no cover
         rate_changes: List["LoanRateChange"]
-        loan_events: List["LoanEvent"]
-        account: Account
 
     account: Account = Relationship(sa_relationship=relationship("Account", back_populates="loan"))
     loan_events: List["LoanEvent"] = Relationship(

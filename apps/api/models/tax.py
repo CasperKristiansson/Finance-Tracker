@@ -36,9 +36,6 @@ class TaxEvent(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, ta
     )
     note: Optional[str] = Field(default=None, sa_column=Column(String(500), nullable=True))
 
-    if TYPE_CHECKING:  # pragma: no cover
-        transaction: "Transaction"
-
     __table_args__ = (
         UniqueConstraint("user_id", "transaction_id", name="uq_tax_event_user_transaction"),
     )

@@ -1,11 +1,9 @@
 """Service layer for investment analytics."""
 
-# pylint: disable=broad-exception-caught,too-many-lines
-
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Optional, cast
 from uuid import UUID
 
@@ -631,7 +629,7 @@ class InvestmentSnapshotService:
             return None
         try:
             return Decimal(str(value))
-        except Exception:
+        except (InvalidOperation, ValueError, TypeError):
             return None
 
     def _normalize_key(self, value: str | None) -> str:

@@ -84,11 +84,7 @@ class Transaction(
     )
     if TYPE_CHECKING:  # pragma: no cover
         category: Optional["Category"]
-        legs: List["TransactionLeg"]
-        loan_events: List["LoanEvent"]
         import_batch: Optional["TransactionImportBatch"]
-        import_file: Optional["ImportFile"]
-        tax_event: Optional["TaxEvent"]
 
     __table_args__ = (
         UniqueConstraint("user_id", "external_id", name="uq_transaction_external_id"),
@@ -147,11 +143,6 @@ class TransactionLeg(UUIDPrimaryKeyMixin, UserOwnedMixin, SQLModel, table=True):
         sa_column=Column(Numeric(18, 2), nullable=True),
     )
 
-    if TYPE_CHECKING:  # pragma: no cover
-        transaction: Transaction
-        account: "Account"
-        loan_event: Optional["LoanEvent"]
-
     transaction: Transaction = Relationship(
         back_populates="legs",
         sa_relationship=relationship("Transaction", back_populates="legs"),
@@ -194,11 +185,6 @@ class LoanEvent(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, t
     event_type: LoanEventType = Field(sa_column=Column(SAEnum(LoanEventType), nullable=False))
     amount: Decimal = Field(sa_column=Column(Numeric(18, 2), nullable=False))
     occurred_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
-
-    if TYPE_CHECKING:  # pragma: no cover
-        transaction: Transaction
-        loan: "Loan"
-        transaction_leg: Optional["TransactionLeg"]
 
     loan: "Loan" = Relationship(
         back_populates="loan_events",

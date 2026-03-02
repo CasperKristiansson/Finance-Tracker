@@ -99,15 +99,3 @@ exclude_also = [
 [[tool.mypy.overrides]]
 module = "apps.api.tests.*"
 disable_error_code = ["attr-defined"]
-
-[[tool.mypy.overrides]]
-module = "apps.api.models.*"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "apps.api.repositories.account"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "apps.api.repositories.category"
-ignore_errors = true

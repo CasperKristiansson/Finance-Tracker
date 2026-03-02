@@ -12,6 +12,7 @@ from sqlalchemy import Date as SADate
 from sqlalchemy import Table, case
 from sqlalchemy import cast as sa_cast
 from sqlalchemy import func
+from sqlalchemy import select as sa_select
 from sqlmodel import Session, select
 
 from ..models import Account, Category, Transaction, TransactionLeg
@@ -46,11 +47,11 @@ class CategoryRepository:
         statement = select(Category)
         if not include_special:
             statement = statement.where(
-                Category.category_type.in_([CategoryType.INCOME, CategoryType.EXPENSE])
+                cast(Any, Category.category_type).in_([CategoryType.INCOME, CategoryType.EXPENSE])
             )
         if not include_archived:
-            statement = statement.where(Category.is_archived.is_(False))
-        statement = statement.order_by(Category.name)
+            statement = statement.where(cast(Any, Category.is_archived).is_(False))
+        statement = statement.order_by(cast(Any, Category.name))
         return list(self.session.exec(statement))
 
     def find_by_name(self, name: str) -> Optional[Category]:
@@ -94,13 +95,14 @@ class CategoryRepository:
             self.session.exec(
                 select(Account.id).where(
                     Account.user_id == self.user_id,
-                    Account.name.in_(["Offset", "Unassigned"]),
+                    cast(Any, Account.name).in_(["Offset", "Unassigned"]),
                 )
             ).all()
         )
 
-        statement = (
-            select(
+        statement = cast(
+            Any,
+            sa_select(
                 cast(Any, transaction_table.c.category_id).label("category_id"),
                 func.count(func.distinct(transaction_table.c.id)).label("transaction_count"),
                 func.max(cast(Any, transaction_table.c.occurred_at)).label("last_used_at"),
@@ -116,10 +118,10 @@ class CategoryRepository:
             .join_from(
                 leg_table, transaction_table, leg_table.c.transaction_id == transaction_table.c.id
             )
-            .where(transaction_table.c.category_id.in_(category_ids))
+            .where(cast(Any, transaction_table.c.category_id).in_(category_ids))
             .where(transaction_table.c.user_id == self.user_id)
             .where(leg_table.c.user_id == self.user_id)
-            .group_by(transaction_table.c.category_id)
+            .group_by(transaction_table.c.category_id),
         )
         if excluded_ids:
             statement = statement.where(~leg_table.c.account_id.in_(excluded_ids))
@@ -155,6 +157,7 @@ class CategoryRepository:
         transaction_table = cast(Table, getattr(Transaction, "__table__"))
         leg_table = cast(Table, getattr(TransactionLeg, "__table__"))
 
+        period_column: Any
         if dialect == "sqlite":
             period_column = func.date(cast(Any, transaction_table.c.occurred_at), "start of month")
         else:
@@ -167,7 +170,7 @@ class CategoryRepository:
             self.session.exec(
                 select(Account.id).where(
                     Account.user_id == self.user_id,
-                    Account.name.in_(["Offset", "Unassigned"]),
+                    cast(Any, Account.name).in_(["Offset", "Unassigned"]),
                 )
             ).all()
         )
@@ -188,7 +191,7 @@ class CategoryRepository:
             .join_from(
                 leg_table, transaction_table, leg_table.c.transaction_id == transaction_table.c.id
             )
-            .where(transaction_table.c.category_id.in_(category_ids))
+            .where(cast(Any, transaction_table.c.category_id).in_(category_ids))
             .where(cast(Any, transaction_table.c.occurred_at) >= start)
             .where(cast(Any, transaction_table.c.occurred_at) < end)
             .where(transaction_table.c.user_id == self.user_id)

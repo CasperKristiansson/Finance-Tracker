@@ -1,7 +1,8 @@
 """Import service package."""
 
 from .files import ImportFileService
-from .service import CategorySuggestion, ImportService, RuleMatch
+from .service import ImportService, RuleMatch
+from .suggestions import CategorySuggestion
 
 __all__ = [
     "ImportService",

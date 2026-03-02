@@ -54,7 +54,7 @@ class TransactionRepository:
         offset: Optional[int] = None,
         include_tax_event: bool = True,
     ) -> List[Transaction]:
-        options = [selectinload(Transaction.legs)]  # type: ignore[arg-type]
+        options = [selectinload(cast(Any, Transaction.legs))]
         if include_tax_event:
             options.append(selectinload(cast(Any, Transaction.tax_event)))
         statement = select(Transaction).options(*options)
@@ -65,7 +65,7 @@ class TransactionRepository:
             statement = statement.where(Transaction.occurred_at <= end_date)
         if account_ids:
             statement = statement.join(TransactionLeg).where(
-                TransactionLeg.account_id.in_(list(account_ids))  # type: ignore[attr-defined]
+                cast(Any, TransactionLeg.account_id).in_(list(account_ids))
             )
         if category_ids:
             statement = statement.where(cast(Any, Transaction.category_id).in_(list(category_ids)))
@@ -207,12 +207,12 @@ class TransactionRepository:
         statement = (
             select(Transaction)
             .options(
-                selectinload(Transaction.legs),  # type: ignore[arg-type]
+                selectinload(cast(Any, Transaction.legs)),
                 selectinload(cast(Any, Transaction.tax_event)),
             )
             .join(TransactionLeg)
             .where(TransactionLeg.account_id == account_id)
-            .order_by(desc(Transaction.occurred_at))  # type: ignore[arg-type]
+            .order_by(desc(cast(Any, Transaction.occurred_at)))
         )
         return list(self.session.exec(statement))
 
@@ -243,7 +243,7 @@ class TransactionRepository:
         statement = (
             select(LoanEvent)
             .where(LoanEvent.loan_id == loan_id)
-            .order_by(desc(LoanEvent.occurred_at))  # type: ignore[arg-type]
+            .order_by(desc(cast(Any, LoanEvent.occurred_at)))
         )
         return list(self.session.exec(statement))
 

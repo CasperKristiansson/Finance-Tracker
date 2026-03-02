@@ -296,6 +296,39 @@ def test_preview_circle_k_amounts_are_negated():
     assert first_amount < 0
 
 
+def test_preview_returns_503_when_draft_store_is_unavailable(monkeypatch: pytest.MonkeyPatch):
+    account_id = _create_account(bank_import_type="swedbank")
+    payload = _swedbank_workbook()
+
+    monkeypatch.setattr(
+        import_handlers,
+        "save_import_draft_preview",
+        lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("Draft store unavailable")),
+    )
+
+    response = preview_imports(
+        {
+            "body": json.dumps(
+                {
+                    "files": [
+                        {
+                            "filename": "swedbank.xlsx",
+                            "account_id": str(account_id),
+                            "content_base64": payload,
+                        }
+                    ],
+                    "note": "preview",
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+
+    assert response["statusCode"] == 503
+    assert _json_body(response) == {"error": "Draft store unavailable"}
+
+
 def test_preview_includes_related_transactions():
     account_id = _create_account(bank_import_type="swedbank")
     groceries_id = _create_category(name="Groceries")

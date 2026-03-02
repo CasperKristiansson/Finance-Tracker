@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import enum
+import importlib
 import json
 import logging
 from datetime import date, datetime, timezone
@@ -15,8 +16,10 @@ from sqlalchemy import select
 from sqlalchemy.sql.schema import Table
 from sqlmodel import Session, SQLModel
 
-from .. import models as _models  # noqa: F401
 from ..shared.session import get_session
+
+# Ensure SQLModel metadata is fully populated before backup table discovery.
+importlib.import_module("apps.api.models")
 
 logger = logging.getLogger(__name__)
 

@@ -151,7 +151,12 @@ class ReportingRepository:
                 period, (Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0"))
             )
             income, expense, adjustment_inflow, adjustment_outflow = self._accumulate(
-                amount, tx_type, income, expense, adjustment_inflow, adjustment_outflow
+                amount=amount,
+                transaction_type=tx_type,
+                income=income,
+                expense=expense,
+                adjustment_inflow=adjustment_inflow,
+                adjustment_outflow=adjustment_outflow,
             )
             buckets[period] = (income, expense, adjustment_inflow, adjustment_outflow)
 
@@ -195,7 +200,12 @@ class ReportingRepository:
                 occurred_at.year, (Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0"))
             )
             income, expense, adjustment_inflow, adjustment_outflow = self._accumulate(
-                amount, tx_type, income, expense, adjustment_inflow, adjustment_outflow
+                amount=amount,
+                transaction_type=tx_type,
+                income=income,
+                expense=expense,
+                adjustment_inflow=adjustment_inflow,
+                adjustment_outflow=adjustment_outflow,
             )
             buckets[occurred_at.year] = (income, expense, adjustment_inflow, adjustment_outflow)
 
@@ -239,12 +249,12 @@ class ReportingRepository:
 
         for _occurred_at, amount, tx_type in legs:
             income_total, expense_total, adjustment_inflow, adjustment_outflow = self._accumulate(
-                amount,
-                tx_type,
-                income_total,
-                expense_total,
-                adjustment_inflow,
-                adjustment_outflow,
+                amount=amount,
+                transaction_type=tx_type,
+                income=income_total,
+                expense=expense_total,
+                adjustment_inflow=adjustment_inflow,
+                adjustment_outflow=adjustment_outflow,
             )
 
         adjustment_net = adjustment_inflow - adjustment_outflow
@@ -718,7 +728,12 @@ class ReportingRepository:
                 key, (Decimal("0"), Decimal("0"), Decimal("0"), Decimal("0"))
             )
             income, expense, adjustment_inflow, adjustment_outflow = self._accumulate(
-                amount, tx_type, income, expense, adjustment_inflow, adjustment_outflow
+                amount=amount,
+                transaction_type=tx_type,
+                income=income,
+                expense=expense,
+                adjustment_inflow=adjustment_inflow,
+                adjustment_outflow=adjustment_outflow,
             )
             buckets[key] = (income, expense, adjustment_inflow, adjustment_outflow)
 
@@ -801,15 +816,26 @@ class ReportingRepository:
         ]
 
     @staticmethod
-    # pylint: disable=too-many-positional-arguments
     def _accumulate(
         amount: Decimal,
         transaction_type: TransactionType,
-        income: Decimal,
-        expense: Decimal,
-        adjustment_inflow: Decimal,
-        adjustment_outflow: Decimal,
+        *totals: Decimal,
+        income: Decimal | None = None,
+        expense: Decimal | None = None,
+        adjustment_inflow: Decimal | None = None,
+        adjustment_outflow: Decimal | None = None,
     ) -> DecimalTotals:
+        if totals:
+            if len(totals) != 4:
+                raise TypeError("_accumulate expected 4 trailing totals")
+            income, expense, adjustment_inflow, adjustment_outflow = totals
+        if (
+            income is None
+            or expense is None
+            or adjustment_inflow is None
+            or adjustment_outflow is None
+        ):
+            raise TypeError("_accumulate requires income/expense/adjustment totals")
         amount = coerce_decimal(amount)
         if transaction_type == TransactionType.ADJUSTMENT:
             if amount > 0:

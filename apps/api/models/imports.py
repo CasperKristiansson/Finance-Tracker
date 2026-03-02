@@ -170,7 +170,6 @@ class TransactionImportBatch(
 
     if TYPE_CHECKING:  # pragma: no cover
         transactions: List["Transaction"]
-        files: List["ImportFile"]
 
     files: List["ImportFile"] = Relationship(
         sa_relationship=relationship(
@@ -207,9 +206,6 @@ class ImportRule(UUIDPrimaryKeyMixin, TimestampMixin, UserOwnedMixin, SQLModel, 
         default=True,
         sa_column=Column(Boolean, nullable=False, server_default="true"),
     )
-
-    if TYPE_CHECKING:  # pragma: no cover
-        category: Optional["Category"]
 
     category: Optional["Category"] = Relationship(sa_relationship=relationship("Category"))
 

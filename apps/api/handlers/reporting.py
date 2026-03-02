@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from io import BytesIO, StringIO
 from typing import Any, Dict, Iterable, cast
 
+import openpyxl
 from pydantic import ValidationError
 
 from ..schemas import (
@@ -428,9 +429,7 @@ def export_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         content = _to_csv(headers, rows).encode()
         content_type = "text/csv"
     else:
-        from openpyxl import Workbook  # pylint: disable=import-outside-toplevel
-
-        wb = Workbook()
+        wb = openpyxl.Workbook()
         ws = wb.active
         if ws is None:
             return json_response(500, {"error": "Unable to open workbook sheet"})

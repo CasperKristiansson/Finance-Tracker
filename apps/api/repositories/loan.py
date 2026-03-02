@@ -28,7 +28,7 @@ class LoanRepository:
     ) -> Optional[Loan]:
         statement = select(Loan).where(Loan.account_id == account_id)
         if with_account:
-            statement = statement.options(selectinload(Loan.account))  # type: ignore[arg-type]
+            statement = statement.options(selectinload(cast(Any, Loan.account)))
         result = self.session.exec(statement)
         return result.one_or_none()
 

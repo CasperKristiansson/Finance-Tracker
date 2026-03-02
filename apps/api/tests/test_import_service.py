@@ -335,7 +335,7 @@ def test_commit_import_file_storage_paths_and_runtime_errors(session, monkeypatc
             raise RuntimeError("fail")
 
     file_id = uuid4()
-    with pytest.raises(ValueError, match="Unable to persist import files"):
+    with pytest.raises(RuntimeError, match="fail"):
         service_with_bad_storage = ImportService(session, storage=_StorageFail())
         service_with_bad_storage.commit_import(
             ImportCommitRequest(
@@ -367,7 +367,7 @@ def test_commit_import_file_storage_paths_and_runtime_errors(session, monkeypatc
         "apps.api.services.imports.service.ImportFileStorage.from_env",
         lambda: (_ for _ in ()).throw(RuntimeError("missing env")),
     )
-    with pytest.raises(ValueError, match="storage is not configured"):
+    with pytest.raises(RuntimeError, match="missing env"):
         ImportService(session).commit_import(
             ImportCommitRequest(
                 rows=[
@@ -1130,7 +1130,7 @@ def test_import_service_build_preview_skips_rows_without_account_id(session, mon
             return self._payload
 
     monkeypatch.setattr(
-        "apps.api.services.imports.service.ImportPreviewResponse",
+        "apps.api.services.imports.draft_mixin.ImportPreviewResponse",
         SimpleNamespace(model_validate=lambda payload: _PreviewEnvelope(payload)),
     )
     monkeypatch.setattr(service, "_category_lookup_by_id", lambda: {})

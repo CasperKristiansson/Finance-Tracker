@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import desc, func
 from sqlalchemy.orm import selectinload
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from ..models import Account, BalanceSnapshot, Loan, Transaction, TransactionLeg
 from ..shared import AccountType, coerce_decimal
@@ -26,24 +26,26 @@ class AccountRepository:
     def get(self, account_id: UUID, *, with_relationships: bool = False) -> Optional[Account]:
         if with_relationships:
             statement = (
-                select(Account).options(selectinload(Account.loan)).where(Account.id == account_id)
+                select(Account)
+                .options(selectinload(cast(Any, Account.loan)))
+                .where(cast(Any, Account.id) == account_id)
             )
-            return self.session.exec(statement).scalars().one_or_none()
+            return self.session.exec(statement).one_or_none()
         return self.session.get(Account, account_id)
 
     def list_accounts(self, include_inactive: bool = False) -> List[Account]:
-        statement = select(Account).options(selectinload(Account.loan))
+        statement = select(Account).options(selectinload(cast(Any, Account.loan)))
         if not include_inactive:
-            statement = statement.where(Account.is_active.is_(True))
-        statement = statement.order_by(Account.name, Account.created_at)
-        return list(self.session.exec(statement).scalars())
+            statement = statement.where(cast(Any, Account.is_active).is_(True))
+        statement = statement.order_by(cast(Any, Account.name), cast(Any, Account.created_at))
+        return list(self.session.exec(statement))
 
     def list_account_options(self, include_inactive: bool = False) -> List[Account]:
         statement = select(Account)
         if not include_inactive:
-            statement = statement.where(Account.is_active.is_(True))
-        statement = statement.order_by(Account.name, Account.created_at)
-        return list(self.session.exec(statement).scalars())
+            statement = statement.where(cast(Any, Account.is_active).is_(True))
+        statement = statement.order_by(cast(Any, Account.name), cast(Any, Account.created_at))
+        return list(self.session.exec(statement))
 
     def save(self, account: Account) -> Account:
         self.session.add(account)
@@ -53,24 +55,27 @@ class AccountRepository:
 
     def calculate_balance(self, account_id: UUID, *, as_of: Optional[datetime] = None) -> Decimal:
         statement = select(func.coalesce(func.sum(TransactionLeg.amount), 0)).where(
-            TransactionLeg.account_id == account_id
+            cast(Any, TransactionLeg.account_id) == account_id
         )
 
         if as_of is not None:
-            statement = statement.join(Transaction, Transaction.id == TransactionLeg.transaction_id)
-            statement = statement.where(Transaction.occurred_at <= as_of)
+            statement = statement.join(
+                Transaction,
+                cast(Any, Transaction.id) == cast(Any, TransactionLeg.transaction_id),
+            )
+            statement = statement.where(cast(Any, Transaction.occurred_at) <= as_of)
 
-        result = self.session.exec(statement).scalar_one()
+        result = self.session.exec(statement).one()
         return coerce_decimal(result)
 
     def latest_snapshot(self, account_id: UUID) -> Optional[BalanceSnapshot]:
         statement = (
             select(BalanceSnapshot)
-            .where(BalanceSnapshot.account_id == account_id)
-            .order_by(BalanceSnapshot.captured_at.desc())
+            .where(cast(Any, BalanceSnapshot.account_id) == account_id)
+            .order_by(desc(cast(Any, BalanceSnapshot.captured_at)))
             .limit(1)
         )
-        return self.session.exec(statement).scalars().one_or_none()
+        return self.session.exec(statement).one_or_none()
 
     def create_snapshot(self, snapshot: BalanceSnapshot) -> BalanceSnapshot:
         self.session.add(snapshot)
@@ -85,7 +90,7 @@ class AccountRepository:
         if account.account_type != AccountType.DEBT:
             raise ValueError("Loans can only be attached to debt accounts")
         existing = self.session.exec(
-            select(Loan).where(Loan.account_id == account_id)
+            select(Loan).where(cast(Any, Loan.account_id) == account_id)
         ).one_or_none()
         if existing is not None:
             raise ValueError("Account already has a linked loan")

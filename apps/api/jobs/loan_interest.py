@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timezone
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Iterable, List, Optional
+from typing import Any, Iterable, List, Optional, cast
 from uuid import UUID
 
 from sqlmodel import Session, select
@@ -37,7 +37,7 @@ def accrue_interest(
 
     statement = select(Loan)
     if loan_ids:
-        statement = statement.where(Loan.id.in_(list(loan_ids)))  # type: ignore[attr-defined]
+        statement = statement.where(cast(Any, Loan.id).in_(list(loan_ids)))
 
     loans = session.exec(statement).all()
     if not loans:
