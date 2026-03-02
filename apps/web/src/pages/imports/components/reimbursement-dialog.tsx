@@ -19,11 +19,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatAccountType } from "@/lib/account-display";
 import { cn } from "@/lib/utils";
-import type { AccountWithBalance, ImportPreviewResponse } from "@/types/api";
+import {
+  AccountType,
+  type AccountWithBalance,
+  type ImportPreviewResponse,
+} from "@/types/api";
 import type { CommitFormValues } from "../imports";
-
-type PreviewFile = ImportPreviewResponse["files"][number];
 
 export type ReimbursementState = {
   originalAmount: string;
@@ -47,7 +50,6 @@ type ReimbursementDialogProps = {
   commitRows: FieldArrayWithId<CommitFormValues, "rows", "fieldId">[];
   commitForm: UseFormReturn<CommitFormValues>;
   previewRowById: Map<string, ImportPreviewResponse["rows"][number]>;
-  fileById: Map<string, PreviewFile>;
   accountById: Map<string, AccountWithBalance>;
   splitRowIdsBySource: Record<string, string[]>;
   toDateInputValue: (value: string | null | undefined) => string;
@@ -68,12 +70,14 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
   commitRows,
   commitForm,
   previewRowById,
-  fileById,
   accountById,
   splitRowIdsBySource,
   toDateInputValue,
 }) => {
   const [selections, setSelections] = useState<string[]>([]);
+  const [accountTypeFilter, setAccountTypeFilter] = useState<
+    "all" | AccountType
+  >("all");
 
   const commitIndexByRowId = useMemo(() => {
     const map = new Map<string, number>();
@@ -84,6 +88,7 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
   useEffect(() => {
     if (!dialogState) {
       setSelections([]);
+      setAccountTypeFilter("all");
       return;
     }
     setSelections(
@@ -210,19 +215,16 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
           commitForm.watch(`rows.${idx}.description`) ?? row.description;
         const occurredAtValue =
           commitForm.watch(`rows.${idx}.occurred_at`) ?? row.occurred_at;
-        const previewMeta = previewRowById.get(row.id);
-        const fileMeta = previewMeta
-          ? fileById.get(previewMeta.file_id)
-          : undefined;
+        const account = accountById.get(row.account_id);
         return {
           id: row.id,
           accountId: row.account_id,
-          accountName: accountById.get(row.account_id)?.name ?? "Account",
+          accountName: account?.name ?? "Account",
+          accountType: account?.account_type ?? AccountType.NORMAL,
           amountValue,
           amountNumber: toNumeric(amountValue),
           description: descriptionValue,
           occurredAt: occurredAtValue,
-          fileLabel: fileMeta?.filename,
           isDeleted: commitForm.watch(`rows.${idx}.delete`) ?? false,
         };
       })
@@ -233,6 +235,11 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
       const bDate = new Date(b.occurredAt ?? "").getTime();
       return bDate - aDate;
     });
+    const filteredCandidates = sortedCandidates.filter((row) =>
+      accountTypeFilter === "all"
+        ? true
+        : row.accountType === accountTypeFilter,
+    );
 
     const selectedTotal = selections.reduce((sum, id) => {
       const candidate = candidateRows.find((row) => row.id === id);
@@ -289,34 +296,55 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
                 they are on another account.
               </p>
             </div>
-            {reimbursementsByRow[baseRow.id]?.reimbursementIds?.length ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => applySelection([])}
+            <div className="flex items-center gap-2">
+              <select
+                className="h-8 rounded border border-slate-200 bg-white px-2 text-xs text-slate-700"
+                value={accountTypeFilter}
+                onChange={(event) =>
+                  setAccountTypeFilter(
+                    event.target.value as "all" | AccountType,
+                  )
+                }
               >
-                Clear reimbursements
-              </Button>
-            ) : null}
+                <option value="all">All account types</option>
+                <option value={AccountType.NORMAL}>
+                  {formatAccountType(AccountType.NORMAL)}
+                </option>
+                <option value={AccountType.DEBT}>
+                  {formatAccountType(AccountType.DEBT)}
+                </option>
+                <option value={AccountType.INVESTMENT}>
+                  {formatAccountType(AccountType.INVESTMENT)}
+                </option>
+              </select>
+              {reimbursementsByRow[baseRow.id]?.reimbursementIds?.length ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => applySelection([])}
+                >
+                  Clear reimbursements
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           <div className="rounded-lg border border-slate-200">
-            {sortedCandidates.length ? (
-              <div className="max-h-[420px] overflow-y-auto">
-                <Table>
+            {filteredCandidates.length ? (
+              <div className="max-h-[420px] overflow-x-auto overflow-y-auto">
+                <Table className="min-w-[920px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Transaction</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Amount</TableHead>
                       <TableHead>Account</TableHead>
-                      <TableHead>File</TableHead>
                       <TableHead className="text-right">Select</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sortedCandidates.map((row) => {
+                    {filteredCandidates.map((row) => {
                       const selected = selections.includes(row.id);
                       return (
                         <TableRow
@@ -349,10 +377,12 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
                             {row.amountValue}
                           </TableCell>
                           <TableCell className="text-slate-600">
-                            {row.accountName}
-                          </TableCell>
-                          <TableCell className="text-slate-600">
-                            {row.fileLabel ?? "—"}
+                            <div className="flex flex-col gap-1">
+                              <span>{row.accountName}</span>
+                              <span className="text-[11px] text-slate-500">
+                                {formatAccountType(row.accountType)}
+                              </span>
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
                             <Button
@@ -371,8 +401,9 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
               </div>
             ) : (
               <div className="p-3 text-sm text-slate-500">
-                No transactions available yet. Upload files or return after
-                parsing completes to link reimbursements.
+                {sortedCandidates.length
+                  ? "No transactions match the selected account type."
+                  : "No transactions available yet. Upload files or return after parsing completes to link reimbursements."}
               </div>
             )}
           </div>
@@ -407,7 +438,7 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={handleDialogChange}>
-      <DialogContent className="max-h-[85vh] max-w-5xl overflow-y-auto">
+      <DialogContent className="max-h-[85vh] w-[min(95vw,max-content)] max-w-[95vw] overflow-x-hidden overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Link reimbursements</DialogTitle>
           <DialogDescription>

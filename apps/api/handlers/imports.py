@@ -323,11 +323,6 @@ def _apply_import_suggestions_state(
         row["suggested_category_id"] = suggestion.category_id
         row["suggested_confidence"] = suggestion.confidence
         row["suggested_reason"] = suggestion.reason
-        draft = row.get("draft")
-        if isinstance(draft, dict):
-            draft["category_id"] = (
-                str(suggestion.category_id) if suggestion.category_id is not None else None
-            )
 
     return preview
 

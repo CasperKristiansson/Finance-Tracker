@@ -97,11 +97,7 @@ const ensureAmplifyConfigured = () => {
     region,
   );
   const currentOrigin = window.location.origin;
-  const defaultRedirects = [
-    `${currentOrigin}/login`,
-    currentOrigin,
-    `${currentOrigin}/`,
-  ];
+  const defaultRedirects = [`${currentOrigin}/login`];
   const redirectSignIn = Array.from(
     new Set(
       [

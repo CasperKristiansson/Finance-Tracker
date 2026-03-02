@@ -689,6 +689,8 @@ export const Imports: React.FC = () => {
     commitRows.forEach((row, idx) => {
       const suggestion = suggestions[row.id];
       if (!suggestion?.category_id) return;
+      const previewRow = preview?.rows.find((item) => item.id === row.id);
+      if (previewRow?.draft) return;
       const currentCategory = commitForm.getValues(`rows.${idx}.category_id`);
       const taxEvent = commitForm.getValues(`rows.${idx}.tax_event_type`);
       const transferAccount = commitForm.getValues(
@@ -702,16 +704,14 @@ export const Imports: React.FC = () => {
         `rows.${idx}.category_id`,
         commitForm.formState,
       );
-      const shouldOverwrite =
-        !categoryField.isDirty &&
-        (currentCategory !== suggestion.category_id || !currentCategory);
+      const shouldOverwrite = !categoryField.isDirty && !currentCategory;
       if (!shouldOverwrite) return;
 
       commitForm.setValue(`rows.${idx}.category_id`, suggestion.category_id, {
         shouldDirty: true,
       });
     });
-  }, [suggestions, commitRows, commitForm]);
+  }, [suggestions, commitRows, commitForm, preview]);
 
   const draftRowsPayload = useMemo(
     () =>
@@ -724,11 +724,6 @@ export const Imports: React.FC = () => {
     () => JSON.stringify(draftRowsPayload),
     [draftRowsPayload],
   );
-  const hasUnsavedDraftChanges =
-    step === 4 &&
-    Boolean(preview?.import_batch_id) &&
-    draftRowsPayload.length > 0 &&
-    draftSnapshot !== lastDraftSnapshotRef.current;
 
   useEffect(() => {
     if (draftSaving) return;
@@ -2555,12 +2550,7 @@ export const Imports: React.FC = () => {
                     variant="outline"
                     className="gap-2"
                     onClick={saveDraftNow}
-                    disabled={
-                      loading ||
-                      saving ||
-                      draftSaving ||
-                      !hasUnsavedDraftChanges
-                    }
+                    disabled={loading || saving || draftSaving}
                   >
                     {draftSaving ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -2832,7 +2822,7 @@ export const Imports: React.FC = () => {
           }
         }}
       >
-        <DialogContent className="max-h-[85vh] max-w-5xl overflow-y-auto">
+        <DialogContent className="max-h-[85vh] w-[min(95vw,max-content)] max-w-[95vw] overflow-x-hidden overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Manage transfer</DialogTitle>
             <DialogDescription>
@@ -2874,7 +2864,7 @@ export const Imports: React.FC = () => {
                   </p>
                   <div className="rounded-lg border border-slate-200">
                     {transferDialogState.batchOptions.length ? (
-                      <div className="max-h-[360px] overflow-auto">
+                      <div className="max-h-[360px] overflow-x-auto overflow-y-auto">
                         <Table className="min-w-[720px]">
                           <TableHeader>
                             <TableRow>
@@ -3019,7 +3009,7 @@ export const Imports: React.FC = () => {
                   </div>
                   <div className="rounded-lg border border-slate-200">
                     {transferTransactions.length ? (
-                      <div className="max-h-[360px] overflow-auto">
+                      <div className="max-h-[360px] overflow-x-auto overflow-y-auto">
                         <Table className="min-w-[720px]">
                           <TableHeader>
                             <TableRow>
@@ -3236,7 +3226,6 @@ export const Imports: React.FC = () => {
         commitRows={commitRows}
         commitForm={commitForm}
         previewRowById={previewRowById}
-        fileById={fileById}
         accountById={accountById}
         splitRowIdsBySource={splitRowIdsBySource}
         toDateInputValue={toDateInputValue}
