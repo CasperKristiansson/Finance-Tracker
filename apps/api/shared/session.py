@@ -1,4 +1,3 @@
-# pyright: reportGeneralTypeIssues=false
 """Database engine and session helpers."""
 
 from __future__ import annotations
@@ -6,7 +5,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Generator, Iterable, Optional, Set
 
-from sqlalchemy import event
+from sqlalchemy import MetaData, event
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -109,14 +108,14 @@ def scope_session_to_user(session: Session, user_id: Optional[str]) -> None:
         ]
 
         @event.listens_for(session, "do_orm_execute")
-        def _add_user_filters(execute_state):  # type: ignore[unused-variable]
+        def _add_user_filters(execute_state):
             if execute_state.is_select and not execute_state.execution_options.get(
                 "include_all_users"
             ):
                 execute_state.statement = execute_state.statement.options(*options)
 
         @event.listens_for(session, "before_flush")
-        def _inject_user_id(sess, _flush_context, _instances):  # type: ignore[unused-variable]
+        def _inject_user_id(sess, _flush_context, _instances):
             for obj in sess.new:
                 if hasattr(obj, "user_id") and not getattr(obj, "user_id", None):
                     setattr(obj, "user_id", resolved_user)
@@ -140,7 +139,7 @@ def session_scope(*, user_id: Optional[str] = None) -> Generator[Session, None, 
         session.close()
 
 
-def init_db(metadata: Optional[SQLModel] = None) -> None:
+def init_db(metadata: Optional[MetaData] = None) -> None:
     """Create database tables for the provided metadata.
 
     Intended for local development and testing. Production deployments

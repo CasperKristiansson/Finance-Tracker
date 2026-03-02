@@ -111,11 +111,3 @@ ignore_errors = true
 [[tool.mypy.overrides]]
 module = "apps.api.repositories.category"
 ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "apps.api.shared.session"
-ignore_errors = true
-
-[[tool.mypy.overrides]]
-module = "apps.api.shared.validation"
-ignore_errors = true

@@ -1,37 +1,9 @@
 import { motion } from "framer-motion";
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  FileBarChart,
-  PiggyBank,
-  Plus,
-  Settings,
-  Upload,
-  Wallet,
-} from "lucide-react";
-import * as LucideIcons from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Plus, Upload } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  ReferenceDot,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Area, AreaChart, Tooltip, XAxis, YAxis } from "recharts";
 import { useAppSelector } from "@/app/hooks";
-import { EmptyState } from "@/components/composed/empty-state";
-import { LoadingCard } from "@/components/composed/loading-card";
 import {
   MotionPage,
   StaggerWrap,
@@ -42,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageRoutes } from "@/data/routes";
 import { selectIsAuthenticated, selectToken } from "@/features/auth/authSlice";
 import {
@@ -53,12 +24,10 @@ import {
 } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import { buildEndpointRequest } from "@/lib/apiEndpoints";
-import { renderCategoryIcon } from "@/lib/category-icons";
-import { compactCurrency, currency } from "@/lib/format";
+import { currency } from "@/lib/format";
 import {
   getDisplayTransactionType,
   getTransactionTypeLabel,
-  isTaxEvent,
 } from "@/lib/transactions";
 import {
   AccountType,
@@ -67,163 +36,27 @@ import {
   type YearlyOverviewResponse,
 } from "@/types/api";
 import type { EndpointResponse } from "@/types/contracts";
-
-type KPI = {
-  title: string;
-  value: string;
-  delta?: string;
-  trend?: "up" | "down" | "neutral";
-  helper?: string;
-};
-
-type SavingsMonthStatus = "normal" | "no-income" | "no-activity";
-
-const numberFromString = (value?: string): number => {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const formatDelta = (value: number) => {
-  const sign = value >= 0 ? "+" : "-";
-  return `${sign}${currency(Math.abs(value))}`;
-};
-
-const MONTH_LABELS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
-
-const ROLLING_MONTH_COUNT = 12;
-
-type RollingMonthSlot = {
-  year: number;
-  monthIndex: number;
-  monthKey: string;
-  label: string;
-};
-
-const toMonthKey = (year: number, monthIndex: number) =>
-  `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-
-const buildRollingMonthSlots = (
-  count = ROLLING_MONTH_COUNT,
-  anchor = new Date(),
-): RollingMonthSlot[] => {
-  const anchorYear = anchor.getFullYear();
-  const anchorMonth = anchor.getMonth();
-  return Array.from({ length: count }, (_, index) => {
-    const offset = count - 1 - index;
-    const date = new Date(anchorYear, anchorMonth - offset, 1);
-    const year = date.getFullYear();
-    const monthIndex = date.getMonth();
-    return {
-      year,
-      monthIndex,
-      monthKey: toMonthKey(year, monthIndex),
-      label: `${MONTH_LABELS[monthIndex] ?? ""} ${String(year).slice(-2)}`,
-    };
-  });
-};
-
-const parsePeriodYearMonth = (period: string) => {
-  const match = period.match(/^(\d{4})-(\d{2})/);
-  if (!match) return null;
-  const year = Number(match[1]);
-  const monthIndex = Number(match[2]) - 1;
-  if (!Number.isFinite(year) || monthIndex < 0 || monthIndex > 11) {
-    return null;
-  }
-  return { year, monthIndex };
-};
-
-const parsePeriodDate = (period: string) => {
-  const normalized = period.includes("T") ? period : `${period}T00:00:00`;
-  const parsed = new Date(normalized);
-  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-};
-
-const getPeriodYear = (period: string) =>
-  parsePeriodYearMonth(period)?.year ?? parsePeriodDate(period).getFullYear();
-const getPeriodMonthKey = (period: string) => {
-  const parsed = parsePeriodYearMonth(period);
-  if (parsed) return toMonthKey(parsed.year, parsed.monthIndex);
-  const fallback = parsePeriodDate(period);
-  return toMonthKey(fallback.getFullYear(), fallback.getMonth());
-};
-
-const dedupeMonthlyEntries = (entries: MonthlyReportEntry[]) => {
-  const byMonth = new Map<string, MonthlyReportEntry>();
-  entries.forEach((entry) => {
-    byMonth.set(getPeriodMonthKey(entry.period), entry);
-  });
-  return Array.from(byMonth.values()).sort((a, b) =>
-    getPeriodMonthKey(a.period).localeCompare(getPeriodMonthKey(b.period)),
-  );
-};
-
-const renderAccountIcon = (icon: string | null | undefined, name: string) => {
-  if (icon?.startsWith("lucide:")) {
-    const key = icon.slice("lucide:".length);
-    const IconComp = (
-      LucideIcons as unknown as Record<string, LucideIcon | undefined>
-    )[key];
-    if (IconComp) {
-      const Icon = IconComp as LucideIcon;
-      return (
-        <Icon className="h-8 w-8 rounded-full border border-slate-100 bg-white p-1 text-slate-700" />
-      );
-    }
-  }
-  if (icon) {
-    return (
-      <img
-        src={`/${icon}`}
-        alt={name}
-        className="h-8 w-8 rounded-full border border-slate-100 bg-white object-contain p-1"
-      />
-    );
-  }
-  return (
-    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">
-      {name.charAt(0)}
-    </div>
-  );
-};
-
-const ChartCard: React.FC<{
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-  action?: React.ReactNode;
-  loading?: boolean;
-}> = ({ title, description, children, action, loading }) => (
-  <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
-    <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
-      <div>
-        <CardTitle className="text-base font-semibold text-slate-900">
-          {title}
-        </CardTitle>
-        {description ? (
-          <p className="text-xs text-slate-500">{description}</p>
-        ) : null}
-      </div>
-      {action}
-    </CardHeader>
-    <CardContent className="h-80 md:h-96">
-      {loading ? <Skeleton className="h-full w-full" /> : children}
-    </CardContent>
-  </Card>
-);
+import { AccountIcon } from "./components/account-icon";
+import { CategoryMixChartCard } from "./components/category-mix-chart-card";
+import { IncomeExpenseChartCard } from "./components/income-expense-chart-card";
+import { NetWorthChartCard } from "./components/net-worth-chart-card";
+import { QuickActionsCard } from "./components/quick-actions-card";
+import {
+  RecentTransactionsCard,
+  type DashboardRecentTransaction,
+} from "./components/recent-transactions-card";
+import { SavingsRateChartCard } from "./components/savings-rate-chart-card";
+import {
+  MONTH_LABELS,
+  buildRollingMonthSlots,
+  dedupeMonthlyEntries,
+  formatCurrencyDelta,
+  getPeriodMonthKey,
+  getPeriodYear,
+  numberFromString,
+  type KPI,
+  type SavingsMonthStatus,
+} from "./dashboard-utils";
 
 export const Dashboard: React.FC = () => {
   const { monthly, total, netWorth, fetchTotalReport, fetchNetWorthReport } =
@@ -441,7 +274,7 @@ export const Dashboard: React.FC = () => {
       {
         title: "Cash flow (12m)",
         value: currency(trailingNet),
-        delta: formatDelta(trailingNet),
+        delta: formatCurrencyDelta(trailingNet, currency),
         trend: trailingNet >= 0 ? "up" : "down",
         helper: "Last 12 months",
       },
@@ -687,12 +520,11 @@ export const Dashboard: React.FC = () => {
     return { avgBurn, avgIncome, months, trend, lastNet, prevNet, sparkline };
   }, [cashOnHand, filteredMonthly, monthly.data, monthlyWindowData]);
 
-  const recentTransactions = useMemo(() => {
+  const recentTransactions = useMemo<DashboardRecentTransaction[]>(() => {
     return recent.items.map((tx) => {
       const primaryLeg = tx.legs?.[0];
       const amount = primaryLeg ? Number(primaryLeg.amount) : 0;
       const txType = getDisplayTransactionType(tx);
-      const taxLinked = isTaxEvent(tx);
       const typeLabel = getTransactionTypeLabel(tx);
 
       const accountLabel = (() => {
@@ -733,12 +565,10 @@ export const Dashboard: React.FC = () => {
         description: tx.description?.trim() || "Transaction",
         amount,
         occurred_at: tx.occurred_at,
-        account_id: primaryLeg?.account_id || "",
         accountLabel,
         category,
         type: txType,
         typeLabel,
-        isTax: taxLinked,
       };
     });
   }, [accountNameById, categoryById, recent.items]);
@@ -843,730 +673,39 @@ export const Dashboard: React.FC = () => {
 
       <StaggerWrap className="grid gap-4 md:grid-cols-2">
         <motion.div variants={fadeInUp}>
-          <ChartCard
-            title="Income vs Expense"
-            description="Last 12 months"
+          <IncomeExpenseChartCard
+            data={incomeExpenseChart}
             loading={monthly.loading}
-          >
-            <ChartContainer
-              className="h-full w-full"
-              config={{
-                income: {
-                  label: "Income",
-                  color: "var(--chart-income, #22c55e)",
-                },
-                expense: {
-                  label: "Expense",
-                  color: "var(--chart-expense, #ef4444)",
-                },
-              }}
-            >
-              <BarChart
-                data={incomeExpenseChart}
-                margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient
-                    id="incomeBarFill"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop
-                      offset="0%"
-                      stopColor="var(--color-income)"
-                      stopOpacity={0.95}
-                    />
-                    <stop
-                      offset="100%"
-                      stopColor="var(--color-income)"
-                      stopOpacity={0.35}
-                    />
-                  </linearGradient>
-                  <linearGradient
-                    id="expenseBarFill"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop
-                      offset="0%"
-                      stopColor="var(--color-expense)"
-                      stopOpacity={0.9}
-                    />
-                    <stop
-                      offset="100%"
-                      stopColor="var(--color-expense)"
-                      stopOpacity={0.3}
-                    />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(v) => compactCurrency(Number(v))}
-                  tickMargin={12}
-                  width={90}
-                />
-                <Tooltip
-                  shared
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-
-                    const monthLabel =
-                      typeof payload[0]?.payload?.label === "string"
-                        ? payload[0].payload.label
-                        : "";
-                    const monthIndex =
-                      typeof payload[0]?.payload?.monthIndex === "number"
-                        ? payload[0].payload.monthIndex
-                        : null;
-                    const monthYear =
-                      typeof payload[0]?.payload?.year === "number"
-                        ? payload[0].payload.year
-                        : null;
-                    const overviewYear = yearlyOverview?.year ?? null;
-
-                    const incomeItem = payload.find(
-                      (p) => p.dataKey === "income",
-                    );
-                    const expenseItem = payload.find(
-                      (p) => p.dataKey === "expense",
-                    );
-
-                    const incomeTotal =
-                      incomeItem?.value !== undefined &&
-                      incomeItem.value !== null
-                        ? Math.abs(Number(incomeItem.value))
-                        : null;
-                    const expenseTotal =
-                      expenseItem?.value !== undefined &&
-                      expenseItem.value !== null
-                        ? Math.abs(Number(expenseItem.value))
-                        : null;
-
-                    const buildBreakdown = (
-                      breakdown:
-                        | YearlyOverviewResponse["category_breakdown"]
-                        | YearlyOverviewResponse["income_category_breakdown"]
-                        | undefined,
-                      fallbackColor: string,
-                    ) => {
-                      const sorted =
-                        breakdown &&
-                        monthIndex !== null &&
-                        monthYear !== null &&
-                        overviewYear === monthYear
-                          ? breakdown
-                              .map((row) => ({
-                                name: row.name,
-                                total: Math.abs(
-                                  Number(row.monthly[monthIndex] ?? 0),
-                                ),
-                                color: row.color_hex ?? undefined,
-                              }))
-                              .filter(
-                                (row) =>
-                                  Number.isFinite(row.total) && row.total > 0,
-                              )
-                              .sort((a, b) => b.total - a.total)
-                          : [];
-                      const top = sorted.slice(0, 4);
-                      const otherTotal = sorted
-                        .slice(4)
-                        .reduce((sum, row) => sum + row.total, 0);
-
-                      return { top, otherTotal, fallbackColor };
-                    };
-
-                    const incomeBreakdown = buildBreakdown(
-                      yearlyOverview?.income_category_breakdown,
-                      "#10b981",
-                    );
-                    const expenseBreakdown = buildBreakdown(
-                      yearlyOverview?.category_breakdown,
-                      "#ef4444",
-                    );
-
-                    return (
-                      <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                        <p className="font-semibold text-slate-800">
-                          {monthLabel}
-                        </p>
-                        <div className="mt-1 grid gap-1">
-                          <p className="text-slate-600">
-                            Income:{" "}
-                            <span className="font-medium text-slate-800 tabular-nums">
-                              {incomeTotal !== null
-                                ? currency(incomeTotal)
-                                : "—"}
-                            </span>
-                          </p>
-                          <p className="text-slate-600">
-                            Expense:{" "}
-                            <span className="font-medium text-slate-800 tabular-nums">
-                              {expenseTotal !== null
-                                ? currency(expenseTotal)
-                                : "—"}
-                            </span>
-                          </p>
-                        </div>
-
-                        {yearlyOverviewLoading ? (
-                          <p className="mt-2 text-slate-500">
-                            Loading breakdown…
-                          </p>
-                        ) : monthYear !== null &&
-                          overviewYear !== null &&
-                          monthYear !== overviewYear ? (
-                          <p className="mt-2 text-slate-500">
-                            Category breakdown is available for {overviewYear}{" "}
-                            months only.
-                          </p>
-                        ) : monthIndex !== null ? (
-                          <div className="mt-2 space-y-2">
-                            {incomeBreakdown.top.length ? (
-                              <div>
-                                <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
-                                  Income categories
-                                </p>
-                                <div className="mt-1 space-y-1">
-                                  {incomeBreakdown.top.map((row) => (
-                                    <div
-                                      key={`${row.name}-${row.total}`}
-                                      className="flex items-center justify-between gap-4"
-                                    >
-                                      <span className="flex min-w-0 items-center gap-2 text-slate-700">
-                                        <span
-                                          className="h-2 w-2 shrink-0 rounded-full"
-                                          style={{
-                                            backgroundColor:
-                                              row.color ??
-                                              incomeBreakdown.fallbackColor,
-                                          }}
-                                        />
-                                        <span className="truncate">
-                                          {row.name}
-                                        </span>
-                                      </span>
-                                      <span className="font-medium text-slate-800 tabular-nums">
-                                        {currency(row.total)}
-                                      </span>
-                                    </div>
-                                  ))}
-                                  {incomeBreakdown.otherTotal ? (
-                                    <div className="flex items-center justify-between gap-4 pt-1 text-slate-600">
-                                      <span>Other</span>
-                                      <span className="font-medium tabular-nums">
-                                        {currency(incomeBreakdown.otherTotal)}
-                                      </span>
-                                    </div>
-                                  ) : null}
-                                </div>
-                              </div>
-                            ) : null}
-
-                            {expenseBreakdown.top.length ? (
-                              <div>
-                                <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
-                                  Expense categories
-                                </p>
-                                <div className="mt-1 space-y-1">
-                                  {expenseBreakdown.top.map((row) => (
-                                    <div
-                                      key={`${row.name}-${row.total}`}
-                                      className="flex items-center justify-between gap-4"
-                                    >
-                                      <span className="flex min-w-0 items-center gap-2 text-slate-700">
-                                        <span
-                                          className="h-2 w-2 shrink-0 rounded-full"
-                                          style={{
-                                            backgroundColor:
-                                              row.color ??
-                                              expenseBreakdown.fallbackColor,
-                                          }}
-                                        />
-                                        <span className="truncate">
-                                          {row.name}
-                                        </span>
-                                      </span>
-                                      <span className="font-medium text-slate-800 tabular-nums">
-                                        {currency(row.total)}
-                                      </span>
-                                    </div>
-                                  ))}
-                                  {expenseBreakdown.otherTotal ? (
-                                    <div className="flex items-center justify-between gap-4 pt-1 text-slate-600">
-                                      <span>Other</span>
-                                      <span className="font-medium tabular-nums">
-                                        {currency(expenseBreakdown.otherTotal)}
-                                      </span>
-                                    </div>
-                                  ) : null}
-                                </div>
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  }}
-                />
-                <Bar
-                  dataKey="income"
-                  fill="url(#incomeBarFill)"
-                  stroke="var(--color-income)"
-                  strokeOpacity={0.55}
-                  radius={[8, 8, 0, 0]}
-                  barSize={24}
-                  name="Income"
-                />
-                <Bar
-                  dataKey="expense"
-                  fill="url(#expenseBarFill)"
-                  stroke="var(--color-expense)"
-                  strokeOpacity={0.55}
-                  radius={[8, 8, 0, 0]}
-                  barSize={24}
-                  name="Expense"
-                />
-              </BarChart>
-            </ChartContainer>
-          </ChartCard>
+            yearlyOverview={yearlyOverview}
+            yearlyOverviewLoading={yearlyOverviewLoading}
+          />
         </motion.div>
-
         <motion.div variants={fadeInUp}>
-          <ChartCard
-            title="Net Worth"
-            description="Trajectory over time"
+          <NetWorthChartCard
+            data={netWorthData}
             loading={netWorth.loading}
-          >
-            <ChartContainer
-              className="h-full w-full"
-              config={{
-                net: {
-                  label: "Net worth",
-                  color: "#4f46e5",
-                },
-              }}
-            >
-              <AreaChart
-                data={netWorthData}
-                margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
-              >
-                <defs>
-                  <linearGradient id="netFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="date"
-                  tickFormatter={(value) =>
-                    new Date(value).toLocaleDateString("en-US", {
-                      month: "short",
-                    })
-                  }
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  tickLine={false}
-                  axisLine={false}
-                  domain={netWorthDomain}
-                  allowDataOverflow
-                  tickMargin={12}
-                  width={90}
-                  tickFormatter={(v) => compactCurrency(Number(v))}
-                />
-                <Tooltip content={<ChartTooltipContent />} />
-                {Array.from(new Set(netWorthData.map((d) => d.year))).map(
-                  (year) => {
-                    const firstPoint = netWorthData.find(
-                      (d) => d.year === year,
-                    );
-                    return firstPoint ? (
-                      <ReferenceLine
-                        key={year}
-                        x={firstPoint.date}
-                        stroke="#cbd5e1"
-                        strokeDasharray="4 4"
-                        label={{
-                          value: `${year}`,
-                          position: "insideTopLeft",
-                          fill: "#475569",
-                          fontSize: 10,
-                        }}
-                      />
-                    ) : null;
-                  },
-                )}
-                <Area
-                  type="monotoneX"
-                  connectNulls
-                  dataKey="net"
-                  stroke="#4f46e5"
-                  fill="url(#netFill)"
-                  strokeWidth={2}
-                  name="Net worth"
-                />
-              </AreaChart>
-            </ChartContainer>
-          </ChartCard>
+            domain={netWorthDomain}
+          />
         </motion.div>
       </StaggerWrap>
 
       <StaggerWrap className="grid gap-4 xl:grid-cols-[1fr_1.5fr_1fr]">
         <motion.div variants={fadeInUp}>
-          <ChartCard
-            title="Category mix"
-            description="Income vs expenses (last 12 months)"
+          <CategoryMixChartCard
             loading={yearlyOverviewLoading}
-            action={
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                  Income
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-rose-500" />
-                  Expenses
-                </span>
-              </div>
-            }
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <defs>
-                  <linearGradient
-                    id="categoryMixIncomeFill"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop offset="0%" stopColor="#34d399" stopOpacity={0.95} />
-                    <stop
-                      offset="100%"
-                      stopColor="#059669"
-                      stopOpacity={0.95}
-                    />
-                  </linearGradient>
-                  <linearGradient
-                    id="categoryMixExpenseFill"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop offset="0%" stopColor="#fb7185" stopOpacity={0.95} />
-                    <stop
-                      offset="100%"
-                      stopColor="#e11d48"
-                      stopOpacity={0.95}
-                    />
-                  </linearGradient>
-                </defs>
-                <Pie
-                  data={categoryBreakdown}
-                  dataKey="value"
-                  nameKey="name"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={4}
-                >
-                  {categoryBreakdown.map((_, index) => (
-                    <Cell
-                      key={index}
-                      fill={
-                        index === 0
-                          ? "url(#categoryMixIncomeFill)"
-                          : "url(#categoryMixExpenseFill)"
-                      }
-                      stroke={index === 0 ? "#10b981" : "#ef4444"}
-                      strokeOpacity={0.35}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const item = payload[0];
-                    const flow =
-                      item.name === "Income"
-                        ? ("income" as const)
-                        : ("expense" as const);
-                    const sorted =
-                      flow === "income"
-                        ? rollingCategoryBreakdown.income
-                        : rollingCategoryBreakdown.expense;
-                    const top = sorted.slice(0, 5);
-                    const otherTotal = sorted
-                      .slice(5)
-                      .reduce((sum, row) => sum + row.total, 0);
-                    return (
-                      <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                        <p className="font-semibold text-slate-800">
-                          {item.name}
-                        </p>
-                        <p className="text-slate-600">
-                          {currency(Number(item.value))}
-                        </p>
-                        {yearlyOverviewLoading ? (
-                          <p className="mt-2 text-slate-500">
-                            Loading breakdown…
-                          </p>
-                        ) : top.length ? (
-                          <div className="mt-2 space-y-1">
-                            {top.map((row) => (
-                              <div
-                                key={`${row.name}-${row.total}`}
-                                className="flex items-center justify-between gap-4"
-                              >
-                                <span className="flex min-w-0 items-center gap-2 text-slate-700">
-                                  <span
-                                    className="h-2 w-2 shrink-0 rounded-full"
-                                    style={{
-                                      backgroundColor:
-                                        row.color ??
-                                        (flow === "income"
-                                          ? "#10b981"
-                                          : "#ef4444"),
-                                    }}
-                                  />
-                                  <span className="truncate">{row.name}</span>
-                                </span>
-                                <span className="font-medium text-slate-800 tabular-nums">
-                                  {currency(row.total)}
-                                </span>
-                              </div>
-                            ))}
-                            {otherTotal ? (
-                              <div className="flex items-center justify-between gap-4 pt-1 text-slate-600">
-                                <span>Other</span>
-                                <span className="font-medium tabular-nums">
-                                  {currency(otherTotal)}
-                                </span>
-                              </div>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </ChartCard>
+            categoryBreakdown={categoryBreakdown}
+            rollingBreakdown={rollingCategoryBreakdown}
+          />
         </motion.div>
-
         <motion.div variants={fadeInUp}>
-          <ChartCard
-            title="Savings rate"
-            description="Last 12 months"
+          <SavingsRateChartCard
             loading={monthly.loading}
-            action={
-              savingsStatusSummary.noIncomeMonths ||
-              savingsStatusSummary.noActivityMonths ? (
-                <div className="space-y-1 text-[11px] text-slate-500">
-                  {savingsStatusSummary.noIncomeMonths ? (
-                    <p className="flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-full bg-amber-400" />
-                      {savingsStatusSummary.noIncomeMonths} no-income months
-                    </p>
-                  ) : null}
-                  {savingsStatusSummary.noActivityMonths ? (
-                    <p className="flex items-center gap-1">
-                      <span className="h-2 w-2 rounded-full bg-slate-300" />
-                      {savingsStatusSummary.noActivityMonths} no-activity months
-                    </p>
-                  ) : null}
-                </div>
-              ) : null
-            }
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={savingsRateData}>
-                <defs>
-                  <linearGradient
-                    id="savingsRateFill"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.95} />
-                    <stop
-                      offset="100%"
-                      stopColor="#0284c7"
-                      stopOpacity={0.95}
-                    />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="month" tickLine={false} axisLine={false} />
-                <YAxis
-                  tickFormatter={(v) => `${v}%`}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <ReferenceLine y={0} stroke="#cbd5e1" />
-                {savingsRateData
-                  .filter((point) => point.status !== "normal")
-                  .map((point) => (
-                    <ReferenceDot
-                      key={`${point.label}-${point.status}`}
-                      x={point.month}
-                      y={0}
-                      r={point.status === "no-activity" ? 4 : 3}
-                      fill={
-                        point.status === "no-activity" ? "#cbd5e1" : "#fbbf24"
-                      }
-                      stroke={
-                        point.status === "no-activity" ? "#64748b" : "#b45309"
-                      }
-                    />
-                  ))}
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const item = payload[0];
-                    const status =
-                      item.payload?.status === "no-income" ||
-                      item.payload?.status === "no-activity"
-                        ? (item.payload.status as SavingsMonthStatus)
-                        : "normal";
-                    return (
-                      <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                        <p className="font-semibold text-slate-800">
-                          {item.payload.label}
-                        </p>
-                        <p className="text-slate-600">
-                          Savings rate: {item.value}%
-                        </p>
-                        <p className="text-slate-500">
-                          Income: {currency(Number(item.payload.income ?? 0))} -
-                          Expense: {currency(Number(item.payload.expense ?? 0))}
-                        </p>
-                        {status === "no-income" ? (
-                          <p className="text-amber-700">
-                            No income recorded this month.
-                          </p>
-                        ) : null}
-                        {status === "no-activity" ? (
-                          <p className="text-slate-600">
-                            No income or expense recorded this month.
-                          </p>
-                        ) : null}
-                      </div>
-                    );
-                  }}
-                />
-                <Bar
-                  dataKey="rate"
-                  fill="url(#savingsRateFill)"
-                  stroke="#0ea5e9"
-                  strokeOpacity={0.4}
-                  radius={[6, 6, 4, 4]}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartCard>
+            data={savingsRateData}
+            summary={savingsStatusSummary}
+          />
         </motion.div>
-
         <motion.div variants={fadeInUp} {...subtleHover}>
-          <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.25)]">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <div>
-                <CardTitle className="text-base font-semibold text-slate-900">
-                  Quick actions
-                </CardTitle>
-                <p className="text-xs text-slate-500">Jump into common flows</p>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Button
-                asChild
-                variant="outline"
-                className="w-full justify-start gap-2"
-              >
-                <Link
-                  to={PageRoutes.transactions}
-                  className="flex items-center gap-2"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add transaction
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="w-full justify-start gap-2"
-              >
-                <Link
-                  to={PageRoutes.imports}
-                  className="flex items-center gap-2"
-                >
-                  <Upload className="h-4 w-4" />
-                  Import bank file
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="w-full justify-start gap-2"
-              >
-                <Link
-                  to={PageRoutes.accounts}
-                  className="flex items-center gap-2"
-                >
-                  <Wallet className="h-4 w-4" />
-                  View accounts
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="w-full justify-start gap-2"
-              >
-                <Link
-                  to={PageRoutes.reports}
-                  className="flex items-center gap-2"
-                >
-                  <FileBarChart className="h-4 w-4" />
-                  Reports
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="w-full justify-start gap-2"
-              >
-                <Link to={PageRoutes.goals} className="flex items-center gap-2">
-                  <PiggyBank className="h-4 w-4" />
-                  Goals
-                </Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="w-full justify-start gap-2"
-              >
-                <Link
-                  to={PageRoutes.settings}
-                  className="flex items-center gap-2"
-                >
-                  <Settings className="h-4 w-4" />
-                  Settings
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
+          <QuickActionsCard />
         </motion.div>
       </StaggerWrap>
 
@@ -1597,7 +736,7 @@ export const Dashboard: React.FC = () => {
                       className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2"
                     >
                       <div className="flex items-center gap-3">
-                        {renderAccountIcon(account.icon, account.name)}
+                        <AccountIcon icon={account.icon} name={account.name} />
                         <div>
                           <p className="text-sm font-semibold text-slate-900">
                             {account.name}
@@ -1750,137 +889,12 @@ export const Dashboard: React.FC = () => {
       </StaggerWrap>
 
       <motion.div variants={fadeInUp}>
-        <Card className="border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.25)]">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <div>
-              <CardTitle className="text-base font-semibold text-slate-900">
-                Recent transactions
-              </CardTitle>
-              <p className="text-xs text-slate-500">
-                Latest activity across tracked accounts
-              </p>
-            </div>
-            <Tabs
-              value={recentTab}
-              onValueChange={(val) => setRecentTab(val as typeof recentTab)}
-              className="w-auto"
-            >
-              <TabsList className="bg-slate-100">
-                <TabsTrigger value="all" className="cursor-pointer">
-                  All
-                </TabsTrigger>
-                <TabsTrigger value="income" className="cursor-pointer">
-                  Income
-                </TabsTrigger>
-                <TabsTrigger value="expense" className="cursor-pointer">
-                  Expense
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {recent.loading ? (
-              <LoadingCard lines={4} />
-            ) : filteredRecentTransactions.length === 0 ? (
-              <EmptyState
-                title="No recent transactions yet."
-                description="Import files or add activity to see your latest account movements."
-                action={
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="border-slate-200"
-                  >
-                    <Link to={PageRoutes.transactions}>Open transactions</Link>
-                  </Button>
-                }
-              />
-            ) : (
-              <div className="space-y-2">
-                {filteredRecentTransactions.map((tx) => (
-                  <div
-                    key={tx.id}
-                    className="rounded-lg border border-slate-100 bg-white px-3 py-2 shadow-[0_8px_20px_-18px_rgba(15,23,42,0.4)]"
-                  >
-                    <div className="grid w-full items-start gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)_auto] sm:items-center sm:gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900">
-                          {tx.description}
-                        </p>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                          <span>
-                            {new Date(tx.occurred_at).toLocaleDateString(
-                              "en-US",
-                              {
-                                month: "short",
-                                day: "numeric",
-                              },
-                            )}
-                          </span>
-                          <span className="text-slate-300">•</span>
-                          <span className="truncate">{tx.accountLabel}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex min-w-0 items-center gap-2 sm:flex-nowrap sm:justify-end">
-                        <span
-                          className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                            tx.type === TransactionType.TRANSFER
-                              ? "bg-slate-100 text-slate-700"
-                              : tx.amount >= 0
-                                ? "bg-emerald-50 text-emerald-700"
-                                : "bg-rose-50 text-rose-700"
-                          }`}
-                        >
-                          {tx.typeLabel}
-                        </span>
-
-                        {tx.type ===
-                        TransactionType.TRANSFER ? null : tx.category ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
-                            {renderCategoryIcon(
-                              tx.category.icon,
-                              tx.category.name,
-                              tx.category.icon?.startsWith("lucide:")
-                                ? "h-4 w-4 text-slate-700"
-                                : "text-sm leading-none",
-                            )}
-                            <span className="max-w-44 truncate">
-                              {tx.category.name}
-                            </span>
-                          </span>
-                        ) : (
-                          <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
-                            Unassigned
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex items-center justify-end">
-                        {tx.type === TransactionType.TRANSFER ? (
-                          <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
-                            {currency(Math.abs(tx.amount))}
-                          </span>
-                        ) : (
-                          <span
-                            className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                              tx.amount >= 0
-                                ? "bg-emerald-50 text-emerald-700"
-                                : "bg-rose-50 text-rose-700"
-                            }`}
-                          >
-                            {tx.amount >= 0 ? "+" : "-"}
-                            {currency(Math.abs(tx.amount))}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <RecentTransactionsCard
+          loading={recent.loading}
+          tab={recentTab}
+          onTabChange={setRecentTab}
+          transactions={filteredRecentTransactions}
+        />
       </motion.div>
     </MotionPage>
   );

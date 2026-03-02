@@ -1,10 +1,9 @@
-# pyright: reportGeneralTypeIssues=false
 """Validation helpers for shared finance logic."""
 
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import TYPE_CHECKING, Callable, Iterable, Protocol, Sequence, TypeVar, Union
+from typing import TYPE_CHECKING, Callable, Iterable, Protocol, Sequence, TypeVar, Union, cast
 from uuid import UUID
 
 from .enums import TransactionType
@@ -55,7 +54,7 @@ def ensure_balanced_legs(
         if isinstance(leg, (int, float, Decimal)):
             value = leg
         elif hasattr(leg, "amount"):
-            value = leg.amount  # type: ignore[assignment]
+            value = cast(SupportsAmount, leg).amount
         elif accessor is not None:
             value = accessor(leg)
         else:

@@ -6,7 +6,6 @@ import {
   ArrowRight,
   Calendar,
   ChevronDown,
-  Eye,
   Filter,
   Loader2,
   MoreHorizontal,
@@ -23,7 +22,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -42,6 +40,7 @@ import {
   useCategoriesApi,
   useTransactionsApi,
 } from "@/hooks/use-api";
+import { formatAccountType, renderAccountIcon } from "@/lib/account-display";
 import { formatCategoryLabel, renderCategoryIcon } from "@/lib/category-icons";
 import { currency, formatDate as formatDateLabel } from "@/lib/format";
 import {
@@ -51,7 +50,6 @@ import {
   taxAdjustedAmountHint,
 } from "@/lib/transactions";
 import { cn } from "@/lib/utils";
-import { formatAccountType, renderAccountIcon } from "@/pages/accounts/utils";
 import {
   CategoryType,
   TransactionType,
@@ -60,79 +58,18 @@ import {
   type TransactionRead,
 } from "@/types/api";
 import TransactionModal from "./transaction-modal";
-
-type SortKey = "date" | "description" | "amount" | "category" | "type";
-type TransactionTypeFilter = TransactionType | "tax" | "";
-
-type ColumnKey =
-  | "date"
-  | "type"
-  | "description"
-  | "accounts"
-  | "category"
-  | "amount"
-  | "notes";
-
-type ColumnConfig = {
-  key: ColumnKey;
-  label: string;
-  align?: "left" | "right";
-};
-
-const columns: ColumnConfig[] = [
-  { key: "date", label: "Date" },
-  { key: "type", label: "Type" },
-  { key: "description", label: "Payee / Description" },
-  { key: "accounts", label: "Account" },
-  { key: "category", label: "Category" },
-  { key: "amount", label: "Amount", align: "right" },
-  { key: "notes", label: "Notes" },
-];
-
-const sortableColumnKey: Partial<Record<ColumnKey, SortKey>> = {
-  date: "date",
-  type: "type",
-  description: "description",
-  category: "category",
-  amount: "amount",
-};
-
-const columnWidthClass: Partial<Record<ColumnKey, string>> = {
-  date: "w-40",
-  type: "w-28",
-  accounts: "w-72",
-  category: "w-48",
-  amount: "w-36",
-  notes: "w-56",
-};
-
-const transactionTypeOptions: Array<{
-  value: TransactionTypeFilter;
-  label: string;
-}> = [
-  { value: TransactionType.INCOME, label: "Income" },
-  { value: TransactionType.EXPENSE, label: "Expense" },
-  { value: TransactionType.TRANSFER, label: "Transfer" },
-  { value: TransactionType.INVESTMENT_EVENT, label: "Investment" },
-  { value: "tax", label: "Tax" },
-  { value: TransactionType.ADJUSTMENT, label: "Adjustment" },
-];
-
-const resolveTransactionTypeFilters = (filter: TransactionTypeFilter) => {
-  if (!filter) {
-    return { transactionTypes: undefined, taxEvent: undefined };
-  }
-
-  if (filter === "tax") {
-    return { transactionTypes: undefined, taxEvent: true };
-  }
-
-  if (filter === TransactionType.TRANSFER) {
-    return { transactionTypes: [TransactionType.TRANSFER], taxEvent: false };
-  }
-
-  return { transactionTypes: [filter], taxEvent: undefined };
-};
+import {
+  ColumnToggle,
+  columnWidthClass,
+  columns,
+  resolveTransactionTypeFilters,
+  sortableColumnKey,
+  transactionTypeOptions,
+  type ColumnConfig,
+  type ColumnKey,
+  type SortKey,
+  type TransactionTypeFilter,
+} from "./transactions-table-config";
 
 const formatCurrency = (value: number) =>
   currency(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -174,38 +111,6 @@ const accountTypeTone: Record<AccountType, string> = {
   [AccountType.NORMAL]: "bg-slate-100 text-slate-700",
   [AccountType.DEBT]: "bg-rose-100 text-rose-700",
   [AccountType.INVESTMENT]: "bg-indigo-100 text-indigo-700",
-};
-
-const ColumnToggle: React.FC<{
-  visibility: Record<ColumnKey, boolean>;
-  onToggle: (key: ColumnKey) => void;
-}> = ({ visibility, onToggle }) => {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2 border-slate-300 text-slate-700"
-        >
-          <Eye className="h-4 w-4" /> Columns
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuLabel>Show / hide</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {columns.map((col) => (
-          <DropdownMenuCheckboxItem
-            key={col.key}
-            checked={visibility[col.key] !== false}
-            onCheckedChange={() => onToggle(col.key)}
-          >
-            {col.label}
-          </DropdownMenuCheckboxItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
 };
 
 export const Transactions: React.FC = () => {

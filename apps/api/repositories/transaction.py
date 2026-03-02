@@ -1,4 +1,3 @@
-# pyright: reportGeneralTypeIssues=false
 """Repository helpers for transaction entities."""
 
 from __future__ import annotations

@@ -1,4 +1,3 @@
-# pyright: reportGeneralTypeIssues=false
 """Category and system account models."""
 
 from __future__ import annotations

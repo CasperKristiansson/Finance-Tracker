@@ -1,4 +1,3 @@
-# pyright: reportGeneralTypeIssues=false
 """Account and loan related models."""
 
 from __future__ import annotations

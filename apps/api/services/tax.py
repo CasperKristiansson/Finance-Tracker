@@ -1,4 +1,3 @@
-# pyright: reportGeneralTypeIssues=false
 """Service layer for income tax operations."""
 
 from __future__ import annotations

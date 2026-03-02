@@ -1,4 +1,3 @@
-# pyright: reportGeneralTypeIssues=false
 """Tax-related models (income tax payments/refunds)."""
 
 from __future__ import annotations

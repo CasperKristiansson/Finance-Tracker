@@ -1,4 +1,3 @@
-# pyright: reportGeneralTypeIssues=false
 """Persistence helpers for category entities."""
 
 from __future__ import annotations

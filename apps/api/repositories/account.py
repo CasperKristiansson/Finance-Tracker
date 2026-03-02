@@ -1,4 +1,3 @@
-# pyright: reportGeneralTypeIssues=false
 """Data access layer for account entities."""
 
 from __future__ import annotations

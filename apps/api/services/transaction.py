@@ -1,4 +1,3 @@
-# pyright: reportGeneralTypeIssues=false
 """Service layer for transaction operations."""
 
 from __future__ import annotations
