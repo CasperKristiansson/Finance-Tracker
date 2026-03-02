@@ -1,8 +1,6 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import { ChevronDown, Loader2, Trash2, X } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import { z } from "zod";
 import { useAppSelector } from "@/app/hooks";
 import { ConfirmDialog } from "@/components/composed/confirm-dialog";
 import { Button } from "@/components/ui/button";
@@ -32,64 +30,22 @@ import {
   type TransactionRead,
 } from "@/types/api";
 
-const transactionTypeOptions = [
-  "transaction",
-  TransactionType.ADJUSTMENT,
-  TransactionType.TRANSFER,
-] as const;
+type TransactionFormType =
+  | "transaction"
+  | typeof TransactionType.ADJUSTMENT
+  | typeof TransactionType.TRANSFER;
 
-type TransactionFormType = (typeof transactionTypeOptions)[number];
-
-const transactionFormSchema = z
-  .object({
-    transaction_type: z.enum(transactionTypeOptions),
-    account_id: z.string().min(1, "Pick an account"),
-    transfer_account_id: z.string().optional(),
-    amount: z.string().min(1, "Add an amount"),
-    description: z.string().min(1, "Description required").trim(),
-    notes: z.string().optional(),
-    category_id: z.string().optional(),
-    occurred_at: z.string().min(1, "Occurred date required"),
-    posted_at: z.string().optional(),
-  })
-  .superRefine((val, ctx) => {
-    const amount = Number(val.amount);
-    if (Number.isNaN(amount)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["amount"],
-        message: "Amount must be numeric",
-      });
-    }
-    if (!Number.isNaN(amount) && Math.abs(amount) < 0.0001) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["amount"],
-        message: "Amount must be non-zero",
-      });
-    }
-    if (val.transaction_type === TransactionType.TRANSFER) {
-      if (!val.transfer_account_id) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["transfer_account_id"],
-          message: "Pick a transfer account",
-        });
-      }
-      if (
-        val.transfer_account_id &&
-        val.transfer_account_id === val.account_id
-      ) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["transfer_account_id"],
-          message: "Transfer accounts must be different",
-        });
-      }
-    }
-  });
-
-type TransactionFormValues = z.infer<typeof transactionFormSchema>;
+type TransactionFormValues = {
+  transaction_type: TransactionFormType;
+  account_id: string;
+  transfer_account_id?: string;
+  amount: string;
+  description: string;
+  notes?: string;
+  category_id?: string;
+  occurred_at: string;
+  posted_at?: string;
+};
 
 const toFormTransactionType = (
   transactionType: TransactionType,
@@ -133,7 +89,6 @@ export const TransactionModal: React.FC<{
     setError,
     formState: { errors, isSubmitting },
   } = useForm<TransactionFormValues>({
-    resolver: zodResolver(transactionFormSchema),
     defaultValues: {
       transaction_type: "transaction",
       account_id: "",
@@ -286,9 +241,22 @@ export const TransactionModal: React.FC<{
     values: TransactionFormValues,
     options: { keepOpen: boolean },
   ) => {
+    if (!values.account_id) {
+      setError("account_id", { message: "Pick an account" });
+      return;
+    }
+    if (!values.occurred_at) {
+      setError("occurred_at", { message: "Occurred date required" });
+      return;
+    }
+    if (!values.description?.trim()) {
+      setError("description", { message: "Description required" });
+      return;
+    }
+
     if (transaction) {
       await updateTransaction(transaction.id, {
-        description: values.description,
+        description: values.description.trim(),
         notes: values.notes?.trim() || null,
         category_id: values.category_id || null,
         occurred_at: new Date(values.occurred_at).toISOString(),
@@ -301,7 +269,15 @@ export const TransactionModal: React.FC<{
     }
 
     const rawAmount = Number(values.amount);
-    const safeAmount = Number.isNaN(rawAmount) ? 0 : rawAmount;
+    if (!Number.isFinite(rawAmount)) {
+      setError("amount", { message: "Amount must be numeric" });
+      return;
+    }
+    if (Math.abs(rawAmount) < 0.0001) {
+      setError("amount", { message: "Amount must be non-zero" });
+      return;
+    }
+    const safeAmount = rawAmount;
     const resolvedTransactionType =
       values.transaction_type === TransactionType.ADJUSTMENT
         ? TransactionType.ADJUSTMENT
@@ -318,6 +294,18 @@ export const TransactionModal: React.FC<{
         message: "Offset account missing. Reconcile an account to create it.",
       });
       return;
+    }
+    if (resolvedTransactionType === TransactionType.TRANSFER) {
+      if (!values.transfer_account_id) {
+        setError("transfer_account_id", { message: "Pick a transfer account" });
+        return;
+      }
+      if (values.transfer_account_id === values.account_id) {
+        setError("transfer_account_id", {
+          message: "Transfer accounts must be different",
+        });
+        return;
+      }
     }
 
     const signedAmount = (() => {
@@ -352,7 +340,7 @@ export const TransactionModal: React.FC<{
           ];
 
     await createTransaction({
-      description: values.description,
+      description: values.description.trim(),
       notes: values.notes?.trim() || undefined,
       category_id:
         resolvedTransactionType === TransactionType.TRANSFER

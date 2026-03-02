@@ -35,10 +35,6 @@ import type {
   CashflowForecastResponse,
   NetWorthProjectionResponse,
 } from "@/types/api";
-import {
-  cashflowForecastResponseSchema,
-  netWorthProjectionResponseSchema,
-} from "@/types/schemas";
 
 const coerceMoney = (value: unknown): number => {
   if (typeof value === "number") return value;
@@ -166,7 +162,6 @@ export const CashFlow: React.FC = () => {
           threshold: 0,
           account_ids: selectedAccounts.length ? selectedAccounts : undefined,
         },
-        schema: cashflowForecastResponseSchema,
       });
       setCashflowForecast(response.data);
     } catch (error) {
@@ -191,7 +186,6 @@ export const CashFlow: React.FC = () => {
           months: 36,
           account_ids: selectedAccounts.length ? selectedAccounts : undefined,
         },
-        schema: netWorthProjectionResponseSchema,
       });
       setNetWorthProjection(response.data);
     } catch (error) {

@@ -28,12 +28,6 @@ import type {
   TransactionRead,
 } from "@/types/contracts";
 import { TransactionType } from "@/types/enums";
-import {
-  transactionCreateSchema,
-  transactionListSchema,
-  transactionSchema,
-  transactionUpdateRequestSchema,
-} from "@/types/schemas";
 
 export const FetchTransactions = createAction<TransactionFilters | undefined>(
   "transactions/fetch",
@@ -118,7 +112,6 @@ function* handleFetchTransactions(
         callApiWithAuth,
         buildEndpointRequest("listTransactions", {
           query,
-          schema: transactionListSchema,
         }),
         { loadingKey: "transactions" },
       );
@@ -178,7 +171,6 @@ function* handleFetchRecentTransactions(
         callApiWithAuth,
         buildEndpointRequest("listTransactions", {
           query,
-          schema: transactionListSchema,
         }),
         { loadingKey: "transactions-recent" },
       );
@@ -204,7 +196,7 @@ function* handleCreateTransaction(
 ): SagaIterator {
   const isDemo: boolean = yield select(selectIsDemo);
   try {
-    const body = transactionCreateSchema.parse(action.payload);
+    const body: EndpointRequest<"createTransaction"> = action.payload;
     if (isDemo) {
       const now = new Date().toISOString();
       const newTx: TransactionRead = {
@@ -242,7 +234,6 @@ function* handleCreateTransaction(
       callApiWithAuth,
       buildEndpointRequest("createTransaction", {
         body,
-        schema: transactionSchema,
       }),
       { loadingKey: "transaction-create" },
     );
@@ -263,7 +254,7 @@ function* handleUpdateTransaction(
 ): SagaIterator {
   const isDemo: boolean = yield select(selectIsDemo);
   try {
-    const body = transactionUpdateRequestSchema.parse(action.payload.data);
+    const body: EndpointRequest<"updateTransaction"> = action.payload.data;
     if (isDemo) {
       const existing: TransactionRead[] = yield select(selectTransactions);
       const updated = existing.map((tx) =>
@@ -287,7 +278,6 @@ function* handleUpdateTransaction(
       buildEndpointRequest("updateTransaction", {
         pathParams: { transactionId: action.payload.id },
         body,
-        schema: transactionSchema,
       }),
       { loadingKey: "transaction-update" },
     );

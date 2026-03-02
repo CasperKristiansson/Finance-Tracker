@@ -1,9 +1,7 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import React, { useCallback, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { z } from "zod";
 import { LucideIconPicker } from "@/components/lucide-icon-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +15,6 @@ import {
   type AccountCreateRequest,
   type AccountWithBalance,
 } from "@/types/api";
-import { bankImportTypeSchema } from "@/types/schemas";
 
 type Props = {
   open: boolean;
@@ -34,41 +31,21 @@ const iconPresets = [
   { label: "Circle K", value: "banks/circlek.png" },
 ];
 
-const accountFormSchema = z
-  .object({
-    name: z.string().min(1, "Name is required").trim(),
-    account_type: z.enum(AccountType),
-    is_active: z.boolean(),
-    icon: z.string().optional(),
-    bank_import_type: bankImportTypeSchema.nullable().optional(),
-    loan: z.object({
-      origin_principal: z.string().optional(),
-      current_principal: z.string().optional(),
-      interest_rate_annual: z.string().optional(),
-      interest_compound: z.enum(InterestCompound),
-      minimum_payment: z.string().optional(),
-      expected_maturity_date: z.string().optional(),
-    }),
-  })
-  .superRefine((val, ctx) => {
-    if (val.account_type !== AccountType.DEBT) return;
-    const required = [
-      "origin_principal",
-      "current_principal",
-      "interest_rate_annual",
-    ] as const;
-    required.forEach((field) => {
-      if (!val.loan[field]) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ["loan", field],
-          message: "Required for debt accounts",
-        });
-      }
-    });
-  });
-
-type AccountFormValues = z.infer<typeof accountFormSchema>;
+type AccountFormValues = {
+  name: string;
+  account_type: AccountType;
+  is_active: boolean;
+  icon?: string;
+  bank_import_type?: BankImportType | null;
+  loan: {
+    origin_principal?: string;
+    current_principal?: string;
+    interest_rate_annual?: string;
+    interest_compound: InterestCompound;
+    minimum_payment?: string;
+    expected_maturity_date?: string;
+  };
+};
 
 const isDebt = (type: AccountType) => type === AccountType.DEBT;
 
@@ -109,9 +86,10 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
     handleSubmit,
     reset,
     setValue,
+    clearErrors,
+    setError,
     formState: { errors: formErrors, isSubmitting },
   } = useForm<AccountFormValues>({
-    resolver: zodResolver(accountFormSchema),
     defaultValues: getDefaults(),
   });
 
@@ -127,6 +105,29 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
   const bankImportTypeField = register("bank_import_type");
 
   const onSubmit = async (values: AccountFormValues) => {
+    if (isDebt(values.account_type)) {
+      const required: Array<
+        "origin_principal" | "current_principal" | "interest_rate_annual"
+      > = ["origin_principal", "current_principal", "interest_rate_annual"];
+      let missingDebtField = false;
+      required.forEach((field) => {
+        if (!values.loan[field]?.trim()) {
+          setError(`loan.${field}`, {
+            type: "required",
+            message: "Required for debt accounts",
+          });
+          missingDebtField = true;
+        }
+      });
+      if (missingDebtField) return;
+    } else {
+      clearErrors([
+        "loan.origin_principal",
+        "loan.current_principal",
+        "loan.interest_rate_annual",
+      ]);
+    }
+
     const payload: AccountCreateRequest = {
       name: values.name.trim(),
       account_type: values.account_type,
@@ -216,7 +217,11 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
             </label>
             <Input
               id="name"
-              {...register("name")}
+              {...register("name", {
+                required: "Name is required",
+                validate: (value) =>
+                  value.trim().length > 0 || "Name is required",
+              })}
               placeholder="e.g., Swedbank"
               autoFocus
             />

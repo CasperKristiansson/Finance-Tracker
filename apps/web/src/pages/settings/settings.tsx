@@ -1,8 +1,6 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import { ArchiveRestore, Loader2, Save } from "lucide-react";
 import React, { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 import { MotionPage } from "@/components/motion-presets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,17 +11,11 @@ import { useSettings } from "@/hooks/use-api";
 
 const currencyOptions = ["SEK", "EUR", "USD"] as const;
 type CurrencyCode = (typeof currencyOptions)[number];
-const currencyCodeSchema = z.enum(currencyOptions, {
-  message: "Select a supported currency.",
-});
-
-const profileSchema = z.object({
-  first_name: z.string().min(1, "First name required").trim(),
-  last_name: z.string().min(1, "Last name required").trim(),
-  currency_code: currencyCodeSchema,
-});
-
-type ProfileFormValues = z.infer<typeof profileSchema>;
+type ProfileFormValues = {
+  first_name: string;
+  last_name: string;
+  currency_code: CurrencyCode;
+};
 
 const formatTimestamp = (value?: string) => {
   if (!value) return "Not saved yet";
@@ -62,7 +54,6 @@ export const Settings: React.FC = () => {
     [currencyCode],
   );
   const profileForm = useForm<ProfileFormValues>({
-    resolver: zodResolver(profileSchema),
     defaultValues: {
       first_name: firstName ?? "",
       last_name: lastName ?? "",
@@ -135,7 +126,11 @@ export const Settings: React.FC = () => {
                 id="first-name"
                 placeholder="Ada"
                 autoComplete="given-name"
-                {...profileForm.register("first_name")}
+                {...profileForm.register("first_name", {
+                  required: "First name required",
+                  validate: (value) =>
+                    value.trim().length > 0 || "First name required",
+                })}
               />
               {profileForm.formState.errors.first_name ? (
                 <p className="text-xs text-rose-600">
@@ -151,7 +146,11 @@ export const Settings: React.FC = () => {
                 aria-invalid={Boolean(
                   profileForm.formState.errors.currency_code,
                 )}
-                {...profileForm.register("currency_code")}
+                {...profileForm.register("currency_code", {
+                  validate: (value) =>
+                    currencyOptions.includes(value as CurrencyCode) ||
+                    "Select a supported currency.",
+                })}
               >
                 {currencyOptions.map((currency) => (
                   <option key={currency} value={currency}>
@@ -174,7 +173,11 @@ export const Settings: React.FC = () => {
                 id="last-name"
                 placeholder="Lovelace"
                 autoComplete="family-name"
-                {...profileForm.register("last_name")}
+                {...profileForm.register("last_name", {
+                  required: "Last name required",
+                  validate: (value) =>
+                    value.trim().length > 0 || "Last name required",
+                })}
               />
               {profileForm.formState.errors.last_name ? (
                 <p className="text-xs text-rose-600">

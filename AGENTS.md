@@ -99,6 +99,10 @@ Purpose-built notes for automation agents working on this repo. Assume you often
 - Assume you may have full access; still avoid global/destructive operations (e.g., resetting user changes).
 - Keep secrets out of logs/commits; redact PII in examples.
 - Infrastructure toggles: `make tf-enable-public-db` / `make tf-disable-public-db` change DB exposure—use cautiously.
+- Local DB/Alembic workflow:
+  - If local tooling must connect directly to Aurora (for example `alembic upgrade`, `alembic revision --autogenerate`, or manual SQL checks), first run `make tf-enable-public-db`.
+  - As soon as local DB work is complete, always run `make tf-disable-public-db` in the same session.
+  - Treat public DB access as temporary only; default/steady state must be disabled.
 
 ## Quick Command Reference
 

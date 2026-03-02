@@ -20,15 +20,6 @@ import { callApiWithAuth } from "@/features/api/apiSaga";
 import { selectIsDemo } from "@/features/auth/authSlice";
 import { buildEndpointRequest } from "@/lib/apiEndpoints";
 import type { EndpointRequest, EndpointResponse } from "@/types/contracts";
-import {
-  accountCreateRequestSchema,
-  accountListSchema,
-  accountUpdateRequestSchema,
-  reconcileAccountRequestSchema,
-  reconcileAccountResponseSchema,
-  loanCreateRequestSchema,
-  loanUpdateRequestSchema,
-} from "@/types/schemas";
 
 export const FetchAccounts = createAction<
   Partial<Pick<AccountsState, "includeInactive" | "asOfDate">> | undefined
@@ -88,7 +79,6 @@ function* handleFetchAccounts(
         callApiWithAuth,
         buildEndpointRequest("listAccounts", {
           query,
-          schema: accountListSchema,
         }),
         { loadingKey: "accounts" },
       );
@@ -113,13 +103,14 @@ function* handleCreateAccount(
   yield put(setAccountMutationError(undefined));
   const isDemo: boolean = yield select(selectIsDemo);
   try {
-    const body = accountCreateRequestSchema.parse(action.payload);
+    const body: EndpointRequest<"createAccount"> = action.payload;
     if (isDemo) {
       const existing = (yield select(selectAccounts)) as AccountsState["items"];
       const now = new Date().toISOString();
+      const accountId = `demo-account-${Date.now()}`;
       const newAccount = {
-        id: `demo-account-${Date.now()}`,
-        name: body.name,
+        id: accountId,
+        name: body.name ?? "Untitled account",
         account_type: body.account_type,
         is_active: body.is_active ?? true,
         icon: body.icon ?? null,
@@ -133,7 +124,7 @@ function* handleCreateAccount(
         loan: body.loan
           ? {
               id: `demo-loan-${Date.now()}`,
-              account_id: `demo-account-${Date.now()}`,
+              account_id: accountId,
               origin_principal: body.loan.origin_principal,
               current_principal: body.loan.current_principal,
               interest_rate_annual: body.loan.interest_rate_annual,
@@ -174,14 +165,20 @@ function* handleUpdateAccount(
   yield put(setAccountMutationError(undefined));
   const isDemo: boolean = yield select(selectIsDemo);
   try {
-    const body = accountUpdateRequestSchema.parse(data);
+    const body: EndpointRequest<"updateAccount"> = data;
     if (isDemo) {
       const existing = (yield select(selectAccounts)) as AccountsState["items"];
       const updated = existing.map((acct) =>
         acct.id === accountId
           ? {
               ...acct,
-              ...body,
+              name: body.name ?? acct.name,
+              is_active: body.is_active ?? acct.is_active,
+              icon: body.icon !== undefined ? body.icon : (acct.icon ?? null),
+              bank_import_type:
+                body.bank_import_type !== undefined
+                  ? body.bank_import_type
+                  : (acct.bank_import_type ?? null),
               updated_at: new Date().toISOString(),
             }
           : acct,
@@ -230,7 +227,7 @@ function* handleAttachLoan(
   yield put(setAccountMutationError(undefined));
   const isDemo: boolean = yield select(selectIsDemo);
   try {
-    const body = loanCreateRequestSchema.parse({ account_id, ...loanData });
+    const body: EndpointRequest<"createLoan"> = { account_id, ...loanData };
     if (isDemo) {
       const existing = (yield select(selectAccounts)) as AccountsState["items"];
       const now = new Date().toISOString();
@@ -281,7 +278,7 @@ function* handleUpdateLoan(
   yield put(setAccountMutationError(undefined));
   const isDemo: boolean = yield select(selectIsDemo);
   try {
-    const body = loanUpdateRequestSchema.parse(data);
+    const body: EndpointRequest<"updateLoan"> = data;
     if (isDemo) {
       const existing = (yield select(selectAccounts)) as AccountsState["items"];
       const now = new Date().toISOString();
@@ -291,13 +288,20 @@ function* handleUpdateLoan(
               ...acct,
               loan: {
                 ...acct.loan,
-                ...body,
+                origin_principal:
+                  body.origin_principal ?? acct.loan.origin_principal,
+                current_principal:
+                  body.current_principal ?? acct.loan.current_principal,
+                interest_rate_annual:
+                  body.interest_rate_annual ?? acct.loan.interest_rate_annual,
+                interest_compound:
+                  body.interest_compound ?? acct.loan.interest_compound,
                 minimum_payment:
-                  body.minimum_payment !== undefined
+                  body.minimum_payment != null
                     ? body.minimum_payment
                     : acct.loan.minimum_payment,
                 expected_maturity_date:
-                  body.expected_maturity_date !== undefined
+                  body.expected_maturity_date != null
                     ? body.expected_maturity_date
                     : acct.loan.expected_maturity_date,
                 updated_at: now,
@@ -358,18 +362,17 @@ function* handleReconcileAccounts(
     }
 
     for (const item of action.payload.items) {
-      const body = reconcileAccountRequestSchema.parse({
+      const body: EndpointRequest<"reconcileAccount"> = {
         captured_at: item.capturedAt,
         reported_balance: item.reportedBalance,
         description: item.description,
         category_id: item.categoryId ?? null,
-      });
+      };
       yield call(
         callApiWithAuth,
         buildEndpointRequest("reconcileAccount", {
           pathParams: { accountId: item.accountId },
           body,
-          schema: reconcileAccountResponseSchema,
         }),
         { loadingKey: "accounts-reconcile" },
       );

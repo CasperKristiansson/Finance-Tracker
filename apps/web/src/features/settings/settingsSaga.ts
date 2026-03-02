@@ -11,11 +11,6 @@ import type {
   SettingsPayload,
   SettingsResponse,
 } from "@/types/contracts";
-import {
-  backupRunResponseSchema,
-  settingsPayloadSchema,
-  settingsResponseSchema,
-} from "@/types/schemas";
 import { selectIsDemo, selectToken } from "../auth/authSlice";
 import {
   SETTINGS_STORAGE_KEY,
@@ -81,14 +76,13 @@ function* handleLoadSettings() {
     try {
       const response: SettingsResponse = yield call(
         callApiWithAuth,
-        buildEndpointRequest("getSettings", { schema: settingsResponseSchema }),
+        buildEndpointRequest("getSettings"),
         { loadingKey: "settings", silent: true },
       );
       if (response?.settings) {
         const payload: Partial<SettingsState> = {
           firstName: response.settings.first_name || undefined,
           lastName: response.settings.last_name || undefined,
-          currencyCode: response.settings.currency_code || undefined,
         };
         yield put(hydrateSettings(payload));
         const currentState: SettingsState =
@@ -123,11 +117,10 @@ function* handleSaveSettings() {
     }
 
     try {
-      const payload: SettingsPayload = settingsPayloadSchema.parse({
-        first_name: state.firstName,
-        last_name: state.lastName,
-        currency_code: state.currencyCode,
-      });
+      const payload: SettingsPayload = {
+        first_name: state.firstName ?? null,
+        last_name: state.lastName ?? null,
+      };
       const request: EndpointRequest<"saveSettings"> = { settings: payload };
       yield call(
         callApiWithAuth,
@@ -171,9 +164,7 @@ function* handleRunBackup() {
     try {
       yield call(
         callApiWithAuth<EndpointResponse<"runTransactionsBackup">>,
-        buildEndpointRequest("runTransactionsBackup", {
-          schema: backupRunResponseSchema,
-        }),
+        buildEndpointRequest("runTransactionsBackup", {}),
         { loadingKey: "settings", silent: true },
       );
       toast.success("Backup created", {

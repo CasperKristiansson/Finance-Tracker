@@ -1,4 +1,3 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Check,
   CheckSquare,
@@ -25,7 +24,6 @@ import React, {
 import { useFieldArray, useForm } from "react-hook-form";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { z } from "zod";
 import { useAppSelector } from "@/app/hooks";
 import { ConfirmDialog } from "@/components/composed/confirm-dialog";
 import { MotionPage } from "@/components/motion-presets";
@@ -260,24 +258,9 @@ type SplitPreviewRow = ImportPreviewResponse["rows"][number] & {
   is_split: true;
 };
 
-const commitRowSchema = z.object({
-  id: z.string(),
-  file_id: z.string().nullable().optional(),
-  account_id: z.string(),
-  occurred_at: z.string(),
-  amount: z.string(),
-  description: z.string(),
-  category_id: z.string().nullable().optional(),
-  transfer_account_id: z.string().nullable().optional(),
-  tax_event_type: z.enum(TaxEventTypeEnum).nullable().optional(),
-  delete: z.boolean().optional(),
-});
-
-const commitFormSchema = z.object({
-  rows: z.array(commitRowSchema),
-});
-
-export type CommitFormValues = z.infer<typeof commitFormSchema>;
+export type CommitFormValues = {
+  rows: ImportCommitRow[];
+};
 
 const normalizeDraftRow = (
   row: CommitFormValues["rows"][number],
@@ -402,7 +385,6 @@ export const Imports: React.FC = () => {
   const pendingDraftSnapshotRef = useRef<string | null>(null);
 
   const commitForm = useForm<CommitFormValues>({
-    resolver: zodResolver(commitFormSchema),
     defaultValues: { rows: [] },
   });
 
@@ -1636,7 +1618,7 @@ export const Imports: React.FC = () => {
                       >
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium text-slate-800">
-                            {draft.file_names.join(", ")}
+                            {(draft.file_names ?? []).join(", ")}
                           </p>
                           <p className="text-xs text-slate-500">
                             {draft.row_count} rows • {draft.error_count} errors
@@ -1696,7 +1678,7 @@ export const Imports: React.FC = () => {
             title="Remove unfinished import?"
             description={
               draftPendingDelete
-                ? `Remove "${draftPendingDelete.file_names.join(", ")}"? You won’t be able to resume it.`
+                ? `Remove "${(draftPendingDelete.file_names ?? []).join(", ")}"? You won’t be able to resume it.`
                 : "You won’t be able to resume this import after removal."
             }
             confirmLabel="Remove"

@@ -1,4 +1,3 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import { ShaderGradient, ShaderGradientCanvas } from "@shadergradient/react";
 import { motion, useReducedMotion } from "framer-motion";
 import {
@@ -16,7 +15,6 @@ import {
 import React, { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { z } from "zod";
 import { useAppSelector } from "@/app/hooks";
 import { ConfirmDialog } from "@/components/composed/confirm-dialog";
 import {
@@ -54,20 +52,15 @@ import { currency, formatDate as formatDateLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { fetchTotalOverview } from "@/services/reports";
 import type {
+  GoalCreateRequest,
   GoalListResponse,
   GoalRead,
   TotalOverviewResponse,
 } from "@/types/api";
-import { goalListSchema } from "@/types/schemas";
-
-const goalFormSchema = z.object({
-  name: z.string().min(1, "Name required").trim(),
-  target_amount: z.string().min(1, "Target amount required").trim(),
-  target_date: z.string().optional(),
-  note: z.string().optional(),
-});
-
-type GoalFormValues = z.infer<typeof goalFormSchema>;
+type GoalFormValues = Pick<
+  GoalCreateRequest,
+  "name" | "target_amount" | "target_date" | "note"
+>;
 
 type GoalWithProgress = GoalRead & {
   computedCurrentAmount: number;
@@ -120,7 +113,6 @@ export const Goals: React.FC = () => {
     null,
   );
   const goalForm = useForm<GoalFormValues>({
-    resolver: zodResolver(goalFormSchema),
     defaultValues: defaultGoalValues,
   });
 
@@ -169,7 +161,6 @@ export const Goals: React.FC = () => {
       }
       const { data } = await apiFetch<GoalListResponse>({
         path: "/goals",
-        schema: goalListSchema,
         token,
       });
       setGoals(data.goals ?? []);
@@ -514,7 +505,11 @@ export const Goals: React.FC = () => {
                       </label>
                       <Input
                         placeholder="Reach 1,000,000 SEK"
-                        {...goalForm.register("name")}
+                        {...goalForm.register("name", {
+                          required: "Name required",
+                          validate: (value) =>
+                            value.trim().length > 0 || "Name required",
+                        })}
                       />
                       {goalForm.formState.errors.name ? (
                         <span className="text-xs text-rose-600">
@@ -530,7 +525,16 @@ export const Goals: React.FC = () => {
                         <Input
                           type="number"
                           placeholder="1000000"
-                          {...goalForm.register("target_amount")}
+                          {...goalForm.register("target_amount", {
+                            required: "Target amount required",
+                            validate: (value) => {
+                              const trimmed = value.trim();
+                              if (!trimmed) return "Target amount required";
+                              return Number.isFinite(Number(trimmed))
+                                ? true
+                                : "Target amount must be numeric";
+                            },
+                          })}
                         />
                         {goalForm.formState.errors.target_amount ? (
                           <span className="text-xs text-rose-600">

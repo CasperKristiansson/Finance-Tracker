@@ -36,13 +36,6 @@ import {
 import { buildReportKey } from "@/features/reports/reportsSlice";
 import { buildEndpointRequest } from "@/lib/apiEndpoints";
 import type { EndpointResponse } from "@/types/contracts";
-import {
-  monthlyReportSchema,
-  netWorthHistorySchema,
-  quarterlyReportSchema,
-  totalReportSchema,
-  yearlyReportSchema,
-} from "@/types/schemas";
 
 export const FetchMonthlyReport = createAction<ReportFilters | undefined>(
   "reports/fetchMonthly",
@@ -107,7 +100,6 @@ function* handleFetchMonthly(
         callApiWithAuth,
         buildEndpointRequest("monthlyReport", {
           query,
-          schema: monthlyReportSchema,
         }),
         { loadingKey: "report-monthly" },
       );
@@ -153,7 +145,6 @@ function* handleFetchYearly(
         callApiWithAuth,
         buildEndpointRequest("yearlyReport", {
           query,
-          schema: yearlyReportSchema,
         }),
         { loadingKey: "report-yearly" },
       );
@@ -197,7 +188,6 @@ function* handleFetchTotal(
         callApiWithAuth,
         buildEndpointRequest("totalReport", {
           query,
-          schema: totalReportSchema,
         }),
         { loadingKey: "report-total" },
       );
@@ -240,7 +230,6 @@ function* handleFetchNetWorth(
         callApiWithAuth,
         buildEndpointRequest("netWorthHistory", {
           query,
-          schema: netWorthHistorySchema,
         }),
         { loadingKey: "report-net-worth" },
       );
@@ -288,7 +277,6 @@ function* handleFetchQuarterly(
         callApiWithAuth,
         buildEndpointRequest("quarterlyReport", {
           query,
-          schema: quarterlyReportSchema,
         }),
         { loadingKey: "report-quarterly" },
       );

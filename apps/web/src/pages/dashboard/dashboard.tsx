@@ -66,11 +66,6 @@ import {
   type TransactionListResponse,
   TransactionType,
 } from "@/types/api";
-import {
-  monthlyReportSchema,
-  transactionListSchema,
-  yearlyOverviewSchema,
-} from "@/types/schemas";
 
 type KPI = {
   title: string;
@@ -330,7 +325,6 @@ export const Dashboard: React.FC = () => {
                 ...(accountIds?.length ? { account_ids: accountIds } : {}),
               },
               token,
-              schema: monthlyReportSchema,
             }),
           ),
         );
@@ -368,7 +362,6 @@ export const Dashboard: React.FC = () => {
               path: "/reports/yearly-overview",
               query: { year },
               token,
-              schema: yearlyOverviewSchema,
             }),
           ),
         );
@@ -410,7 +403,6 @@ export const Dashboard: React.FC = () => {
             limit: 200,
           },
           token,
-          schema: transactionListSchema,
         });
         const deltaMap: Record<string, number> = {};
         (data.transactions || []).forEach((tx) => {

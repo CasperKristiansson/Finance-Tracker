@@ -30,7 +30,6 @@ import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useInvestmentsApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import { AccountType, type YearlyOverviewResponse } from "@/types/api";
-import { yearlyOverviewSchema } from "@/types/schemas";
 import { AccountModal } from "./children/account-modal";
 import {
   AccountHealthCard,
@@ -101,7 +100,6 @@ export const Accounts: React.FC = () => {
       try {
         const { data } = await apiFetch<YearlyOverviewResponse>({
           path: "/reports/yearly-overview",
-          schema: yearlyOverviewSchema,
           query: { year },
           token,
         });

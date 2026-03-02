@@ -1,4 +1,3 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Calendar, Copy, Loader2, Plus, Receipt } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
@@ -13,7 +12,6 @@ import {
   YAxis,
 } from "recharts";
 import { toast } from "sonner";
-import { z } from "zod";
 import { useAppSelector } from "@/app/hooks";
 import { MotionPage } from "@/components/motion-presets";
 import { Button } from "@/components/ui/button";
@@ -55,15 +53,9 @@ import type {
   TaxEventListResponse,
   TaxSummaryResponse,
   TaxEventCreateResponse,
+  TaxEventCreateRequest,
   TaxTotalSummaryResponse,
 } from "@/types/api";
-import {
-  taxEventCreateResponseSchema,
-  taxEventTypeSchema,
-  taxEventListResponseSchema,
-  taxSummarySchema,
-  taxTotalSummarySchema,
-} from "@/types/schemas";
 
 const monthLabel = (year: number, month: number) =>
   formatDate(Date.UTC(year, month - 1, 1), {
@@ -85,19 +77,15 @@ const formatDisplayDate = (iso: string) =>
     day: "numeric",
   });
 
-const createTaxEventSchema = z.object({
-  event_type: taxEventTypeSchema,
-  account_id: z.string().min(1),
-  occurred_at: z.string().min(1),
-  amount: z
-    .string()
-    .min(1)
-    .refine((value) => Number(value) > 0, "Amount must be positive"),
-  description: z.string().min(1).max(250),
-  note: z.string().nullable().optional(),
-});
-
-type CreateTaxEventValues = z.infer<typeof createTaxEventSchema>;
+type CreateTaxEventValues = Pick<
+  TaxEventCreateRequest,
+  | "event_type"
+  | "account_id"
+  | "occurred_at"
+  | "amount"
+  | "description"
+  | "note"
+>;
 
 const typeTone: Record<TaxEventType, string> = {
   [TaxEventType.PAYMENT]: "bg-rose-100 text-rose-800",
@@ -156,7 +144,6 @@ export const Taxes: React.FC = () => {
       const { data } = await apiFetch<TaxSummaryResponse>({
         path: "/tax/summary",
         query: { year: targetYear },
-        schema: taxSummarySchema,
         token,
       });
       setSummary(data);
@@ -181,7 +168,6 @@ export const Taxes: React.FC = () => {
       }
       const { data } = await apiFetch<TaxTotalSummaryResponse>({
         path: "/tax/summary/total",
-        schema: taxTotalSummarySchema,
         token,
       });
       setTotalSummary(data);
@@ -219,7 +205,6 @@ export const Taxes: React.FC = () => {
         const { data } = await apiFetch<TaxEventListResponse>({
           path: "/tax/events",
           query,
-          schema: taxEventListResponseSchema,
           token,
         });
         all.push(...data.events);
@@ -254,7 +239,6 @@ export const Taxes: React.FC = () => {
   }, [token, year, viewMode]);
 
   const form = useForm<CreateTaxEventValues>({
-    resolver: zodResolver(createTaxEventSchema),
     defaultValues: {
       event_type: TaxEventType.PAYMENT,
       account_id: "",
@@ -304,7 +288,6 @@ export const Taxes: React.FC = () => {
       const { data } = await apiFetch<TaxEventCreateResponse>({
         path: "/tax/events",
         method: "POST",
-        schema: taxEventCreateResponseSchema,
         token,
         body: {
           account_id: values.account_id,
@@ -1074,6 +1057,7 @@ export const Taxes: React.FC = () => {
                 <Controller
                   control={form.control}
                   name="event_type"
+                  rules={{ required: true }}
                   render={({ field }) => (
                     <select
                       className="rounded border border-slate-200 px-3 py-2"
@@ -1090,6 +1074,7 @@ export const Taxes: React.FC = () => {
                 <Controller
                   control={form.control}
                   name="account_id"
+                  rules={{ required: "Account is required" }}
                   render={({ field }) => (
                     <select
                       className="rounded border border-slate-200 px-3 py-2"
@@ -1113,7 +1098,9 @@ export const Taxes: React.FC = () => {
                 <input
                   type="date"
                   className="rounded border border-slate-200 px-3 py-2"
-                  {...form.register("occurred_at")}
+                  {...form.register("occurred_at", {
+                    required: "Date is required",
+                  })}
                 />
               </label>
               <label className="flex flex-col gap-1 text-sm text-slate-700">
@@ -1122,7 +1109,15 @@ export const Taxes: React.FC = () => {
                   inputMode="decimal"
                   className="rounded border border-slate-200 px-3 py-2"
                   placeholder="0"
-                  {...form.register("amount")}
+                  {...form.register("amount", {
+                    required: "Amount is required",
+                    validate: (value) => {
+                      const amount = Number(value);
+                      if (!Number.isFinite(amount))
+                        return "Amount must be numeric";
+                      return amount > 0 || "Amount must be positive";
+                    },
+                  })}
                 />
               </label>
             </div>
@@ -1131,7 +1126,14 @@ export const Taxes: React.FC = () => {
               Description
               <input
                 className="rounded border border-slate-200 px-3 py-2"
-                {...form.register("description")}
+                {...form.register("description", {
+                  required: "Description is required",
+                  validate: (value) => {
+                    const trimmed = value.trim();
+                    if (!trimmed) return "Description is required";
+                    return trimmed.length <= 250 || "Description too long";
+                  },
+                })}
               />
             </label>
 

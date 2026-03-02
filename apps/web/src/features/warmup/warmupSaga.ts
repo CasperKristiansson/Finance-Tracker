@@ -5,7 +5,6 @@ import { selectToken } from "@/features/auth/authSlice";
 import { apiFetch, ApiError } from "@/lib/apiClient";
 import { buildEndpointRequest } from "@/lib/apiEndpoints";
 import type { EndpointResponse } from "@/types/contracts";
-import { warmupResponseSchema } from "@/types/schemas";
 import {
   recordWarmupAttempt,
   selectWarmupState,
@@ -59,7 +58,6 @@ function* performWarmup() {
         buildEndpointRequest("warmDatabase", {
           retryCount: 1,
           token,
-          schema: warmupResponseSchema,
         }),
       )) as { data: EndpointResponse<"warmDatabase"> };
 

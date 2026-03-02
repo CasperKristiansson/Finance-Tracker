@@ -17,12 +17,8 @@ import {
   type CategoriesState,
 } from "@/features/categories/categoriesSlice";
 import { buildEndpointRequest } from "@/lib/apiEndpoints";
+import type { CategoryRead } from "@/types/api";
 import type { EndpointRequest, EndpointResponse } from "@/types/contracts";
-import {
-  categoryCreateRequestSchema,
-  categoryListSchema,
-  categoryUpdateRequestSchema,
-} from "@/types/schemas";
 
 export const FetchCategories = createAction<
   Partial<Pick<CategoriesState, "includeArchived">> | undefined
@@ -63,12 +59,17 @@ function* handleFetchCategories(
       callApiWithAuth,
       buildEndpointRequest("listCategories", {
         query,
-        schema: categoryListSchema,
       }),
       { loadingKey: "categories" },
     );
 
-    yield put(setCategories(response.categories));
+    const normalized: CategoryRead[] = response.categories.map((category) => ({
+      ...category,
+      transaction_count: category.transaction_count ?? 0,
+      lifetime_total: category.lifetime_total ?? "0",
+      recent_months: category.recent_months ?? [],
+    }));
+    yield put(setCategories(normalized));
   } catch (error) {
     yield put(
       setCategoriesError(
@@ -87,7 +88,7 @@ function* handleCreateCategory(
   yield put(setCategoryCreateLoading(true));
   yield put(setCategoryMutationError(undefined));
   try {
-    const body = categoryCreateRequestSchema.parse(action.payload);
+    const body: EndpointRequest<"createCategory"> = action.payload;
     if (isDemo) {
       const current = (yield select(
         selectCategories,
@@ -143,7 +144,7 @@ function* handleUpdateCategory(
   yield put(setCategoryUpdateLoading(true));
   yield put(setCategoryMutationError(undefined));
   try {
-    const body = categoryUpdateRequestSchema.parse(action.payload.data);
+    const body: EndpointRequest<"updateCategory"> = action.payload.data;
     if (isDemo) {
       const current = (yield select(
         selectCategories,
@@ -154,9 +155,14 @@ function* handleUpdateCategory(
             cat.id === action.payload.id
               ? {
                   ...cat,
-                  ...body,
-                  color_hex: body.color_hex ?? cat.color_hex,
-                  icon: body.icon ?? cat.icon,
+                  name: body.name ?? cat.name,
+                  category_type: body.category_type ?? cat.category_type,
+                  color_hex:
+                    body.color_hex !== undefined
+                      ? body.color_hex
+                      : cat.color_hex,
+                  icon: body.icon !== undefined ? body.icon : cat.icon,
+                  is_archived: body.is_archived ?? cat.is_archived,
                   updated_at: new Date().toISOString(),
                 }
               : cat,

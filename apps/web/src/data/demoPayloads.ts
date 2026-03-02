@@ -1602,11 +1602,11 @@ export const getDemoTotalOverview = (): TotalOverviewResponse => {
     ],
     accounts,
     investments: {
-      series: demoInvestmentOverview.portfolio.series.map((point) => ({
+      series: (demoInvestmentOverview.portfolio.series ?? []).map((point) => ({
         date: point.date,
         value: String(point.value),
       })),
-      yearly: demoInvestmentOverview.portfolio.series.map((point) => ({
+      yearly: (demoInvestmentOverview.portfolio.series ?? []).map((point) => ({
         year: Number(point.date.slice(0, 4)),
         end_value: String(point.value),
         contributions: "420000.00",

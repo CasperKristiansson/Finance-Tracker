@@ -304,6 +304,7 @@ export interface ImportCategorySuggestJobRequest {
   transactions: ImportCategorySuggestTransaction[];
   model_id?: string | null;
   max_tokens?: number | null;
+  import_batch_id?: string | null;
   client_id: string;
   client_token: string;
 }
@@ -396,6 +397,8 @@ export interface ImportDraftRead {
 
 export interface ImportDraftSaveRequest {
   rows: ImportCommitRow[];
+  snapshot?: ImportPreviewResponse | null;
+  note?: string | null;
 }
 
 export interface ImportDraftSaveResponse {
@@ -467,6 +470,7 @@ export interface ImportPreviewRequest {
 
 export interface ImportPreviewResponse {
   import_batch_id: string;
+  suggestions_status?: "not_started" | "running" | "completed" | "failed";
   files: ImportPreviewFileRead[];
   rows: ImportPreviewRowRead[];
   accounts?: ImportPreviewAccountContextRead[];

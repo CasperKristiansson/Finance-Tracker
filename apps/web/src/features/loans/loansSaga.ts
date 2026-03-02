@@ -17,11 +17,6 @@ import {
 } from "@/features/loans/loansSlice";
 import { buildEndpointRequest } from "@/lib/apiEndpoints";
 import type { EndpointResponse } from "@/types/contracts";
-import {
-  loanEventsResponseSchema,
-  loanPortfolioSeriesResponseSchema,
-  loanScheduleSchema,
-} from "@/types/schemas";
 
 export const FetchLoanSchedule = createAction<{
   accountId: string;
@@ -65,7 +60,6 @@ function* handleFetchSchedule(
         buildEndpointRequest("getLoanSchedule", {
           pathParams: { accountId },
           query,
-          schema: loanScheduleSchema,
         }),
         { loadingKey },
       );
@@ -106,7 +100,6 @@ function* handleFetchEvents(
         buildEndpointRequest("listLoanEvents", {
           pathParams: { accountId },
           query,
-          schema: loanEventsResponseSchema,
         }),
         { loadingKey },
       );
@@ -147,7 +140,6 @@ function* handleFetchPortfolioSeries(
         callApiWithAuth,
         buildEndpointRequest("listLoanPortfolioSeries", {
           query,
-          schema: loanPortfolioSeriesResponseSchema,
         }),
         { loadingKey },
       );

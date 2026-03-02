@@ -20,6 +20,7 @@ from apps.api.shared import (
     configure_engine,
     get_default_user_id,
     get_engine,
+    import_draft_state,
     scope_session_to_user,
 )
 
@@ -39,6 +40,27 @@ def configure_sqlite(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         yield
     finally:
         SQLModel.metadata.drop_all(engine)
+
+
+class _FakeDraftStoreTable:
+    def __init__(self) -> None:
+        self.items: dict[str, dict[str, Any]] = {}
+
+    def get_item(self, *, Key: dict) -> dict:
+        item = self.items.get(str(Key["connection_id"]))
+        if item is None:
+            return {}
+        return {"Item": item}
+
+    def put_item(self, *, Item: dict) -> None:
+        self.items[str(Item["connection_id"])] = Item
+
+
+@pytest.fixture(autouse=True)
+def configure_import_draft_store(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    table = _FakeDraftStoreTable()
+    monkeypatch.setattr(import_draft_state, "_get_table", lambda: table)
+    yield
 
 
 def _create_account(*, bank_import_type: str) -> UUID:

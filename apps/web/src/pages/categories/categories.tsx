@@ -1,4 +1,3 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import {
   ChevronRight,
   Loader2,
@@ -10,7 +9,6 @@ import {
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { z } from "zod";
 import { useAppSelector } from "@/app/hooks";
 import { LucideIconPicker } from "@/components/lucide-icon-picker";
 import { MotionPage } from "@/components/motion-presets";
@@ -48,7 +46,6 @@ import {
   type TransactionListResponse,
   type TransactionRead,
 } from "@/types/api";
-import { categorySchema, transactionListSchema } from "@/types/schemas";
 
 const formatCategory = (cat: CategoryRead) =>
   formatCategoryLabel(cat.name, cat.icon);
@@ -58,35 +55,16 @@ const selectableCategoryTypes = [
   CategoryType.EXPENSE,
 ] as const;
 
-const categoryFormSchema = categorySchema
-  .pick({ name: true, category_type: true, icon: true, color_hex: true })
-  .extend({
-    name: z.string().min(1, "Name is required").trim(),
-    icon: z.string().optional(),
-    color_hex: z
-      .string()
-      .trim()
-      .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Invalid hex color")
-      .optional()
-      .or(z.literal("")),
-  });
+type CategoryFormValues = {
+  name: string;
+  category_type: CategoryType;
+  icon?: string;
+  color_hex?: string;
+};
 
-type CategoryFormValues = z.infer<typeof categoryFormSchema>;
-
-const categoryEditFormSchema = z.object({
-  name: z.string().min(1, "Name is required").trim(),
-  category_type: z.enum(CategoryType),
-  icon: z.string().optional(),
-  color_hex: z
-    .string()
-    .trim()
-    .regex(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "Invalid hex color")
-    .optional()
-    .or(z.literal("")),
-  is_archived: z.boolean(),
-});
-
-type CategoryEditFormValues = z.infer<typeof categoryEditFormSchema>;
+type CategoryEditFormValues = CategoryFormValues & {
+  is_archived: boolean;
+};
 
 type TypeFilter = "all" | CategoryType;
 type ArchivedFilter = "active" | "archived" | "all";
@@ -97,6 +75,11 @@ const formatCurrency = (value: number) =>
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   });
+
+const isValidHexColor = (value?: string) =>
+  !value ||
+  /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value.trim()) ||
+  "Invalid hex color";
 
 const formatShortDate = (value?: string | null) => {
   if (!value) return "Never";
@@ -191,7 +174,6 @@ export const Categories: React.FC = () => {
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const createForm = useForm<CategoryFormValues>({
-    resolver: zodResolver(categoryFormSchema),
     defaultValues: {
       name: "",
       category_type: CategoryType.EXPENSE,
@@ -211,7 +193,6 @@ export const Categories: React.FC = () => {
   );
 
   const editForm = useForm<CategoryEditFormValues>({
-    resolver: zodResolver(categoryEditFormSchema),
     defaultValues: {
       name: "",
       category_type: CategoryType.EXPENSE,
@@ -415,7 +396,6 @@ export const Categories: React.FC = () => {
       path: "/transactions",
       token,
       query: { category_ids: detailsId, limit: 20 },
-      schema: transactionListSchema,
     })
       .then(({ data }) => {
         if (cancelled) return;
@@ -838,7 +818,11 @@ export const Categories: React.FC = () => {
                   <Input
                     id="edit-category-name"
                     placeholder="e.g., Groceries"
-                    {...editForm.register("name")}
+                    {...editForm.register("name", {
+                      required: "Name is required",
+                      validate: (value) =>
+                        value.trim().length > 0 || "Name is required",
+                    })}
                     disabled={updateLoading}
                   />
                   {editForm.formState.errors.name ? (
@@ -899,7 +883,9 @@ export const Categories: React.FC = () => {
                       disabled={updateLoading}
                     />
                     <Input
-                      {...editForm.register("color_hex")}
+                      {...editForm.register("color_hex", {
+                        validate: (value) => isValidHexColor(value),
+                      })}
                       placeholder="#64748b"
                       disabled={updateLoading}
                     />
@@ -1315,7 +1301,11 @@ export const Categories: React.FC = () => {
                 <label className="text-sm text-slate-600">Name</label>
                 <Input
                   placeholder="Groceries"
-                  {...createForm.register("name")}
+                  {...createForm.register("name", {
+                    required: "Name is required",
+                    validate: (value) =>
+                      value.trim().length > 0 || "Name is required",
+                  })}
                   disabled={createLoading}
                 />
                 {createForm.formState.errors.name ? (
@@ -1352,7 +1342,9 @@ export const Categories: React.FC = () => {
                     disabled={createLoading}
                   />
                   <Input
-                    {...createForm.register("color_hex")}
+                    {...createForm.register("color_hex", {
+                      validate: (value) => isValidHexColor(value),
+                    })}
                     placeholder="#64748b"
                     disabled={createLoading}
                   />

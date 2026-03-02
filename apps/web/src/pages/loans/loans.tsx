@@ -84,11 +84,6 @@ import {
 import { cn } from "@/lib/utils";
 import type { AccountWithBalance } from "@/types/api";
 import { AccountType, InterestCompound, LoanEventType } from "@/types/api";
-import {
-  accountWithBalanceSchema,
-  loanSchema,
-  transactionSchema,
-} from "@/types/schemas";
 
 const selectLikeInput =
   "flex h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
@@ -621,7 +616,6 @@ export const Loans: React.FC = () => {
         path: "/accounts",
         method: "POST",
         token,
-        schema: accountWithBalanceSchema,
         body: {
           name: loanName.trim(),
           account_type: AccountType.DEBT,
@@ -698,7 +692,6 @@ export const Loans: React.FC = () => {
         path: "/transactions",
         method: "POST",
         token,
-        schema: transactionSchema,
         body: {
           category_id: null,
           description: activityDescription.trim()
@@ -732,7 +725,6 @@ export const Loans: React.FC = () => {
             path: `/loans/${accountId}`,
             method: "PATCH",
             token,
-            schema: loanSchema,
             body: {
               current_principal: centsToMoneyString(clamped),
             },
@@ -793,7 +785,6 @@ export const Loans: React.FC = () => {
         path: `/loans/${accountId}`,
         method: "PATCH",
         token,
-        schema: loanSchema,
         body: {
           origin_principal: centsToMoneyString(originCents),
           current_principal: centsToMoneyString(currentCents),

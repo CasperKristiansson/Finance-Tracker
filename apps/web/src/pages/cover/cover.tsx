@@ -1,21 +1,16 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
 import React from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
-import { z } from "zod";
 import { MotionPage, fadeInUp } from "@/components/motion-presets";
 
-const coverFormSchema = z.object({
-  name: z.string().min(1, "Name required").trim(),
-  email: z.string().email("Valid email required").trim(),
-});
-
-type CoverFormValues = z.infer<typeof coverFormSchema>;
+type CoverFormValues = {
+  name: string;
+  email: string;
+};
 
 export const Cover: React.FC = () => {
   const coverForm = useForm<CoverFormValues>({
-    resolver: zodResolver(coverFormSchema),
     defaultValues: { name: "", email: "" },
   });
 
@@ -60,7 +55,11 @@ export const Cover: React.FC = () => {
                     id="hs-cover-with-gradient-form-name-1"
                     className="block w-full rounded-lg border-white/20 bg-white/10 py-2.5 ps-11 pe-4 text-white placeholder:text-white focus:border-white/30 focus:ring-white/30 sm:p-4 sm:py-3 sm:ps-11 sm:text-sm"
                     placeholder="Full name"
-                    {...coverForm.register("name")}
+                    {...coverForm.register("name", {
+                      required: "Name required",
+                      validate: (value) =>
+                        value.trim().length > 0 || "Name required",
+                    })}
                   />
                   <div className="pointer-events-none absolute inset-y-0 start-0 z-20 flex items-center ps-4">
                     <svg
@@ -100,7 +99,12 @@ export const Cover: React.FC = () => {
                     id="hs-cover-with-gradient-form-email-1"
                     className="block w-full rounded-lg border-white/20 bg-white/10 py-2.5 ps-11 pe-4 text-white placeholder:text-white focus:border-white/30 focus:ring-white/30 sm:p-4 sm:py-3 sm:ps-11 sm:text-sm"
                     placeholder="Email address"
-                    {...coverForm.register("email")}
+                    {...coverForm.register("email", {
+                      required: "Valid email required",
+                      validate: (value) =>
+                        /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim()) ||
+                        "Valid email required",
+                    })}
                   />
                   <div className="pointer-events-none absolute inset-y-0 start-0 z-20 flex items-center ps-4">
                     <svg

@@ -15,12 +15,11 @@ import {
   setOverview,
 } from "@/features/investments/investmentsSlice";
 import { buildEndpointRequest } from "@/lib/apiEndpoints";
+import type {
+  InvestmentOverviewResponse,
+  InvestmentTransactionRead,
+} from "@/types/api";
 import type { EndpointRequest, EndpointResponse } from "@/types/contracts";
-import {
-  investmentOverviewResponseSchema,
-  investmentSnapshotCreateResponseSchema,
-  investmentTransactionListSchema,
-} from "@/types/schemas";
 
 export const FetchInvestmentTransactions = createAction(
   "investments/fetchTransactions",
@@ -44,12 +43,15 @@ function* handleFetchTransactions(): Generator {
       callApiWithAuth,
       buildEndpointRequest("listInvestmentTransactions", {
         query: { limit: 500 },
-        schema: investmentTransactionListSchema,
       }),
       { loadingKey: "investments", silent: true },
     );
     if (response?.transactions) {
-      yield put(setTransactions(response.transactions));
+      yield put(
+        setTransactions(
+          response.transactions as unknown as InvestmentTransactionRead[],
+        ),
+      );
     }
   } catch (error) {
     yield put(
@@ -71,12 +73,23 @@ function* handleFetchOverview(): Generator {
     } else {
       const response: EndpointResponse<"investmentOverview"> = yield call(
         callApiWithAuth,
-        buildEndpointRequest("investmentOverview", {
-          schema: investmentOverviewResponseSchema,
-        }),
+        buildEndpointRequest("investmentOverview"),
         { loadingKey: "investments", silent: true },
       );
-      yield put(setOverview(response));
+      const normalized: InvestmentOverviewResponse = {
+        ...response,
+        portfolio: {
+          ...response.portfolio,
+          series: response.portfolio.series ?? [],
+          cashflow_series: response.portfolio.cashflow_series ?? [],
+        },
+        accounts: (response.accounts ?? []).map((account) => ({
+          ...account,
+          series: account.series ?? [],
+        })),
+        recent_cashflows: response.recent_cashflows ?? [],
+      };
+      yield put(setOverview(normalized));
     }
   } catch (error) {
     yield put(
@@ -103,7 +116,6 @@ function* handleCreateSnapshot(
         callApiWithAuth,
         buildEndpointRequest("createInvestmentSnapshot", {
           body: action.payload.data,
-          schema: investmentSnapshotCreateResponseSchema,
         }),
         { loadingKey: "investments-create-snapshot" },
       );

@@ -4,7 +4,6 @@ import { toast } from "sonner";
 import { resetAccounts } from "@/features/accounts/accountsSlice";
 import { resetReports } from "@/features/reports/reportsSlice";
 import { resetTransactions } from "@/features/transactions/transactionsSlice";
-import { authSessionSchema } from "@/types/schemas";
 import { setLoading } from "../app/appSlice";
 import { resetWarmup } from "../warmup/warmupSlice";
 import authService, {
@@ -158,11 +157,8 @@ function* handleLoginWithGoogle() {
       authService.fetchAuthenticatedUser(),
     );
     if (existingSession) {
-      const parsed = authSessionSchema.safeParse(existingSession);
-      if (parsed.success) {
-        yield put(loginSuccess(parsed.data));
-        return;
-      }
+      yield put(loginSuccess(existingSession));
+      return;
     }
 
     yield call(() => authService.signInWithGoogle());
@@ -191,9 +187,8 @@ function* handleLoginWithGoogle() {
         const session: AuthenticatedUser | null = yield call(() =>
           authService.fetchAuthenticatedUser(true),
         );
-        const parsed = session ? authSessionSchema.safeParse(session) : null;
-        if (parsed?.success) {
-          yield put(loginSuccess(parsed.data));
+        if (session) {
+          yield put(loginSuccess(session));
           return;
         }
       } catch {
@@ -257,18 +252,7 @@ function* initializeAuth() {
     );
 
     if (existingSession) {
-      const parsed = authSessionSchema.safeParse(existingSession);
-      if (parsed.success) {
-        yield put(loginSuccess({ ...parsed.data }));
-      } else {
-        console.error("Invalid session payload from auth provider", {
-          issues: parsed.error.format(),
-          session: existingSession,
-        });
-        toast.error("Failed to restore session", {
-          description: "Session payload was invalid.",
-        });
-      }
+      yield put(loginSuccess(existingSession));
     }
   } catch (error) {
     if (isPendingApprovalError(error)) {
