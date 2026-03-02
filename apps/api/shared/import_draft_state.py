@@ -199,6 +199,8 @@ def save_import_draft_rows(
         existing["amount"] = row.get("amount")
         existing["description"] = row.get("description")
         existing["draft"] = {
+            "id": row.get("id"),
+            "file_id": row.get("file_id"),
             "account_id": row.get("account_id"),
             "occurred_at": row.get("occurred_at"),
             "amount": row.get("amount"),
