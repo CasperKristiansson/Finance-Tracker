@@ -31,6 +31,16 @@ class CategoryService:
             include_special=include_special,
         )
 
+    def list_category_options(
+        self,
+        include_archived: bool = False,
+        include_special: bool = False,
+    ) -> List[Category]:
+        return self.repository.list(
+            include_archived=include_archived,
+            include_special=include_special,
+        )
+
     def get_category(self, category_id: UUID) -> Category:
         category = self.repository.get(category_id)
         if category is None:

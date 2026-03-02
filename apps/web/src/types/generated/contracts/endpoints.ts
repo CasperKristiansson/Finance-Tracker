@@ -41,6 +41,11 @@ export type CreateLoanResponse = Models.LoanRead;
 export type CreateLoanQuery = void;
 export type CreateLoanPath = void;
 
+export type CreateLoanActivityRequest = Models.LoanActivityCreateRequest;
+export type CreateLoanActivityResponse = Models.LoanActivityCreateResponse;
+export type CreateLoanActivityQuery = void;
+export type CreateLoanActivityPath = { accountId: string };
+
 export type CreateTaxEventRequest = Models.TaxEventCreateRequest;
 export type CreateTaxEventResponse = Models.TaxEventCreateResponse;
 export type CreateTaxEventQuery = void;
@@ -50,6 +55,11 @@ export type CreateTransactionRequest = Models.TransactionCreate;
 export type CreateTransactionResponse = Models.TransactionRead;
 export type CreateTransactionQuery = void;
 export type CreateTransactionPath = void;
+
+export type DashboardOverviewRequest = void;
+export type DashboardOverviewResponse = Models.DashboardOverviewResponse;
+export type DashboardOverviewQuery = Models.DashboardOverviewQuery;
+export type DashboardOverviewPath = void;
 
 export type DateRangeReportRequest = void;
 export type DateRangeReportResponse = Models.DateRangeReportResponse;
@@ -101,6 +111,11 @@ export type InvestmentOverviewResponse = Models.InvestmentOverviewResponse;
 export type InvestmentOverviewQuery = void;
 export type InvestmentOverviewPath = void;
 
+export type ListAccountOptionsRequest = void;
+export type ListAccountOptionsResponse = Models.ListAccountOptionsResponse;
+export type ListAccountOptionsQuery = Models.ListAccountOptionsQuery;
+export type ListAccountOptionsPath = void;
+
 export type ListAccountsRequest = void;
 export type ListAccountsResponse = Models.ListAccountsResponse;
 export type ListAccountsQuery = Models.ListAccountsQuery;
@@ -110,6 +125,11 @@ export type ListCategoriesRequest = void;
 export type ListCategoriesResponse = Models.CategoryListResponse;
 export type ListCategoriesQuery = Models.ListCategoriesQuery;
 export type ListCategoriesPath = void;
+
+export type ListCategoryOptionsRequest = void;
+export type ListCategoryOptionsResponse = Models.CategoryOptionsResponse;
+export type ListCategoryOptionsQuery = Models.ListCategoryOptionsQuery;
+export type ListCategoryOptionsPath = void;
 
 export type ListGoalsRequest = void;
 export type ListGoalsResponse = Models.GoalListResponse;
@@ -142,6 +162,11 @@ export type ListLoanPortfolioSeriesRequest = void;
 export type ListLoanPortfolioSeriesResponse = Models.LoanPortfolioSeriesRead;
 export type ListLoanPortfolioSeriesQuery = Models.LoanPortfolioSeriesQuery;
 export type ListLoanPortfolioSeriesPath = void;
+
+export type ListRecentTransactionsRequest = void;
+export type ListRecentTransactionsResponse = Models.TransactionRecentResponse;
+export type ListRecentTransactionsQuery = Models.TransactionRecentQuery;
+export type ListRecentTransactionsPath = void;
 
 export type ListTaxEventsRequest = void;
 export type ListTaxEventsResponse = Models.TaxEventListResponse;
@@ -277,6 +302,11 @@ export type YearlyOverviewResponse = Models.YearlyOverviewResponse;
 export type YearlyOverviewQuery = Models.YearlyOverviewQuery;
 export type YearlyOverviewPath = void;
 
+export type YearlyOverviewRangeRequest = void;
+export type YearlyOverviewRangeResponse = Models.YearlyOverviewRangeResponse;
+export type YearlyOverviewRangeQuery = Models.YearlyOverviewRangeQuery;
+export type YearlyOverviewRangePath = void;
+
 export type YearlyReportRequest = void;
 export type YearlyReportResponse = Models.YearlyReportResponse;
 export type YearlyReportQuery = Models.YearlyReportQuery;
@@ -360,6 +390,17 @@ export const endpoints = {
     handler: "apps/api/handlers/loans.create_loan",
     auth: true,
   }),
+  createLoanActivity: defineEndpoint<
+    CreateLoanActivityRequest,
+    CreateLoanActivityResponse,
+    CreateLoanActivityQuery,
+    CreateLoanActivityPath
+  >({
+    path: "/loans/{accountId}/activity",
+    method: "POST",
+    handler: "apps/api/handlers/loans.create_loan_activity",
+    auth: true,
+  }),
   createTaxEvent: defineEndpoint<
     CreateTaxEventRequest,
     CreateTaxEventResponse,
@@ -380,6 +421,17 @@ export const endpoints = {
     path: "/transactions",
     method: "POST",
     handler: "apps/api/handlers/transactions.create_transaction",
+    auth: true,
+  }),
+  dashboardOverview: defineEndpoint<
+    DashboardOverviewRequest,
+    DashboardOverviewResponse,
+    DashboardOverviewQuery,
+    DashboardOverviewPath
+  >({
+    path: "/reports/dashboard-overview",
+    method: "GET",
+    handler: "apps/api/handlers/reporting.dashboard_overview",
     auth: true,
   }),
   dateRangeReport: defineEndpoint<
@@ -492,6 +544,17 @@ export const endpoints = {
     handler: "apps/api/handlers/investments.investment_overview",
     auth: true,
   }),
+  listAccountOptions: defineEndpoint<
+    ListAccountOptionsRequest,
+    ListAccountOptionsResponse,
+    ListAccountOptionsQuery,
+    ListAccountOptionsPath
+  >({
+    path: "/accounts/options",
+    method: "GET",
+    handler: "apps/api/handlers/accounts.list_account_options",
+    auth: true,
+  }),
   listAccounts: defineEndpoint<
     ListAccountsRequest,
     ListAccountsResponse,
@@ -512,6 +575,17 @@ export const endpoints = {
     path: "/categories",
     method: "GET",
     handler: "apps/api/handlers/categories.list_categories",
+    auth: true,
+  }),
+  listCategoryOptions: defineEndpoint<
+    ListCategoryOptionsRequest,
+    ListCategoryOptionsResponse,
+    ListCategoryOptionsQuery,
+    ListCategoryOptionsPath
+  >({
+    path: "/categories/options",
+    method: "GET",
+    handler: "apps/api/handlers/categories.list_category_options",
     auth: true,
   }),
   listGoals: defineEndpoint<
@@ -578,6 +652,17 @@ export const endpoints = {
     path: "/loans/events/series",
     method: "GET",
     handler: "apps/api/handlers/loans.list_loan_portfolio_series",
+    auth: true,
+  }),
+  listRecentTransactions: defineEndpoint<
+    ListRecentTransactionsRequest,
+    ListRecentTransactionsResponse,
+    ListRecentTransactionsQuery,
+    ListRecentTransactionsPath
+  >({
+    path: "/transactions/recent",
+    method: "GET",
+    handler: "apps/api/handlers/transactions.list_recent_transactions",
     auth: true,
   }),
   listTaxEvents: defineEndpoint<
@@ -865,6 +950,17 @@ export const endpoints = {
     path: "/reports/yearly-overview",
     method: "GET",
     handler: "apps/api/handlers/reporting.yearly_overview",
+    auth: true,
+  }),
+  yearlyOverviewRange: defineEndpoint<
+    YearlyOverviewRangeRequest,
+    YearlyOverviewRangeResponse,
+    YearlyOverviewRangeQuery,
+    YearlyOverviewRangePath
+  >({
+    path: "/reports/yearly-overview-range",
+    method: "GET",
+    handler: "apps/api/handlers/reporting.yearly_overview_range",
     auth: true,
   }),
   yearlyReport: defineEndpoint<

@@ -1163,6 +1163,34 @@ class ReportingService:
             "insights": insights[:6],
         }
 
+    def yearly_overview_range(
+        self,
+        *,
+        start_year: int,
+        end_year: int,
+        account_ids: Optional[Iterable[UUID]] = None,
+    ) -> list[dict[str, object]]:
+        return [
+            self.yearly_overview(year=year, account_ids=account_ids)
+            for year in range(start_year, end_year + 1)
+        ]
+
+    def dashboard_overview(
+        self,
+        *,
+        year: int,
+        account_ids: Optional[Iterable[UUID]] = None,
+    ) -> dict[str, object]:
+        monthly = self.monthly_report(year=year, account_ids=account_ids, category_ids=None)
+        total = self.total_report(account_ids=account_ids, category_ids=None)
+        net_worth = self.net_worth_history(account_ids=account_ids)
+        return {
+            "year": year,
+            "monthly": monthly,
+            "total": total,
+            "net_worth": net_worth,
+        }
+
     def yearly_category_detail(
         self,
         *,

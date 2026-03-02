@@ -27,3 +27,12 @@ jobs:
 
       - name: Lint + typecheck + knip
         run: npm run lint -w apps/web
+
+      - name: Enforce frontend architecture boundaries
+        run: npm run check:frontend-boundaries
+
+      - name: Enforce changed-file size/complexity budgets
+        run: npm run check:changed-file-budgets
+
+      - name: Verify generated API contracts are up to date
+        run: npm run check:api-contract-drift

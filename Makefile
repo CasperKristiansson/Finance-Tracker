@@ -37,6 +37,7 @@ type-check:
 	isort --check-only apps/api
 	@mkdir -p "$(PYLINTHOME)"
 	PYLINTHOME="$(PYLINTHOME)" PYTHONPATH=. pylint apps/api
+	ruff check apps/api
 	pyright apps/api
 	mypy apps/api
 	PYTHONPATH=. $(PYTHON) scripts/check_integration_function_coverage.py

@@ -369,6 +369,29 @@ class TotalOverviewResponse(BaseModel):
     insights: List[str]
 
 
+class DashboardOverviewQuery(_CsvUUIDMixin):
+    """Query parameters for the dashboard overview endpoint."""
+
+    year: Optional[int] = Field(default=None, ge=1900, le=3000)
+    account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _split_lists(cls, values: Any) -> Any:
+        if isinstance(values, dict) and "account_ids" in values:
+            values["account_ids"] = cls._parse_uuid_list(values.get("account_ids"))
+        return values
+
+
+class DashboardOverviewResponse(BaseModel):
+    """Condensed analytics payload for dashboard rendering."""
+
+    year: int
+    monthly: List[MonthlyReportEntry]
+    total: TotalReportRead
+    net_worth: List["NetWorthPoint"]
+
+
 class NetWorthHistoryQuery(_CsvUUIDMixin):
     """Query parameters for net worth history endpoint."""
 
@@ -488,6 +511,29 @@ class YearlyOverviewQuery(_CsvUUIDMixin):
         if isinstance(values, dict) and "account_ids" in values:
             values["account_ids"] = cls._parse_uuid_list(values.get("account_ids"))
         return values
+
+
+class YearlyOverviewRangeQuery(_CsvUUIDMixin):
+    """Query parameters for loading multiple yearly overviews at once."""
+
+    start_year: int = Field(ge=1900, le=3000, alias="start_year")
+    end_year: int = Field(ge=1900, le=3000, alias="end_year")
+    account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _split_lists(cls, values: Any) -> Any:
+        if isinstance(values, dict) and "account_ids" in values:
+            values["account_ids"] = cls._parse_uuid_list(values.get("account_ids"))
+        return values
+
+    @model_validator(mode="after")
+    def _validate_range(self) -> "YearlyOverviewRangeQuery":
+        if self.start_year > self.end_year:
+            raise ValueError("start_year must be less than or equal to end_year")
+        if (self.end_year - self.start_year) > 25:
+            raise ValueError("Year range must not exceed 25 years")
+        return self
 
 
 class YearlyCategoryDetailQuery(_CsvUUIDMixin):
@@ -657,6 +703,12 @@ class YearlyOverviewResponse(BaseModel):
     insights: List[str]
 
 
+class YearlyOverviewRangeResponse(BaseModel):
+    start_year: int
+    end_year: int
+    items: List[YearlyOverviewResponse]
+
+
 class YearlyCategoryMonthlyEntry(BaseModel):
     date: str
     month: int
@@ -724,6 +776,8 @@ __all__ = [
     "DateRangeReportResponse",
     "TotalReportRead",
     "TotalReportResponse",
+    "DashboardOverviewQuery",
+    "DashboardOverviewResponse",
     "NetWorthHistoryQuery",
     "NetWorthPoint",
     "NetWorthHistoryResponse",
@@ -732,7 +786,9 @@ __all__ = [
     "NetWorthProjectionQuery",
     "NetWorthProjectionResponse",
     "YearlyOverviewQuery",
+    "YearlyOverviewRangeQuery",
     "YearlyOverviewResponse",
+    "YearlyOverviewRangeResponse",
     "YearlyCategoryDetailQuery",
     "YearlyCategoryDetailResponse",
     "ExportReportRequest",

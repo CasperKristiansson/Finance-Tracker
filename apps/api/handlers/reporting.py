@@ -6,13 +6,15 @@ import base64
 import csv
 from datetime import datetime, timezone
 from io import BytesIO, StringIO
-from typing import Any, Dict, Iterable
+from typing import Any, Dict, Iterable, cast
 
 from pydantic import ValidationError
 
 from ..schemas import (
     CashflowForecastQuery,
     CashflowForecastResponse,
+    DashboardOverviewQuery,
+    DashboardOverviewResponse,
     DateRangeReportQuery,
     DateRangeReportResponse,
     ExportReportRequest,
@@ -35,6 +37,8 @@ from ..schemas import (
     YearlyCategoryDetailQuery,
     YearlyCategoryDetailResponse,
     YearlyOverviewQuery,
+    YearlyOverviewRangeQuery,
+    YearlyOverviewRangeResponse,
     YearlyOverviewResponse,
     YearlyReportEntry,
     YearlyReportQuery,
@@ -272,6 +276,57 @@ def yearly_overview(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     return json_response(200, payload.model_dump(mode="json"))
 
 
+def yearly_overview_range(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    user_id = get_user_id(event)
+    params = get_query_params(event)
+
+    try:
+        query = YearlyOverviewRangeQuery.model_validate(params)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope(user_id=user_id) as session:
+        service = ReportingService(session)
+        items = service.yearly_overview_range(
+            start_year=query.start_year,
+            end_year=query.end_year,
+            account_ids=query.account_ids,
+        )
+        payload = YearlyOverviewRangeResponse(
+            start_year=query.start_year,
+            end_year=query.end_year,
+            items=[YearlyOverviewResponse.model_validate(item) for item in items],
+        )
+    return json_response(200, payload.model_dump(mode="json"))
+
+
+def dashboard_overview(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    user_id = get_user_id(event)
+    params = get_query_params(event)
+
+    try:
+        query = DashboardOverviewQuery.model_validate(params)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope(user_id=user_id) as session:
+        service = ReportingService(session)
+        year = query.year or datetime.now(timezone.utc).year
+        result = service.dashboard_overview(year=year, account_ids=query.account_ids)
+        monthly_items = cast(list[dict[str, object]], result["monthly"])
+        total_item = cast(dict[str, object], result["total"])
+        net_worth_items = cast(list[dict[str, object]], result["net_worth"])
+        payload = DashboardOverviewResponse(
+            year=year,
+            monthly=[MonthlyReportEntry.model_validate(item) for item in monthly_items],
+            total=TotalReportRead.model_validate(total_item),
+            net_worth=[NetWorthPoint.model_validate(item) for item in net_worth_items],
+        )
+    return json_response(200, payload.model_dump(mode="json"))
+
+
 def yearly_category_detail(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     ensure_engine()
     user_id = get_user_id(event)
@@ -397,11 +452,18 @@ def export_report(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 __all__ = [
     "monthly_report",
+    "yearly_report",
+    "yearly_overview",
+    "yearly_overview_range",
+    "yearly_category_detail",
+    "total_report",
+    "total_overview",
+    "dashboard_overview",
+    "net_worth_history",
+    "cashflow_forecast",
+    "net_worth_projection",
     "quarterly_report",
     "date_range_report",
     "export_report",
-    "yearly_report",
-    "total_report",
-    "net_worth_history",
     "reset_handler_state",
 ]

@@ -68,6 +68,9 @@ class AccountService:
             results.append((account, balance))
         return results
 
+    def list_account_options(self, *, include_inactive: bool = False) -> List[Account]:
+        return self.repository.list_account_options(include_inactive=include_inactive)
+
     def attach_loan(
         self,
         account_id: UUID,

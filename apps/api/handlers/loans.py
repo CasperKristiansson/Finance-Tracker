@@ -8,6 +8,8 @@ from typing import Any, Dict
 from pydantic import ValidationError
 
 from ..schemas import (
+    LoanActivityCreateRequest,
+    LoanActivityCreateResponse,
     LoanCreateRequest,
     LoanEventListQuery,
     LoanEventRead,
@@ -180,8 +182,54 @@ def get_loan_schedule(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     return json_response(200, response.model_dump(mode="json"))
 
 
+def create_loan_activity(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    """HTTP POST /loans/{accountId}/activity."""
+
+    ensure_engine()
+    user_id = get_user_id(event)
+    account_id = extract_path_uuid(event, param_names=("account_id", "accountId"))
+    if account_id is None:
+        return json_response(400, {"error": "Account ID missing from path"})
+
+    payload = parse_body(event)
+    try:
+        data = LoanActivityCreateRequest.model_validate(payload)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope(user_id=user_id) as session:
+        service = LoanService(session)
+        try:
+            result = service.record_activity(
+                account_id=account_id,
+                kind=data.kind,
+                funding_account_id=data.funding_account_id,
+                amount=data.amount,
+                occurred_at=data.occurred_at,
+                description=data.description,
+                sync_principal=data.sync_principal,
+            )
+        except LookupError as exc:
+            return json_response(404, {"error": str(exc)})
+        except ValueError as exc:
+            return json_response(400, {"error": str(exc)})
+
+    loan = result["loan"]
+    transaction = result["transaction"]
+    response = LoanActivityCreateResponse(
+        account_id=account_id,
+        loan_id=loan.id,
+        transaction_id=transaction.id,
+        amount=data.amount,
+        kind=data.kind,
+        current_principal=loan.current_principal,
+    )
+    return json_response(201, response.model_dump(mode="json"))
+
+
 __all__ = [
     "create_loan",
+    "create_loan_activity",
     "update_loan",
     "list_loan_events",
     "get_loan_schedule",

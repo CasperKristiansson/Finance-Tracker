@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 from pydantic import ValidationError
 
@@ -12,6 +12,9 @@ from ..schemas import (
     TransactionListQuery,
     TransactionListResponse,
     TransactionRead,
+    TransactionRecentQuery,
+    TransactionRecentResponse,
+    TransactionSummaryRead,
     TransactionUpdate,
 )
 from ..services import TransactionService
@@ -33,6 +36,10 @@ def reset_handler_state() -> None:
 
 def _transaction_to_schema(transaction: Transaction) -> TransactionRead:
     return TransactionRead.model_validate(transaction)
+
+
+def _transaction_to_summary_schema(transaction: Transaction) -> TransactionSummaryRead:
+    return TransactionSummaryRead.model_validate(transaction)
 
 
 def list_transactions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
@@ -61,12 +68,50 @@ def list_transactions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             sort_dir=query.sort_dir,
             limit=query.limit,
             offset=query.offset,
+            include_tax_event=query.include_tax_event or query.tax_event is not None,
         )
-        account_ids = {leg.account_id for tx in transactions for leg in tx.legs}
-        running_balances = service.calculate_account_balances(account_ids)
+        running_balances = None
+        if query.include_running_balances:
+            account_ids = {leg.account_id for tx in transactions for leg in tx.legs}
+            running_balances = service.calculate_account_balances(account_ids)
+        serialized: list[TransactionRead | TransactionSummaryRead]
+        if query.view == "summary":
+            serialized = cast(
+                list[TransactionRead | TransactionSummaryRead],
+                [_transaction_to_summary_schema(tx) for tx in transactions],
+            )
+        else:
+            serialized = cast(
+                list[TransactionRead | TransactionSummaryRead],
+                [_transaction_to_schema(tx) for tx in transactions],
+            )
         response = TransactionListResponse(
-            transactions=[_transaction_to_schema(tx) for tx in transactions],
+            transactions=serialized,
             running_balances=running_balances,
+        )
+    return json_response(200, response.model_dump(mode="json"))
+
+
+def list_recent_transactions(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    user_id = get_user_id(event)
+    params = get_query_params(event)
+
+    try:
+        query = TransactionRecentQuery.model_validate(params)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope(user_id=user_id) as session:
+        service = TransactionService(session)
+        transactions = service.list_recent_transactions(
+            account_ids=query.account_ids,
+            transaction_types=query.transaction_type,
+            limit=query.limit,
+            include_tax_event=query.include_tax_event,
+        )
+        response = TransactionRecentResponse(
+            transactions=[_transaction_to_summary_schema(tx) for tx in transactions],
         )
     return json_response(200, response.model_dump(mode="json"))
 
@@ -105,6 +150,7 @@ def create_transaction(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 __all__ = [
     "list_transactions",
+    "list_recent_transactions",
     "create_transaction",
     "update_transaction",
     "delete_transaction",

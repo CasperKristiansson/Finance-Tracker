@@ -63,9 +63,13 @@ import {
   getDisplayTransactionType,
   getTransactionBadge,
   isTaxEvent,
+  normalizeTransactionRead,
 } from "@/lib/transactions";
 import { cn } from "@/lib/utils";
-import { fetchYearlyOverview, fetchYearlyReport } from "@/services/reports";
+import {
+  fetchYearlyOverviewRange,
+  fetchYearlyReport,
+} from "@/services/reports";
 import { fetchTransactions } from "@/services/transactions";
 import {
   AccountType,
@@ -293,16 +297,21 @@ export const AccountDetails: React.FC = () => {
 
       setYearlyOverviewLoading(true);
       try {
-        const results = await Promise.all(
-          years.map(async (year) => {
-            const { data } = await fetchYearlyOverview({
-              year,
-              token,
-            });
-            return [year, data] as const;
-          }),
+        const startYear = Math.min(...years);
+        const endYear = Math.max(...years);
+        const yearSet = new Set(years);
+        const { data } = await fetchYearlyOverviewRange({
+          startYear,
+          endYear,
+          accountIds: accountId,
+          token,
+        });
+        const filtered = (data.items ?? []).filter((item) =>
+          yearSet.has(Number(item.year)),
         );
-        setYearlyOverviews(Object.fromEntries(results));
+        setYearlyOverviews(
+          Object.fromEntries(filtered.map((item) => [item.year, item])),
+        );
       } catch (err) {
         console.error("Failed to fetch yearly overview for account", err);
         setYearlyOverviews({});
@@ -622,12 +631,11 @@ export const AccountDetails: React.FC = () => {
         offset: nextOffset,
       };
       const { data } = await fetchTransactions({ token, query });
-      const next = reset
-        ? data.transactions
-        : [...txItems, ...data.transactions];
+      const normalized = data.transactions.map(normalizeTransactionRead);
+      const next = reset ? normalized : [...txItems, ...normalized];
       setTxItems(next);
-      setTxOffset(nextOffset + data.transactions.length);
-      setTxHasMore(data.transactions.length >= txLimit);
+      setTxOffset(nextOffset + normalized.length);
+      setTxHasMore(normalized.length >= txLimit);
     } catch (err) {
       console.error("Failed to load account transactions", err);
       setTxError("Failed to load transactions.");

@@ -52,6 +52,7 @@ import {
   useTransactionsApi,
 } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
 import { renderCategoryIcon } from "@/lib/category-icons";
 import { compactCurrency, currency } from "@/lib/format";
 import {
@@ -62,10 +63,10 @@ import {
 import {
   AccountType,
   type MonthlyReportEntry,
-  type YearlyOverviewResponse,
-  type TransactionListResponse,
   TransactionType,
+  type YearlyOverviewResponse,
 } from "@/types/api";
+import type { EndpointResponse } from "@/types/contracts";
 
 type KPI = {
   title: string;
@@ -225,14 +226,8 @@ const ChartCard: React.FC<{
 );
 
 export const Dashboard: React.FC = () => {
-  const {
-    monthly,
-    total,
-    netWorth,
-    fetchMonthlyReport,
-    fetchTotalReport,
-    fetchNetWorthReport,
-  } = useReportsApi();
+  const { monthly, total, netWorth, fetchTotalReport, fetchNetWorthReport } =
+    useReportsApi();
   const { recent, fetchRecentTransactions } = useTransactionsApi();
   const {
     items: accounts,
@@ -280,14 +275,11 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated || hasFetched.current) return;
     hasFetched.current = true;
-    const year = new Date().getFullYear();
-    fetchMonthlyReport({ year });
     fetchTotalReport();
     fetchNetWorthReport();
     fetchAccounts();
     fetchCategories();
   }, [
-    fetchMonthlyReport,
     fetchTotalReport,
     fetchNetWorthReport,
     fetchAccounts,
@@ -318,17 +310,20 @@ export const Dashboard: React.FC = () => {
       const collectMonthly = async (accountIds?: string[]) => {
         const responses = await Promise.all(
           years.map((year) =>
-            apiFetch<{ results: MonthlyReportEntry[] }>({
-              path: "/reports/monthly",
-              query: {
-                year,
-                ...(accountIds?.length ? { account_ids: accountIds } : {}),
-              },
-              token,
-            }),
+            apiFetch<EndpointResponse<"dashboardOverview">>(
+              buildEndpointRequest("dashboardOverview", {
+                query: {
+                  year,
+                  ...(accountIds?.length
+                    ? { account_ids: accountIds.join(",") }
+                    : {}),
+                },
+                token,
+              }),
+            ),
           ),
         );
-        return responses.flatMap((response) => response.data.results ?? []);
+        return responses.flatMap((response) => response.data.monthly ?? []);
       };
 
       try {
@@ -353,25 +348,25 @@ export const Dashboard: React.FC = () => {
     const loadYearlyOverview = async () => {
       if (!token) return;
       const currentYear = new Date().getFullYear();
-      const years = [currentYear - 1, currentYear];
       setYearlyOverviewLoading(true);
       try {
-        const responses = await Promise.all(
-          years.map((year) =>
-            apiFetch<YearlyOverviewResponse>({
-              path: "/reports/yearly-overview",
-              query: { year },
-              token,
-            }),
-          ),
+        const { data } = await apiFetch<
+          EndpointResponse<"yearlyOverviewRange">
+        >(
+          buildEndpointRequest("yearlyOverviewRange", {
+            query: {
+              start_year: currentYear - 1,
+              end_year: currentYear,
+            },
+            token,
+          }),
         );
-        const byYear = responses.reduce<Record<number, YearlyOverviewResponse>>(
-          (acc, response) => {
-            acc[response.data.year] = response.data;
-            return acc;
-          },
-          {},
-        );
+        const byYear = (data.items ?? []).reduce<
+          Record<number, YearlyOverviewResponse>
+        >((acc, item) => {
+          acc[item.year] = item;
+          return acc;
+        }, {});
         setYearlyOverviewsByYear(byYear);
         setYearlyOverview(byYear[currentYear] ?? null);
       } catch (err) {
@@ -386,38 +381,25 @@ export const Dashboard: React.FC = () => {
   }, [token]);
 
   useEffect(() => {
-    const fetchDeltas = async () => {
-      if (!activeAccounts.length || !token) return;
-      const startOfYear = new Date(
-        new Date().getFullYear(),
+    const currentYear = new Date().getFullYear();
+    const currentYearOverview = yearlyOverviewsByYear[currentYear];
+    if (!currentYearOverview || !activeAccounts.length) {
+      setAccountDeltas({});
+      return;
+    }
+    const activeAccountIds = new Set(
+      activeAccounts.map((account) => account.id),
+    );
+    const deltaMap: Record<string, number> = {};
+    currentYearOverview.account_flows.forEach((flow) => {
+      if (!activeAccountIds.has(flow.account_id)) return;
+      deltaMap[flow.account_id] = (flow.monthly_change ?? []).reduce(
+        (sum, value) => sum + Number(value),
         0,
-        1,
-      ).toISOString();
-      const accountIds = activeAccounts.map((a) => a.id).join(",");
-      try {
-        const { data } = await apiFetch<TransactionListResponse>({
-          path: "/transactions",
-          query: {
-            start_date: startOfYear,
-            account_ids: accountIds,
-            limit: 200,
-          },
-          token,
-        });
-        const deltaMap: Record<string, number> = {};
-        (data.transactions || []).forEach((tx) => {
-          tx.legs.forEach((leg) => {
-            deltaMap[leg.account_id] =
-              (deltaMap[leg.account_id] || 0) + Number(leg.amount);
-          });
-        });
-        setAccountDeltas(deltaMap);
-      } catch (err) {
-        console.error("Failed to fetch account deltas", err);
-      }
-    };
-    fetchDeltas();
-  }, [activeAccounts, token]);
+      );
+    });
+    setAccountDeltas(deltaMap);
+  }, [activeAccounts, yearlyOverviewsByYear]);
 
   const kpis: KPI[] = useMemo(() => {
     const rollingSlots = buildRollingMonthSlots();

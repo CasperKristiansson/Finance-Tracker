@@ -13,9 +13,12 @@ from ..schemas import (
     CategoryCreate,
     CategoryListResponse,
     CategoryMonthlyPoint,
+    CategoryOptionRead,
+    CategoryOptionsResponse,
     CategoryRead,
     CategoryUpdate,
     ListCategoriesQuery,
+    ListCategoryOptionsQuery,
     MergeCategoriesRequest,
 )
 from ..services import CategoryService
@@ -110,7 +113,29 @@ def list_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
                     expense_total=(usage.expense_total if usage else None),
                 ).model_copy(update={"recent_months": points})
             )
-        response = CategoryListResponse(categories=enriched)
+    response = CategoryListResponse(categories=enriched)
+    return json_response(200, response.model_dump(mode="json"))
+
+
+def list_category_options(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    ensure_engine()
+    user_id = get_user_id(event)
+    params = get_query_params(event)
+
+    try:
+        query = ListCategoryOptionsQuery.model_validate(params)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope(user_id=user_id) as session:
+        service = CategoryService(session)
+        categories = service.list_category_options(
+            include_archived=query.include_archived,
+            include_special=query.include_special,
+        )
+        response = CategoryOptionsResponse(
+            options=[CategoryOptionRead.model_validate(category) for category in categories]
+        )
     return json_response(200, response.model_dump(mode="json"))
 
 
@@ -222,6 +247,7 @@ def merge_categories(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
 __all__ = [
     "list_categories",
+    "list_category_options",
     "create_category",
     "update_category",
     "merge_categories",

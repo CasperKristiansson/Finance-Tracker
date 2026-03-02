@@ -16,8 +16,11 @@ from ..schemas import (
     CashflowForecastResponse,
     CategoryCreate,
     CategoryListResponse,
+    CategoryOptionsResponse,
     CategoryRead,
     CategoryUpdate,
+    DashboardOverviewQuery,
+    DashboardOverviewResponse,
     DateRangeReportQuery,
     DateRangeReportResponse,
     ExportReportRequest,
@@ -46,9 +49,14 @@ from ..schemas import (
     InvestmentSnapshotCreateResponse,
     InvestmentTransactionListQuery,
     InvestmentTransactionListResponse,
+    ListAccountOptionsQuery,
+    ListAccountOptionsResponse,
     ListAccountsQuery,
     ListAccountsResponse,
     ListCategoriesQuery,
+    ListCategoryOptionsQuery,
+    LoanActivityCreateRequest,
+    LoanActivityCreateResponse,
     LoanCreateRequest,
     LoanEventListQuery,
     LoanEventListResponse,
@@ -86,11 +94,15 @@ from ..schemas import (
     TransactionListQuery,
     TransactionListResponse,
     TransactionRead,
+    TransactionRecentQuery,
+    TransactionRecentResponse,
     TransactionUpdate,
     WarmupResponse,
     YearlyCategoryDetailQuery,
     YearlyCategoryDetailResponse,
     YearlyOverviewQuery,
+    YearlyOverviewRangeQuery,
+    YearlyOverviewRangeResponse,
     YearlyOverviewResponse,
     YearlyReportQuery,
     YearlyReportResponse,
@@ -115,6 +127,10 @@ HTTP_HANDLER_CONTRACTS: dict[str, HandlerHttpContract] = {
     "apps/api/handlers/accounts.list_accounts": HandlerHttpContract(
         query_model=ListAccountsQuery,
         response_model=ListAccountsResponse,
+    ),
+    "apps/api/handlers/accounts.list_account_options": HandlerHttpContract(
+        query_model=ListAccountOptionsQuery,
+        response_model=ListAccountOptionsResponse,
     ),
     "apps/api/handlers/accounts.create_account": HandlerHttpContract(
         request_model=AccountCreate,
@@ -175,6 +191,10 @@ HTTP_HANDLER_CONTRACTS: dict[str, HandlerHttpContract] = {
         query_model=ListCategoriesQuery,
         response_model=CategoryListResponse,
     ),
+    "apps/api/handlers/categories.list_category_options": HandlerHttpContract(
+        query_model=ListCategoryOptionsQuery,
+        response_model=CategoryOptionsResponse,
+    ),
     "apps/api/handlers/categories.create_category": HandlerHttpContract(
         request_model=CategoryCreate,
         response_model=CategoryRead,
@@ -200,6 +220,10 @@ HTTP_HANDLER_CONTRACTS: dict[str, HandlerHttpContract] = {
     "apps/api/handlers/transactions.list_transactions": HandlerHttpContract(
         query_model=TransactionListQuery,
         response_model=TransactionListResponse,
+    ),
+    "apps/api/handlers/transactions.list_recent_transactions": HandlerHttpContract(
+        query_model=TransactionRecentQuery,
+        response_model=TransactionRecentResponse,
     ),
     "apps/api/handlers/transactions.create_transaction": HandlerHttpContract(
         request_model=TransactionCreate,
@@ -229,6 +253,10 @@ HTTP_HANDLER_CONTRACTS: dict[str, HandlerHttpContract] = {
         request_model=LoanCreateRequest,
         response_model=LoanRead,
     ),
+    "apps/api/handlers/loans.create_loan_activity": HandlerHttpContract(
+        request_model=LoanActivityCreateRequest,
+        response_model=LoanActivityCreateResponse,
+    ),
     "apps/api/handlers/loans.update_loan": HandlerHttpContract(
         request_model=LoanUpdate,
         response_model=LoanRead,
@@ -257,6 +285,10 @@ HTTP_HANDLER_CONTRACTS: dict[str, HandlerHttpContract] = {
         query_model=YearlyOverviewQuery,
         response_model=YearlyOverviewResponse,
     ),
+    "apps/api/handlers/reporting.yearly_overview_range": HandlerHttpContract(
+        query_model=YearlyOverviewRangeQuery,
+        response_model=YearlyOverviewRangeResponse,
+    ),
     "apps/api/handlers/reporting.yearly_category_detail": HandlerHttpContract(
         query_model=YearlyCategoryDetailQuery,
         response_model=YearlyCategoryDetailResponse,
@@ -276,6 +308,10 @@ HTTP_HANDLER_CONTRACTS: dict[str, HandlerHttpContract] = {
     "apps/api/handlers/reporting.total_overview": HandlerHttpContract(
         query_model=TotalOverviewQuery,
         response_model=TotalOverviewResponse,
+    ),
+    "apps/api/handlers/reporting.dashboard_overview": HandlerHttpContract(
+        query_model=DashboardOverviewQuery,
+        response_model=DashboardOverviewResponse,
     ),
     "apps/api/handlers/reporting.net_worth_history": HandlerHttpContract(
         query_model=NetWorthHistoryQuery,

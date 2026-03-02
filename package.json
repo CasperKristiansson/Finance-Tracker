@@ -10,6 +10,9 @@
     "lint": "npm run lint -w apps/web",
     "preview": "npm run preview -w apps/web",
     "generate:api-contracts": "python3 scripts/generate_api_contract_types.py",
+    "check:api-contract-drift": "bash scripts/check_api_contract_drift.sh",
+    "check:frontend-boundaries": "node scripts/check_frontend_boundaries.mjs",
+    "check:changed-file-budgets": "node scripts/check_changed_file_budgets.mjs",
     "knip:web": "npm run knip -w apps/web",
     "knip:web:fix": "npm run knip:fix -w apps/web"
   }

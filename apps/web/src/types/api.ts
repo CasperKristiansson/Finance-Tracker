@@ -109,6 +109,7 @@ export type TotalOverviewResponse = Models.TotalOverviewResponse;
 export type TransactionLegRead = Models.TransactionLegRead;
 export type TransactionListResponse = Models.TransactionListResponse;
 export type TransactionRead = Models.TransactionRead;
+export type TransactionSummaryRead = Models.TransactionSummaryRead;
 export type TransactionLegCreate = Models.TransactionLegCreate;
 export type TransactionCreate = Models.TransactionCreate;
 export type TransactionUpdateRequest = Models.TransactionUpdate;

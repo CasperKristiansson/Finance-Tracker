@@ -65,6 +65,15 @@ export interface AccountFlowEntry {
   monthly_change: string[];
 }
 
+export interface AccountOptionRead {
+  id: string;
+  name: string;
+  account_type: AccountType;
+  is_active: boolean;
+  icon?: string | null;
+  bank_import_type?: BankImportType | null;
+}
+
 export interface AccountUpdate {
   name?: string | null;
   is_active?: boolean | null;
@@ -162,6 +171,19 @@ export interface CategoryMonthlyPoint {
   total: string;
 }
 
+export interface CategoryOptionRead {
+  id: string;
+  name: string;
+  category_type: CategoryType;
+  color_hex?: string | null;
+  icon?: string | null;
+  is_archived: boolean;
+}
+
+export interface CategoryOptionsResponse {
+  options: CategoryOptionRead[];
+}
+
 export interface CategoryRead {
   id: string;
   name: string;
@@ -205,6 +227,18 @@ export interface CategoryYearHeatmapRow {
   icon?: string | null;
   color_hex?: string | null;
   totals: string[];
+}
+
+export interface DashboardOverviewQuery {
+  year?: number | null;
+  account_ids?: string[] | null;
+}
+
+export interface DashboardOverviewResponse {
+  year: number;
+  monthly: MonthlyReportEntry[];
+  total: TotalReportRead;
+  net_worth: NetWorthPoint[];
 }
 
 export interface DateRangeReportQuery {
@@ -676,6 +710,14 @@ export interface LargestTransactionEntry {
   notes?: string | null;
 }
 
+export interface ListAccountOptionsQuery {
+  include_inactive?: boolean;
+}
+
+export interface ListAccountOptionsResponse {
+  options: AccountOptionRead[];
+}
+
 export interface ListAccountsQuery {
   include_inactive?: boolean;
   as_of_date?: string | null;
@@ -688,6 +730,29 @@ export interface ListAccountsResponse {
 export interface ListCategoriesQuery {
   include_archived?: boolean;
   include_special?: boolean;
+}
+
+export interface ListCategoryOptionsQuery {
+  include_archived?: boolean;
+  include_special?: boolean;
+}
+
+export interface LoanActivityCreateRequest {
+  kind: string;
+  funding_account_id: string;
+  amount: string;
+  occurred_at: string;
+  description?: string | null;
+  sync_principal?: boolean;
+}
+
+export interface LoanActivityCreateResponse {
+  account_id: string;
+  loan_id: string;
+  transaction_id: string;
+  amount: string;
+  kind: string;
+  current_principal: string;
 }
 
 export interface LoanCreate {
@@ -1122,6 +1187,15 @@ export interface TotalReportQuery {
   category_ids?: string[] | null;
 }
 
+export interface TotalReportRead {
+  income: string;
+  expense: string;
+  adjustment_inflow: string;
+  adjustment_outflow: string;
+  adjustment_net: string;
+  net: string;
+}
+
 export interface TotalReportResponse {
   income: string;
   expense: string;
@@ -1176,11 +1250,14 @@ export interface TransactionListQuery {
   sort_dir?: "asc" | "desc";
   limit?: number;
   offset?: number;
+  include_running_balances?: boolean;
+  include_tax_event?: boolean;
+  view?: "full" | "summary";
 }
 
 export interface TransactionListResponse {
-  transactions: TransactionRead[];
-  running_balances: Record<string, string>;
+  transactions: (TransactionRead | TransactionSummaryRead)[];
+  running_balances?: Record<string, string> | null;
 }
 
 export interface TransactionRead {
@@ -1194,6 +1271,29 @@ export interface TransactionRead {
   posted_at: string;
   created_at: string;
   updated_at: string;
+  tax_event?: TaxEventRead | null;
+  legs: TransactionLegRead[];
+}
+
+export interface TransactionRecentQuery {
+  account_ids?: string[] | null;
+  transaction_type?: TransactionType[] | null;
+  include_tax_event?: boolean;
+  limit?: number;
+}
+
+export interface TransactionRecentResponse {
+  transactions: TransactionSummaryRead[];
+}
+
+export interface TransactionSummaryRead {
+  id: string;
+  category_id?: string | null;
+  transaction_type: TransactionType;
+  description?: string | null;
+  notes?: string | null;
+  occurred_at: string;
+  posted_at: string;
   tax_event?: TaxEventRead | null;
   legs: TransactionLegRead[];
 }
@@ -1258,6 +1358,18 @@ export interface YearlyOverviewMonthEntry {
 export interface YearlyOverviewQuery {
   year: number;
   account_ids?: string[] | null;
+}
+
+export interface YearlyOverviewRangeQuery {
+  start_year: number;
+  end_year: number;
+  account_ids?: string[] | null;
+}
+
+export interface YearlyOverviewRangeResponse {
+  start_year: number;
+  end_year: number;
+  items: YearlyOverviewResponse[];
 }
 
 export interface YearlyOverviewResponse {

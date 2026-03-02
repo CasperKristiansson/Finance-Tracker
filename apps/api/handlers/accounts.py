@@ -12,8 +12,11 @@ from pydantic import ValidationError
 from ..models import Account
 from ..schemas import (
     AccountCreate,
+    AccountOptionRead,
     AccountUpdate,
     AccountWithBalance,
+    ListAccountOptionsQuery,
+    ListAccountOptionsResponse,
     ListAccountsQuery,
     ListAccountsResponse,
     ReconcileAccountRequest,
@@ -131,6 +134,27 @@ def list_accounts(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
             reconciliation["needs_reconciliation"] = needs
             data.append(_account_to_schema(account, balance, reconciliation))
     response = ListAccountsResponse(accounts=data)
+    return json_response(200, response.model_dump(mode="json"))
+
+
+def list_account_options(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    """HTTP GET /accounts/options."""
+
+    ensure_engine()
+    user_id = get_user_id(event)
+    params = get_query_params(event)
+
+    try:
+        query = ListAccountOptionsQuery.model_validate(params)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    with session_scope(user_id=user_id) as session:
+        service = AccountService(session)
+        options = service.list_account_options(include_inactive=query.include_inactive)
+        response = ListAccountOptionsResponse(
+            options=[AccountOptionRead.model_validate(account) for account in options]
+        )
     return json_response(200, response.model_dump(mode="json"))
 
 

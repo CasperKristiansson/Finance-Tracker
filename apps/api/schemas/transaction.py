@@ -7,10 +7,49 @@ from decimal import Decimal
 from typing import Any, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from ..shared import TransactionType
 from .tax import TaxEventRead
+
+
+def _split_transaction_csv_filters(values: Any) -> Any:
+    if not isinstance(values, dict):
+        return values
+
+    if "account_ids" in values and isinstance(values.get("account_ids"), str):
+        parts = [part.strip() for part in str(values["account_ids"]).split(",") if part.strip()]
+        parsed_account_ids: List[UUID] = []
+        for part in parts:
+            try:
+                parsed_account_ids.append(UUID(part))
+            except ValueError as exc:
+                raise ValueError(f"Invalid UUID in account_ids: {part}") from exc
+        values["account_ids"] = parsed_account_ids
+
+    if "category_ids" in values and isinstance(values.get("category_ids"), str):
+        parts = [part.strip() for part in str(values["category_ids"]).split(",") if part.strip()]
+        parsed_category_ids: List[UUID] = []
+        for part in parts:
+            try:
+                parsed_category_ids.append(UUID(part))
+            except ValueError as exc:
+                raise ValueError(f"Invalid UUID in category_ids: {part}") from exc
+        values["category_ids"] = parsed_category_ids
+
+    if "transaction_type" in values and isinstance(values["transaction_type"], str):
+        parts = [
+            part.strip() for part in str(values["transaction_type"]).split(",") if part.strip()
+        ]
+        parsed_types: List[TransactionType] = []
+        for part in parts:
+            try:
+                parsed_types.append(TransactionType(part))
+            except ValueError as exc:
+                raise ValueError(f"Invalid transaction_type: {part}") from exc
+        values["transaction_type"] = parsed_types
+
+    return values
 
 
 class TransactionLegCreate(BaseModel):
@@ -90,84 +129,59 @@ class TransactionListQuery(BaseModel):
     sort_dir: Literal["asc", "desc"] = Field(default="desc", alias="sort_dir")
     limit: int = Field(default=50, ge=1, le=200)
     offset: int = Field(default=0, ge=0)
+    include_running_balances: bool = Field(default=False, alias="include_running_balances")
+    include_tax_event: bool = Field(default=False, alias="include_tax_event")
+    view: Literal["full", "summary"] = Field(default="full")
 
     @model_validator(mode="before")
     @classmethod
-    def split_account_ids(cls, values: Any) -> Any:
-        if isinstance(values, dict) and "account_ids" in values:
-            account_ids = values["account_ids"]
-            if isinstance(account_ids, str):
-                parts = [part.strip() for part in account_ids.split(",") if part.strip()]
-                converted: List[UUID] = []
-                for part in parts:
-                    try:
-                        converted.append(UUID(part))
-                    except ValueError as exc:  # pragma: no cover - validation
-                        raise ValidationError(
-                            [
-                                {
-                                    "loc": ("account_ids",),
-                                    "msg": "Invalid UUID in account_ids",
-                                    "type": "value_error",
-                                }
-                            ],
-                            cls,
-                        ) from exc
-                values["account_ids"] = converted
+    def split_csv_filters(cls, values: Any) -> Any:
+        return _split_transaction_csv_filters(values)
 
-        if isinstance(values, dict) and "category_ids" in values:
-            category_ids = values.get("category_ids")
-            if isinstance(category_ids, str):
-                parts = [part.strip() for part in category_ids.split(",") if part.strip()]
-                converted_categories: List[UUID] = []
-                for part in parts:
-                    try:
-                        converted_categories.append(UUID(part))
-                    except ValueError as exc:  # pragma: no cover - validation
-                        raise ValidationError(
-                            [
-                                {
-                                    "loc": ("category_ids",),
-                                    "msg": "Invalid UUID in category_ids",
-                                    "type": "value_error",
-                                }
-                            ],
-                            cls,
-                        ) from exc
-                values["category_ids"] = converted_categories
 
-        if (
-            isinstance(values, dict)
-            and "transaction_type" in values
-            and isinstance(values["transaction_type"], str)
-        ):
-            type_values = [
-                part.strip() for part in str(values["transaction_type"]).split(",") if part.strip()
-            ]
-            converted_types: List[TransactionType] = []
-            for tx_type in type_values:
-                try:
-                    converted_types.append(TransactionType(tx_type))
-                except ValueError as exc:  # pragma: no cover - validation
-                    raise ValidationError(
-                        [
-                            {
-                                "loc": ("transaction_type",),
-                                "msg": "Invalid transaction_type provided",
-                                "type": "value_error",
-                            }
-                        ],
-                        cls,
-                    ) from exc
-            values["transaction_type"] = converted_types
-        return values
+class TransactionSummaryRead(BaseModel):
+    """Condensed transaction representation for list/recent views."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    category_id: Optional[UUID] = None
+    transaction_type: TransactionType
+    description: Optional[str] = None
+    notes: Optional[str] = None
+    occurred_at: datetime
+    posted_at: datetime
+    tax_event: Optional[TaxEventRead] = None
+    legs: List[TransactionLegRead]
 
 
 class TransactionListResponse(BaseModel):
     """Response payload for transaction listings."""
 
-    transactions: List[TransactionRead]
-    running_balances: dict[UUID, Decimal]
+    transactions: List[TransactionRead | TransactionSummaryRead]
+    running_balances: Optional[dict[UUID, Decimal]] = None
+
+
+class TransactionRecentQuery(BaseModel):
+    """Query filters for the recent-transactions endpoint."""
+
+    account_ids: Optional[List[UUID]] = Field(default=None, alias="account_ids")
+    transaction_type: Optional[List[TransactionType]] = Field(
+        default=None, alias="transaction_type"
+    )
+    include_tax_event: bool = Field(default=False, alias="include_tax_event")
+    limit: int = Field(default=20, ge=1, le=200)
+
+    @model_validator(mode="before")
+    @classmethod
+    def split_csv_filters(cls, values: Any) -> Any:
+        return _split_transaction_csv_filters(values)
+
+
+class TransactionRecentResponse(BaseModel):
+    """Response payload for recent transaction listings."""
+
+    transactions: List[TransactionSummaryRead]
 
 
 class TransactionUpdate(BaseModel):
@@ -193,8 +207,11 @@ class TransactionPathParams(BaseModel):
 __all__ = [
     "TransactionCreate",
     "TransactionRead",
+    "TransactionSummaryRead",
     "TransactionLegCreate",
     "TransactionLegRead",
     "TransactionListQuery",
     "TransactionListResponse",
+    "TransactionRecentQuery",
+    "TransactionRecentResponse",
 ]

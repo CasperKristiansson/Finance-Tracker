@@ -2,6 +2,7 @@ import {
   TaxEventType,
   TransactionType,
   type TransactionRead,
+  type TransactionSummaryRead,
 } from "@/types/api";
 
 type TaxAware = Pick<TransactionRead, "transaction_type" | "tax_event">;
@@ -67,5 +68,14 @@ export const taxAdjustedAmountHint = (
   if (displayType === TransactionType.TRANSFER) return Math.abs(value);
   return value;
 };
+
+export const normalizeTransactionRead = (
+  tx: TransactionRead | TransactionSummaryRead,
+): TransactionRead => ({
+  ...tx,
+  external_id: "external_id" in tx ? (tx.external_id ?? null) : null,
+  created_at: "created_at" in tx ? tx.created_at : tx.posted_at,
+  updated_at: "updated_at" in tx ? tx.updated_at : tx.posted_at,
+});
 
 export type { TaxAware };

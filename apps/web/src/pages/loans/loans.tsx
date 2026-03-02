@@ -76,6 +76,7 @@ import { PageRoutes } from "@/data/routes";
 import { selectIsDemo, selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useLoansApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
 import {
   currency,
   formatDate as formatDateLocale,
@@ -612,29 +613,29 @@ export const Loans: React.FC = () => {
 
     setCreateLoanLoading(true);
     try {
-      const created = await apiFetch<AccountWithBalance>({
-        path: "/accounts",
-        method: "POST",
-        token,
-        body: {
-          name: loanName.trim(),
-          account_type: AccountType.DEBT,
-          is_active: true,
-          icon: null,
-          loan: {
-            origin_principal: centsToMoneyString(originCents),
-            current_principal: centsToMoneyString(currentCents),
-            interest_rate_annual: rate,
-            interest_compound: loanInterestCompound,
-            minimum_payment: loanMinimumPayment.trim()
-              ? loanMinimumPayment.trim()
-              : null,
-            expected_maturity_date: loanExpectedMaturityDate.trim()
-              ? loanExpectedMaturityDate.trim()
-              : null,
+      const created = await apiFetch<AccountWithBalance>(
+        buildEndpointRequest("createAccount", {
+          token,
+          body: {
+            name: loanName.trim(),
+            account_type: AccountType.DEBT,
+            is_active: true,
+            icon: null,
+            loan: {
+              origin_principal: centsToMoneyString(originCents),
+              current_principal: centsToMoneyString(currentCents),
+              interest_rate_annual: rate,
+              interest_compound: loanInterestCompound,
+              minimum_payment: loanMinimumPayment.trim()
+                ? loanMinimumPayment.trim()
+                : null,
+              expected_maturity_date: loanExpectedMaturityDate.trim()
+                ? loanExpectedMaturityDate.trim()
+                : null,
+            },
           },
-        },
-      });
+        }),
+      );
 
       toast.success("Loan created");
       setCreateLoanOpen(false);
@@ -683,54 +684,28 @@ export const Loans: React.FC = () => {
       `${activityDate}T00:00:00.000Z`,
     ).toISOString();
     const amount = centsToMoneyString(amountCents);
-    const loanLegAmount = activityKind === "payment" ? amount : `-${amount}`;
-    const fundingLegAmount = activityKind === "payment" ? `-${amount}` : amount;
+    const apiKind = activityKind === "payment" ? "payment" : "disbursement";
 
     setActivityLoading(true);
     try {
-      await apiFetch({
-        path: "/transactions",
-        method: "POST",
-        token,
-        body: {
-          category_id: null,
-          description: activityDescription.trim()
-            ? activityDescription.trim()
-            : activityKind === "payment"
-              ? "Loan principal payment"
-              : "Loan disbursement",
-          notes: null,
-          external_id: null,
-          occurred_at: occurredAtIso,
-          posted_at: occurredAtIso,
-          status: "recorded",
-          legs: [
-            { account_id: accountId, amount: loanLegAmount },
-            { account_id: fundingAccountId, amount: fundingLegAmount },
-          ],
-        },
-      });
-
-      if (syncPrincipal && selectedAccount?.loan?.current_principal) {
-        const current = parseMoneyToCents(
-          selectedAccount.loan.current_principal,
-        );
-        if (current !== null) {
-          const next =
-            activityKind === "payment"
-              ? current - amountCents
-              : current + amountCents;
-          const clamped = next < 0 ? 0n : next;
-          await apiFetch({
-            path: `/loans/${accountId}`,
-            method: "PATCH",
-            token,
-            body: {
-              current_principal: centsToMoneyString(clamped),
-            },
-          });
-        }
-      }
+      await apiFetch(
+        buildEndpointRequest("createLoanActivity", {
+          pathParams: { accountId },
+          token,
+          body: {
+            kind: apiKind,
+            funding_account_id: fundingAccountId,
+            amount,
+            occurred_at: occurredAtIso,
+            description: activityDescription.trim()
+              ? activityDescription.trim()
+              : apiKind === "payment"
+                ? "Loan principal payment"
+                : "Loan disbursement",
+            sync_principal: syncPrincipal,
+          },
+        }),
+      );
 
       toast.success("Loan activity recorded");
       setActivityOpen(false);
@@ -781,23 +756,24 @@ export const Loans: React.FC = () => {
 
     setEditLoanLoading(true);
     try {
-      await apiFetch({
-        path: `/loans/${accountId}`,
-        method: "PATCH",
-        token,
-        body: {
-          origin_principal: centsToMoneyString(originCents),
-          current_principal: centsToMoneyString(currentCents),
-          interest_rate_annual: rate,
-          interest_compound: editInterestCompound,
-          minimum_payment: minPay
-            ? centsToMoneyString(minPayCents ?? 0n)
-            : null,
-          expected_maturity_date: editExpectedMaturityDate.trim()
-            ? editExpectedMaturityDate.trim()
-            : null,
-        },
-      });
+      await apiFetch(
+        buildEndpointRequest("updateLoan", {
+          pathParams: { accountId },
+          token,
+          body: {
+            origin_principal: centsToMoneyString(originCents),
+            current_principal: centsToMoneyString(currentCents),
+            interest_rate_annual: rate,
+            interest_compound: editInterestCompound,
+            minimum_payment: minPay
+              ? centsToMoneyString(minPayCents ?? 0n)
+              : null,
+            expected_maturity_date: editExpectedMaturityDate.trim()
+              ? editExpectedMaturityDate.trim()
+              : null,
+          },
+        }),
+      );
 
       toast.success("Loan updated");
       setEditLoanOpen(false);

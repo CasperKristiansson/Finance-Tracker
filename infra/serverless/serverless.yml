@@ -158,6 +158,18 @@ functions:
           method: GET
           authorizer: cognitoJwt
 
+  listAccountOptions:
+    handler: apps/api/handlers/accounts.list_account_options
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /accounts/options
+          method: GET
+          authorizer: cognitoJwt
+
   createAccount:
     handler: apps/api/handlers/accounts.create_account
     timeout: 29
@@ -400,6 +412,18 @@ functions:
           method: GET
           authorizer: cognitoJwt
 
+  listCategoryOptions:
+    handler: apps/api/handlers/categories.list_category_options
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /categories/options
+          method: GET
+          authorizer: cognitoJwt
+
   createCategory:
     handler: apps/api/handlers/categories.create_category
     timeout: 29
@@ -493,6 +517,18 @@ functions:
     events:
       - httpApi:
           path: /transactions
+          method: GET
+          authorizer: cognitoJwt
+
+  listRecentTransactions:
+    handler: apps/api/handlers/transactions.list_recent_transactions
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /transactions/recent
           method: GET
           authorizer: cognitoJwt
 
@@ -604,6 +640,18 @@ functions:
           method: PATCH
           authorizer: cognitoJwt
 
+  createLoanActivity:
+    handler: apps/api/handlers/loans.create_loan_activity
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /loans/{accountId}/activity
+          method: POST
+          authorizer: cognitoJwt
+
   listLoanEvents:
     handler: apps/api/handlers/loans.list_loan_events
     timeout: 29
@@ -676,6 +724,18 @@ functions:
           method: GET
           authorizer: cognitoJwt
 
+  yearlyOverviewRange:
+    handler: apps/api/handlers/reporting.yearly_overview_range
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/yearly-overview-range
+          method: GET
+          authorizer: cognitoJwt
+
   yearlyCategoryDetail:
     handler: apps/api/handlers/reporting.yearly_category_detail
     timeout: 29
@@ -733,6 +793,18 @@ functions:
     events:
       - httpApi:
           path: /reports/total-overview
+          method: GET
+          authorizer: cognitoJwt
+
+  dashboardOverview:
+    handler: apps/api/handlers/reporting.dashboard_overview
+    timeout: 29
+    memorySize: 512
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /reports/dashboard-overview
           method: GET
           authorizer: cognitoJwt
 

@@ -53,11 +53,12 @@ class TransactionRepository:
         sort_dir: str = "desc",
         limit: Optional[int] = None,
         offset: Optional[int] = None,
+        include_tax_event: bool = True,
     ) -> List[Transaction]:
-        statement = select(Transaction).options(
-            selectinload(Transaction.legs),  # type: ignore[arg-type]
-            selectinload(cast(Any, Transaction.tax_event)),
-        )
+        options = [selectinload(Transaction.legs)]  # type: ignore[arg-type]
+        if include_tax_event:
+            options.append(selectinload(cast(Any, Transaction.tax_event)))
+        statement = select(Transaction).options(*options)
 
         if start_date is not None:
             statement = statement.where(Transaction.occurred_at >= start_date)

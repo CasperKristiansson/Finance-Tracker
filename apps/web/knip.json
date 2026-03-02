@@ -1,17 +1,16 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "project": ["src/**/*.{ts,tsx}", ".storybook/**/*.{ts,tsx}"],
+  "project": ["src/**/*.{ts,tsx}"],
   "ignoreDependencies": [
     "@react-three/fiber",
     "camera-controls",
     "eslint",
     "prettier",
-    "storybook",
     "@types/three",
     "three",
     "three-stdlib"
   ],
-  "ignoreBinaries": ["vite", "tsc", "eslint", "prettier", "storybook", "knip"],
+  "ignoreBinaries": ["vite", "tsc", "eslint", "prettier", "knip"],
   "ignoreExportsUsedInFile": {
     "interface": true,
     "type": true

@@ -5,9 +5,9 @@ from decimal import Decimal
 from types import SimpleNamespace
 from uuid import UUID
 
-from apps.api.models import Loan
+from apps.api.models import Account, Loan
 from apps.api.services.loan import LoanService
-from apps.api.shared import InterestCompound, LoanEventType
+from apps.api.shared import AccountType, InterestCompound, LoanEventType, TransactionType
 
 # mypy: ignore-errors
 
@@ -125,3 +125,37 @@ def test_portfolio_series_truthy_iterable_without_events(session) -> None:
         list_all_events=lambda **_kwargs: _TruthyEmpty()
     )
     assert service.portfolio_series() == []
+
+
+def test_record_activity_creates_transaction_and_syncs_principal(session) -> None:
+    debt = Account(name="Debt", account_type=AccountType.DEBT, is_active=True)
+    funding = Account(name="Checking", account_type=AccountType.NORMAL, is_active=True)
+    session.add_all([debt, funding])
+    session.commit()
+
+    loan = Loan(
+        account_id=debt.id,
+        origin_principal=Decimal("10000"),
+        current_principal=Decimal("10000"),
+        interest_rate_annual=Decimal("0.04"),
+        interest_compound=InterestCompound.MONTHLY,
+    )
+    session.add(loan)
+    session.commit()
+
+    service = LoanService(session)
+    result = service.record_activity(
+        debt.id,
+        kind="payment",
+        funding_account_id=funding.id,
+        amount=Decimal("250"),
+        occurred_at=datetime(2024, 3, 1, tzinfo=timezone.utc),
+        description="Loan payment",
+        sync_principal=True,
+    )
+
+    saved_loan = result["loan"]
+    saved_tx = result["transaction"]
+    assert saved_loan.current_principal == Decimal("9750.00")
+    assert saved_tx.transaction_type == TransactionType.TRANSFER
+    assert len(saved_tx.legs) == 2

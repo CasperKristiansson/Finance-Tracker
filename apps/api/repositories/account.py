@@ -39,6 +39,13 @@ class AccountRepository:
         statement = statement.order_by(Account.name, Account.created_at)
         return list(self.session.exec(statement).scalars())
 
+    def list_account_options(self, include_inactive: bool = False) -> List[Account]:
+        statement = select(Account)
+        if not include_inactive:
+            statement = statement.where(Account.is_active.is_(True))
+        statement = statement.order_by(Account.name, Account.created_at)
+        return list(self.session.exec(statement).scalars())
+
     def save(self, account: Account) -> Account:
         self.session.add(account)
         self.session.commit()

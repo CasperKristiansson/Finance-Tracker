@@ -36,9 +36,13 @@ import { Switch } from "@/components/ui/switch";
 import { selectToken } from "@/features/auth/authSlice";
 import { useCategoriesApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
 import { formatCategoryLabel, renderCategoryIcon } from "@/lib/category-icons";
 import { currency, formatDate } from "@/lib/format";
-import { getDisplayTransactionType } from "@/lib/transactions";
+import {
+  getDisplayTransactionType,
+  normalizeTransactionRead,
+} from "@/lib/transactions";
 import {
   CategoryType,
   TransactionType,
@@ -392,17 +396,26 @@ export const Categories: React.FC = () => {
     setDetailsLoading(true);
     setDetailsError(null);
 
-    apiFetch<TransactionListResponse>({
-      path: "/transactions",
-      token,
-      query: { category_ids: detailsId, limit: 20 },
-    })
+    apiFetch<TransactionListResponse>(
+      buildEndpointRequest("listTransactions", {
+        token,
+        query: {
+          category_ids: detailsId,
+          limit: 20,
+          include_tax_event: true,
+          view: "full",
+        },
+      }),
+    )
       .then(({ data }) => {
         if (cancelled) return;
         setDetailsTransactions(
-          data.transactions.filter(
-            (tx) => getDisplayTransactionType(tx) !== TransactionType.TRANSFER,
-          ),
+          data.transactions
+            .map(normalizeTransactionRead)
+            .filter(
+              (tx) =>
+                getDisplayTransactionType(tx) !== TransactionType.TRANSFER,
+            ),
         );
       })
       .catch((err) => {

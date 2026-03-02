@@ -54,6 +54,7 @@ class TransactionService:
         sort_dir: str = "desc",
         limit: Optional[int] = None,
         offset: Optional[int] = None,
+        include_tax_event: bool = True,
     ) -> List[Transaction]:
         return self.repository.list(
             start_date=start_date,
@@ -69,6 +70,25 @@ class TransactionService:
             sort_dir=sort_dir,
             limit=limit,
             offset=offset,
+            include_tax_event=include_tax_event,
+        )
+
+    def list_recent_transactions(
+        self,
+        *,
+        account_ids: Optional[Iterable[UUID]] = None,
+        transaction_types: Optional[Iterable["TransactionType"]] = None,
+        limit: int = 20,
+        include_tax_event: bool = False,
+    ) -> List[Transaction]:
+        return self.repository.list(
+            account_ids=account_ids,
+            transaction_types=transaction_types,
+            sort_by="occurred_at",
+            sort_dir="desc",
+            limit=limit,
+            offset=0,
+            include_tax_event=include_tax_event,
         )
 
     def create_transaction(

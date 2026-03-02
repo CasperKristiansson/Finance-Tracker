@@ -145,6 +145,31 @@ class ListAccountsResponse(BaseModel):
     accounts: list[AccountWithBalance]
 
 
+class ListAccountOptionsQuery(BaseModel):
+    """Query parameters for listing lightweight account options."""
+
+    include_inactive: bool = Field(default=False, alias="include_inactive")
+
+
+class AccountOptionRead(BaseModel):
+    """Lightweight account option for selectors."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    account_type: AccountType
+    is_active: bool
+    icon: Optional[str] = None
+    bank_import_type: Optional[BankImportType] = None
+
+
+class ListAccountOptionsResponse(BaseModel):
+    """Response payload for account options."""
+
+    options: list[AccountOptionRead]
+
+
 class UpdateAccountPath(BaseModel):
     """Path parameters for update account handler."""
 
@@ -160,6 +185,9 @@ __all__ = [
     "AccountWithBalance",
     "ListAccountsQuery",
     "ListAccountsResponse",
+    "ListAccountOptionsQuery",
+    "AccountOptionRead",
+    "ListAccountOptionsResponse",
     "UpdateAccountPath",
     "ReconcileAccountRequest",
     "ReconcileAccountResponse",

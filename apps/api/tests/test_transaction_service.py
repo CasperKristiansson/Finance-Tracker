@@ -281,6 +281,32 @@ def test_transaction_service_private_branch_paths(session) -> None:
         occurred_at=None,
     )
 
+
+def test_list_recent_transactions_forwards_repository_args(session) -> None:
+    service = TransactionService(session)
+    captured: dict[str, object] = {}
+
+    class _Repo:
+        def list(self, **kwargs):
+            captured.update(kwargs)
+            return []
+
+    service.repository = _Repo()  # type: ignore[assignment]
+    service.list_recent_transactions(
+        account_ids=[UUID(int=1)],
+        transaction_types=[TransactionType.EXPENSE],
+        limit=7,
+        include_tax_event=True,
+    )
+
+    assert captured["account_ids"] == [UUID(int=1)]
+    assert captured["transaction_types"] == [TransactionType.EXPENSE]
+    assert captured["sort_by"] == "occurred_at"
+    assert captured["sort_dir"] == "desc"
+    assert captured["limit"] == 7
+    assert captured["offset"] == 0
+    assert captured["include_tax_event"] is True
+
     # _delete_investment_snapshot: non-investment and invalid/missing snapshot branches.
     non_investment_tx = Transaction(
         transaction_type=TransactionType.TRANSFER,

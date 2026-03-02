@@ -94,7 +94,15 @@ def test_create_and_list_transactions():
     body = _json_body(list_response)
     transactions = body["transactions"]
     assert any(item["id"] == transaction_id for item in transactions)
-    assert isinstance(body.get("running_balances"), dict)
+    assert body.get("running_balances") is None
+
+    with_balances = list_transactions(
+        {"queryStringParameters": {"include_running_balances": "true"}},
+        None,
+    )
+    assert with_balances["statusCode"] == 200
+    with_balances_body = _json_body(with_balances)
+    assert isinstance(with_balances_body.get("running_balances"), dict)
 
 
 def test_create_transaction_validation_error():

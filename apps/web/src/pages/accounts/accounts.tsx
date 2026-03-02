@@ -29,7 +29,9 @@ import { PageRoutes } from "@/data/routes";
 import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useInvestmentsApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
 import { AccountType, type YearlyOverviewResponse } from "@/types/api";
+import type { EndpointResponse } from "@/types/contracts";
 import { AccountModal } from "./children/account-modal";
 import {
   AccountHealthCard,
@@ -98,12 +100,18 @@ export const Accounts: React.FC = () => {
       const year = baseDate.getFullYear();
       setYearlyOverviewLoading(true);
       try {
-        const { data } = await apiFetch<YearlyOverviewResponse>({
-          path: "/reports/yearly-overview",
-          query: { year },
-          token,
-        });
-        setYearlyOverview(data);
+        const { data } = await apiFetch<
+          EndpointResponse<"yearlyOverviewRange">
+        >(
+          buildEndpointRequest("yearlyOverviewRange", {
+            query: {
+              start_year: year,
+              end_year: year,
+            },
+            token,
+          }),
+        );
+        setYearlyOverview((data.items ?? [])[0] ?? null);
       } catch (err) {
         console.error("Failed to fetch yearly overview", err);
         setYearlyOverview(null);

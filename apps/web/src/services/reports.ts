@@ -31,6 +31,27 @@ export const fetchYearlyOverview = async ({
     }),
   );
 
+export const fetchYearlyOverviewRange = async ({
+  startYear,
+  endYear,
+  token,
+  accountIds,
+}: TokenParam & {
+  startYear: number;
+  endYear: number;
+  accountIds?: string | string[];
+}) =>
+  apiFetch<EndpointResponse<"yearlyOverviewRange">>(
+    buildEndpointRequest("yearlyOverviewRange", {
+      query: {
+        start_year: startYear,
+        end_year: endYear,
+        ...(accountIds ? { account_ids: accountIds } : {}),
+      },
+      token,
+    }),
+  );
+
 export const fetchYearlyCategoryDetail = async ({
   year,
   categoryId,

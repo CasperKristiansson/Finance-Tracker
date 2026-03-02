@@ -4,19 +4,25 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
-from typing import List, Optional, cast
+from typing import List, Optional, TypedDict, cast
 from uuid import UUID
 
 from sqlmodel import Session
 
-from ..models import Loan, LoanEvent
+from ..models import Loan, LoanEvent, Transaction, TransactionLeg
 from ..repositories.account import AccountRepository
 from ..repositories.loan import LoanRepository
 from ..repositories.transaction import TransactionRepository
 from ..schemas.loan import LoanPortfolioSeriesPoint, LoanScheduleEntry
-from ..shared import AccountType, InterestCompound, LoanEventType
+from ..shared import AccountType, InterestCompound, LoanEventType, TransactionType
+from .transaction import TransactionService
 
 _CENT = Decimal("0.01")
+
+
+class LoanActivityResult(TypedDict):
+    loan: Loan
+    transaction: Transaction
 
 
 class LoanService:
@@ -165,6 +171,75 @@ class LoanService:
             principal = remaining
 
         return schedule
+
+    def record_activity(
+        self,
+        account_id: UUID,
+        *,
+        kind: str,
+        funding_account_id: UUID,
+        amount: Decimal,
+        occurred_at: datetime,
+        description: Optional[str] = None,
+        sync_principal: bool = False,
+    ) -> LoanActivityResult:
+        loan = self.get_loan(account_id)
+        funding_account = self.account_repository.get(funding_account_id, with_relationships=False)
+        if funding_account is None:
+            raise LookupError("Funding account not found")
+        if funding_account.id == account_id:
+            raise ValueError("Funding account must be different from the loan account")
+
+        amount = amount.quantize(_CENT, rounding=ROUND_HALF_UP)
+        if amount <= Decimal("0"):
+            raise ValueError("Amount must be greater than zero")
+
+        if kind == "payment":
+            loan_leg_amount = amount
+            funding_leg_amount = -amount
+            default_description = "Loan principal payment"
+        elif kind == "disbursement":
+            loan_leg_amount = -amount
+            funding_leg_amount = amount
+            default_description = "Loan disbursement"
+        else:
+            raise ValueError("Unsupported loan activity kind")
+
+        transaction = Transaction(
+            category_id=None,
+            transaction_type=TransactionType.TRANSFER,
+            description=description or default_description,
+            notes=None,
+            external_id=None,
+            occurred_at=occurred_at,
+            posted_at=occurred_at,
+        )
+        legs = [
+            TransactionLeg(account_id=account_id, amount=loan_leg_amount),
+            TransactionLeg(account_id=funding_account_id, amount=funding_leg_amount),
+        ]
+        transaction_service = TransactionService(self.session)
+        created_transaction = transaction_service.create_transaction(
+            transaction, legs, commit=False
+        )
+
+        if sync_principal:
+            current_principal = loan.current_principal or Decimal("0")
+            if kind == "payment":
+                next_principal = max(Decimal("0"), current_principal - amount)
+            else:
+                next_principal = current_principal + amount
+            loan.current_principal = next_principal.quantize(_CENT, rounding=ROUND_HALF_UP)
+
+        self.session.add(loan)
+        self.session.commit()
+        self.session.refresh(loan)
+        self.session.refresh(created_transaction)
+
+        return {
+            "loan": loan,
+            "transaction": created_transaction,
+        }
 
     def _monthly_rate(self, loan: Loan) -> Decimal:
         rate = loan.interest_rate_annual or Decimal("0")

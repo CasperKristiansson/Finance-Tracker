@@ -91,6 +91,32 @@ class CategoryListResponse(BaseModel):
     categories: list[CategoryRead]
 
 
+class ListCategoryOptionsQuery(BaseModel):
+    """Query parameters for listing lightweight category options."""
+
+    include_archived: bool = Field(default=False, alias="include_archived")
+    include_special: bool = Field(default=False, alias="include_special")
+
+
+class CategoryOptionRead(BaseModel):
+    """Lightweight category option for selectors."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    category_type: CategoryType
+    color_hex: Optional[str] = None
+    icon: Optional[str] = None
+    is_archived: bool
+
+
+class CategoryOptionsResponse(BaseModel):
+    """Response payload for category options."""
+
+    options: list[CategoryOptionRead]
+
+
 class MergeCategoriesRequest(BaseModel):
     """Request payload for merging one category into another."""
 
@@ -115,5 +141,8 @@ __all__ = [
     "ListCategoriesQuery",
     "CategoryPathParams",
     "CategoryListResponse",
+    "ListCategoryOptionsQuery",
+    "CategoryOptionRead",
+    "CategoryOptionsResponse",
     "MergeCategoriesRequest",
 ]

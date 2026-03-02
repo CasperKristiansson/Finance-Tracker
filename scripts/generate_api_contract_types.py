@@ -426,8 +426,8 @@ def render_endpoint_helpers() -> str:
 
 def render_endpoints(endpoints: list[EndpointSpec], names: dict[Any, str]) -> str:
     lines = [
-        "import type * as Models from './models'",
         "import { defineEndpoint } from './endpoint'",
+        "import type * as Models from './models'",
         "",
     ]
 

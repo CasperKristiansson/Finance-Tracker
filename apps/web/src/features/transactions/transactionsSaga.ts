@@ -22,6 +22,7 @@ import {
 } from "@/features/transactions/transactionsSlice";
 import { selectTransactionFilters } from "@/features/transactions/transactionsSlice";
 import { buildEndpointRequest } from "@/lib/apiEndpoints";
+import { normalizeTransactionRead } from "@/lib/transactions";
 import type {
   EndpointRequest,
   EndpointResponse,
@@ -88,11 +89,16 @@ function* handleFetchTransactions(
       ...(filters.sortDir ? { sort_dir: filters.sortDir } : {}),
       limit,
       offset,
+      include_running_balances: true,
+      include_tax_event: true,
+      view: "full" as const,
     };
 
     if (isDemo) {
       const existing: TransactionRead[] = yield select(selectTransactions);
-      const source = demoTransactionsResponse.transactions;
+      const source = demoTransactionsResponse.transactions.map(
+        normalizeTransactionRead,
+      );
       const combined = offset > 0 ? [...existing, ...source] : source;
       yield put(setTransactions(combined));
       if (demoTransactionsResponse.running_balances) {
@@ -117,10 +123,8 @@ function* handleFetchTransactions(
       );
 
       const existing: TransactionRead[] = yield select(selectTransactions);
-      const combined =
-        offset > 0
-          ? [...existing, ...response.transactions]
-          : response.transactions;
+      const normalized = response.transactions.map(normalizeTransactionRead);
+      const combined = offset > 0 ? [...existing, ...normalized] : normalized;
       yield put(setTransactions(combined));
       if (response.running_balances) {
         yield put(setRunningBalances(response.running_balances));
@@ -164,18 +168,22 @@ function* handleFetchRecentTransactions(
     };
 
     if (isDemo) {
-      const trimmed = demoTransactionsResponse.transactions.slice(0, limit);
+      const trimmed = demoTransactionsResponse.transactions
+        .slice(0, limit)
+        .map(normalizeTransactionRead);
       yield put(setRecentTransactions(trimmed));
     } else {
-      const response: EndpointResponse<"listTransactions"> = yield call(
+      const response: EndpointResponse<"listRecentTransactions"> = yield call(
         callApiWithAuth,
-        buildEndpointRequest("listTransactions", {
+        buildEndpointRequest("listRecentTransactions", {
           query,
         }),
         { loadingKey: "transactions-recent" },
       );
 
-      const trimmed = response.transactions.slice(0, limit);
+      const trimmed = response.transactions
+        .slice(0, limit)
+        .map(normalizeTransactionRead);
       yield put(setRecentTransactions(trimmed));
     }
   } catch (error) {

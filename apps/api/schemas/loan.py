@@ -121,8 +121,32 @@ class LoanPortfolioSeriesRead(BaseModel):
     series: List[LoanPortfolioSeriesPoint]
 
 
+class LoanActivityCreateRequest(BaseModel):
+    """Request payload for recording loan activity atomically."""
+
+    kind: str = Field(pattern="^(payment|disbursement)$")
+    funding_account_id: UUID
+    amount: Decimal = Field(gt=Decimal("0"))
+    occurred_at: datetime
+    description: Optional[str] = Field(default=None, max_length=250)
+    sync_principal: bool = False
+
+
+class LoanActivityCreateResponse(BaseModel):
+    """Response payload after recording loan activity."""
+
+    account_id: UUID
+    loan_id: UUID
+    transaction_id: UUID
+    amount: Decimal
+    kind: str
+    current_principal: Decimal
+
+
 __all__ = [
     "LoanCreateRequest",
+    "LoanActivityCreateRequest",
+    "LoanActivityCreateResponse",
     "LoanUpdate",
     "LoanScheduleQuery",
     "LoanScheduleEntry",

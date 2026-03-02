@@ -219,6 +219,35 @@ def test_reporting_service_cashflow_alert_and_projection_default_method(session)
     )
     assert ensemble["alert_below_threshold_at"] is not None
 
+
+def test_yearly_overview_range_calls_yearly_overview_per_year(session) -> None:
+    service = ReportingService(session)
+    called_years: list[int] = []
+
+    def _yearly_overview(*, year, account_ids=None):  # pylint: disable=unused-argument
+        called_years.append(year)
+        return {"year": year}
+
+    service.yearly_overview = _yearly_overview  # type: ignore[assignment]
+    result = service.yearly_overview_range(start_year=2022, end_year=2024)
+
+    assert called_years == [2022, 2023, 2024]
+    assert result == [{"year": 2022}, {"year": 2023}, {"year": 2024}]
+
+
+def test_dashboard_overview_aggregates_monthly_total_and_net_worth(session) -> None:
+    service = ReportingService(session)
+    service.monthly_report = lambda **_kwargs: ["monthly"]  # type: ignore[assignment]
+    service.total_report = lambda **_kwargs: {"net": Decimal("12")}  # type: ignore[assignment]
+    service.net_worth_history = lambda **_kwargs: ["net-worth"]  # type: ignore[assignment]
+
+    result = service.dashboard_overview(year=2025, account_ids=[UUID(int=1)])
+
+    assert result["year"] == 2025
+    assert result["monthly"] == ["monthly"]
+    assert result["total"] == {"net": Decimal("12")}
+    assert result["net_worth"] == ["net-worth"]
+
     # Fewer than six monthly points => no holdout, defaults to sma_delta recommendation.
     service.net_worth_history = lambda account_ids=None: [  # type: ignore[assignment]
         NetWorthPoint(period=date(2025, month, 28), net_worth=Decimal(str(1000 + month * 10)))
