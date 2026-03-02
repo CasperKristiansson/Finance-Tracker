@@ -34,11 +34,19 @@ class InvestmentSnapshotService:
         start: Optional[datetime] = None,
         end: Optional[datetime] = None,
         holding: Optional[str] = None,
+        account_name: Optional[str] = None,
         tx_type: Optional[str] = None,
         limit: Optional[int] = None,
+        offset: int = 0,
     ) -> list[InvestmentTransaction]:
         return self.tx_repository.list_transactions(
-            start=start, end=end, holding=holding, tx_type=tx_type, limit=limit
+            start=start,
+            end=end,
+            holding=holding,
+            account_name=account_name,
+            tx_type=tx_type,
+            limit=limit,
+            offset=offset,
         )
 
     def investment_overview(self) -> dict[str, Any]:

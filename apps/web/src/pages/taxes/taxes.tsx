@@ -31,14 +31,6 @@ import {
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   demoTaxEvents,
   demoTaxTotalSummary,
   getDemoTaxSummary,
@@ -46,7 +38,7 @@ import {
 import { selectIsDemo, selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
-import { currency, formatDate } from "@/lib/format";
+import { currency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { TaxEventType } from "@/types/api";
 import type {
@@ -56,26 +48,17 @@ import type {
   TaxEventCreateRequest,
   TaxTotalSummaryResponse,
 } from "@/types/api";
-
-const monthLabel = (year: number, month: number) =>
-  formatDate(Date.UTC(year, month - 1, 1), {
-    month: "short",
-  });
-
-const isoDate = (value: string) => value.slice(0, 10);
-
-const toNumber = (value: unknown) => {
-  if (typeof value === "number") return value;
-  if (typeof value === "string") return Number(value);
-  return 0;
-};
-
-const formatDisplayDate = (iso: string) =>
-  formatDate(iso, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+import { TaxEventsTable } from "./components/tax-events-table";
+import {
+  TAX_EVENTS_PAGE_SIZE,
+  formatDisplayDate,
+  getDefaultTaxEventFormValues,
+  isoDate,
+  monthLabel,
+  taxEventTone,
+  toNumber,
+  yearRangeIso,
+} from "./taxes-utils";
 
 type CreateTaxEventValues = Pick<
   TaxEventCreateRequest,
@@ -87,15 +70,10 @@ type CreateTaxEventValues = Pick<
   | "note"
 >;
 
-const typeTone: Record<TaxEventType, string> = {
-  [TaxEventType.PAYMENT]: "bg-rose-100 text-rose-800",
-  [TaxEventType.REFUND]: "bg-emerald-100 text-emerald-800",
-};
-
 export const Taxes: React.FC = () => {
   const token = useAppSelector(selectToken);
   const isDemo = useAppSelector(selectIsDemo);
-  const { items: accounts, fetchAccounts } = useAccountsApi();
+  const { options: accountOptionsData, fetchAccountOptions } = useAccountsApi();
 
   const currentYear = new Date().getFullYear();
   const [viewMode, setViewMode] = useState<"year" | "total">("year");
@@ -107,14 +85,16 @@ export const Taxes: React.FC = () => {
   const [totalSummaryLoading, setTotalSummaryLoading] = useState(false);
   const [events, setEvents] = useState<TaxEventListResponse | null>(null);
   const [eventsLoading, setEventsLoading] = useState(false);
+  const [eventsLoadingMore, setEventsLoadingMore] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [detailsId, setDetailsId] = useState<string | null>(null);
   const closeDetails = () => setDetailsId(null);
+  const eventsPageSize = TAX_EVENTS_PAGE_SIZE;
 
   useEffect(() => {
-    fetchAccounts();
-  }, [fetchAccounts]);
+    fetchAccountOptions({ includeInactive: false });
+  }, [fetchAccountOptions]);
 
   useEffect(() => {
     setDetailsId(null);
@@ -127,10 +107,10 @@ export const Taxes: React.FC = () => {
 
   const accountOptions = useMemo(
     () =>
-      accounts
+      accountOptionsData
         .filter((acc) => acc.is_active)
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [accounts],
+    [accountOptionsData],
   );
 
   const loadSummary = async (targetYear: number) => {
@@ -182,36 +162,52 @@ export const Taxes: React.FC = () => {
     }
   };
 
-  const loadEvents = async (range?: { start?: string; end?: string }) => {
+  const loadEvents = async (
+    range?: { start?: string; end?: string },
+    options?: { append?: boolean },
+  ) => {
+    const append = Boolean(options?.append);
     if (!token) return;
-    setEventsLoading(true);
+    if (append) {
+      setEventsLoadingMore(true);
+    } else {
+      setEventsLoading(true);
+    }
     try {
+      const offset = append ? (events?.next_offset ?? 0) : 0;
       if (isDemo) {
-        setEvents(demoTaxEvents);
+        const page = demoTaxEvents.events.slice(
+          offset,
+          offset + eventsPageSize,
+        );
+        const hasMore = offset + eventsPageSize < demoTaxEvents.events.length;
+        setEvents((prev) => ({
+          events: append ? [...(prev?.events ?? []), ...page] : page,
+          limit: eventsPageSize,
+          offset,
+          has_more: hasMore,
+          next_offset: hasMore ? offset + eventsPageSize : null,
+        }));
         return;
       }
-      const limit = 200;
-      const maxPages = 50;
-      const all: TaxEventListResponse["events"] = [];
+      const query: Record<string, string | number> = {
+        limit: eventsPageSize,
+        offset,
+      };
+      if (range?.start) query.start_date = range.start;
+      if (range?.end) query.end_date = range.end;
 
-      for (let page = 0; page < maxPages; page += 1) {
-        const query: Record<string, string | number> = {
-          limit,
-          offset: page * limit,
-        };
-        if (range?.start) query.start_date = range.start;
-        if (range?.end) query.end_date = range.end;
-
-        const { data } = await apiFetch<TaxEventListResponse>({
-          path: "/tax/events",
-          query,
-          token,
-        });
-        all.push(...data.events);
-        if (data.events.length < limit) break;
-      }
-
-      setEvents({ events: all });
+      const { data } = await apiFetch<TaxEventListResponse>({
+        path: "/tax/events",
+        query,
+        token,
+      });
+      setEvents((prev) => ({
+        ...data,
+        events: append
+          ? [...(prev?.events ?? []), ...data.events]
+          : data.events,
+      }));
     } catch (error) {
       setEvents(null);
       toast.error("Unable to load tax events", {
@@ -219,7 +215,11 @@ export const Taxes: React.FC = () => {
           error instanceof Error ? error.message : "Please try again shortly.",
       });
     } finally {
-      setEventsLoading(false);
+      if (append) {
+        setEventsLoadingMore(false);
+      } else {
+        setEventsLoading(false);
+      }
     }
   };
 
@@ -227,9 +227,7 @@ export const Taxes: React.FC = () => {
     if (viewMode === "year") {
       setTotalSummary(null);
       void loadSummary(year);
-      const start = new Date(Date.UTC(year, 0, 1)).toISOString();
-      const end = new Date(Date.UTC(year + 1, 0, 1)).toISOString();
-      void loadEvents({ start, end });
+      void loadEvents(yearRangeIso(year));
     } else {
       setSummary(null);
       void loadTotalSummary();
@@ -239,14 +237,7 @@ export const Taxes: React.FC = () => {
   }, [token, year, viewMode]);
 
   const form = useForm<CreateTaxEventValues>({
-    defaultValues: {
-      event_type: TaxEventType.PAYMENT,
-      account_id: "",
-      occurred_at: new Date().toISOString().slice(0, 10),
-      amount: "",
-      description: "Skatteverket",
-      note: "",
-    },
+    defaultValues: getDefaultTaxEventFormValues(),
   });
 
   const submit = form.handleSubmit(async (values) => {
@@ -265,7 +256,8 @@ export const Taxes: React.FC = () => {
           note: values.note?.trim() || null,
           account_id: values.account_id,
           account_name:
-            accounts.find((acc) => acc.id === values.account_id)?.name ?? null,
+            accountOptionsData.find((acc) => acc.id === values.account_id)
+              ?.name ?? null,
           amount: values.amount,
         };
         setEvents((prev) => ({
@@ -275,14 +267,7 @@ export const Taxes: React.FC = () => {
         toast.success("Tax recorded (demo mode)", {
           description: `Created ${values.event_type} event.`,
         });
-        form.reset({
-          event_type: TaxEventType.PAYMENT,
-          account_id: "",
-          occurred_at: new Date().toISOString().slice(0, 10),
-          amount: "",
-          description: "Skatteverket",
-          note: "",
-        });
+        form.reset(getDefaultTaxEventFormValues());
         return;
       }
       const { data } = await apiFetch<TaxEventCreateResponse>({
@@ -302,18 +287,9 @@ export const Taxes: React.FC = () => {
       toast.success("Tax recorded", {
         description: `Created ${data.tax_event.event_type} event.`,
       });
-      form.reset({
-        event_type: TaxEventType.PAYMENT,
-        account_id: "",
-        occurred_at: new Date().toISOString().slice(0, 10),
-        amount: "",
-        description: "Skatteverket",
-        note: "",
-      });
+      form.reset(getDefaultTaxEventFormValues());
       if (viewMode === "year") {
-        const start = new Date(Date.UTC(year, 0, 1)).toISOString();
-        const end = new Date(Date.UTC(year + 1, 0, 1)).toISOString();
-        await Promise.all([loadSummary(year), loadEvents({ start, end })]);
+        await Promise.all([loadSummary(year), loadEvents(yearRangeIso(year))]);
       } else {
         await Promise.all([loadTotalSummary(), loadEvents()]);
       }
@@ -827,77 +803,18 @@ export const Taxes: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {eventsLoading && !events?.events?.length ? (
-            <Skeleton className="h-32 w-full" />
-          ) : null}
-          {!events?.events?.length && !eventsLoading ? (
-            <p className="text-sm text-slate-500">
-              No tax events recorded yet.
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Account</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(events?.events ?? []).map((item) => {
-                  const sign = item.event_type === TaxEventType.REFUND ? -1 : 1;
-                  const amount = sign * toNumber(item.amount);
-                  return (
-                    <TableRow
-                      key={item.id}
-                      className={cn(
-                        "cursor-pointer transition-colors hover:bg-slate-50 focus-visible:bg-slate-50",
-                        detailsId === item.id ? "bg-slate-50" : undefined,
-                      )}
-                      onClick={() => setDetailsId(item.id)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setDetailsId(item.id);
-                        }
-                      }}
-                      tabIndex={0}
-                    >
-                      <TableCell className="whitespace-nowrap">
-                        {new Date(item.occurred_at).toLocaleDateString("sv-SE")}
-                      </TableCell>
-                      <TableCell className="min-w-[240px]">
-                        <div className="font-medium text-slate-900">
-                          {item.description || item.authority || "Tax"}
-                        </div>
-                        {item.note ? (
-                          <div className="text-xs text-slate-500">
-                            {item.note}
-                          </div>
-                        ) : null}
-                      </TableCell>
-                      <TableCell>{item.account_name ?? "—"}</TableCell>
-                      <TableCell>
-                        <span
-                          className={cn(
-                            "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
-                            typeTone[item.event_type],
-                          )}
-                        >
-                          {item.event_type}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right font-medium">
-                        {currency(amount)}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
+          <TaxEventsTable
+            events={events}
+            eventsLoading={eventsLoading}
+            eventsLoadingMore={eventsLoadingMore}
+            detailsId={detailsId}
+            onSelect={setDetailsId}
+            onLoadMore={() => {
+              const range =
+                viewMode === "year" ? yearRangeIso(year) : undefined;
+              void loadEvents(range, { append: true });
+            }}
+          />
         </CardContent>
       </Card>
 
@@ -927,7 +844,7 @@ export const Taxes: React.FC = () => {
                   <span
                     className={cn(
                       "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold",
-                      typeTone[selectedEvent.event_type],
+                      taxEventTone[selectedEvent.event_type],
                     )}
                   >
                     {selectedEvent.event_type}

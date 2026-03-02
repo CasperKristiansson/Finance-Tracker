@@ -649,12 +649,18 @@ export interface InvestmentTransactionListQuery {
   start?: string | null;
   end?: string | null;
   holding?: string | null;
+  account_name?: string | null;
   type?: string | null;
   limit?: number | null;
+  offset?: number;
 }
 
 export interface InvestmentTransactionListResponse {
   transactions: InvestmentTransactionRead[];
+  limit?: number | null;
+  offset?: number;
+  has_more?: boolean;
+  next_offset?: number | null;
 }
 
 export interface InvestmentTransactionRead {
@@ -1045,6 +1051,10 @@ export interface TaxEventListQuery {
 
 export interface TaxEventListResponse {
   events: TaxEventListItem[];
+  limit?: number;
+  offset?: number;
+  has_more?: boolean;
+  next_offset?: number | null;
 }
 
 export interface TaxEventRead {

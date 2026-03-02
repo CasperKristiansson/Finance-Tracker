@@ -188,8 +188,14 @@ export const resolveDemoRequest = (request: DemoApiRequest) => {
       case "/tax/events": {
         const limit = getNumber(request.query?.limit, 200);
         const offset = getNumber(request.query?.offset, 0);
+        const events = demoTaxEvents.events.slice(offset, offset + limit);
+        const hasMore = offset + limit < demoTaxEvents.events.length;
         return {
-          events: demoTaxEvents.events.slice(offset, offset + limit),
+          events,
+          limit,
+          offset,
+          has_more: hasMore,
+          next_offset: hasMore ? offset + limit : null,
         };
       }
       default:

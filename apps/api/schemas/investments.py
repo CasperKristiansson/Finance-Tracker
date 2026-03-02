@@ -34,6 +34,10 @@ class InvestmentTransactionListResponse(BaseModel):
     """Response for listing investment transactions."""
 
     transactions: list[InvestmentTransactionRead]
+    limit: Optional[int] = None
+    offset: int = 0
+    has_more: bool = False
+    next_offset: Optional[int] = None
 
 
 class InvestmentTransactionListQuery(BaseModel):
@@ -42,8 +46,10 @@ class InvestmentTransactionListQuery(BaseModel):
     start: Optional[datetime] = None
     end: Optional[datetime] = None
     holding: Optional[str] = None
+    account_name: Optional[str] = Field(default=None, alias="account_name")
     tx_type: Optional[str] = Field(default=None, alias="type")
     limit: Optional[int] = Field(default=None, ge=1, le=500)
+    offset: int = Field(default=0, ge=0)
 
 
 class InvestmentValuePointRead(BaseModel):

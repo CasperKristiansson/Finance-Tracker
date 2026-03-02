@@ -21,9 +21,14 @@ import type {
 } from "@/types/api";
 import type { EndpointRequest, EndpointResponse } from "@/types/contracts";
 
-export const FetchInvestmentTransactions = createAction(
-  "investments/fetchTransactions",
-);
+export const FetchInvestmentTransactions = createAction<
+  | {
+      accountName?: string;
+      limit?: number;
+      offset?: number;
+    }
+  | undefined
+>("investments/fetchTransactions");
 export const FetchInvestmentOverview = createAction(
   "investments/fetchOverview",
 );
@@ -31,7 +36,9 @@ export const CreateInvestmentSnapshot = createAction<{
   data: EndpointRequest<"createInvestmentSnapshot">;
 }>("investments/createSnapshot");
 
-function* handleFetchTransactions(): Generator {
+function* handleFetchTransactions(
+  action: ReturnType<typeof FetchInvestmentTransactions>,
+): Generator {
   const isDemo: boolean = yield select(selectIsDemo);
   try {
     if (isDemo) {
@@ -39,10 +46,19 @@ function* handleFetchTransactions(): Generator {
       return;
     }
 
+    const limit = action.payload?.limit ?? 80;
+    const offset = action.payload?.offset ?? 0;
+
     const response: EndpointResponse<"listInvestmentTransactions"> = yield call(
       callApiWithAuth,
       buildEndpointRequest("listInvestmentTransactions", {
-        query: { limit: 500 },
+        query: {
+          limit,
+          offset,
+          ...(action.payload?.accountName
+            ? { account_name: action.payload.accountName }
+            : {}),
+        },
       }),
       { loadingKey: "investments", silent: true },
     );

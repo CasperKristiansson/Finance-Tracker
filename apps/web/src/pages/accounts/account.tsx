@@ -250,7 +250,7 @@ export const AccountDetails: React.FC = () => {
     token,
   ]);
 
-  const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [, setAvailableYears] = useState<number[]>([]);
   const [availableYearsLoading, setAvailableYearsLoading] = useState(false);
   const [yearlyOverviews, setYearlyOverviews] = useState<
     Record<number, YearlyOverviewResponse>
@@ -258,38 +258,33 @@ export const AccountDetails: React.FC = () => {
   const [yearlyOverviewLoading, setYearlyOverviewLoading] = useState(false);
 
   useEffect(() => {
-    const loadAvailableYears = async () => {
-      if (!token) return;
-      if (!accountId) return;
-      setAvailableYearsLoading(true);
-      try {
-        const { data } = await fetchYearlyReport({
-          accountIds: accountId,
-          token,
-        });
-        const years = (data.results ?? [])
-          .map((row: { year: number | string }) => Number(row.year))
-          .filter((y: number) => Number.isFinite(y))
-          .sort((a: number, b: number) => a - b);
-        setAvailableYears(years);
-      } catch (err) {
-        console.error("Failed to fetch yearly totals for account", err);
-        setAvailableYears([]);
-      } finally {
-        setAvailableYearsLoading(false);
-      }
-    };
-    void loadAvailableYears();
-  }, [accountId, token]);
-
-  useEffect(() => {
     const loadOverviews = async () => {
       if (!token) return;
       if (!accountId) return;
-      const years =
-        range === "all"
-          ? availableYears
-          : yearsForFixedRange.filter((y) => y > 1900 && y < 3000);
+      let years: number[] = [];
+      if (range === "all") {
+        setAvailableYearsLoading(true);
+        try {
+          const { data } = await fetchYearlyReport({
+            accountIds: accountId,
+            token,
+          });
+          years = (data.results ?? [])
+            .map((row: { year: number | string }) => Number(row.year))
+            .filter((y: number) => Number.isFinite(y))
+            .sort((a: number, b: number) => a - b);
+          setAvailableYears(years);
+        } catch (err) {
+          console.error("Failed to fetch yearly totals for account", err);
+          setAvailableYears([]);
+          years = [];
+        } finally {
+          setAvailableYearsLoading(false);
+        }
+      } else {
+        years = yearsForFixedRange.filter((y) => y > 1900 && y < 3000);
+      }
+
       if (!years.length) {
         setYearlyOverviews({});
         return;
@@ -320,7 +315,7 @@ export const AccountDetails: React.FC = () => {
       }
     };
     void loadOverviews();
-  }, [accountId, availableYears, range, refreshSeq, token, yearsForFixedRange]);
+  }, [accountId, range, refreshSeq, token, yearsForFixedRange]);
 
   const investmentSeries = useMemo(() => {
     if (!account) return null;
@@ -629,6 +624,9 @@ export const AccountDetails: React.FC = () => {
         account_ids: accountId,
         limit: txLimit,
         offset: nextOffset,
+        include_running_balances: false,
+        include_tax_event: true,
+        view: "summary" as const,
       };
       const { data } = await fetchTransactions({ token, query });
       const normalized = data.transactions.map(normalizeTransactionRead);

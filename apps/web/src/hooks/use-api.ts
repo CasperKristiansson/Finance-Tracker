@@ -4,6 +4,7 @@ import {
   ArchiveAccount,
   AttachLoan,
   CreateAccount,
+  FetchAccountOptions,
   FetchAccounts,
   ReconcileAccounts,
   UpdateAccount,
@@ -14,6 +15,7 @@ import {
   type AccountsState,
 } from "@/features/accounts/accountsSlice";
 import {
+  FetchCategoryOptions,
   FetchCategories,
   CreateCategory,
   UpdateCategory,
@@ -148,6 +150,11 @@ export const useAccountsApi = () => {
       dispatch(FetchAccounts(filters)),
     [dispatch],
   );
+  const fetchAccountOptions = useCallback(
+    (filters?: Pick<AccountsState, "includeInactive">) =>
+      dispatch(FetchAccountOptions(filters)),
+    [dispatch],
+  );
 
   const createAccount = useCallback(
     (payload: Parameters<typeof CreateAccount>[0]) =>
@@ -187,6 +194,7 @@ export const useAccountsApi = () => {
   return {
     ...state,
     fetchAccounts,
+    fetchAccountOptions,
     createAccount,
     updateAccount,
     archiveAccount,
@@ -206,6 +214,12 @@ export const useCategoriesApi = () => {
   const fetchCategories = useCallback(
     (filters?: Partial<Pick<CategoriesState, "includeArchived">>) => {
       dispatch(FetchCategories(filters));
+    },
+    [dispatch],
+  );
+  const fetchCategoryOptions = useCallback(
+    (filters?: Pick<CategoriesState, "includeArchived">) => {
+      dispatch(FetchCategoryOptions(filters));
     },
     [dispatch],
   );
@@ -230,6 +244,7 @@ export const useCategoriesApi = () => {
   return {
     ...state,
     fetchCategories,
+    fetchCategoryOptions,
     createCategory,
     updateCategory,
     mergeCategory,
@@ -271,6 +286,7 @@ export const useTransactionsApi = () => {
         limit?: number;
         accountIds?: string[];
         transactionTypes?: string[];
+        includeTaxEvent?: boolean;
       } = {},
     ) => {
       dispatch(FetchRecentTransactions(params));
@@ -301,7 +317,8 @@ export const useInvestmentsApi = () => {
   const overview = useAppSelector(selectInvestmentOverview);
 
   const fetchTransactions = useCallback(
-    () => dispatch(FetchInvestmentTransactions()),
+    (params?: Parameters<typeof FetchInvestmentTransactions>[0]) =>
+      dispatch(FetchInvestmentTransactions(params)),
     [dispatch],
   );
 

@@ -191,6 +191,56 @@ def test_tax_total_summary_aggregates_across_years():
     assert Decimal(yearly[2024]["net_tax_paid"]) == Decimal("150.00")
 
 
+def test_list_tax_events_returns_pagination_metadata() -> None:
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        account = Account(name="Bank", account_type=AccountType.NORMAL, is_active=True)
+        session.add(account)
+        session.commit()
+        session.refresh(account)
+        account_id = str(account.id)
+
+    for day in (10, 11):
+        create_tax_event(
+            {
+                "body": json.dumps(
+                    {
+                        "account_id": account_id,
+                        "occurred_at": f"2024-01-{day}T00:00:00Z",
+                        "amount": "100.00",
+                        "event_type": "payment",
+                        "description": "Skatteverket",
+                    }
+                ),
+                "isBase64Encoded": False,
+            },
+            None,
+        )
+
+    first_page = list_tax_events(
+        {"queryStringParameters": {"limit": "1", "offset": "0"}},
+        None,
+    )
+    assert first_page["statusCode"] == 200
+    first_body = _json_body(first_page)
+    assert len(first_body["events"]) == 1
+    assert first_body["limit"] == 1
+    assert first_body["offset"] == 0
+    assert first_body["has_more"] is True
+    assert first_body["next_offset"] == 1
+
+    second_page = list_tax_events(
+        {"queryStringParameters": {"limit": "1", "offset": "1"}},
+        None,
+    )
+    assert second_page["statusCode"] == 200
+    second_body = _json_body(second_page)
+    assert len(second_body["events"]) == 1
+    assert second_body["has_more"] is False
+    assert second_body["next_offset"] is None
+
+
 def test_reports_exclude_tax_transactions_from_income_and_expense():
     engine = get_engine()
     with Session(engine) as session:

@@ -402,8 +402,8 @@ export const Categories: React.FC = () => {
         query: {
           category_ids: detailsId,
           limit: 20,
-          include_tax_event: true,
-          view: "full",
+          include_tax_event: false,
+          view: "summary",
         },
       }),
     )

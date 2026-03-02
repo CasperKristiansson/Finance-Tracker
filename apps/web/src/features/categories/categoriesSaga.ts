@@ -6,6 +6,9 @@ import { callApiWithAuth } from "@/features/api/apiSaga";
 import { selectIsDemo } from "@/features/auth/authSlice";
 import {
   selectCategories,
+  setCategoryOptions,
+  setCategoryOptionsError,
+  setCategoryOptionsLoading,
   selectCategoriesState,
   setCategories,
   setCategoriesError,
@@ -23,6 +26,9 @@ import type { EndpointRequest, EndpointResponse } from "@/types/contracts";
 export const FetchCategories = createAction<
   Partial<Pick<CategoriesState, "includeArchived">> | undefined
 >("categories/fetch");
+export const FetchCategoryOptions = createAction<
+  Pick<CategoriesState, "includeArchived"> | undefined
+>("categories/fetchOptions");
 export const CreateCategory =
   createAction<EndpointRequest<"createCategory">>("categories/create");
 export const UpdateCategory = createAction<{
@@ -78,6 +84,53 @@ function* handleFetchCategories(
     );
   } finally {
     yield put(setCategoriesLoading(false));
+  }
+}
+
+function* handleFetchCategoryOptions(
+  action: ReturnType<typeof FetchCategoryOptions>,
+): SagaIterator {
+  const state: CategoriesState = yield select(selectCategoriesState);
+  const includeArchived =
+    action.payload?.includeArchived ?? state.includeArchived;
+  yield put(setCategoryOptionsLoading(true));
+  const isDemo: boolean = yield select(selectIsDemo);
+
+  try {
+    if (isDemo) {
+      const options = demoCategories.categories.map((category) => ({
+        id: category.id,
+        name: category.name,
+        category_type: category.category_type,
+        color_hex: category.color_hex,
+        icon: category.icon,
+        is_archived: category.is_archived,
+      }));
+      yield put(setCategoryOptions(options));
+      return;
+    }
+
+    const response: EndpointResponse<"listCategoryOptions"> = yield call(
+      callApiWithAuth,
+      buildEndpointRequest("listCategoryOptions", {
+        query: {
+          include_archived: includeArchived,
+          include_special: false,
+        },
+      }),
+      { loadingKey: "category-options" },
+    );
+    yield put(setCategoryOptions(response.options));
+  } catch (error) {
+    yield put(
+      setCategoryOptionsError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load category options",
+      ),
+    );
+  } finally {
+    yield put(setCategoryOptionsLoading(false));
   }
 }
 
@@ -250,6 +303,7 @@ function* handleMergeCategory(
 
 export function* CategoriesSaga(): SagaIterator {
   yield takeLatest(FetchCategories.type, handleFetchCategories);
+  yield takeLatest(FetchCategoryOptions.type, handleFetchCategoryOptions);
   yield takeLatest(CreateCategory.type, handleCreateCategory);
   yield takeLatest(UpdateCategory.type, handleUpdateCategory);
   yield takeLatest(MergeCategory.type, handleMergeCategory);

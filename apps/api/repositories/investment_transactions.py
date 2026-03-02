@@ -29,8 +29,10 @@ class InvestmentTransactionRepository:
         start: Optional[datetime] = None,
         end: Optional[datetime] = None,
         holding: Optional[str] = None,
+        account_name: Optional[str] = None,
         tx_type: Optional[str] = None,
         limit: Optional[int] = None,
+        offset: int = 0,
     ) -> List[InvestmentTransaction]:
         statement = select(InvestmentTransaction).order_by(
             cast(Any, InvestmentTransaction.occurred_at).desc()
@@ -41,8 +43,12 @@ class InvestmentTransactionRepository:
             statement = statement.where(InvestmentTransaction.occurred_at <= end)
         if holding:
             statement = statement.where(InvestmentTransaction.holding_name == holding)
+        if account_name:
+            statement = statement.where(InvestmentTransaction.account_name == account_name)
         if tx_type:
             statement = statement.where(InvestmentTransaction.transaction_type == tx_type)
+        if offset:
+            statement = statement.offset(offset)
         if limit:
             statement = statement.limit(limit)
         result = self.session.exec(statement)

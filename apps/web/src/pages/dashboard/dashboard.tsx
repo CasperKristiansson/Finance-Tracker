@@ -19,7 +19,6 @@ import { selectIsAuthenticated, selectToken } from "@/features/auth/authSlice";
 import {
   useAccountsApi,
   useCategoriesApi,
-  useReportsApi,
   useTransactionsApi,
 } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
@@ -50,24 +49,22 @@ import {
   MONTH_LABELS,
   buildRollingMonthSlots,
   dedupeMonthlyEntries,
+  dedupePeriodEntries,
   formatCurrencyDelta,
   getPeriodMonthKey,
   getPeriodYear,
-  numberFromString,
   type KPI,
   type SavingsMonthStatus,
 } from "./dashboard-utils";
 
 export const Dashboard: React.FC = () => {
-  const { monthly, total, netWorth, fetchTotalReport, fetchNetWorthReport } =
-    useReportsApi();
   const { recent, fetchRecentTransactions } = useTransactionsApi();
   const {
     items: accounts,
     loading: accountsLoading,
     fetchAccounts,
   } = useAccountsApi();
-  const { items: categories, fetchCategories } = useCategoriesApi();
+  const { options: categories, fetchCategoryOptions } = useCategoriesApi();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const token = useAppSelector(selectToken);
   const hasFetched = useRef(false);
@@ -77,6 +74,12 @@ export const Dashboard: React.FC = () => {
   const [monthlyWindowData, setMonthlyWindowData] = useState<
     MonthlyReportEntry[]
   >([]);
+  const [netWorthWindowData, setNetWorthWindowData] = useState<
+    EndpointResponse<"dashboardOverview">["net_worth"]
+  >([]);
+  const [dashboardOverviewLoading, setDashboardOverviewLoading] =
+    useState(false);
+  const [accountsRequested, setAccountsRequested] = useState(false);
   const [yearlyOverviewsByYear, setYearlyOverviewsByYear] = useState<
     Record<number, YearlyOverviewResponse>
   >({});
@@ -108,17 +111,10 @@ export const Dashboard: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated || hasFetched.current) return;
     hasFetched.current = true;
-    fetchTotalReport();
-    fetchNetWorthReport();
+    setAccountsRequested(true);
     fetchAccounts();
-    fetchCategories();
-  }, [
-    fetchTotalReport,
-    fetchNetWorthReport,
-    fetchAccounts,
-    fetchCategories,
-    isAuthenticated,
-  ]);
+    fetchCategoryOptions();
+  }, [fetchAccounts, fetchCategoryOptions, isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -129,19 +125,24 @@ export const Dashboard: React.FC = () => {
         : recentTab === "income"
           ? [TransactionType.INCOME, TransactionType.TRANSFER]
           : [TransactionType.EXPENSE, TransactionType.TRANSFER];
-    fetchRecentTransactions({ limit, transactionTypes });
+    fetchRecentTransactions({
+      limit,
+      transactionTypes,
+      includeTaxEvent: true,
+    });
   }, [fetchRecentTransactions, isAuthenticated, recentTab]);
 
   useEffect(() => {
     const loadFilteredMonthly = async () => {
       if (!token) return;
+      if (!accountsRequested || accountsLoading) return;
       const nonInvestmentIds = accounts
         .filter((acc) => acc.account_type !== AccountType.INVESTMENT)
         .map((acc) => acc.id);
       const currentYear = new Date().getFullYear();
       const years = [currentYear - 1, currentYear];
-      const collectMonthly = async (accountIds?: string[]) => {
-        const responses = await Promise.all(
+      const collectOverview = async (accountIds?: string[]) => {
+        return Promise.all(
           years.map((year) =>
             apiFetch<EndpointResponse<"dashboardOverview">>(
               buildEndpointRequest("dashboardOverview", {
@@ -156,26 +157,39 @@ export const Dashboard: React.FC = () => {
             ),
           ),
         );
-        return responses.flatMap((response) => response.data.monthly ?? []);
       };
 
       try {
-        const [windowEntries, filteredEntries] = await Promise.all([
-          collectMonthly(),
+        setDashboardOverviewLoading(true);
+        const [windowResponses, filteredResponses] = await Promise.all([
+          collectOverview(),
           nonInvestmentIds.length
-            ? collectMonthly(nonInvestmentIds)
+            ? collectOverview(nonInvestmentIds)
             : Promise.resolve([]),
         ]);
+        const windowEntries = windowResponses.flatMap(
+          (response) => response.data.monthly ?? [],
+        );
+        const netWorthEntries = windowResponses.flatMap(
+          (response) => response.data.net_worth ?? [],
+        );
+        const filteredEntries = filteredResponses.flatMap(
+          (response) => response.data.monthly ?? [],
+        );
         setMonthlyWindowData(dedupeMonthlyEntries(windowEntries));
+        setNetWorthWindowData(dedupePeriodEntries(netWorthEntries));
         setFilteredMonthly(dedupeMonthlyEntries(filteredEntries));
       } catch (err) {
         console.error("Failed to fetch rolling monthly report", err);
         setMonthlyWindowData([]);
+        setNetWorthWindowData([]);
         setFilteredMonthly([]);
+      } finally {
+        setDashboardOverviewLoading(false);
       }
     };
     void loadFilteredMonthly();
-  }, [accounts, token]);
+  }, [accounts, accountsLoading, accountsRequested, token]);
 
   useEffect(() => {
     const loadYearlyOverview = async () => {
@@ -238,9 +252,7 @@ export const Dashboard: React.FC = () => {
     const rollingSlots = buildRollingMonthSlots();
     const cashFlowSource = filteredMonthly.length
       ? filteredMonthly
-      : monthlyWindowData.length
-        ? monthlyWindowData
-        : monthly.data || [];
+      : monthlyWindowData;
     const byMonth = new Map<string, { income: number; expense: number }>();
     cashFlowSource.forEach((entry) => {
       byMonth.set(getPeriodMonthKey(entry.period), {
@@ -260,9 +272,9 @@ export const Dashboard: React.FC = () => {
     const trailingNet = trailingIncome - trailingExpense;
     const trailingSavingsRate =
       trailingIncome > 0 ? Math.round((trailingNet / trailingIncome) * 100) : 0;
-    const netWorthNow = netWorth.data?.length
-      ? Number(netWorth.data[netWorth.data.length - 1]?.net_worth)
-      : numberFromString(total.data?.net);
+    const netWorthNow = netWorthWindowData.length
+      ? Number(netWorthWindowData[netWorthWindowData.length - 1]?.net_worth)
+      : 0;
 
     return [
       {
@@ -285,21 +297,11 @@ export const Dashboard: React.FC = () => {
         trend: trailingSavingsRate >= 0 ? "up" : "down",
       },
     ];
-  }, [
-    filteredMonthly,
-    monthly.data,
-    monthlyWindowData,
-    netWorth.data,
-    total.data,
-  ]);
+  }, [filteredMonthly, monthlyWindowData, netWorthWindowData]);
 
   const incomeExpenseChart = useMemo(() => {
     const rollingSlots = buildRollingMonthSlots();
-    const source = filteredMonthly.length
-      ? filteredMonthly
-      : monthlyWindowData.length
-        ? monthlyWindowData
-        : monthly.data || [];
+    const source = filteredMonthly.length ? filteredMonthly : monthlyWindowData;
     const byMonth = new Map<string, { income: number; expense: number }>();
 
     source.forEach((entry) => {
@@ -321,7 +323,7 @@ export const Dashboard: React.FC = () => {
         expense: entry?.expense ?? 0,
       };
     });
-  }, [monthly.data, filteredMonthly, monthlyWindowData]);
+  }, [filteredMonthly, monthlyWindowData]);
 
   const rollingCategoryBreakdown = useMemo(() => {
     const rollingSlots = buildRollingMonthSlots();
@@ -393,11 +395,7 @@ export const Dashboard: React.FC = () => {
 
   const savingsRateData = useMemo(() => {
     const rollingSlots = buildRollingMonthSlots();
-    const source = filteredMonthly.length
-      ? filteredMonthly
-      : monthlyWindowData.length
-        ? monthlyWindowData
-        : monthly.data || [];
+    const source = filteredMonthly.length ? filteredMonthly : monthlyWindowData;
     const byMonth = new Map<string, { income: number; expense: number }>();
     source.forEach((entry) => {
       byMonth.set(getPeriodMonthKey(entry.period), {
@@ -425,7 +423,7 @@ export const Dashboard: React.FC = () => {
         status,
       };
     });
-  }, [monthly.data, filteredMonthly, monthlyWindowData]);
+  }, [filteredMonthly, monthlyWindowData]);
 
   const savingsStatusSummary = useMemo(() => {
     return savingsRateData.reduce(
@@ -439,13 +437,13 @@ export const Dashboard: React.FC = () => {
   }, [savingsRateData]);
 
   const netWorthData = useMemo(() => {
-    const points = netWorth.data || [];
+    const points = netWorthWindowData;
     return points.map((point) => ({
       date: point.period,
       net: Number(point.net_worth),
       year: getPeriodYear(point.period),
     }));
-  }, [netWorth.data]);
+  }, [netWorthWindowData]);
 
   const netWorthDomain = useMemo<[number, number]>(() => {
     if (!netWorthData.length) return [0, 0];
@@ -470,11 +468,7 @@ export const Dashboard: React.FC = () => {
 
   const runwayMetrics = useMemo(() => {
     const rollingSlots = buildRollingMonthSlots();
-    const source = filteredMonthly.length
-      ? filteredMonthly
-      : monthlyWindowData.length
-        ? monthlyWindowData
-        : monthly.data || [];
+    const source = filteredMonthly.length ? filteredMonthly : monthlyWindowData;
     const byMonth = new Map<string, { income: number; expense: number }>();
     source.forEach((entry) => {
       byMonth.set(getPeriodMonthKey(entry.period), {
@@ -518,7 +512,7 @@ export const Dashboard: React.FC = () => {
     const months = avgBurn > 0 ? cashOnHand / avgBurn : null;
 
     return { avgBurn, avgIncome, months, trend, lastNet, prevNet, sparkline };
-  }, [cashOnHand, filteredMonthly, monthly.data, monthlyWindowData]);
+  }, [cashOnHand, filteredMonthly, monthlyWindowData]);
 
   const recentTransactions = useMemo<DashboardRecentTransaction[]>(() => {
     return recent.items.map((tx) => {
@@ -675,7 +669,7 @@ export const Dashboard: React.FC = () => {
         <motion.div variants={fadeInUp}>
           <IncomeExpenseChartCard
             data={incomeExpenseChart}
-            loading={monthly.loading}
+            loading={dashboardOverviewLoading}
             yearlyOverview={yearlyOverview}
             yearlyOverviewLoading={yearlyOverviewLoading}
           />
@@ -683,7 +677,7 @@ export const Dashboard: React.FC = () => {
         <motion.div variants={fadeInUp}>
           <NetWorthChartCard
             data={netWorthData}
-            loading={netWorth.loading}
+            loading={dashboardOverviewLoading}
             domain={netWorthDomain}
           />
         </motion.div>
@@ -699,7 +693,7 @@ export const Dashboard: React.FC = () => {
         </motion.div>
         <motion.div variants={fadeInUp}>
           <SavingsRateChartCard
-            loading={monthly.loading}
+            loading={dashboardOverviewLoading}
             data={savingsRateData}
             summary={savingsStatusSummary}
           />
@@ -779,7 +773,7 @@ export const Dashboard: React.FC = () => {
               ) : null}
             </CardHeader>
             <CardContent className="flex flex-1 flex-col gap-3">
-              {monthly.loading || accountsLoading ? (
+              {dashboardOverviewLoading || accountsLoading ? (
                 <Skeleton className="h-10 w-48" />
               ) : runwayMetrics.months === null ? (
                 <p className="text-sm text-slate-500">

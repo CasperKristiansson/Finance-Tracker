@@ -108,7 +108,7 @@ type DrilldownState =
 
 export const CashFlow: React.FC = () => {
   const token = useAppSelector(selectToken);
-  const { items: accounts, fetchAccounts } = useAccountsApi();
+  const { options: accounts, fetchAccountOptions } = useAccountsApi();
   const { monthly, quarterly, fetchMonthlyReport, fetchQuarterlyReport } =
     useReportsApi();
 
@@ -132,8 +132,8 @@ export const CashFlow: React.FC = () => {
   const [drilldown, setDrilldown] = useState<DrilldownState | null>(null);
 
   useEffect(() => {
-    fetchAccounts();
-  }, [fetchAccounts]);
+    fetchAccountOptions({ includeInactive: false });
+  }, [fetchAccountOptions]);
 
   useEffect(() => {
     const filters = {

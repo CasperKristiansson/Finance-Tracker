@@ -67,6 +67,10 @@ class TaxEventListResponse(BaseModel):
     """Response payload for listing tax events."""
 
     events: List[TaxEventListItem]
+    limit: int = 0
+    offset: int = 0
+    has_more: bool = False
+    next_offset: Optional[int] = None
 
 
 class TaxEventCreateResponse(BaseModel):

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Iterator
@@ -17,7 +17,7 @@ from apps.api.handlers.investments import (
     list_investment_transactions,
     reset_handler_state,
 )
-from apps.api.models import Account, InvestmentSnapshot, Transaction
+from apps.api.models import Account, InvestmentSnapshot, InvestmentTransaction, Transaction
 from apps.api.shared import (
     AccountType,
     TransactionType,
@@ -68,6 +68,68 @@ def test_list_investment_transactions_invalid_limit_returns_400() -> None:
     response = list_investment_transactions({"queryStringParameters": {"limit": "abc"}}, None)
     assert response["statusCode"] == 400
     assert _json_body(response)["error"] == "limit must be an integer"
+
+
+def test_list_investment_transactions_invalid_offset_returns_400() -> None:
+    response = list_investment_transactions({"queryStringParameters": {"offset": "abc"}}, None)
+    assert response["statusCode"] == 400
+    assert _json_body(response)["error"] == "offset must be an integer"
+
+
+def test_list_investment_transactions_supports_account_name_and_pagination() -> None:
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        session.add_all(
+            [
+                InvestmentTransaction(
+                    occurred_at=datetime(2024, 1, 10, tzinfo=timezone.utc),
+                    transaction_type="buy",
+                    description="Broker A tx 1",
+                    account_name="Broker A",
+                    amount_sek=Decimal("-100.00"),
+                ),
+                InvestmentTransaction(
+                    occurred_at=datetime(2024, 1, 11, tzinfo=timezone.utc),
+                    transaction_type="buy",
+                    description="Broker A tx 2",
+                    account_name="Broker A",
+                    amount_sek=Decimal("-50.00"),
+                ),
+                InvestmentTransaction(
+                    occurred_at=datetime(2024, 1, 12, tzinfo=timezone.utc),
+                    transaction_type="buy",
+                    description="Broker B tx",
+                    account_name="Broker B",
+                    amount_sek=Decimal("-75.00"),
+                ),
+            ]
+        )
+        session.commit()
+
+    first_page = list_investment_transactions(
+        {"queryStringParameters": {"account_name": "Broker A", "limit": "1", "offset": "0"}},
+        None,
+    )
+    assert first_page["statusCode"] == 200
+    first_body = _json_body(first_page)
+    assert len(first_body["transactions"]) == 1
+    assert first_body["transactions"][0]["account_name"] == "Broker A"
+    assert first_body["limit"] == 1
+    assert first_body["offset"] == 0
+    assert first_body["has_more"] is True
+    assert first_body["next_offset"] == 1
+
+    second_page = list_investment_transactions(
+        {"queryStringParameters": {"account_name": "Broker A", "limit": "1", "offset": "1"}},
+        None,
+    )
+    assert second_page["statusCode"] == 200
+    second_body = _json_body(second_page)
+    assert len(second_body["transactions"]) == 1
+    assert second_body["transactions"][0]["account_name"] == "Broker A"
+    assert second_body["has_more"] is False
+    assert second_body["next_offset"] is None
 
 
 def test_create_investment_snapshot_validation_and_not_found() -> None:

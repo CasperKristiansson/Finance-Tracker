@@ -1865,4 +1865,8 @@ export const demoTaxEvents: TaxEventListResponse = {
       amount: "4200.00",
     },
   ],
+  limit: 100,
+  offset: 0,
+  has_more: false,
+  next_offset: null,
 };

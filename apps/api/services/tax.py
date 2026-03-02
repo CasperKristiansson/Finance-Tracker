@@ -108,11 +108,16 @@ class TaxService:
         end_date: Optional[datetime] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[TaxEventListItem]:
+    ) -> tuple[List[TaxEventListItem], bool]:
         rows = self._fetch_tax_rows(
-            start_date=start_date, end_date=end_date, limit=limit, offset=offset
+            start_date=start_date,
+            end_date=end_date,
+            limit=limit + 1,
+            offset=offset,
         )
-        return [
+        has_more = len(rows) > limit
+        page_rows = rows[:limit]
+        items = [
             TaxEventListItem(
                 id=row.event.id,
                 transaction_id=row.event.transaction_id,
@@ -125,8 +130,9 @@ class TaxService:
                 account_name=row.account_name,
                 amount=row.amount,
             )
-            for row in rows
+            for row in page_rows
         ]
+        return items, has_more
 
     def summary_for_year(
         self, *, year: int

@@ -1,10 +1,16 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { AccountWithBalance } from "@/types/api";
+import type { EndpointResponse } from "@/types/contracts";
+
+type AccountOption = EndpointResponse<"listAccountOptions">["options"][number];
 
 export interface AccountsState {
   items: AccountWithBalance[];
+  options: AccountOption[];
   loading: boolean;
+  optionsLoading: boolean;
   error?: string;
+  optionsError?: string;
   includeInactive: boolean;
   asOfDate?: string | null;
   createLoading: boolean;
@@ -16,7 +22,9 @@ export interface AccountsState {
 
 const initialState: AccountsState = {
   items: [],
+  options: [],
   loading: false,
+  optionsLoading: false,
   includeInactive: false,
   asOfDate: null,
   createLoading: false,
@@ -32,8 +40,15 @@ const accountsSlice = createSlice({
       state.items = action.payload;
       state.error = undefined;
     },
+    setAccountOptions(state, action: PayloadAction<AccountOption[]>) {
+      state.options = action.payload;
+      state.optionsError = undefined;
+    },
     setAccountsLoading(state, action: PayloadAction<boolean>) {
       state.loading = action.payload;
+    },
+    setAccountOptionsLoading(state, action: PayloadAction<boolean>) {
+      state.optionsLoading = action.payload;
     },
     setAccountCreateLoading(state, action: PayloadAction<boolean>) {
       state.createLoading = action.payload;
@@ -46,6 +61,9 @@ const accountsSlice = createSlice({
     },
     setAccountsError(state, action: PayloadAction<string | undefined>) {
       state.error = action.payload ?? "Unable to load accounts";
+    },
+    setAccountOptionsError(state, action: PayloadAction<string | undefined>) {
+      state.optionsError = action.payload ?? "Unable to load account options";
     },
     setAccountReconcileError(state, action: PayloadAction<string | undefined>) {
       state.reconcileError = action.payload;
@@ -72,8 +90,11 @@ const accountsSlice = createSlice({
   selectors: {
     selectAccountsState: (state) => state,
     selectAccounts: (state) => state.items,
+    selectAccountOptions: (state) => state.options,
     selectAccountsLoading: (state) => state.loading,
+    selectAccountOptionsLoading: (state) => state.optionsLoading,
     selectAccountsError: (state) => state.error,
+    selectAccountOptionsError: (state) => state.optionsError,
     selectAccountCreateLoading: (state) => state.createLoading,
     selectAccountUpdateLoading: (state) => state.updateLoading,
     selectAccountReconcileLoading: (state) => state.reconcileLoading,
@@ -84,11 +105,14 @@ const accountsSlice = createSlice({
 
 export const {
   setAccounts,
+  setAccountOptions,
   setAccountsLoading,
+  setAccountOptionsLoading,
   setAccountCreateLoading,
   setAccountUpdateLoading,
   setAccountReconcileLoading,
   setAccountsError,
+  setAccountOptionsError,
   setAccountReconcileError,
   setAccountMutationError,
   setAccountsFilters,
@@ -97,8 +121,11 @@ export const {
 export const {
   selectAccountsState,
   selectAccounts,
+  selectAccountOptions,
   selectAccountsLoading,
+  selectAccountOptionsLoading,
   selectAccountsError,
+  selectAccountOptionsError,
   selectAccountCreateLoading,
   selectAccountUpdateLoading,
   selectAccountReconcileLoading,

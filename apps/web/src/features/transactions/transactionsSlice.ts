@@ -15,6 +15,9 @@ export interface TransactionFilters {
   taxEvent?: boolean;
   sortBy?: "occurred_at" | "amount" | "description" | "category" | "type";
   sortDir?: "asc" | "desc";
+  includeRunningBalances?: boolean;
+  includeTaxEvent?: boolean;
+  view?: "full" | "summary";
 }
 
 export interface TransactionsState {

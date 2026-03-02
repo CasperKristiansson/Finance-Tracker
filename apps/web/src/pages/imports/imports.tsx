@@ -458,6 +458,9 @@ export const Imports: React.FC = () => {
         maxAmount: transferMaxAmount,
         sortBy: "occurred_at",
         sortDir: "desc",
+        includeRunningBalances: false,
+        includeTaxEvent: true,
+        view: "summary",
       });
     }, 250);
     return () => clearTimeout(debounce);
@@ -1135,6 +1138,9 @@ export const Imports: React.FC = () => {
         transferTransactionsPagination.offset +
         transferTransactionsPagination.limit,
       limit: transferTransactionsPagination.limit,
+      includeRunningBalances: false,
+      includeTaxEvent: true,
+      view: "summary",
     });
   };
 

@@ -78,14 +78,21 @@ def list_tax_events(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
     with session_scope(user_id=user_id) as session:
         service = TaxService(session)
-        items = service.list_events(
+        items, has_more = service.list_events(
             start_date=query.start_date,
             end_date=query.end_date,
             limit=query.limit,
             offset=query.offset,
         )
 
-    payload = TaxEventListResponse(events=items)
+    next_offset = query.offset + query.limit if has_more else None
+    payload = TaxEventListResponse(
+        events=items,
+        limit=query.limit,
+        offset=query.offset,
+        has_more=has_more,
+        next_offset=next_offset,
+    )
     return json_response(200, payload.model_dump(mode="json"))
 
 

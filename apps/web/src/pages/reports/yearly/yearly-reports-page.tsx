@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 
 import {
   fetchYearlyCategoryDetail,
-  fetchYearlyOverview,
+  fetchYearlyOverviewRange,
 } from "@/services/reports";
 import type {
   YearlyCategoryDetailResponse,
@@ -90,43 +90,32 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
   });
 
   useEffect(() => {
-    const loadOverview = async () => {
+    const loadOverviewPair = async () => {
       if (!token) return;
       setOverviewLoading(true);
+      setPrevOverviewLoading(true);
       try {
-        const { data } = await fetchYearlyOverview({ year, token });
-        setOverview(data);
+        const { data } = await fetchYearlyOverviewRange({
+          startYear: year - 1,
+          endYear: year,
+          token,
+        });
+        const byYear = new Map(
+          (data.items ?? []).map((item) => [item.year, item]),
+        );
+        setOverview(byYear.get(year) ?? null);
+        setPrevOverview(year > 1900 ? (byYear.get(year - 1) ?? null) : null);
       } catch (error) {
         console.error(error);
         setOverview(null);
+        setPrevOverview(null);
       } finally {
         setOverviewLoading(false);
-      }
-    };
-
-    void loadOverview();
-  }, [token, year]);
-
-  useEffect(() => {
-    const loadPrevOverview = async () => {
-      if (!token) return;
-      if (year <= 1900) {
-        setPrevOverview(null);
-        return;
-      }
-      setPrevOverviewLoading(true);
-      try {
-        const { data } = await fetchYearlyOverview({ year: year - 1, token });
-        setPrevOverview(data);
-      } catch (error) {
-        console.error(error);
-        setPrevOverview(null);
-      } finally {
         setPrevOverviewLoading(false);
       }
     };
 
-    void loadPrevOverview();
+    void loadOverviewPair();
   }, [token, year]);
 
   useEffect(() => {

@@ -37,6 +37,7 @@ export const FetchRecentTransactions = createAction<{
   limit?: number;
   accountIds?: string[];
   transactionTypes?: string[];
+  includeTaxEvent?: boolean;
 }>("transactions/fetchRecent");
 export const CreateTransaction = createAction<
   EndpointRequest<"createTransaction">
@@ -65,6 +66,9 @@ function* handleFetchTransactions(
 
   const limit = filters.limit ?? 50;
   const offset = filters.offset ?? 0;
+  const includeRunningBalances = filters.includeRunningBalances ?? false;
+  const includeTaxEvent = filters.includeTaxEvent ?? false;
+  const view = filters.view ?? "summary";
 
   try {
     const query = {
@@ -89,9 +93,9 @@ function* handleFetchTransactions(
       ...(filters.sortDir ? { sort_dir: filters.sortDir } : {}),
       limit,
       offset,
-      include_running_balances: true,
-      include_tax_event: true,
-      view: "full" as const,
+      include_running_balances: includeRunningBalances,
+      include_tax_event: includeTaxEvent,
+      view,
     };
 
     if (isDemo) {
@@ -101,10 +105,12 @@ function* handleFetchTransactions(
       );
       const combined = offset > 0 ? [...existing, ...source] : source;
       yield put(setTransactions(combined));
-      if (demoTransactionsResponse.running_balances) {
+      if (includeRunningBalances && demoTransactionsResponse.running_balances) {
         yield put(
           setRunningBalances(demoTransactionsResponse.running_balances),
         );
+      } else if (!includeRunningBalances) {
+        yield put(setRunningBalances({}));
       }
       yield put(
         setPagination({
@@ -126,8 +132,10 @@ function* handleFetchTransactions(
       const normalized = response.transactions.map(normalizeTransactionRead);
       const combined = offset > 0 ? [...existing, ...normalized] : normalized;
       yield put(setTransactions(combined));
-      if (response.running_balances) {
+      if (includeRunningBalances && response.running_balances) {
         yield put(setRunningBalances(response.running_balances));
+      } else if (!includeRunningBalances) {
+        yield put(setRunningBalances({}));
       }
       yield put(
         setPagination({
@@ -165,6 +173,7 @@ function* handleFetchRecentTransactions(
       ...(action.payload?.transactionTypes?.length
         ? { transaction_type: action.payload.transactionTypes.join(",") }
         : {}),
+      include_tax_event: action.payload?.includeTaxEvent ?? false,
     };
 
     if (isDemo) {

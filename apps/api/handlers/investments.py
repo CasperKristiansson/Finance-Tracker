@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, time, timezone
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast
 
 from pydantic import ValidationError
 
@@ -39,25 +39,47 @@ def list_investment_transactions(event: Dict[str, Any], _context: Any) -> Dict[s
     start = params.get("start")
     end = params.get("end")
     holding = params.get("holding")
+    account_name = params.get("account_name")
     tx_type = params.get("type")
     limit_raw = params.get("limit")
+    offset_raw = params.get("offset")
     limit: Optional[int] = None
+    offset = 0
     if limit_raw is not None:
         try:
             limit = max(1, min(500, int(limit_raw)))
         except (TypeError, ValueError):
             return json_response(400, {"error": "limit must be an integer"})
+    if offset_raw is not None:
+        try:
+            offset = max(0, int(offset_raw))
+        except (TypeError, ValueError):
+            return json_response(400, {"error": "offset must be an integer"})
 
     start_dt = datetime.fromisoformat(start) if start else None
     end_dt = datetime.fromisoformat(end) if end else None
 
     with session_scope(user_id=user_id) as session:
         service = InvestmentSnapshotService(session)
+        requested_limit = limit
+        service_limit = (requested_limit + 1) if requested_limit is not None else None
         txs = service.list_transactions(
-            start=start_dt, end=end_dt, holding=holding, tx_type=tx_type, limit=limit
+            start=start_dt,
+            end=end_dt,
+            holding=holding,
+            account_name=cast(Optional[str], account_name),
+            tx_type=tx_type,
+            limit=service_limit,
+            offset=offset,
         )
+        has_more = bool(requested_limit is not None and len(txs) > requested_limit)
+        page_txs = txs[:requested_limit] if requested_limit is not None else txs
         response = InvestmentTransactionListResponse(
-            transactions=[InvestmentTransactionRead.model_validate(tx) for tx in txs]
+            transactions=[InvestmentTransactionRead.model_validate(tx) for tx in page_txs],
+            limit=requested_limit,
+            offset=offset,
+            has_more=has_more,
+            next_offset=(offset + requested_limit) if has_more and requested_limit else None,
         ).model_dump(mode="json")
 
     return json_response(200, response)

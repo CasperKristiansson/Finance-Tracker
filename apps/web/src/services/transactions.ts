@@ -8,7 +8,10 @@ export const fetchTransactions = async ({
   token,
   query,
 }: TokenParam & {
-  query: Record<string, string | number | string[] | undefined | null>;
+  query: Record<
+    string,
+    string | number | boolean | string[] | undefined | null
+  >;
 }) =>
   apiFetch<EndpointResponse<"listTransactions">>(
     buildEndpointRequest("listTransactions", {

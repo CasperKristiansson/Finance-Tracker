@@ -3,6 +3,9 @@ import type { SagaIterator } from "redux-saga";
 import { call, put, select, takeLatest } from "redux-saga/effects";
 import { demoAccounts } from "@/data/demoPayloads";
 import {
+  setAccountOptions,
+  setAccountOptionsError,
+  setAccountOptionsLoading,
   setAccountCreateLoading,
   setAccountMutationError,
   setAccountReconcileError,
@@ -24,6 +27,9 @@ import type { EndpointRequest, EndpointResponse } from "@/types/contracts";
 export const FetchAccounts = createAction<
   Partial<Pick<AccountsState, "includeInactive" | "asOfDate">> | undefined
 >("accounts/fetch");
+export const FetchAccountOptions = createAction<
+  Pick<AccountsState, "includeInactive"> | undefined
+>("accounts/fetchOptions");
 export const CreateAccount =
   createAction<EndpointRequest<"createAccount">>("accounts/create");
 export const UpdateAccount = createAction<{
@@ -93,6 +99,52 @@ function* handleFetchAccounts(
     );
   } finally {
     yield put(setAccountsLoading(false));
+  }
+}
+
+function* handleFetchAccountOptions(
+  action: ReturnType<typeof FetchAccountOptions>,
+): SagaIterator {
+  const stored: AccountsState = yield select(selectAccountsState);
+  const includeInactive =
+    action.payload?.includeInactive ?? stored.includeInactive;
+  yield put(setAccountOptionsLoading(true));
+  const isDemo: boolean = yield select(selectIsDemo);
+
+  try {
+    if (isDemo) {
+      const options = demoAccounts.accounts.map((account) => ({
+        id: account.id,
+        name: account.name,
+        account_type: account.account_type,
+        is_active: account.is_active,
+        icon: account.icon,
+        bank_import_type: account.bank_import_type,
+      }));
+      yield put(setAccountOptions(options));
+      return;
+    }
+
+    const response: EndpointResponse<"listAccountOptions"> = yield call(
+      callApiWithAuth,
+      buildEndpointRequest("listAccountOptions", {
+        query: {
+          include_inactive: includeInactive,
+        },
+      }),
+      { loadingKey: "account-options" },
+    );
+    yield put(setAccountOptions(response.options));
+  } catch (error) {
+    yield put(
+      setAccountOptionsError(
+        error instanceof Error
+          ? error.message
+          : "Failed to load account options",
+      ),
+    );
+  } finally {
+    yield put(setAccountOptionsLoading(false));
   }
 }
 
@@ -391,6 +443,7 @@ function* handleReconcileAccounts(
 
 export function* AccountsSaga(): SagaIterator {
   yield takeLatest(FetchAccounts.type, handleFetchAccounts);
+  yield takeLatest(FetchAccountOptions.type, handleFetchAccountOptions);
   yield takeLatest(CreateAccount.type, handleCreateAccount);
   yield takeLatest(UpdateAccount.type, handleUpdateAccount);
   yield takeLatest(ArchiveAccount.type, handleArchiveAccount);

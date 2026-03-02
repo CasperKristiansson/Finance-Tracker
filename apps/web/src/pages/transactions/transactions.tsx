@@ -178,6 +178,9 @@ export const Transactions: React.FC = () => {
       search: urlSearch || undefined,
       sortBy: "occurred_at",
       sortDir: sortAsc ? "asc" : "desc",
+      includeRunningBalances: false,
+      includeTaxEvent: true,
+      view: "summary",
     });
     fetchAccounts({});
     fetchCategories();
@@ -215,6 +218,9 @@ export const Transactions: React.FC = () => {
         endDate: endDate || undefined,
         sortBy,
         sortDir: sortAsc ? "asc" : "desc",
+        includeRunningBalances: false,
+        includeTaxEvent: true,
+        view: "summary",
       });
     }, 250);
     return () => clearTimeout(debounce);
@@ -328,6 +334,9 @@ export const Transactions: React.FC = () => {
     fetchTransactions({
       offset: pagination.offset + pagination.limit,
       limit: pagination.limit,
+      includeRunningBalances: false,
+      includeTaxEvent: true,
+      view: "summary",
     });
   };
 
@@ -373,7 +382,13 @@ export const Transactions: React.FC = () => {
             size="sm"
             className="gap-2 border-slate-300 text-slate-700"
             onClick={() =>
-              fetchTransactions({ limit: pagination.limit, offset: 0 })
+              fetchTransactions({
+                limit: pagination.limit,
+                offset: 0,
+                includeRunningBalances: false,
+                includeTaxEvent: true,
+                view: "summary",
+              })
             }
           >
             <RefreshIcon className="h-4 w-4" /> Refresh
@@ -435,6 +450,9 @@ export const Transactions: React.FC = () => {
             maxAmount: maxAmount || undefined,
             startDate: startDate || undefined,
             endDate: endDate || undefined,
+            includeRunningBalances: false,
+            includeTaxEvent: true,
+            view: "summary",
           });
         }}
       />

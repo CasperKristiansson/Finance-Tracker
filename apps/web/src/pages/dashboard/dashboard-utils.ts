@@ -106,3 +106,15 @@ export const dedupeMonthlyEntries = (entries: MonthlyReportEntry[]) => {
     getPeriodMonthKey(a.period).localeCompare(getPeriodMonthKey(b.period)),
   );
 };
+
+export const dedupePeriodEntries = <T extends { period: string }>(
+  entries: T[],
+) => {
+  const byPeriod = new Map<string, T>();
+  entries.forEach((entry) => {
+    byPeriod.set(String(entry.period), entry);
+  });
+  return Array.from(byPeriod.values()).sort((a, b) =>
+    String(a.period).localeCompare(String(b.period)),
+  );
+};

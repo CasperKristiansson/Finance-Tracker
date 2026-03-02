@@ -421,23 +421,7 @@ export const Investments: React.FC = () => {
 
   const selectedAccountInvestmentTxs = useMemo(() => {
     if (!selectedAccount) return [];
-    const norm = (value: string | null | undefined) =>
-      String(value ?? "")
-        .trim()
-        .toLowerCase();
-    const selectedKey = norm(selectedAccount.accountName);
-    if (!selectedKey) return [];
-    return transactions
-      .filter((tx) => {
-        const key = norm(tx.account_name);
-        if (!key) return false;
-        return (
-          key === selectedKey ||
-          key.includes(selectedKey) ||
-          selectedKey.includes(key)
-        );
-      })
-      .slice(0, 50);
+    return transactions.slice(0, 50);
   }, [selectedAccount, transactions]);
 
   const selectedAccountRecentCashflows = useMemo(() => {
@@ -490,9 +474,17 @@ export const Investments: React.FC = () => {
 
   useEffect(() => {
     if (!detailsAccountId) return;
-    if (transactions.length) return;
-    fetchInvestmentTransactions();
-  }, [detailsAccountId, fetchInvestmentTransactions, transactions.length]);
+    if (!selectedAccount?.accountName) return;
+    fetchInvestmentTransactions({
+      accountName: selectedAccount.accountName,
+      limit: 80,
+      offset: 0,
+    });
+  }, [
+    detailsAccountId,
+    fetchInvestmentTransactions,
+    selectedAccount?.accountName,
+  ]);
 
   useEffect(() => {
     if (!snapshotDialogOpen) return;
