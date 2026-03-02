@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict
 from uuid import UUID
 
@@ -40,6 +41,8 @@ from .utils import (
     reset_engine_state,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def reset_handler_state() -> None:
     reset_engine_state()
@@ -70,7 +73,13 @@ def preview_imports(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     try:
         save_import_draft_preview(user_id=user_id, preview=response, note=data.note)
     except RuntimeError as exc:
-        return json_response(503, {"error": str(exc)})
+        # Keep preview usable even if initial draft persistence fails.
+        # The follow-up /imports/{importBatchId}/draft write can still persist the snapshot.
+        logger.warning(
+            "Initial preview draft persistence failed for batch %s: %s",
+            response.get("import_batch_id"),
+            exc,
+        )
     return json_response(200, response)
 
 

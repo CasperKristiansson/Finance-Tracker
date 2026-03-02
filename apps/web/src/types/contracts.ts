@@ -1,4 +1,4 @@
-import { endpoints } from "./generated/contracts/endpoints";
+import { endpoints } from "./generated/contracts";
 import type {
   EndpointMap as GeneratedEndpointMap,
   EndpointName as GeneratedEndpointName,
@@ -7,7 +7,7 @@ import type {
   EndpointQuery as GeneratedEndpointQuery,
   EndpointRequest as GeneratedEndpointRequest,
   EndpointResponse as GeneratedEndpointResponse,
-} from "./generated/contracts/endpoints";
+} from "./generated/contracts";
 
 export { endpoints };
 

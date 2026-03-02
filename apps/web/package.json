@@ -5,9 +5,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint . && tsc --noEmit",
+    "lint": "eslint . && tsc --noEmit && npm run knip",
     "preview": "vite preview",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "storybook": "storybook dev -p 6006 -c .storybook",
     "build-storybook": "storybook build -c .storybook",
     "knip": "knip --no-progress --include files,dependencies,unlisted,binaries",
