@@ -210,6 +210,7 @@ functions:
     handler: apps/api/handlers/imports.preview_imports
     memorySize: 512
     timeout: 29
+    vpc: ~
     layers:
       - ${self:custom.backendLayerArn}
     events:

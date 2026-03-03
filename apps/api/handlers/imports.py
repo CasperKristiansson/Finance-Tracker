@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Dict
 from uuid import UUID
 
 from pydantic import ValidationError
+from sqlmodel import select
 
+from ..models import ImportFile, TransactionImportBatch
 from ..schemas import (
     ImportCategorySuggestionRead,
     ImportCommitRequest,
@@ -18,6 +21,7 @@ from ..schemas import (
     ImportPreviewResponse,
 )
 from ..services import ImportService
+from ..services.imports.preview_builder import build_import_preview
 from ..shared import session_scope
 from ..shared.import_draft_state import (
     delete_import_draft_preview,
@@ -48,7 +52,6 @@ def reset_handler_state() -> None:
 def preview_imports(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     """HTTP POST /imports/preview."""
 
-    ensure_engine()
     user_id = get_user_id(event)
     parsed_body = parse_body(event)
 
@@ -57,14 +60,12 @@ def preview_imports(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except ValidationError as exc:
         return json_response(400, {"error": exc.errors()})
 
-    with session_scope(user_id=user_id) as session:
-        service = ImportService(session)
-        try:
-            preview = service.preview_import(data)
-        except LookupError as exc:
-            return json_response(404, {"error": str(exc)})
-        except ValueError as exc:
-            return json_response(400, {"error": str(exc)})
+    try:
+        preview = build_import_preview(data)
+    except LookupError as exc:
+        return json_response(404, {"error": str(exc)})
+    except ValueError as exc:
+        return json_response(400, {"error": str(exc)})
 
     response = ImportPreviewResponse.model_validate(preview).model_dump(mode="json")
     try:
@@ -88,6 +89,7 @@ def commit_imports(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
 
     try:
         with session_scope(user_id=user_id) as session:
+            _seed_commit_batch_from_payload(payload=data, session=session)
             service = ImportService(session)
             result = service.commit_import(data)
     except LookupError as exc:
@@ -217,6 +219,72 @@ def delete_import_draft(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
         return json_response(503, {"error": str(exc)})
 
     return json_response(200, {"import_batch_id": str(import_batch_id), "deleted": True})
+
+
+def _seed_commit_batch_from_payload(
+    *,
+    payload: ImportCommitRequest,
+    session: Any,
+) -> None:
+    if payload.import_batch_id is None:
+        return
+
+    import_batch_id = payload.import_batch_id
+    batch = session.get(TransactionImportBatch, import_batch_id)
+    now = datetime.now(timezone.utc)
+    if batch is None:
+        batch = TransactionImportBatch(
+            id=import_batch_id,
+            source_name=payload.note or "import",
+            note=payload.note,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(batch)
+        session.flush()
+    else:
+        batch.updated_at = now
+        if payload.note is not None:
+            batch.note = payload.note
+
+    existing_files = {
+        file.id: file
+        for file in session.exec(select(ImportFile).where(ImportFile.batch_id == import_batch_id))
+    }
+
+    if payload.files:
+        return
+
+    referenced_file_ids = {
+        row.file_id for row in payload.rows if not row.delete and row.file_id is not None
+    }
+    if len(referenced_file_ids) > 1:
+        raise ValueError("Rows reference multiple import files; include files payload")
+
+    file_rows: dict[UUID, list[Any]] = {}
+    for row in payload.rows:
+        if row.delete or row.file_id is None:
+            continue
+        file_rows.setdefault(row.file_id, []).append(row)
+
+    for file_id, rows in file_rows.items():
+        if file_id in existing_files:
+            continue
+        first_row = rows[0]
+        session.add(
+            ImportFile(
+                id=file_id,
+                batch_id=import_batch_id,
+                filename=f"import-{file_id}.xlsx",
+                account_id=first_row.account_id,
+                row_count=len(rows),
+                error_count=0,
+                status="draft",
+                bank_type="",
+                created_at=now,
+                updated_at=now,
+            )
+        )
 
 
 def _apply_import_suggestions_state(

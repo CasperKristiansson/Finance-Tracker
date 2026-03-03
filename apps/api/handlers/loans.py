@@ -213,17 +213,16 @@ def create_loan_activity(event: Dict[str, Any], _context: Any) -> Dict[str, Any]
             return json_response(404, {"error": str(exc)})
         except ValueError as exc:
             return json_response(400, {"error": str(exc)})
-
-    loan = result["loan"]
-    transaction = result["transaction"]
-    response = LoanActivityCreateResponse(
-        account_id=account_id,
-        loan_id=loan.id,
-        transaction_id=transaction.id,
-        amount=data.amount,
-        kind=data.kind,
-        current_principal=loan.current_principal,
-    )
+        loan = result["loan"]
+        transaction = result["transaction"]
+        response = LoanActivityCreateResponse(
+            account_id=account_id,
+            loan_id=loan.id,
+            transaction_id=transaction.id,
+            amount=data.amount,
+            kind=data.kind,
+            current_principal=loan.current_principal,
+        )
     return json_response(201, response.model_dump(mode="json"))
 
 

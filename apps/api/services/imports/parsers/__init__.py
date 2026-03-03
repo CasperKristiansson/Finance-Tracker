@@ -69,4 +69,28 @@ def parse_bank_rows(*, filename: str, content: bytes, bank_type: BankImportType)
     return rows, errors
 
 
-__all__ = ["NormalizedRow", "ParseResult", "parse_bank_rows"]
+def parse_bank_rows_auto(
+    *, filename: str, content: bytes
+) -> tuple[BankImportType | None, ParseResult]:
+    """Try all parsers and pick the strongest parse candidate."""
+
+    best_type: BankImportType | None = None
+    best_rows: list[NormalizedRow] = []
+    best_errors: list[tuple[int, str]] = [(0, "Unable to detect bank import type")]
+
+    for candidate_type in _PARSER_MAP:
+        rows, errors = parse_bank_rows(filename=filename, content=content, bank_type=candidate_type)
+        if len(rows) > len(best_rows):
+            best_type = candidate_type
+            best_rows = rows
+            best_errors = errors
+            continue
+        if len(rows) == len(best_rows) and len(errors) < len(best_errors):
+            best_type = candidate_type
+            best_rows = rows
+            best_errors = errors
+
+    return best_type, (best_rows, best_errors)
+
+
+__all__ = ["NormalizedRow", "ParseResult", "parse_bank_rows", "parse_bank_rows_auto"]

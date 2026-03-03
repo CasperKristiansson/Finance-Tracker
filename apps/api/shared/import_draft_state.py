@@ -19,6 +19,11 @@ _DRAFT_ITEM_TYPE = "import_draft"
 _DRAFT_STATUS_DRAFT = "draft"
 _DRAFT_STATUS_COMMITTED = "committed"
 _DRAFT_TTL_SECONDS = 60 * 60 * 24 * 30
+_DYNAMODB_CONFIG = Config(
+    connect_timeout=3,
+    read_timeout=10,
+    retries={"max_attempts": 2},
+)
 
 
 def save_import_draft_preview(
@@ -284,10 +289,7 @@ def _get_table():
     table_name = os.getenv(_CONNECTIONS_TABLE_ENV)
     if not table_name:
         return None
-    resource = boto3.resource(
-        "dynamodb",
-        config=Config(connect_timeout=1, read_timeout=1, retries={"max_attempts": 1}),
-    )
+    resource = boto3.resource("dynamodb", config=_DYNAMODB_CONFIG)
     return resource.Table(table_name)
 
 

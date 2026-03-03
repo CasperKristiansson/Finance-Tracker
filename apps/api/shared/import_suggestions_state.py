@@ -20,6 +20,11 @@ _STATE_KEY_PREFIX = "batch#"
 _STATE_ITEM_TYPE = "import_suggestions_state"
 _STATE_TTL_SECONDS = 60 * 60 * 24 * 14
 _VALID_STATUSES = {"not_started", "running", "completed", "failed"}
+_DYNAMODB_CONFIG = Config(
+    connect_timeout=3,
+    read_timeout=10,
+    retries={"max_attempts": 2},
+)
 
 
 def load_import_suggestions_state(
@@ -124,10 +129,7 @@ def _get_table():
     table_name = os.getenv(_CONNECTIONS_TABLE_ENV)
     if not table_name:
         return None
-    resource = boto3.resource(
-        "dynamodb",
-        config=Config(connect_timeout=1, read_timeout=1, retries={"max_attempts": 1}),
-    )
+    resource = boto3.resource("dynamodb", config=_DYNAMODB_CONFIG)
     return resource.Table(table_name)
 
 

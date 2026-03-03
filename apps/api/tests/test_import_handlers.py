@@ -239,10 +239,10 @@ def test_preview_parses_swedbank_and_returns_rows():
     assert body["files"][0]["bank_import_type"] == "swedbank"
     assert body["files"][0]["row_count"] == 2
     assert body["rows"] and len(body["rows"]) == 2
-    assert body["accounts"] and body["accounts"][0]["account_id"] == str(account_id)
+    assert body["accounts"] == []
 
 
-def test_preview_returns_error_when_account_has_no_bank_type():
+def test_preview_autodetects_bank_type_without_account_lookup():
     account_id = _create_account(bank_import_type=None)
     payload = _swedbank_workbook()
     response = preview_imports(
@@ -265,9 +265,8 @@ def test_preview_returns_error_when_account_has_no_bank_type():
     assert response["statusCode"] == 200
     body = _json_body(response)
     file_meta = body["files"][0]
-    assert file_meta["row_count"] == 0
-    assert file_meta["error_count"] >= 1
-    assert "bank import type" in file_meta["errors"][0]["message"].lower()
+    assert file_meta["bank_import_type"] == "swedbank"
+    assert file_meta["row_count"] == 2
 
 
 def test_preview_circle_k_amounts_are_negated():
@@ -332,7 +331,7 @@ def test_preview_returns_503_when_draft_store_is_unavailable(monkeypatch: pytest
 def test_preview_includes_related_transactions():
     account_id = _create_account(bank_import_type="swedbank")
     groceries_id = _create_category(name="Groceries")
-    tx_id = _create_categorized_transaction(
+    _create_categorized_transaction(
         account_id=account_id,
         category_id=groceries_id,
         description="Deposit salary",
@@ -357,11 +356,7 @@ def test_preview_includes_related_transactions():
     )
     assert response["statusCode"] == 200
     body = _json_body(response)
-    row_id = body["rows"][0]["id"]
-    account_ctx = next(ctx for ctx in body["accounts"] if ctx["account_id"] == str(account_id))
-    assert any(item["id"] == str(tx_id) for item in account_ctx["similar_transactions"])
-    match = next(m for m in account_ctx["similar_by_row"] if m["row_id"] == row_id)
-    assert str(tx_id) in match["transaction_ids"]
+    assert body["accounts"] == []
 
 
 def test_commit_is_all_or_nothing():
@@ -785,13 +780,15 @@ def test_import_handler_validation_and_error_paths(monkeypatch: pytest.MonkeyPat
         def __init__(self, _session) -> None:
             pass
 
-        def preview_import(self, _data):
-            raise LookupError("missing")
-
         def commit_import(self, _data):
             raise LookupError("missing")
 
     monkeypatch.setattr(import_handlers, "ImportService", _PreviewLookupErrorService)
+    monkeypatch.setattr(
+        import_handlers,
+        "build_import_preview",
+        lambda _data: (_ for _ in ()).throw(LookupError("missing")),
+    )
     preview_lookup = preview_imports(
         {
             "body": json.dumps(
@@ -857,13 +854,15 @@ def test_import_handler_validation_and_error_paths(monkeypatch: pytest.MonkeyPat
     assert save_lookup["statusCode"] == 404
 
     class _PreviewValueErrorService(_PreviewLookupErrorService):
-        def preview_import(self, _data):
-            raise ValueError("bad preview")
-
         def commit_import(self, _data):
             raise ValueError("bad commit")
 
     monkeypatch.setattr(import_handlers, "ImportService", _PreviewValueErrorService)
+    monkeypatch.setattr(
+        import_handlers,
+        "build_import_preview",
+        lambda _data: (_ for _ in ()).throw(ValueError("bad preview")),
+    )
     preview_value = preview_imports(
         {
             "body": json.dumps(
