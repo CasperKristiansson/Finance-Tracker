@@ -235,44 +235,34 @@ function buildSuggestPayload(
     }
   });
 
-  const contexts = preview.accounts ?? [];
-  const rowsByAccount = new Map<string, typeof preview.rows>();
-  preview.rows.forEach((row) => {
-    const list = rowsByAccount.get(row.account_id) ?? [];
-    list.push(row);
-    rowsByAccount.set(row.account_id, list);
-  });
-
   const transactions: ImportCategorySuggestRequest["transactions"] = [];
   const seenTransactionIds = new Set<string>();
-
-  for (const ctx of contexts) {
-    const accountRows = rowsByAccount.get(ctx.account_id) ?? [];
-    const bankImportType = bankImportTypeByAccount.get(ctx.account_id);
+  for (const row of preview.rows) {
+    if (row.rule_applied) continue;
+    const bankImportType = bankImportTypeByAccount.get(row.account_id);
     const isSwedbankAccount = bankImportType === "swedbank";
-    for (const row of accountRows) {
-      if (row.rule_applied) continue;
-      if (
-        isSwedbankAccount &&
-        row.description.toLowerCase().includes("swish")
-      ) {
-        continue;
-      }
-      if (seenTransactionIds.has(row.id)) continue;
-      seenTransactionIds.add(row.id);
-      transactions.push({
-        id: row.id,
-        description: row.description,
-        amount: row.amount,
-        occurred_at: row.occurred_at,
-      });
-      if (transactions.length >= 200) break;
+    if (isSwedbankAccount && row.description.toLowerCase().includes("swish")) {
+      continue;
     }
+    if (seenTransactionIds.has(row.id)) continue;
+    seenTransactionIds.add(row.id);
+    transactions.push({
+      id: row.id,
+      description: row.description,
+      amount: row.amount,
+      occurred_at: row.occurred_at,
+    });
     if (transactions.length >= 200) break;
   }
 
+  const estimatedMaxTokens = Math.min(
+    4000,
+    Math.max(1200, Math.ceil(transactions.length * 60)),
+  );
+
   const history: ImportCategorySuggestRequest["history"] = [];
   const seenHistory = new Set<string>();
+  const contexts = preview.accounts ?? [];
   for (const ctx of contexts) {
     const candidates = [
       ...(ctx.recent_transactions ?? []),
@@ -300,6 +290,7 @@ function buildSuggestPayload(
     })),
     history,
     transactions,
+    max_tokens: estimatedMaxTokens,
   };
 }
 
@@ -346,27 +337,6 @@ const buildDraftRowsFromPreview = (
     tax_event_type: null,
     delete: false,
   }));
-
-function* suggestSync(request: ImportCategorySuggestRequest) {
-  const mapped: Record<
-    string,
-    ImportCategorySuggestResponse["suggestions"][number]
-  > = {};
-
-  const body: ImportCategorySuggestRequest = request;
-  const response: ImportCategorySuggestResponse = yield call(
-    callApiWithAuth,
-    buildEndpointRequest("suggestImportCategories", {
-      body,
-    }),
-    { loadingKey: "imports-suggest" },
-  );
-  response.suggestions.forEach((suggestion) => {
-    mapped[suggestion.id] = suggestion;
-  });
-
-  return mapped;
-}
 
 function* handlePreview(action: ReturnType<typeof PreviewImports>) {
   yield put(setImportsLoading(true));
@@ -489,8 +459,8 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
       throw new Error("No categories available for suggestions.");
     }
 
-    const payload = buildSuggestPayload(preview, available);
-    if (!payload.transactions.length) {
+    const suggestPayload = buildSuggestPayload(preview, available);
+    if (!suggestPayload.transactions.length) {
       throw new Error("No transactions available for suggestions.");
     }
 
@@ -506,20 +476,19 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
       if (shouldTrackStatus) {
         yield put(setImportPreviewSuggestionsStatus("completed"));
       }
-    } else if (!WS_API_BASE_URL) {
-      const mapped = yield* suggestSync(payload);
-      yield put(setImportSuggestions(mapped));
-      if (shouldTrackStatus) {
-        yield put(setImportPreviewSuggestionsStatus("completed"));
-      }
     } else {
+      if (!WS_API_BASE_URL) {
+        throw new Error(
+          "Suggestions websocket URL is not configured (set VITE_WS_API_BASE_URL).",
+        );
+      }
       const clientId = crypto.randomUUID();
       const clientToken = createClientToken();
       channel = createSuggestionsChannel(clientId, clientToken);
       yield* waitForSocketOpen(channel);
 
       const jobRequest: ImportCategorySuggestJobRequest = {
-        ...payload,
+        ...suggestPayload,
         import_batch_id: preview.import_batch_id,
         client_id: clientId,
         client_token: clientToken,

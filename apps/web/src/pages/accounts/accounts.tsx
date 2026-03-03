@@ -74,8 +74,9 @@ export const Accounts: React.FC = () => {
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortAsc, setSortAsc] = useState(true);
   const [reconcileOpen, setReconcileOpen] = useState(false);
-  const [yearlyOverview, setYearlyOverview] =
-    useState<YearlyOverviewResponse | null>(null);
+  const [yearlyOverviewItems, setYearlyOverviewItems] = useState<
+    YearlyOverviewResponse[]
+  >([]);
   const [yearlyOverviewLoading, setYearlyOverviewLoading] = useState(false);
 
   useEffect(() => {
@@ -97,7 +98,8 @@ export const Accounts: React.FC = () => {
     const loadYearlyOverview = async () => {
       if (!token) return;
       const baseDate = asOfDate ? new Date(asOfDate) : new Date();
-      const year = baseDate.getFullYear();
+      const endYear = baseDate.getFullYear();
+      const startYear = endYear - 1;
       setYearlyOverviewLoading(true);
       try {
         const { data } = await apiFetch<
@@ -105,16 +107,16 @@ export const Accounts: React.FC = () => {
         >(
           buildEndpointRequest("yearlyOverviewRange", {
             query: {
-              start_year: year,
-              end_year: year,
+              start_year: startYear,
+              end_year: endYear,
             },
             token,
           }),
         );
-        setYearlyOverview((data.items ?? [])[0] ?? null);
+        setYearlyOverviewItems(data.items ?? []);
       } catch (err) {
         console.error("Failed to fetch yearly overview", err);
-        setYearlyOverview(null);
+        setYearlyOverviewItems([]);
       } finally {
         setYearlyOverviewLoading(false);
       }
@@ -148,32 +150,66 @@ export const Accounts: React.FC = () => {
   }, [items]);
 
   const accountTrendById = useMemo(() => {
-    if (!yearlyOverview) return new Map<string, number[]>();
+    if (!yearlyOverviewItems.length) return new Map<string, number[]>();
     const baseDate = asOfDate ? new Date(asOfDate) : new Date();
-    const isPastYear = baseDate.getFullYear() < new Date().getFullYear();
-    const endMonthIndex = isPastYear ? 11 : baseDate.getMonth();
-    const startMonthIndex = Math.max(0, endMonthIndex - 5);
-    const monthRange = Array.from(
-      { length: endMonthIndex - startMonthIndex + 1 },
-      (_, i) => startMonthIndex + i,
+    const endMonthKey = baseDate.getFullYear() * 12 + baseDate.getMonth();
+    const startMonthKey = endMonthKey - 5;
+
+    const monthlyBalancesByAccount = new Map<string, Map<number, number>>();
+    const sortedOverviews = [...yearlyOverviewItems].sort(
+      (a, b) => a.year - b.year,
     );
 
-    const map = new Map<string, number[]>();
-    yearlyOverview.account_flows.forEach((flow) => {
-      const startBalance = Number(flow.start_balance);
-      const changes = flow.monthly_change.map((v) => Number(v) || 0);
-      const balancesByMonth = changes.reduce<number[]>((acc, change, idx) => {
-        const prev = idx === 0 ? startBalance : (acc[idx - 1] ?? startBalance);
-        acc[idx] = prev + change;
-        return acc;
-      }, []);
-      const series = monthRange.map(
-        (monthIdx) => balancesByMonth[monthIdx] ?? 0,
-      );
-      map.set(flow.account_id, series);
+    sortedOverviews.forEach((overview) => {
+      overview.account_flows.forEach((flow) => {
+        const changes = flow.monthly_change.map((v) => Number(v) || 0);
+        let running = Number(flow.start_balance) || 0;
+        const monthMap =
+          monthlyBalancesByAccount.get(flow.account_id) ??
+          new Map<number, number>();
+        for (let monthIndex = 0; monthIndex < 12; monthIndex += 1) {
+          running += changes[monthIndex] ?? 0;
+          monthMap.set(overview.year * 12 + monthIndex, running);
+        }
+        monthlyBalancesByAccount.set(flow.account_id, monthMap);
+      });
     });
+
+    const map = new Map<string, number[]>();
+    monthlyBalancesByAccount.forEach((monthMap, accountId) => {
+      const priorValue = [...monthMap.entries()]
+        .filter(([monthKey]) => monthKey < startMonthKey)
+        .sort((a, b) => a[0] - b[0])
+        .at(-1)?.[1];
+
+      let lastKnown =
+        typeof priorValue === "number" && Number.isFinite(priorValue)
+          ? priorValue
+          : null;
+      const series: number[] = [];
+      for (
+        let monthKey = startMonthKey;
+        monthKey <= endMonthKey;
+        monthKey += 1
+      ) {
+        const monthValue = monthMap.get(monthKey);
+        if (typeof monthValue === "number" && Number.isFinite(monthValue)) {
+          lastKnown = monthValue;
+          series.push(monthValue);
+          continue;
+        }
+        if (lastKnown !== null) {
+          series.push(lastKnown);
+        }
+      }
+
+      if (series.length >= 2) {
+        map.set(accountId, series);
+      }
+    });
+
     return map;
-  }, [asOfDate, yearlyOverview]);
+  }, [asOfDate, yearlyOverviewItems]);
 
   const investmentTrendById = useMemo(() => {
     const map = new Map<string, number[]>();
@@ -496,12 +532,14 @@ export const Accounts: React.FC = () => {
                     {sortedItems.map((account) => {
                       const isActive = account.is_active;
                       const series =
-                        accountTrendById.get(account.id) ??
-                        investmentTrendById.get(account.id) ??
-                        investmentTrendById.get(
-                          `name:${normalizeKey(account.name)}`,
-                        ) ??
-                        [];
+                        account.account_type === AccountType.INVESTMENT
+                          ? (investmentTrendById.get(account.id) ??
+                            investmentTrendById.get(
+                              `name:${normalizeKey(account.name)}`,
+                            ) ??
+                            accountTrendById.get(account.id) ??
+                            [])
+                          : (accountTrendById.get(account.id) ?? []);
                       const hasSeries = series.length >= 2;
                       const delta = hasSeries
                         ? series[series.length - 1] - series[0]

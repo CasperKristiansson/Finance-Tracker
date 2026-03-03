@@ -191,6 +191,47 @@ def test_latest_investment_snapshot_respects_as_of(session) -> None:
     assert as_of_latest.snapshot_date == date(2024, 1, 1)
 
 
+def test_investment_balance_uses_latest_snapshot_that_contains_account(session) -> None:
+    service = AccountService(session)
+    bospar = service.create_account(Account(name="Bospar", account_type=AccountType.INVESTMENT))
+    private = service.create_account(
+        Account(name="Nordnet Private", account_type=AccountType.INVESTMENT)
+    )
+
+    session.add_all(
+        [
+            InvestmentSnapshot(
+                provider="manual",
+                report_type="portfolio_report",
+                account_name="Bospar",
+                snapshot_date=date(2025, 12, 31),
+                portfolio_value=Decimal("145218.40"),
+                raw_text="raw",
+                parsed_payload={"accounts": {"Bospar": 145218.40}},
+            ),
+            InvestmentSnapshot(
+                provider="manual",
+                report_type="portfolio_report",
+                account_name="Nordnet Private",
+                snapshot_date=date(2026, 1, 1),
+                portfolio_value=Decimal("1562335.00"),
+                raw_text="raw",
+                parsed_payload={"accounts": {"Nordnet Private": 1562335.00}},
+            ),
+        ]
+    )
+    session.commit()
+
+    _, bospar_balance = service.get_account_with_balance(bospar.id)
+    _, private_balance = service.get_account_with_balance(private.id)
+    assert bospar_balance == Decimal("145218.4")
+    assert private_balance == Decimal("1562335.0")
+
+    bospar_state = service.reconciliation_state(bospar.id)
+    assert bospar_state["last_captured_at"] is not None
+    assert bospar_state["last_reported_balance"] == Decimal("145218.4")
+
+
 def test_get_or_create_offset_account_is_cached(session) -> None:
     service = AccountService(session)
     first = service.get_or_create_offset_account()

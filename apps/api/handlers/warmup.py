@@ -25,7 +25,7 @@ def warm_database(_event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     except OperationalError as exc:
         logger.info("Database is still waking up: %s", exc)
         return json_response(
-            503,
+            200,
             {
                 "status": "starting",
                 "message": "Database is scaling up. Retrying shortly usually succeeds.",

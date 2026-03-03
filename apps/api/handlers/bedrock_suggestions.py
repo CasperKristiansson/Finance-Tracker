@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import time
@@ -37,6 +38,17 @@ _TOOL_NAME = "categorize_transactions"
 _CONNECTIONS_TABLE_ENV = "IMPORT_SUGGESTIONS_CONNECTIONS_TABLE"
 _SUGGESTIONS_QUEUE_ENV = "IMPORT_SUGGESTIONS_QUEUE_URL"
 _CONNECTION_TTL_SECONDS = 3600
+_CONNECTION_LOOKUP_RETRIES = 6
+_CONNECTION_LOOKUP_DELAY_SECONDS = 0.2
+
+logger = logging.getLogger(__name__)
+
+_BEDROCK_REGION_ENV = "BEDROCK_REGION"
+_BEDROCK_CONNECT_TIMEOUT_ENV = "BEDROCK_CONNECT_TIMEOUT_SECONDS"
+_BEDROCK_READ_TIMEOUT_ENV = "BEDROCK_READ_TIMEOUT_SECONDS"
+_BEDROCK_CONNECT_TIMEOUT_DEFAULT = 5
+_BEDROCK_READ_TIMEOUT_DEFAULT = 60
+_BEDROCK_TOTAL_MAX_ATTEMPTS_NO_RETRY = 1
 
 
 @dataclass(frozen=True)
@@ -121,7 +133,7 @@ def enqueue_import_category_suggestions(event: Dict[str, Any], _context: Any) ->
     if not queue_url:
         return json_response(503, {"error": "Suggestion queue unavailable"})
 
-    connection = _fetch_connection_by_client(request.client_id)
+    connection = _resolve_connection_for_enqueue(request.client_id)
     if connection is None:
         return json_response(409, {"error": "Suggestions websocket not connected"})
     if connection.client_token != request.client_token:
@@ -168,6 +180,7 @@ def process_import_category_suggestions(event: Dict[str, Any], _context: Any) ->
             continue
 
         message: dict[str, Any]
+        started_at = time.monotonic()
         try:
             suggestions = _suggest_with_bedrock(request)
             if request.import_batch_id is not None:
@@ -182,6 +195,20 @@ def process_import_category_suggestions(event: Dict[str, Any], _context: Any) ->
                 "client_id": str(request.client_id),
                 "suggestions": [item.model_dump(mode="json") for item in suggestions],
             }
+            logger.info(
+                "import suggestions completed",
+                extra={
+                    "job_id": job_id,
+                    "import_batch_id": (
+                        str(request.import_batch_id) if request.import_batch_id else None
+                    ),
+                    "client_id": str(request.client_id),
+                    "transactions": len(request.transactions),
+                    "categories": len(request.categories),
+                    "history_items": len(request.history),
+                    "duration_ms": int((time.monotonic() - started_at) * 1000),
+                },
+            )
         except (
             SuggestionError,
             LookupError,
@@ -191,6 +218,21 @@ def process_import_category_suggestions(event: Dict[str, Any], _context: Any) ->
             ClientError,
         ) as exc:
             error_text = str(exc) or "Unable to suggest categories."
+            logger.warning(
+                "import suggestions failed",
+                extra={
+                    "job_id": job_id,
+                    "import_batch_id": (
+                        str(request.import_batch_id) if request.import_batch_id else None
+                    ),
+                    "client_id": str(request.client_id),
+                    "transactions": len(request.transactions),
+                    "categories": len(request.categories),
+                    "history_items": len(request.history),
+                    "duration_ms": int((time.monotonic() - started_at) * 1000),
+                    "error": error_text,
+                },
+            )
             if request.import_batch_id is not None:
                 try:
                     _persist_suggestions_failure(
@@ -521,6 +563,19 @@ def _fetch_connection_by_client(client_id: UUID) -> Optional[SuggestionConnectio
     )
 
 
+def _resolve_connection_for_enqueue(client_id: UUID) -> Optional[SuggestionConnection]:
+    """Resolve websocket connection with a short retry window for GSI propagation."""
+
+    for attempt in range(_CONNECTION_LOOKUP_RETRIES):
+        connection = _fetch_connection_by_client(client_id)
+        if connection is not None:
+            return connection
+        if attempt < _CONNECTION_LOOKUP_RETRIES - 1:
+            time.sleep(_CONNECTION_LOOKUP_DELAY_SECONDS)
+    logger.info("No websocket connection found for client_id=%s", client_id)
+    return None
+
+
 def _post_to_connection(connection: SuggestionConnection, payload: dict[str, Any]) -> None:
     client = boto3.client("apigatewaymanagementapi", endpoint_url=connection.endpoint)
     try:
@@ -635,15 +690,47 @@ def _extract_json(text: str) -> Any:
 
 
 def _get_bedrock_client():
-    region = os.getenv("BEDROCK_REGION") or "eu-west-1"
+    region = os.getenv(_BEDROCK_REGION_ENV) or "eu-west-1"
+    connect_timeout_seconds = _get_int_env(
+        _BEDROCK_CONNECT_TIMEOUT_ENV,
+        _BEDROCK_CONNECT_TIMEOUT_DEFAULT,
+        minimum=1,
+        maximum=30,
+    )
+    read_timeout_seconds = _get_int_env(
+        _BEDROCK_READ_TIMEOUT_ENV,
+        _BEDROCK_READ_TIMEOUT_DEFAULT,
+        minimum=5,
+        maximum=300,
+    )
     try:
         return boto3.client(
             "bedrock-runtime",
             region_name=region,
-            config=Config(connect_timeout=3, read_timeout=12, retries={"max_attempts": 2}),
+            config=Config(
+                connect_timeout=connect_timeout_seconds,
+                read_timeout=read_timeout_seconds,
+                # No retry: fail fast after the first Bedrock timeout/error.
+                retries={
+                    "mode": "standard",
+                    "total_max_attempts": _BEDROCK_TOTAL_MAX_ATTEMPTS_NO_RETRY,
+                },
+            ),
         )
     except (BotoCoreError, ClientError):  # pragma: no cover - environment dependent
         return None
+
+
+def _get_int_env(name: str, default: int, *, minimum: int, maximum: int) -> int:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("Invalid integer env var %s=%s; using default=%d", name, raw, default)
+        return default
+    return max(minimum, min(value, maximum))
 
 
 def _signature(description: str) -> str:

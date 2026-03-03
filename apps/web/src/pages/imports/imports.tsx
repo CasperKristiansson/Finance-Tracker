@@ -27,6 +27,10 @@ import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
 import { ConfirmDialog } from "@/components/composed/confirm-dialog";
 import { MotionPage } from "@/components/motion-presets";
+import {
+  ReconcileAccountsDialog,
+  type ReconcileAccountsPayload,
+} from "@/components/reconcile-accounts-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -303,7 +307,14 @@ const bankLabel = (
 export const Imports: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const token = useAppSelector(selectToken);
-  const { items: accounts, fetchAccounts } = useAccountsApi();
+  const {
+    items: accounts,
+    loading: accountsLoading,
+    reconcileLoading,
+    reconcileError,
+    fetchAccounts,
+    reconcileAccounts,
+  } = useAccountsApi();
   const { items: categories, fetchCategories } = useCategoriesApi();
   const {
     items: transferTransactions,
@@ -379,6 +390,15 @@ export const Imports: React.FC = () => {
     string | null
   >(null);
   const [isHydratingImportId, setIsHydratingImportId] = useState(false);
+  const [reconcilePromptOpen, setReconcilePromptOpen] = useState(false);
+  const [postCommitReconcileAccountIds, setPostCommitReconcileAccountIds] =
+    useState<string[]>([]);
+  const [
+    awaitingPostCommitAccountsRefresh,
+    setAwaitingPostCommitAccountsRefresh,
+  ] = useState(false);
+  const [postCommitAccountsFetchStarted, setPostCommitAccountsFetchStarted] =
+    useState(false);
   const importIdFromUrl = searchParams.get("importId");
   const draftLoadRequestRef = useRef<string | null>(null);
   const lastDraftSnapshotRef = useRef<string | null>(null);
@@ -584,6 +604,8 @@ export const Imports: React.FC = () => {
     if (saving) return;
     if (error) {
       setCommitTriggered(false);
+      setAwaitingPostCommitAccountsRefresh(false);
+      setPostCommitAccountsFetchStarted(false);
       return;
     }
     if (preview) return;
@@ -599,7 +621,40 @@ export const Imports: React.FC = () => {
       next.delete("importId");
       return next;
     });
-  }, [commitTriggered, saving, preview, error, commitForm, setSearchParams]);
+    if (postCommitReconcileAccountIds.length > 0) {
+      setAwaitingPostCommitAccountsRefresh(true);
+      setPostCommitAccountsFetchStarted(false);
+      fetchAccounts({});
+    }
+  }, [
+    commitTriggered,
+    saving,
+    preview,
+    error,
+    commitForm,
+    setSearchParams,
+    postCommitReconcileAccountIds.length,
+    fetchAccounts,
+  ]);
+
+  useEffect(() => {
+    if (!awaitingPostCommitAccountsRefresh) return;
+    if (accountsLoading) {
+      setPostCommitAccountsFetchStarted(true);
+      return;
+    }
+    if (!postCommitAccountsFetchStarted) return;
+    setAwaitingPostCommitAccountsRefresh(false);
+    setPostCommitAccountsFetchStarted(false);
+    if (postCommitReconcileAccountIds.length > 0) {
+      setReconcilePromptOpen(true);
+    }
+  }, [
+    awaitingPostCommitAccountsRefresh,
+    accountsLoading,
+    postCommitAccountsFetchStarted,
+    postCommitReconcileAccountIds.length,
+  ]);
 
   useEffect(() => {
     const hasErrors = preview
@@ -719,6 +774,11 @@ export const Imports: React.FC = () => {
     accounts.forEach((acc) => map.set(acc.id, acc));
     return map;
   }, [accounts]);
+  const postCommitReconcileTargets = useMemo(() => {
+    if (!postCommitReconcileAccountIds.length) return [];
+    const included = new Set(postCommitReconcileAccountIds);
+    return accounts.filter((account) => included.has(account.id));
+  }, [accounts, postCommitReconcileAccountIds]);
 
   const mappedFilesReady = useMemo(
     () => files.length > 0 && files.every((f) => Boolean(f.accountId)),
@@ -1403,9 +1463,20 @@ export const Imports: React.FC = () => {
           };
         })
         .filter(Boolean) ?? [];
+    const normalizedRows = values.rows.map((row) => normalizeDraftRow(row));
+    const affectedAccountIds = Array.from(
+      new Set(
+        normalizedRows
+          .filter((row) => !row.delete)
+          .map((row) => row.account_id)
+          .filter((accountId): accountId is string => Boolean(accountId)),
+      ),
+    );
+    setPostCommitReconcileAccountIds(affectedAccountIds);
+
     const payload: ImportCommitRequest = {
       import_batch_id: preview?.import_batch_id,
-      rows: values.rows.map((row) => normalizeDraftRow(row)),
+      rows: normalizedRows,
     };
     if (commitFiles.length) {
       payload.files = commitFiles as NonNullable<ImportCommitRequest["files"]>;
@@ -3169,6 +3240,25 @@ export const Imports: React.FC = () => {
         accountById={accountById}
         splitRowIdsBySource={splitRowIdsBySource}
         toDateInputValue={toDateInputValue}
+      />
+
+      <ReconcileAccountsDialog
+        open={reconcilePromptOpen}
+        onOpenChange={setReconcilePromptOpen}
+        accounts={accounts}
+        targets={postCommitReconcileTargets}
+        loading={reconcileLoading}
+        error={reconcileError}
+        description="Import balance reconciliation adjustment"
+        onReconcile={(payload: ReconcileAccountsPayload) =>
+          reconcileAccounts(payload)
+        }
+        onSuccess={() => {
+          fetchAccounts({});
+          toast.success("Accounts reconciled", {
+            description: "Reconciliation balances were applied successfully.",
+          });
+        }}
       />
     </MotionPage>
   );

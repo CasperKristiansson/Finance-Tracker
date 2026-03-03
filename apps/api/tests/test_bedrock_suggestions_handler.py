@@ -297,7 +297,7 @@ def test_enqueue_import_category_suggestions_paths(monkeypatch: pytest.MonkeyPat
     assert missing_queue["statusCode"] == 503
 
     monkeypatch.setenv(bs._SUGGESTIONS_QUEUE_ENV, "https://sqs.example/queue")
-    monkeypatch.setattr(bs, "_fetch_connection_by_client", lambda _client_id: None)
+    monkeypatch.setattr(bs, "_resolve_connection_for_enqueue", lambda _client_id: None)
     missing_conn = enqueue_import_category_suggestions(
         {
             "body": json.dumps(
@@ -319,7 +319,7 @@ def test_enqueue_import_category_suggestions_paths(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(
         bs,
-        "_fetch_connection_by_client",
+        "_resolve_connection_for_enqueue",
         lambda _client_id: SuggestionConnection("c1", "https://endpoint", "other-token-value"),
     )
     mismatch = enqueue_import_category_suggestions(
@@ -349,7 +349,7 @@ def test_enqueue_import_category_suggestions_paths(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.setattr(
         bs,
-        "_fetch_connection_by_client",
+        "_resolve_connection_for_enqueue",
         lambda _client_id: SuggestionConnection("c1", "https://endpoint", "token-1234567890"),
     )
     monkeypatch.setattr(bs.boto3, "client", lambda *_args, **_kwargs: _SqsClient())
@@ -380,7 +380,7 @@ def test_enqueue_import_category_suggestions_batch_state_paths(
     monkeypatch.setenv(bs._SUGGESTIONS_QUEUE_ENV, "https://sqs.example/queue")
     monkeypatch.setattr(
         bs,
-        "_fetch_connection_by_client",
+        "_resolve_connection_for_enqueue",
         lambda _client_id: SuggestionConnection("c1", "https://endpoint", "token-1234567890"),
     )
     monkeypatch.setattr(
@@ -430,6 +430,28 @@ def test_enqueue_import_category_suggestions_batch_state_paths(
         None,
     )
     assert unavailable["statusCode"] == 503
+
+
+def test_resolve_connection_for_enqueue_retries_until_visible(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = {"count": 0}
+
+    def _fetch(_client_id):
+        calls["count"] += 1
+        if calls["count"] < 3:
+            return None
+        return SuggestionConnection("c1", "https://endpoint", "token-1234567890")
+
+    sleep_calls: list[float] = []
+    monkeypatch.setattr(bs, "_fetch_connection_by_client", _fetch)
+    monkeypatch.setattr(bs.time, "sleep", lambda delay: sleep_calls.append(delay))
+
+    resolved = bs._resolve_connection_for_enqueue(UUID(int=1))
+    assert resolved is not None
+    assert resolved.connection_id == "c1"
+    assert calls["count"] == 3
+    assert sleep_calls == [bs._CONNECTION_LOOKUP_DELAY_SECONDS] * 2
 
 
 def test_process_import_category_suggestions_success_and_error(

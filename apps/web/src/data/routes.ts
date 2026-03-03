@@ -18,6 +18,7 @@ export const PageRoutes = {
   taxes: "/taxes",
   loans: "/loans",
   investments: "/investments",
+  investmentDetails: "/investments/:accountId",
   goals: "/goals",
   settings: "/settings",
 };

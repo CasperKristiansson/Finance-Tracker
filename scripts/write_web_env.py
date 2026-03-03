@@ -42,6 +42,11 @@ def parse_args() -> argparse.Namespace:
         help="Optional AWS CLI profile for the terraform outputs and SSM queries",
     )
     parser.add_argument(
+        "--api-stack-name",
+        default="finance-tracker-api-default",
+        help="CloudFormation stack name for resolving API endpoints",
+    )
+    parser.add_argument(
         "--local-redirect-signin",
         default="http://localhost:5173/login",
         help="Override for VITE_OAUTH_REDIRECT_SIGNIN in .env.local",
@@ -109,6 +114,41 @@ def read_oauth_settings(tf_dir: str, profile: str) -> dict:
     return output.get("value", output)
 
 
+def read_api_endpoints(stack_name: str, region: str, profile: str) -> tuple[str, str]:
+    command = [
+        "aws",
+        "cloudformation",
+        "describe-stacks",
+        "--stack-name",
+        stack_name,
+        "--query",
+        "Stacks[0].Outputs",
+        "--output",
+        "json",
+        "--region",
+        region,
+    ]
+    if profile:
+        command.extend(["--profile", profile])
+    result = run_subprocess(command)
+    outputs: Any = json.loads(result.stdout)
+    if not isinstance(outputs, list):
+        return "", ""
+
+    by_key = {}
+    for entry in outputs:
+        if not isinstance(entry, dict):
+            continue
+        key = entry.get("OutputKey")
+        value = entry.get("OutputValue")
+        if isinstance(key, str) and isinstance(value, str):
+            by_key[key] = value
+
+    api_base_url = str(by_key.get("HttpApiUrl", "")).strip()
+    ws_api_base_url = str(by_key.get("ServiceEndpointWebsocket", "")).strip()
+    return api_base_url, ws_api_base_url
+
+
 def _parse_existing_env(env_path: Path) -> dict[str, str]:
     if not env_path.exists():
         return {}
@@ -127,13 +167,12 @@ def write_env_file(
     user_pool_id: str,
     user_pool_client_id: str,
     oauth_settings: dict,
+    api_base_url: str,
+    ws_api_base_url: str,
     *,
     redirect_signin: str | None = None,
     redirect_signout: str | None = None,
 ) -> None:
-    existing = _parse_existing_env(env_path)
-    api_base = existing.get("VITE_API_BASE_URL", "")
-    ws_api_base = existing.get("VITE_WS_API_BASE_URL", "")
     fallback_signin = oauth_settings.get("callback_urls", [""])[0]
     fallback_signout = oauth_settings.get("logout_urls", [""])[0]
     redirect_signin = redirect_signin or fallback_signin
@@ -148,8 +187,8 @@ def write_env_file(
         f"VITE_COGNITO_DOMAIN={oauth_settings.get('domain', '')}\n"
         f"VITE_OAUTH_REDIRECT_SIGNIN={redirect_signin}\n"
         f"VITE_OAUTH_REDIRECT_SIGNOUT={redirect_signout}\n"
-        f"VITE_API_BASE_URL={api_base}\n"
-        f"VITE_WS_API_BASE_URL={ws_api_base}\n"
+        f"VITE_API_BASE_URL={api_base_url}\n"
+        f"VITE_WS_API_BASE_URL={ws_api_base_url}\n"
     )
     env_path.write_text(content, encoding="utf-8")
 
@@ -190,6 +229,22 @@ def main() -> None:
         }
 
     try:
+        api_base_url, ws_api_base_url = read_api_endpoints(
+            args.api_stack_name,
+            args.aws_region,
+            args.aws_profile,
+        )
+    except subprocess.CalledProcessError as error:
+        fallback_api = first_present("VITE_API_BASE_URL")
+        fallback_ws = first_present("VITE_WS_API_BASE_URL")
+        if not fallback_api and not fallback_ws:
+            raise RuntimeError(
+                "Failed to read API endpoints from CloudFormation and no fallback found in existing env files."
+            ) from error
+        print("Warning: using existing API endpoint settings from env as fallback", flush=True)
+        api_base_url, ws_api_base_url = fallback_api, fallback_ws
+
+    try:
         user_pool_id = read_parameter(auth_paths["user_pool_id"], args.aws_region, args.aws_profile)
     except subprocess.CalledProcessError as error:
         fallback = first_present("VITE_USER_POOL_ID")
@@ -226,6 +281,8 @@ def main() -> None:
         user_pool_id,
         user_pool_client_id,
         oauth_settings,
+        api_base_url,
+        ws_api_base_url,
     )
 
     write_env_file(
@@ -234,6 +291,8 @@ def main() -> None:
         user_pool_id,
         user_pool_client_id,
         oauth_settings,
+        api_base_url,
+        ws_api_base_url,
     )
 
     write_env_file(
@@ -242,6 +301,8 @@ def main() -> None:
         user_pool_id,
         user_pool_client_id,
         oauth_settings,
+        api_base_url,
+        ws_api_base_url,
         redirect_signin=args.local_redirect_signin,
         redirect_signout=args.local_redirect_signout,
     )

@@ -170,11 +170,13 @@ class AccountService:
             raise LookupError("Account not found")
 
         if account.account_type == AccountType.INVESTMENT:
-            snapshot = self._latest_investment_snapshot(as_of=None)
-            balance = self._investment_balance(account.name, snapshot)
+            balance, snapshot_date = self._latest_investment_balance(
+                account_name=account.name,
+                as_of=None,
+            )
             captured_at = (
-                datetime.combine(snapshot.snapshot_date, time.min, tzinfo=timezone.utc)
-                if snapshot is not None
+                datetime.combine(snapshot_date, time.min, tzinfo=timezone.utc)
+                if snapshot_date is not None
                 else None
             )
             return {
@@ -202,8 +204,32 @@ class AccountService:
         if account.account_type != AccountType.INVESTMENT:
             return self.repository.calculate_balance(account.id, as_of=as_of)
 
-        snapshot = self._latest_investment_snapshot(as_of=as_of)
-        return self._investment_balance(account.name, snapshot)
+        balance, _snapshot_date = self._latest_investment_balance(
+            account_name=account.name,
+            as_of=as_of,
+        )
+        return balance
+
+    def _latest_investment_balance(
+        self,
+        *,
+        account_name: str,
+        as_of: Optional[datetime],
+    ) -> tuple[Decimal, date | None]:
+        target_date: date | None = as_of.date() if as_of else None
+        statement = select(InvestmentSnapshot)
+        if target_date is not None:
+            statement = statement.where(cast(Any, InvestmentSnapshot.snapshot_date) <= target_date)
+        statement = statement.order_by(
+            cast(Any, InvestmentSnapshot.snapshot_date).desc(),
+            cast(Any, InvestmentSnapshot.created_at).desc(),
+        )
+        snapshots = self.session.exec(statement).all()
+        for snapshot in snapshots:
+            matched, value = self._resolve_investment_balance(account_name, snapshot)
+            if matched:
+                return value, snapshot.snapshot_date
+        return Decimal("0"), None
 
     def _latest_investment_snapshot(
         self, *, as_of: Optional[datetime]
@@ -217,24 +243,60 @@ class AccountService:
 
     @staticmethod
     def _investment_balance(account_name: str, snapshot: InvestmentSnapshot | None) -> Decimal:
+        matched, value = AccountService._resolve_investment_balance(account_name, snapshot)
+        if matched:
+            return value
+        return Decimal("0")
+
+    @staticmethod
+    def _resolve_investment_balance(
+        account_name: str, snapshot: InvestmentSnapshot | None
+    ) -> tuple[bool, Decimal]:
         if snapshot is None:
-            return Decimal("0")
+            return False, Decimal("0")
         payload = getattr(snapshot, "parsed_payload", None) or {}
         accounts = payload.get("accounts") if isinstance(payload, dict) else None
         if isinstance(accounts, dict):
             if account_name in accounts:
                 raw_value = accounts.get(account_name)
                 if isinstance(raw_value, (int, float, Decimal)):
-                    return coerce_decimal(raw_value)
-                return Decimal("0")
+                    return True, coerce_decimal(raw_value)
+                return True, Decimal("0")
             # Fallback: case-insensitive match for renamed accounts.
             lower_map = {str(key).lower(): val for key, val in accounts.items()}
             if account_name.lower() in lower_map:
                 raw_value = lower_map[account_name.lower()]
                 if isinstance(raw_value, (int, float, Decimal)):
-                    return coerce_decimal(raw_value)
-                return Decimal("0")
-        return Decimal("0")
+                    return True, coerce_decimal(raw_value)
+                return True, Decimal("0")
+
+            # Keep parity with investment overview matcher for minor naming drift.
+            target = account_name.strip().lower()
+            best_key: str | None = None
+            best_len = 0
+            for key in accounts.keys():
+                normalized = str(key).strip().lower()
+                if not normalized:
+                    continue
+                if target in normalized or normalized in target:
+                    if len(normalized) > best_len:
+                        best_key = str(key)
+                        best_len = len(normalized)
+            if best_key is not None:
+                raw_value = accounts.get(best_key)
+                if isinstance(raw_value, (int, float, Decimal)):
+                    return True, coerce_decimal(raw_value)
+                return True, Decimal("0")
+
+        snapshot_account_name = str(getattr(snapshot, "account_name", "") or "").strip().lower()
+        target = account_name.strip().lower()
+        if snapshot_account_name and (target == snapshot_account_name):
+            portfolio_value = getattr(snapshot, "portfolio_value", None)
+            if isinstance(portfolio_value, (int, float, Decimal)):
+                return True, coerce_decimal(portfolio_value)
+            return True, Decimal("0")
+
+        return False, Decimal("0")
 
     def _get_or_create_offset_account(self) -> Account:
         if hasattr(self, "_offset_account"):

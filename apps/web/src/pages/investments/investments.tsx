@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { Loader2, RefreshCw } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Area,
   AreaChart,
@@ -32,13 +32,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -203,15 +196,14 @@ const groupContributionPoints = (
 export const Investments: React.FC = () => {
   const {
     overview,
-    transactions,
     loading,
     error,
     updateLoading,
     updateError,
     fetchOverview,
-    fetchTransactions: fetchInvestmentTransactions,
     createSnapshot,
   } = useInvestmentsApi();
+  const navigate = useNavigate();
 
   const [portfolioWindow, setPortfolioWindow] = useState<"since" | "12m">(
     "since",
@@ -220,7 +212,6 @@ export const Investments: React.FC = () => {
     "month" | "quarter" | "year"
   >("month");
   const [accountWindow, setAccountWindow] = useState<"since" | "12m">("since");
-  const [detailsAccountId, setDetailsAccountId] = useState<string | null>(null);
   const [cashflowDetailsMonth, setCashflowDetailsMonth] = useState<
     string | null
   >(null);
@@ -235,7 +226,7 @@ export const Investments: React.FC = () => {
   const [snapshotNotes, setSnapshotNotes] = useState("");
   const [snapshotSubmitted, setSnapshotSubmitted] = useState(false);
   const [cashflowsDialogScope, setCashflowsDialogScope] = useState<
-    "portfolio" | "account" | null
+    "portfolio" | null
   >(null);
 
   useEffect(() => {
@@ -405,32 +396,12 @@ export const Investments: React.FC = () => {
       .sort((a, b) => b.currentValue - a.currentValue);
   }, [overview?.accounts]);
 
-  const selectedAccount = useMemo(() => {
-    if (!detailsAccountId) return null;
-    return (
-      accountSummaries.find((a) => a.accountId === detailsAccountId) ?? null
-    );
-  }, [accountSummaries, detailsAccountId]);
-
   const snapshotAccount = useMemo(() => {
     if (!snapshotAccountId) return null;
     return (
       accountSummaries.find((a) => a.accountId === snapshotAccountId) ?? null
     );
   }, [accountSummaries, snapshotAccountId]);
-
-  const selectedAccountInvestmentTxs = useMemo(() => {
-    if (!selectedAccount) return [];
-    return transactions.slice(0, 50);
-  }, [selectedAccount, transactions]);
-
-  const selectedAccountRecentCashflows = useMemo(() => {
-    if (!selectedAccount) return [];
-    const accountId = selectedAccount.accountId;
-    return (overview?.recent_cashflows ?? []).filter(
-      (row) => row.account_id === accountId,
-    );
-  }, [overview?.recent_cashflows, selectedAccount]);
 
   const recentCashflows = useMemo(
     () => overview?.recent_cashflows ?? [],
@@ -456,35 +427,14 @@ export const Investments: React.FC = () => {
   }, [cashflowDetailsMonth, cashflowDetailsMonthKey]);
 
   const cashflowsDialogItems = useMemo(() => {
-    const base =
-      cashflowsDialogScope === "account"
-        ? selectedAccountRecentCashflows
-        : recentCashflows;
-    return [...base].sort((a, b) =>
+    return [...recentCashflows].sort((a, b) =>
       String(b.occurred_at).localeCompare(String(a.occurred_at)),
     );
-  }, [cashflowsDialogScope, recentCashflows, selectedAccountRecentCashflows]);
+  }, [recentCashflows]);
 
   const cashflowsDialogTitle = useMemo(() => {
-    if (cashflowsDialogScope === "account" && selectedAccount) {
-      return `Deposits & withdrawals · ${selectedAccount.accountName}`;
-    }
     return "Deposits & withdrawals";
-  }, [cashflowsDialogScope, selectedAccount]);
-
-  useEffect(() => {
-    if (!detailsAccountId) return;
-    if (!selectedAccount?.accountName) return;
-    fetchInvestmentTransactions({
-      accountName: selectedAccount.accountName,
-      limit: 80,
-      offset: 0,
-    });
-  }, [
-    detailsAccountId,
-    fetchInvestmentTransactions,
-    selectedAccount?.accountName,
-  ]);
+  }, []);
 
   useEffect(() => {
     if (!snapshotDialogOpen) return;
@@ -1057,11 +1007,17 @@ export const Investments: React.FC = () => {
                             className="cursor-pointer"
                             role="button"
                             tabIndex={0}
-                            onClick={() => setDetailsAccountId(acct.accountId)}
+                            onClick={() =>
+                              navigate(
+                                `${PageRoutes.investments}/${acct.accountId}`,
+                              )
+                            }
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
-                                setDetailsAccountId(acct.accountId);
+                                navigate(
+                                  `${PageRoutes.investments}/${acct.accountId}`,
+                                );
                               }
                             }}
                           >
@@ -1124,375 +1080,6 @@ export const Investments: React.FC = () => {
           </Card>
         </motion.div>
       </StaggerWrap>
-
-      <Sheet
-        open={Boolean(detailsAccountId)}
-        onOpenChange={(open) => {
-          if (!open) setDetailsAccountId(null);
-        }}
-      >
-        <SheetContent side="right" className="bg-white sm:max-w-lg">
-          {selectedAccount ? (
-            <>
-              <SheetHeader className="border-b border-slate-100">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <SheetTitle className="truncate text-lg">
-                      {selectedAccount.accountName}
-                    </SheetTitle>
-                    <SheetDescription className="mt-1 text-slate-600">
-                      <span
-                        className={cn(
-                          "inline-flex items-center rounded-full px-2 py-1 text-xs font-medium",
-                          freshnessBadge(selectedAccount.asOf).className,
-                        )}
-                      >
-                        {freshnessBadge(selectedAccount.asOf).label}
-                      </span>
-                      {selectedAccount.startDate ? (
-                        <span className="ml-2 text-xs text-slate-500">
-                          Since {selectedAccount.startDate}
-                        </span>
-                      ) : null}
-                    </SheetDescription>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      openSnapshotDialog(selectedAccount.accountId)
-                    }
-                  >
-                    Update balance
-                  </Button>
-                </div>
-              </SheetHeader>
-              <div className="flex-1 space-y-4 overflow-y-auto p-4">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="rounded-lg border border-slate-100 bg-white p-3">
-                    <div className="text-xs text-slate-500">Current value</div>
-                    <div className="mt-1 text-sm font-semibold text-slate-900 tabular-nums">
-                      {formatSek(selectedAccount.currentValue)}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-slate-100 bg-white p-3 text-right">
-                    <div className="text-xs text-slate-500">Start</div>
-                    <div className="mt-1 text-sm font-semibold text-slate-900 tabular-nums">
-                      {selectedAccount.startDate ?? "—"}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-slate-100 bg-white p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-xs font-medium text-slate-500 uppercase">
-                      Recent deposits & withdrawals
-                    </div>
-                    <button
-                      type="button"
-                      className="text-xs font-medium text-slate-700 underline underline-offset-4 hover:text-slate-900"
-                      onClick={() => setCashflowsDialogScope("account")}
-                    >
-                      View all
-                    </button>
-                  </div>
-                  {selectedAccountRecentCashflows.length ? (
-                    <div className="mt-3 space-y-2">
-                      {selectedAccountRecentCashflows.map((row) => {
-                        const occurredAt = String(row.occurred_at);
-                        const dateLabel = occurredAt.slice(0, 10);
-                        const amount = coerceMoney(row.amount_sek);
-                        const isDeposit = row.direction === "deposit";
-                        return (
-                          <div
-                            key={row.transaction_id}
-                            className="flex items-center justify-between gap-3 rounded-md border border-slate-100 px-3 py-2"
-                          >
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-medium text-slate-900">
-                                {dateLabel}
-                              </div>
-                              <div className="truncate text-xs text-slate-500">
-                                {row.description ?? "—"}
-                              </div>
-                              <Link
-                                to={`${PageRoutes.transactions}?search=${encodeURIComponent(
-                                  row.transaction_id,
-                                )}`}
-                                className="mt-1 inline-block truncate font-mono text-[11px] text-slate-500 hover:text-slate-700"
-                                title={row.transaction_id}
-                              >
-                                {row.transaction_id}
-                              </Link>
-                            </div>
-                            <div
-                              className={cn(
-                                "shrink-0 text-sm font-semibold tabular-nums",
-                                isDeposit
-                                  ? "text-emerald-700"
-                                  : "text-rose-700",
-                              )}
-                            >
-                              {isDeposit ? "+" : "-"}
-                              {formatSek(amount)}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="mt-3 rounded-md border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
-                      No recent cashflows for this account.
-                    </div>
-                  )}
-                </div>
-
-                <div className="rounded-lg border border-slate-100 bg-white p-3">
-                  <div className="text-xs font-medium text-slate-500 uppercase">
-                    Since start
-                  </div>
-                  <div className="mt-2 space-y-2">
-                    <MetricRow
-                      label="Deposited"
-                      value={formatSek(selectedAccount.cashflowSince.added)}
-                    />
-                    <MetricRow
-                      label="Withdrawn"
-                      value={formatSek(selectedAccount.cashflowSince.withdrawn)}
-                    />
-                    <MetricRow
-                      label="Net contributions"
-                      value={formatSignedSek(selectedAccount.cashflowSince.net)}
-                      valueClassName={
-                        selectedAccount.cashflowSince.net >= 0
-                          ? "text-emerald-700"
-                          : "text-rose-700"
-                      }
-                    />
-                    <MetricRow
-                      label="Market growth"
-                      value={
-                        <>
-                          {formatSignedSek(selectedAccount.growthSince.amount)}{" "}
-                          {selectedAccount.growthSince.pct !== null
-                            ? `(${selectedAccount.growthSince.pct >= 0 ? "+" : ""}${selectedAccount.growthSince.pct.toFixed(1)}%)`
-                            : ""}
-                        </>
-                      }
-                      valueClassName={
-                        selectedAccount.growthSince.amount >= 0
-                          ? "text-emerald-700"
-                          : "text-rose-700"
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-slate-100 bg-white p-3">
-                  <div className="text-xs font-medium text-slate-500 uppercase">
-                    Last 12 months
-                  </div>
-                  <div className="mt-2 space-y-2">
-                    <MetricRow
-                      label="Deposited"
-                      value={formatSek(selectedAccount.cashflow12m.added)}
-                    />
-                    <MetricRow
-                      label="Withdrawn"
-                      value={formatSek(selectedAccount.cashflow12m.withdrawn)}
-                    />
-                    <MetricRow
-                      label="Net contributions"
-                      value={formatSignedSek(selectedAccount.cashflow12m.net)}
-                      valueClassName={
-                        selectedAccount.cashflow12m.net >= 0
-                          ? "text-emerald-700"
-                          : "text-rose-700"
-                      }
-                    />
-                    <MetricRow
-                      label="Market growth"
-                      value={
-                        <>
-                          {formatSignedSek(selectedAccount.growth12m.amount)}{" "}
-                          {selectedAccount.growth12m.pct !== null
-                            ? `(${selectedAccount.growth12m.pct >= 0 ? "+" : ""}${selectedAccount.growth12m.pct.toFixed(1)}%)`
-                            : ""}
-                        </>
-                      }
-                      valueClassName={
-                        selectedAccount.growth12m.amount >= 0
-                          ? "text-emerald-700"
-                          : "text-rose-700"
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-slate-100 bg-white p-3">
-                  <div className="text-xs font-medium text-slate-500 uppercase">
-                    Value over time
-                  </div>
-                  <div className="mt-3 h-48">
-                    {selectedAccount.series.length ? (
-                      <ChartContainer
-                        className="h-full w-full"
-                        config={{
-                          value: {
-                            label: selectedAccount.accountName,
-                            color: "#4f46e5",
-                          },
-                        }}
-                      >
-                        <AreaChart
-                          data={selectedAccount.series}
-                          margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
-                        >
-                          <defs>
-                            <linearGradient
-                              id="accountFill"
-                              x1="0"
-                              y1="0"
-                              x2="0"
-                              y2="1"
-                            >
-                              <stop
-                                offset="5%"
-                                stopColor="#4f46e5"
-                                stopOpacity={0.25}
-                              />
-                              <stop
-                                offset="95%"
-                                stopColor="#4f46e5"
-                                stopOpacity={0}
-                              />
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            vertical={false}
-                          />
-                          <XAxis
-                            dataKey="date"
-                            tickFormatter={(value) =>
-                              new Date(value).toLocaleDateString("en-US", {
-                                month: "short",
-                              })
-                            }
-                            tickLine={false}
-                            axisLine={false}
-                          />
-                          <YAxis
-                            tickLine={false}
-                            axisLine={false}
-                            tickMargin={12}
-                            width={90}
-                            tickFormatter={(v) => formatCompact(Number(v))}
-                          />
-                          <Tooltip
-                            content={
-                              <ChartTooltipContent
-                                formatter={(value) => (
-                                  <span className="font-mono font-medium text-foreground tabular-nums">
-                                    {formatSek(Number(value))}
-                                  </span>
-                                )}
-                              />
-                            }
-                          />
-                          <Area
-                            type="monotoneX"
-                            connectNulls
-                            dataKey="value"
-                            stroke="var(--color-value)"
-                            fill="url(#accountFill)"
-                            strokeWidth={2}
-                            isAnimationActive={false}
-                          />
-                        </AreaChart>
-                      </ChartContainer>
-                    ) : (
-                      <div className="flex h-full items-center justify-center rounded-md border border-slate-100 bg-slate-50 text-sm text-slate-600">
-                        No snapshots yet.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded-lg border border-slate-100 bg-white p-3">
-                  <div className="text-xs font-medium text-slate-500 uppercase">
-                    Investment transactions (latest)
-                  </div>
-                  <div className="mt-3">
-                    {selectedAccountInvestmentTxs.length ? (
-                      <div className="overflow-hidden rounded-md border border-slate-100">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Date</TableHead>
-                              <TableHead>Type</TableHead>
-                              <TableHead>Description</TableHead>
-                              <TableHead className="text-right">
-                                Amount
-                              </TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {selectedAccountInvestmentTxs.map((tx) => {
-                              const dateLabel = String(tx.occurred_at).slice(
-                                0,
-                                10,
-                              );
-                              const amount = coerceMoney(tx.amount_sek);
-                              const tone =
-                                amount > 0
-                                  ? "text-emerald-700"
-                                  : amount < 0
-                                    ? "text-rose-700"
-                                    : "text-slate-700";
-                              return (
-                                <TableRow key={tx.id}>
-                                  <TableCell className="whitespace-nowrap">
-                                    {dateLabel}
-                                  </TableCell>
-                                  <TableCell className="whitespace-nowrap">
-                                    {tx.transaction_type}
-                                  </TableCell>
-                                  <TableCell className="min-w-0">
-                                    <div className="truncate">
-                                      {tx.description ?? tx.holding_name ?? "—"}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell
-                                    className={cn(
-                                      "text-right font-medium tabular-nums",
-                                      tone,
-                                    )}
-                                  >
-                                    {formatSignedSek(amount)}
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    ) : (
-                      <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
-                        {loading && !transactions.length
-                          ? "Loading transactions…"
-                          : "No investment transactions found for this account."}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="p-4 text-sm text-slate-600">Select an account.</div>
-          )}
-        </SheetContent>
-      </Sheet>
 
       <Dialog
         open={snapshotDialogOpen}

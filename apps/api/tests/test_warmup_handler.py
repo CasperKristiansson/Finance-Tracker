@@ -50,7 +50,7 @@ def test_warm_database_returns_starting_when_operational_error(
 
     response = warm_database({}, None)
 
-    assert response["statusCode"] == 503
+    assert response["statusCode"] == 200
     body = _json_body(response)
     assert body["status"] == "starting"
     assert "Retrying shortly" in body["message"]
