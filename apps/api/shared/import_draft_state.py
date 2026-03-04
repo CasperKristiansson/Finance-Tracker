@@ -274,7 +274,10 @@ def _get_item(*, import_batch_id: UUID, strict: bool = False) -> dict[str, Any] 
             raise RuntimeError("Draft store unavailable")
         return None
     try:
-        response = table.get_item(Key={"connection_id": _draft_pk(import_batch_id)})
+        response = table.get_item(
+            Key={"connection_id": _draft_pk(import_batch_id)},
+            ConsistentRead=True,
+        )
     except (BotoCoreError, ClientError) as exc:
         if strict:
             raise RuntimeError("Draft store unavailable") from exc

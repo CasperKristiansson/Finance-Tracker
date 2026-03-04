@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Iterator
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from openpyxl import Workbook
@@ -68,7 +68,7 @@ class _FakeDraftStoreTable:
     def __init__(self) -> None:
         self.items: dict[str, dict] = {}
 
-    def get_item(self, *, Key: dict) -> dict:
+    def get_item(self, *, Key: dict, **_kwargs: object) -> dict:
         item = self.items.get(str(Key["connection_id"]))
         if item is None:
             return {}
@@ -397,6 +397,80 @@ def test_commit_is_all_or_nothing():
         None,
     )
     assert response["statusCode"] == 400
+
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        assert session.exec(select(Transaction)).all() == []
+
+
+def test_commit_rejects_unknown_rows_for_existing_draft_batch():
+    account_id = _create_account(bank_import_type="swedbank")
+    preview_response = preview_imports(
+        {
+            "body": json.dumps(
+                {
+                    "files": [
+                        {
+                            "filename": "swedbank.xlsx",
+                            "account_id": str(account_id),
+                            "content_base64": _swedbank_workbook(),
+                        }
+                    ],
+                    "note": "draft commit validation",
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert preview_response["statusCode"] == 200
+    preview_body = _json_body(preview_response)
+    valid_row = preview_body["rows"][0]
+
+    response = commit_imports(
+        {
+            "body": json.dumps(
+                {
+                    "import_batch_id": preview_body["import_batch_id"],
+                    "note": "commit with invalid row",
+                    "rows": [
+                        {
+                            "id": valid_row["id"],
+                            "file_id": valid_row["file_id"],
+                            "account_id": valid_row["account_id"],
+                            "occurred_at": valid_row["occurred_at"],
+                            "amount": valid_row["amount"],
+                            "description": valid_row["description"],
+                            "category_id": valid_row.get("suggested_category_id"),
+                            "transfer_account_id": None,
+                            "tax_event_type": None,
+                            "delete": False,
+                        },
+                        {
+                            "id": str(uuid4()),
+                            "file_id": str(uuid4()),
+                            "account_id": valid_row["account_id"],
+                            "occurred_at": valid_row["occurred_at"],
+                            "amount": valid_row["amount"],
+                            "description": "Unknown row",
+                            "category_id": None,
+                            "transfer_account_id": None,
+                            "tax_event_type": None,
+                            "delete": False,
+                        },
+                    ],
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert response["statusCode"] == 400
+    assert _json_body(response)["error"] in {
+        "Row references unknown import file",
+        "Rows reference multiple import files; include files payload",
+    }
 
     engine = get_engine()
     with Session(engine) as session:
@@ -758,7 +832,7 @@ def test_commit_creates_batch_and_transactions():
     assert body["transaction_ids"] and len(body["transaction_ids"]) == 1
 
 
-def test_commit_accepts_multi_file_rows_without_files_payload():
+def test_commit_rejects_multi_file_rows_without_files_payload():
     account_id = _create_account(bank_import_type="swedbank")
     import_batch_id = UUID(int=987)
     file_id_a = UUID(int=111)
@@ -795,19 +869,8 @@ def test_commit_accepts_multi_file_rows_without_files_payload():
         None,
     )
 
-    assert response["statusCode"] == 200
-    body = _json_body(response)
-    assert body["import_batch_id"] == str(import_batch_id)
-    assert len(body["transaction_ids"]) == 2
-
-    engine = get_engine()
-    with Session(engine) as session:
-        scope_session_to_user(session, get_default_user_id())
-        batch = session.get(TransactionImportBatch, import_batch_id)
-        assert batch is not None
-
-        files = session.exec(select(ImportFile).where(ImportFile.batch_id == import_batch_id)).all()
-        assert {f.id for f in files} == {file_id_a, file_id_b}
+    assert response["statusCode"] == 400
+    assert _json_body(response)["error"] == "Rows reference multiple import files; include files payload"
 
 
 def test_persist_import_files_stores_uploaded_file_metadata(

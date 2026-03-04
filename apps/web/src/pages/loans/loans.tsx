@@ -74,6 +74,16 @@ import { AccountType, InterestCompound, LoanEventType } from "@/types/api";
 const selectLikeInput =
   "flex h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 const LOAN_EVENTS_PAGE_LIMIT = 200;
+const LOAN_ACTIVITY_MONTHS = 12;
+
+type LoanActivityMonthBucket = {
+  key: string;
+  label: string;
+  principalPaid: number;
+  disbursed: number;
+  interestAndFees: number;
+  eventCount: number;
+};
 
 const formatCurrency = (value: number) => currency(value);
 
@@ -180,6 +190,80 @@ const sumPrincipalPayments = (events: LoanEventRead[] | undefined) => {
     const amount = Number(event.amount);
     return sum + (Number.isFinite(amount) ? Math.max(0, amount) : 0);
   }, 0);
+};
+
+const toMonthKey = (date: Date) => {
+  const month = `${date.getUTCMonth() + 1}`.padStart(2, "0");
+  return `${date.getUTCFullYear()}-${month}`;
+};
+
+const buildLoanActivityBuckets = (months = LOAN_ACTIVITY_MONTHS) => {
+  const formatter = new Intl.DateTimeFormat("sv-SE", {
+    month: "short",
+    year: "2-digit",
+    timeZone: "UTC",
+  });
+  const now = new Date();
+  const start = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (months - 1), 1),
+  );
+
+  const buckets: LoanActivityMonthBucket[] = [];
+  for (let i = 0; i < months; i += 1) {
+    const bucketDate = new Date(
+      Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + i, 1),
+    );
+    buckets.push({
+      key: toMonthKey(bucketDate),
+      label: formatter.format(bucketDate),
+      principalPaid: 0,
+      disbursed: 0,
+      interestAndFees: 0,
+      eventCount: 0,
+    });
+  }
+
+  return buckets;
+};
+
+const aggregateLoanActivityByMonth = (
+  sourceEvents: LoanEventRead[] | undefined,
+  months = LOAN_ACTIVITY_MONTHS,
+) => {
+  const buckets = buildLoanActivityBuckets(months);
+  const byMonth = new Map(buckets.map((bucket) => [bucket.key, bucket]));
+
+  for (const event of sourceEvents ?? []) {
+    const amount = Number(event.amount);
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+    const occurredAt = new Date(event.occurred_at);
+    if (Number.isNaN(occurredAt.getTime())) continue;
+
+    const key = toMonthKey(occurredAt);
+    const bucket = byMonth.get(key);
+    if (!bucket) continue;
+
+    if (event.event_type === LoanEventType.PAYMENT_PRINCIPAL) {
+      bucket.principalPaid += amount;
+      bucket.eventCount += 1;
+      continue;
+    }
+    if (event.event_type === LoanEventType.DISBURSEMENT) {
+      bucket.disbursed += amount;
+      bucket.eventCount += 1;
+      continue;
+    }
+    if (
+      event.event_type === LoanEventType.INTEREST_ACCRUAL ||
+      event.event_type === LoanEventType.PAYMENT_INTEREST ||
+      event.event_type === LoanEventType.FEE
+    ) {
+      bucket.interestAndFees += amount;
+      bucket.eventCount += 1;
+    }
+  }
+
+  return buckets;
 };
 
 const getLoanCurrentPrincipal = (account: AccountWithBalance) => {
@@ -401,6 +485,97 @@ export const Loans: React.FC = () => {
           (item.remaining > 0 || item.paid > 0),
       );
   }, [events, loanAccounts]);
+
+  const allLoanEvents = useMemo(
+    () => loanAccounts.flatMap((account) => events[account.id] ?? []),
+    [events, loanAccounts],
+  );
+
+  const totalPrincipalPaid12m = useMemo(
+    () =>
+      aggregateLoanActivityByMonth(allLoanEvents).reduce(
+        (sum, item) => sum + item.principalPaid,
+        0,
+      ),
+    [allLoanEvents],
+  );
+
+  const totalDisbursed12m = useMemo(
+    () =>
+      aggregateLoanActivityByMonth(allLoanEvents).reduce(
+        (sum, item) => sum + item.disbursed,
+        0,
+      ),
+    [allLoanEvents],
+  );
+
+  const totalInterestAndFees12m = useMemo(
+    () =>
+      aggregateLoanActivityByMonth(allLoanEvents).reduce(
+        (sum, item) => sum + item.interestAndFees,
+        0,
+      ),
+    [allLoanEvents],
+  );
+
+  const loanActivityByMonthData = useMemo(
+    () => aggregateLoanActivityByMonth(allLoanEvents),
+    [allLoanEvents],
+  );
+
+  const loanActivityByAccountData = useMemo(() => {
+    return loanAccounts
+      .map((account) => {
+        const monthly = aggregateLoanActivityByMonth(events[account.id]);
+        const principalPaid = monthly.reduce(
+          (sum, item) => sum + item.principalPaid,
+          0,
+        );
+        const disbursed = monthly.reduce(
+          (sum, item) => sum + item.disbursed,
+          0,
+        );
+        const interestAndFees = monthly.reduce(
+          (sum, item) => sum + item.interestAndFees,
+          0,
+        );
+        const total = principalPaid + disbursed + interestAndFees;
+
+        return {
+          name: account.name,
+          principalPaid,
+          disbursed,
+          interestAndFees,
+          total,
+        };
+      })
+      .filter((item) => item.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 8);
+  }, [events, loanAccounts]);
+
+  const selectedLoanActivityByMonthData = useMemo(
+    () => aggregateLoanActivityByMonth(accountEvents),
+    [accountEvents],
+  );
+
+  const selectedLoanActivityMixData = useMemo(() => {
+    const monthly = aggregateLoanActivityByMonth(accountEvents);
+    const principalPaid = monthly.reduce(
+      (sum, item) => sum + item.principalPaid,
+      0,
+    );
+    const disbursed = monthly.reduce((sum, item) => sum + item.disbursed, 0);
+    const interestAndFees = monthly.reduce(
+      (sum, item) => sum + item.interestAndFees,
+      0,
+    );
+    return [
+      { name: "Principal paid", amount: principalPaid },
+      { name: "Disbursed", amount: disbursed },
+      { name: "Interest + fees", amount: interestAndFees },
+    ].filter((item) => item.amount > 0);
+  }, [accountEvents]);
 
   const refreshLoanData = () => {
     if (!accountId) return;
@@ -703,7 +878,10 @@ export const Loans: React.FC = () => {
         </div>
       ) : null}
 
-      <motion.div variants={fadeInUp} className="grid gap-3 md:grid-cols-2">
+      <motion.div
+        variants={fadeInUp}
+        className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+      >
         <SummaryCard
           label="Total principal"
           value={formatCurrency(totalPrincipal)}
@@ -722,6 +900,16 @@ export const Loans: React.FC = () => {
                 )}% of original`
               : "Based on loan events"
           }
+        />
+        <SummaryCard
+          label="Paid (12 months)"
+          value={formatCurrency(totalPrincipalPaid12m)}
+          hint="Principal payments"
+        />
+        <SummaryCard
+          label="Drawn (12 months)"
+          value={formatCurrency(totalDisbursed12m)}
+          hint={`Interest + fees ${formatCurrency(totalInterestAndFees12m)}`}
         />
       </motion.div>
 
@@ -813,6 +1001,211 @@ export const Loans: React.FC = () => {
           </CardContent>
         </Card>
       </motion.div>
+
+      <div className="grid gap-3 xl:grid-cols-2">
+        <motion.div variants={fadeInUp}>
+          <Card className="border-slate-200 shadow-[0_10px_40px_-26px_rgba(15,23,42,0.35)]">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-slate-900">
+                Loan activity (last 12 months)
+              </CardTitle>
+              <p className="text-xs text-slate-500">
+                Principal payments, disbursements, and interest/fees.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="h-56 w-full">
+                {loanActivityByMonthData.some(
+                  (row) =>
+                    row.principalPaid > 0 ||
+                    row.disbursed > 0 ||
+                    row.interestAndFees > 0,
+                ) ? (
+                  <ChartContainer
+                    config={{
+                      principalPaid: {
+                        label: "Principal paid",
+                        color: "hsl(142.1 76.2% 36.3%)",
+                      },
+                      disbursed: {
+                        label: "Disbursed",
+                        color: "hsl(221.2 83.2% 53.3%)",
+                      },
+                      interestAndFees: {
+                        label: "Interest + fees",
+                        color: "hsl(38 92% 50%)",
+                      },
+                    }}
+                    className="h-full w-full"
+                  >
+                    <BarChart
+                      data={loanActivityByMonthData}
+                      margin={{ left: -12, right: 8 }}
+                    >
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="label"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#64748b" }}
+                      />
+                      <YAxis
+                        tickFormatter={(value) =>
+                          new Intl.NumberFormat("sv-SE", {
+                            notation: "compact",
+                            maximumFractionDigits: 1,
+                          }).format(value)
+                        }
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <Tooltip
+                        content={
+                          <ChartTooltipContent
+                            formatter={(value, name) => {
+                              if (typeof value !== "number") return null;
+                              return (
+                                <div className="flex w-full items-center justify-between gap-3">
+                                  <span className="text-slate-600">{name}</span>
+                                  <span className="font-semibold text-slate-900 tabular-nums">
+                                    {formatCurrency(value)}
+                                  </span>
+                                </div>
+                              );
+                            }}
+                            hideLabel
+                          />
+                        }
+                      />
+                      <Bar
+                        dataKey="principalPaid"
+                        stackId="monthlyLoanActivity"
+                        fill="var(--color-principalPaid)"
+                        radius={[4, 4, 0, 0]}
+                      />
+                      <Bar
+                        dataKey="disbursed"
+                        stackId="monthlyLoanActivity"
+                        fill="var(--color-disbursed)"
+                        radius={[4, 4, 0, 0]}
+                      />
+                      <Bar
+                        dataKey="interestAndFees"
+                        stackId="monthlyLoanActivity"
+                        fill="var(--color-interestAndFees)"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ChartContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-600">
+                    No loan activity in the last 12 months.
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div variants={fadeInUp}>
+          <Card className="border-slate-200 shadow-[0_10px_40px_-26px_rgba(15,23,42,0.35)]">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base font-semibold text-slate-900">
+                Most active loans (last 12 months)
+              </CardTitle>
+              <p className="text-xs text-slate-500">
+                Accounts with the highest posted loan movement.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="h-56 w-full">
+                {loanActivityByAccountData.length ? (
+                  <ChartContainer
+                    config={{
+                      principalPaid: {
+                        label: "Principal paid",
+                        color: "hsl(142.1 76.2% 36.3%)",
+                      },
+                      disbursed: {
+                        label: "Disbursed",
+                        color: "hsl(221.2 83.2% 53.3%)",
+                      },
+                      interestAndFees: {
+                        label: "Interest + fees",
+                        color: "hsl(38 92% 50%)",
+                      },
+                    }}
+                    className="h-full w-full"
+                  >
+                    <BarChart
+                      data={loanActivityByAccountData}
+                      margin={{ left: -12, right: 8 }}
+                    >
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="name"
+                        tickLine={false}
+                        axisLine={false}
+                        tick={{ fill: "#64748b" }}
+                      />
+                      <YAxis
+                        tickFormatter={(value) =>
+                          new Intl.NumberFormat("sv-SE", {
+                            notation: "compact",
+                            maximumFractionDigits: 1,
+                          }).format(value)
+                        }
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <Tooltip
+                        content={
+                          <ChartTooltipContent
+                            formatter={(value, name) => {
+                              if (typeof value !== "number") return null;
+                              return (
+                                <div className="flex w-full items-center justify-between gap-3">
+                                  <span className="text-slate-600">{name}</span>
+                                  <span className="font-semibold text-slate-900 tabular-nums">
+                                    {formatCurrency(value)}
+                                  </span>
+                                </div>
+                              );
+                            }}
+                            hideLabel
+                          />
+                        }
+                      />
+                      <Bar
+                        dataKey="principalPaid"
+                        stackId="loanMixByAccount"
+                        fill="var(--color-principalPaid)"
+                        radius={[4, 4, 0, 0]}
+                      />
+                      <Bar
+                        dataKey="disbursed"
+                        stackId="loanMixByAccount"
+                        fill="var(--color-disbursed)"
+                        radius={[4, 4, 0, 0]}
+                      />
+                      <Bar
+                        dataKey="interestAndFees"
+                        stackId="loanMixByAccount"
+                        fill="var(--color-interestAndFees)"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ChartContainer>
+                ) : (
+                  <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-600">
+                    Not enough activity to build account-level insights yet.
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
 
       <div className="grid gap-3 lg:grid-cols-2">
         {accountsLoading ? (
@@ -1167,6 +1560,196 @@ export const Loans: React.FC = () => {
                 {accountsError || error}
               </div>
             )}
+
+            <div className="grid gap-3 xl:grid-cols-2">
+              <Card className="border-slate-200 shadow-[0_10px_40px_-26px_rgba(15,23,42,0.35)]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold text-slate-900">
+                    Activity trend (last 12 months)
+                  </CardTitle>
+                  <p className="text-xs text-slate-500">
+                    Monthly principal payments, disbursements, and
+                    interest/fees.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-56 w-full">
+                    {selectedLoanActivityByMonthData.some(
+                      (row) =>
+                        row.principalPaid > 0 ||
+                        row.disbursed > 0 ||
+                        row.interestAndFees > 0,
+                    ) ? (
+                      <ChartContainer
+                        config={{
+                          principalPaid: {
+                            label: "Principal paid",
+                            color: "hsl(142.1 76.2% 36.3%)",
+                          },
+                          disbursed: {
+                            label: "Disbursed",
+                            color: "hsl(221.2 83.2% 53.3%)",
+                          },
+                          interestAndFees: {
+                            label: "Interest + fees",
+                            color: "hsl(38 92% 50%)",
+                          },
+                        }}
+                        className="h-full w-full"
+                      >
+                        <BarChart
+                          data={selectedLoanActivityByMonthData}
+                          margin={{ left: -12, right: 8 }}
+                        >
+                          <CartesianGrid
+                            vertical={false}
+                            strokeDasharray="3 3"
+                          />
+                          <XAxis
+                            dataKey="label"
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#64748b" }}
+                          />
+                          <YAxis
+                            tickFormatter={(value) =>
+                              new Intl.NumberFormat("sv-SE", {
+                                notation: "compact",
+                                maximumFractionDigits: 1,
+                              }).format(value)
+                            }
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <Tooltip
+                            content={
+                              <ChartTooltipContent
+                                formatter={(value, name) => {
+                                  if (typeof value !== "number") return null;
+                                  return (
+                                    <div className="flex w-full items-center justify-between gap-3">
+                                      <span className="text-slate-600">
+                                        {name}
+                                      </span>
+                                      <span className="font-semibold text-slate-900 tabular-nums">
+                                        {formatCurrency(value)}
+                                      </span>
+                                    </div>
+                                  );
+                                }}
+                                hideLabel
+                              />
+                            }
+                          />
+                          <Bar
+                            dataKey="principalPaid"
+                            stackId="selectedLoanMonthly"
+                            fill="var(--color-principalPaid)"
+                            radius={[4, 4, 0, 0]}
+                          />
+                          <Bar
+                            dataKey="disbursed"
+                            stackId="selectedLoanMonthly"
+                            fill="var(--color-disbursed)"
+                            radius={[4, 4, 0, 0]}
+                          />
+                          <Bar
+                            dataKey="interestAndFees"
+                            stackId="selectedLoanMonthly"
+                            fill="var(--color-interestAndFees)"
+                            radius={[4, 4, 0, 0]}
+                          />
+                        </BarChart>
+                      </ChartContainer>
+                    ) : (
+                      <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-600">
+                        No recorded loan activity in the last 12 months.
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-slate-200 shadow-[0_10px_40px_-26px_rgba(15,23,42,0.35)]">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-semibold text-slate-900">
+                    Activity composition (last 12 months)
+                  </CardTitle>
+                  <p className="text-xs text-slate-500">
+                    How this loan changed over the recent year.
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-56 w-full">
+                    {selectedLoanActivityMixData.length ? (
+                      <ChartContainer
+                        config={{
+                          amount: {
+                            label: "Amount",
+                            color: "hsl(217.2 91.2% 59.8%)",
+                          },
+                        }}
+                        className="h-full w-full"
+                      >
+                        <BarChart
+                          data={selectedLoanActivityMixData}
+                          layout="vertical"
+                          margin={{ left: 10, right: 12 }}
+                        >
+                          <CartesianGrid
+                            horizontal={false}
+                            strokeDasharray="3 3"
+                          />
+                          <XAxis
+                            type="number"
+                            tickFormatter={(value) =>
+                              new Intl.NumberFormat("sv-SE", {
+                                notation: "compact",
+                                maximumFractionDigits: 1,
+                              }).format(value)
+                            }
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <YAxis
+                            dataKey="name"
+                            type="category"
+                            width={108}
+                            tickLine={false}
+                            axisLine={false}
+                            tick={{ fill: "#64748b" }}
+                          />
+                          <Tooltip
+                            content={
+                              <ChartTooltipContent
+                                formatter={(value) => {
+                                  if (typeof value !== "number") return null;
+                                  return (
+                                    <span className="font-semibold text-slate-900 tabular-nums">
+                                      {formatCurrency(value)}
+                                    </span>
+                                  );
+                                }}
+                                hideLabel
+                              />
+                            }
+                          />
+                          <Bar
+                            dataKey="amount"
+                            fill="var(--color-amount)"
+                            radius={6}
+                          />
+                        </BarChart>
+                      </ChartContainer>
+                    ) : (
+                      <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-600">
+                        Add loan-linked transactions to see composition.
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
             <Card className="border-slate-200">
               <CardHeader className="pb-2">

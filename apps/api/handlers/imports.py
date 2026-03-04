@@ -46,7 +46,6 @@ from .utils import (
     reset_engine_state,
 )
 
-
 def reset_handler_state() -> None:
     reset_engine_state()
 
@@ -298,6 +297,15 @@ def _seed_commit_batch_from_payload(
         if row.delete or row.file_id is None:
             continue
         file_rows.setdefault(row.file_id, []).append(row)
+
+    referenced_file_ids = set(file_rows.keys())
+    existing_file_ids = set(existing_files.keys())
+    if existing_file_ids:
+        unknown_file_ids = referenced_file_ids - existing_file_ids
+        if unknown_file_ids:
+            raise ValueError("Row references unknown import file")
+    elif len(file_rows) > 1:
+        raise ValueError("Rows reference multiple import files; include files payload")
 
     for file_id, rows in file_rows.items():
         if file_id in existing_files:
