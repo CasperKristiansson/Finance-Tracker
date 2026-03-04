@@ -25,6 +25,8 @@ from ...models import (
 from ...schemas import (
     ImportCommitRequest,
     ImportCommitResponse,
+    ImportPersistFilesRequest,
+    ImportPersistFilesResponse,
     ImportPreviewRequest,
     ImportPreviewResponse,
 )
@@ -406,6 +408,103 @@ class ImportService(ImportDraftMixin):
         return ImportCommitResponse(
             import_batch_id=batch.id,
             transaction_ids=created_ids,
+        ).model_dump(mode="python")
+
+    def persist_import_files(
+        self,
+        *,
+        import_batch_id: UUID,
+        payload: ImportPersistFilesRequest,
+    ) -> dict[str, Any]:
+        """Persist uploaded import files in storage and RDS before commit."""
+
+        commit_files = payload.files or []
+        if not commit_files:
+            raise ValueError("No files provided")
+
+        now = datetime.now(timezone.utc)
+        batch = self.session.get(TransactionImportBatch, import_batch_id)
+        if batch is None:
+            batch = TransactionImportBatch(
+                id=import_batch_id,
+                source_name=payload.note or "import",
+                note=payload.note,
+                created_at=now,
+                updated_at=now,
+            )
+            self.session.add(batch)
+            self.session.flush()
+        else:
+            if self._batch_has_transactions(batch.id):
+                raise ValueError("Import batch is already committed")
+            if payload.note is not None:
+                batch.note = payload.note
+            batch.source_name = payload.note or batch.source_name or "import"
+            batch.updated_at = now
+
+        existing_files_stmt = select(ImportFile).where(cast(Any, ImportFile.batch_id) == batch.id)
+        existing_files = {file.id: file for file in self.session.exec(existing_files_stmt).all()}
+
+        storage = self.storage or ImportFileStorage.from_env()
+        user_id = self.session.info.get("user_id") or ""
+        file_uploads: dict[UUID, dict[str, Any]] = {}
+
+        for commit_file in commit_files:
+            content = self._decode_base64(commit_file.content_base64)
+            file_id = commit_file.id
+            object_key = storage.build_object_key(
+                user_id=str(user_id),
+                batch_id=batch.id,
+                file_id=file_id,
+                filename=commit_file.filename,
+            )
+            file_model = existing_files.get(file_id)
+            if file_model is None:
+                file_model = ImportFile(
+                    id=file_id,
+                    batch_id=batch.id,
+                    filename=commit_file.filename,
+                    account_id=commit_file.account_id,
+                    row_count=commit_file.row_count,
+                    error_count=commit_file.error_count,
+                    status="stored",
+                    bank_type=str(commit_file.bank_import_type or ""),
+                    object_key=object_key,
+                    content_type=commit_file.content_type,
+                    size_bytes=len(content),
+                    created_at=now,
+                    updated_at=now,
+                )
+                existing_files[file_id] = file_model
+                self.session.add(file_model)
+            else:
+                file_model.filename = commit_file.filename
+                file_model.account_id = commit_file.account_id
+                file_model.row_count = commit_file.row_count
+                file_model.error_count = commit_file.error_count
+                file_model.status = "stored"
+                file_model.bank_type = str(commit_file.bank_import_type or "")
+                file_model.object_key = object_key
+                file_model.content_type = commit_file.content_type
+                file_model.size_bytes = len(content)
+                file_model.updated_at = now
+
+            file_uploads[file_id] = {
+                "key": object_key,
+                "content": content,
+                "content_type": commit_file.content_type,
+            }
+
+        for upload in file_uploads.values():
+            storage.upload_file(
+                key=upload["key"],
+                content=upload["content"],
+                content_type=upload["content_type"],
+            )
+
+        return ImportPersistFilesResponse(
+            import_batch_id=batch.id,
+            file_ids=list(file_uploads.keys()),
         ).model_dump(mode="python")
 
     def _decode_base64(self, payload: str) -> bytes:

@@ -174,6 +174,20 @@ class ImportCommitResponse(BaseModel):
     transaction_ids: List[UUID]
 
 
+class ImportPersistFilesRequest(BaseModel):
+    """Persist uploaded import files for a batch before final commit."""
+
+    note: Optional[str] = Field(default=None, max_length=255)
+    files: List[ImportCommitFile]
+
+
+class ImportPersistFilesResponse(BaseModel):
+    """Response payload for persisted import files."""
+
+    import_batch_id: UUID
+    file_ids: List[UUID]
+
+
 class ImportCategoryOption(BaseModel):
     """Category metadata provided to Bedrock suggestion endpoint."""
 
@@ -328,6 +342,8 @@ __all__ = [
     "ImportCommitFile",
     "ImportCommitRequest",
     "ImportCommitResponse",
+    "ImportPersistFilesRequest",
+    "ImportPersistFilesResponse",
     "ImportCategoryOption",
     "ImportCategoryHistoryItem",
     "ImportCategorySuggestTransaction",

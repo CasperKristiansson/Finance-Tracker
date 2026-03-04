@@ -198,6 +198,11 @@ export type NetWorthProjectionResponse = Models.NetWorthProjectionResponse;
 export type NetWorthProjectionQuery = Models.NetWorthProjectionQuery;
 export type NetWorthProjectionPath = void;
 
+export type PersistImportFilesRequest = Models.ImportPersistFilesRequest;
+export type PersistImportFilesResponse = Models.ImportPersistFilesResponse;
+export type PersistImportFilesQuery = void;
+export type PersistImportFilesPath = { importBatchId: string };
+
 export type PreviewImportsRequest = Models.ImportPreviewRequest;
 export type PreviewImportsResponse = Models.ImportPreviewResponse;
 export type PreviewImportsQuery = void;
@@ -729,6 +734,17 @@ export const endpoints = {
     path: "/reports/forecast/net-worth",
     method: "GET",
     handler: "apps/api/handlers/reporting.net_worth_projection",
+    auth: true,
+  }),
+  persistImportFiles: defineEndpoint<
+    PersistImportFilesRequest,
+    PersistImportFilesResponse,
+    PersistImportFilesQuery,
+    PersistImportFilesPath
+  >({
+    path: "/imports/{importBatchId}/files",
+    method: "POST",
+    handler: "apps/api/handlers/imports.persist_import_files",
     auth: true,
   }),
   previewImports: defineEndpoint<

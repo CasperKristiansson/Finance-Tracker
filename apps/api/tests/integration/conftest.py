@@ -183,25 +183,23 @@ def _issue_auth_token(*, username: str, password: str) -> str:
     ]
     explicit_flows: Sequence[ExplicitAuthFlow] = desc.get("ExplicitAuthFlows") or []
     flows: set[ExplicitAuthFlow] = set(explicit_flows)
-    required_flows: set[ExplicitAuthFlow] = {
-        "ALLOW_ADMIN_USER_PASSWORD_AUTH",
-        "ALLOW_REFRESH_TOKEN_AUTH",
-        "ALLOW_USER_PASSWORD_AUTH",
-    }
-    if not required_flows.issubset(flows):
-        updated_flows: list[ExplicitAuthFlow] = list(flows)
-        updated_flows.extend(flow for flow in required_flows if flow not in flows)
-        idp.update_user_pool_client(
+    if "ALLOW_ADMIN_USER_PASSWORD_AUTH" in flows:
+        resp = idp.admin_initiate_auth(
             UserPoolId=user_pool_id,
             ClientId=client_id,
-            ExplicitAuthFlows=updated_flows,
+            AuthFlow="ADMIN_USER_PASSWORD_AUTH",
+            AuthParameters={"USERNAME": username, "PASSWORD": password},
         )
-    resp = idp.admin_initiate_auth(
-        UserPoolId=user_pool_id,
-        ClientId=client_id,
-        AuthFlow="ADMIN_USER_PASSWORD_AUTH",
-        AuthParameters={"USERNAME": username, "PASSWORD": password},
-    )
+    elif "ALLOW_USER_PASSWORD_AUTH" in flows:
+        resp = idp.initiate_auth(
+            ClientId=client_id,
+            AuthFlow="USER_PASSWORD_AUTH",
+            AuthParameters={"USERNAME": username, "PASSWORD": password},
+        )
+    else:
+        raise RuntimeError(
+            "Cognito app client must allow ALLOW_ADMIN_USER_PASSWORD_AUTH or ALLOW_USER_PASSWORD_AUTH"
+        )
     return resp["AuthenticationResult"]["IdToken"]
 
 

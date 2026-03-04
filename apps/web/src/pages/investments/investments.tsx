@@ -41,7 +41,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageRoutes } from "@/data/routes";
 import { useInvestmentsApi } from "@/hooks/use-api";
 import { compactCurrency, currency } from "@/lib/format";
@@ -53,6 +53,16 @@ const formatCompact = (value: number) => compactCurrency(value);
 
 const formatSignedSek = (value: number) =>
   `${value >= 0 ? "+" : "-"}${formatSek(Math.abs(value))}`;
+
+type OverviewRange = "ytd" | "12m" | "3y" | "5y" | "all";
+
+const OVERVIEW_RANGE_LABEL: Record<OverviewRange, string> = {
+  ytd: "YTD",
+  "12m": "12M",
+  "3y": "3Y",
+  "5y": "5Y",
+  all: "Total",
+};
 
 const coerceMoney = (value: unknown): number => {
   const num = Number(value);
@@ -143,6 +153,13 @@ const endOfMonthIso = (monthIso: string) => {
   return end.toISOString().slice(0, 10);
 };
 
+const subtractYearsInclusiveIso = (date: Date, years: number) => {
+  const result = new Date(date);
+  result.setFullYear(result.getFullYear() - years);
+  result.setDate(result.getDate() + 1);
+  return result.toISOString().slice(0, 10);
+};
+
 const groupContributionPoints = (
   points: ContributionPoint[],
   grouping: "month" | "quarter" | "year",
@@ -194,6 +211,8 @@ const groupContributionPoints = (
 };
 
 export const Investments: React.FC = () => {
+  const today = useMemo(() => new Date(), []);
+  const todayIso = useMemo(() => today.toISOString().slice(0, 10), [today]);
   const {
     overview,
     loading,
@@ -205,13 +224,10 @@ export const Investments: React.FC = () => {
   } = useInvestmentsApi();
   const navigate = useNavigate();
 
-  const [portfolioWindow, setPortfolioWindow] = useState<"since" | "12m">(
-    "since",
-  );
+  const [overviewRange, setOverviewRange] = useState<OverviewRange>("all");
   const [contributionsGrouping, setContributionsGrouping] = useState<
     "month" | "quarter" | "year"
   >("month");
-  const [accountWindow, setAccountWindow] = useState<"since" | "12m">("since");
   const [cashflowDetailsMonth, setCashflowDetailsMonth] = useState<
     string | null
   >(null);
@@ -255,47 +271,60 @@ export const Investments: React.FC = () => {
   const portfolioAsOf = toIsoDate(overview?.portfolio.as_of);
   const portfolioFreshness = freshnessBadge(portfolioAsOf);
 
+  const rangeStartIso = useMemo(() => {
+    const currentYear = today.getFullYear();
+    if (overviewRange === "ytd") return `${currentYear}-01-01`;
+    if (overviewRange === "12m") return subtractYearsInclusiveIso(today, 1);
+    if (overviewRange === "3y") return subtractYearsInclusiveIso(today, 3);
+    if (overviewRange === "5y") return subtractYearsInclusiveIso(today, 5);
+    return null;
+  }, [overviewRange, today]);
+
+  const rangeLabel = OVERVIEW_RANGE_LABEL[overviewRange];
+  const rangeWindowLabel =
+    rangeStartIso === null
+      ? "All available history"
+      : `${rangeStartIso} → ${todayIso}`;
+
+  const visiblePortfolioSeries = useMemo(
+    () =>
+      portfolioSeries.filter((point) => {
+        if (rangeStartIso && point.date < rangeStartIso) return false;
+        return point.date <= todayIso;
+      }),
+    [portfolioSeries, rangeStartIso, todayIso],
+  );
+
   const portfolioDomain = useMemo<[number, number]>(() => {
-    if (!portfolioSeries.length) return [0, 0];
-    const values = portfolioSeries.map((d) => d.value);
+    if (!visiblePortfolioSeries.length) return [0, 0];
+    const values = visiblePortfolioSeries.map((d) => d.value);
     const max = Math.max(...values);
     const upperPad = Math.abs(max) * 0.05 || 1;
     return [0, max + upperPad];
-  }, [portfolioSeries]);
+  }, [visiblePortfolioSeries]);
 
-  const portfolioCashflow = overview?.portfolio.cashflow;
-  const portfolioGrowth12m = overview?.portfolio.growth_12m_ex_transfers;
-  const portfolioGrowthSince =
-    overview?.portfolio.growth_since_start_ex_transfers;
-
-  const portfolioKpis = useMemo(() => {
-    return {
-      since: {
-        added: coerceMoney(portfolioCashflow?.added_since_start),
-        withdrawn: coerceMoney(portfolioCashflow?.withdrawn_since_start),
-        net: coerceMoney(portfolioCashflow?.net_since_start),
-        marketGrowth: coerceMoney(portfolioGrowthSince?.amount),
-        marketGrowthPct: portfolioGrowthSince?.pct ?? null,
-      },
-      twelve: {
-        added: coerceMoney(portfolioCashflow?.added_12m),
-        withdrawn: coerceMoney(portfolioCashflow?.withdrawn_12m),
-        net: coerceMoney(portfolioCashflow?.net_12m),
-        marketGrowth: coerceMoney(portfolioGrowth12m?.amount),
-        marketGrowthPct: portfolioGrowth12m?.pct ?? null,
-      },
-    };
-  }, [portfolioCashflow, portfolioGrowth12m, portfolioGrowthSince]);
+  const portfolioCashflowSeries = useMemo(
+    () =>
+      (overview?.portfolio.cashflow_series ?? [])
+        .map((point) => ({
+          period: String(point.period).slice(0, 10),
+          added: coerceMoney(point.added),
+          withdrawn: coerceMoney(point.withdrawn),
+          net: coerceMoney(point.net),
+        }))
+        .filter((row) => Boolean(row.period))
+        .sort((a, b) => a.period.localeCompare(b.period)),
+    [overview?.portfolio.cashflow_series],
+  );
 
   const contributionsVsGrowth = useMemo<ContributionPoint[]>(() => {
-    const cashflowSeries = overview?.portfolio.cashflow_series ?? [];
-    if (!cashflowSeries.length) return [];
-    return cashflowSeries
+    if (!portfolioCashflowSeries.length) return [];
+    return portfolioCashflowSeries
       .map((point) => {
-        const period = String(point.period).slice(0, 10);
+        const period = point.period;
         const startValue = valueAtIsoDate(portfolioSeries, period);
         const endValue = valueAtIsoDate(portfolioSeries, endOfMonthIso(period));
-        const netContrib = coerceMoney(point.net);
+        const netContrib = point.net;
         if (startValue === null || endValue === null) {
           return {
             period,
@@ -312,12 +341,75 @@ export const Investments: React.FC = () => {
       })
       .filter((row) => Boolean(row.period))
       .sort((a, b) => a.period.localeCompare(b.period));
-  }, [overview?.portfolio.cashflow_series, portfolioSeries]);
+  }, [portfolioCashflowSeries, portfolioSeries]);
+
+  const filteredCashflowSeries = useMemo(
+    () =>
+      portfolioCashflowSeries.filter((point) => {
+        if (rangeStartIso && point.period < rangeStartIso) return false;
+        return point.period <= todayIso;
+      }),
+    [portfolioCashflowSeries, rangeStartIso, todayIso],
+  );
+
+  const filteredContributionsVsGrowth = useMemo(
+    () =>
+      contributionsVsGrowth.filter((row) => {
+        if (rangeStartIso && row.period < rangeStartIso) return false;
+        return row.period <= todayIso;
+      }),
+    [contributionsVsGrowth, rangeStartIso, todayIso],
+  );
 
   const contributionsVsGrowthGrouped = useMemo(
-    () => groupContributionPoints(contributionsVsGrowth, contributionsGrouping),
-    [contributionsGrouping, contributionsVsGrowth],
+    () =>
+      groupContributionPoints(
+        filteredContributionsVsGrowth,
+        contributionsGrouping,
+      ),
+    [contributionsGrouping, filteredContributionsVsGrowth],
   );
+
+  const portfolioRangeKpis = useMemo(() => {
+    const added = filteredCashflowSeries.reduce(
+      (sum, point) => sum + point.added,
+      0,
+    );
+    const withdrawn = filteredCashflowSeries.reduce(
+      (sum, point) => sum + point.withdrawn,
+      0,
+    );
+    const net = added - withdrawn;
+
+    const marketGrowthByBuckets = filteredContributionsVsGrowth.reduce(
+      (sum, row) =>
+        sum + (typeof row.marketGrowth === "number" ? row.marketGrowth : 0),
+      0,
+    );
+
+    const fallbackMarketGrowth =
+      visiblePortfolioSeries.length >= 2
+        ? visiblePortfolioSeries[visiblePortfolioSeries.length - 1].value -
+          visiblePortfolioSeries[0].value -
+          net
+        : 0;
+
+    const marketGrowth =
+      Number.isFinite(marketGrowthByBuckets) &&
+      filteredContributionsVsGrowth.length
+        ? marketGrowthByBuckets
+        : fallbackMarketGrowth;
+
+    const baseValue = visiblePortfolioSeries[0]?.value ?? null;
+    const marketGrowthPct =
+      baseValue && baseValue > 0 ? (marketGrowth / baseValue) * 100 : null;
+
+    return { added, withdrawn, net, marketGrowth, marketGrowthPct };
+  }, [
+    filteredCashflowSeries,
+    filteredContributionsVsGrowth,
+    visiblePortfolioSeries,
+  ]);
 
   const contributionsGroupingLabel = useMemo(() => {
     switch (contributionsGrouping) {
@@ -396,6 +488,57 @@ export const Investments: React.FC = () => {
       .sort((a, b) => b.currentValue - a.currentValue);
   }, [overview?.accounts]);
 
+  const accountRangeRows = useMemo(
+    () =>
+      accountSummaries
+        .map((account) => {
+          const rangeSeries = account.series.filter((point) => {
+            if (rangeStartIso && point.date < rangeStartIso) return false;
+            return point.date <= todayIso;
+          });
+          const rangeStartValue = rangeSeries[0]?.value ?? null;
+          const rangeEndValue =
+            rangeSeries[rangeSeries.length - 1]?.value ?? null;
+          const valueChange =
+            rangeStartValue !== null && rangeEndValue !== null
+              ? rangeEndValue - rangeStartValue
+              : 0;
+          const valueChangePct =
+            rangeStartValue && rangeStartValue > 0
+              ? (valueChange / rangeStartValue) * 100
+              : null;
+
+          if (overviewRange === "all") {
+            return {
+              ...account,
+              added: account.cashflowSince.added,
+              withdrawn: account.cashflowSince.withdrawn,
+              growthAmount: account.growthSince.amount,
+              growthPct: account.growthSince.pct,
+            };
+          }
+          if (overviewRange === "12m") {
+            return {
+              ...account,
+              added: account.cashflow12m.added,
+              withdrawn: account.cashflow12m.withdrawn,
+              growthAmount: account.growth12m.amount,
+              growthPct: account.growth12m.pct,
+            };
+          }
+
+          return {
+            ...account,
+            added: null,
+            withdrawn: null,
+            growthAmount: valueChange,
+            growthPct: valueChangePct,
+          };
+        })
+        .sort((a, b) => b.currentValue - a.currentValue),
+    [accountSummaries, overviewRange, rangeStartIso, todayIso],
+  );
+
   const snapshotAccount = useMemo(() => {
     if (!snapshotAccountId) return null;
     return (
@@ -404,13 +547,18 @@ export const Investments: React.FC = () => {
   }, [accountSummaries, snapshotAccountId]);
 
   const recentCashflows = useMemo(
-    () => overview?.recent_cashflows ?? [],
-    [overview?.recent_cashflows],
+    () =>
+      (overview?.recent_cashflows ?? []).filter((row) => {
+        const occurredAt = String(row.occurred_at).slice(0, 10);
+        if (rangeStartIso && occurredAt < rangeStartIso) return false;
+        return occurredAt <= todayIso;
+      }),
+    [overview?.recent_cashflows, rangeStartIso, todayIso],
   );
   const cashflowDetailsMonthKey = cashflowDetailsMonth?.slice(0, 7) ?? null;
   const cashflowDetailsItems = useMemo(() => {
     if (!cashflowDetailsMonthKey) return [];
-    return (overview?.recent_cashflows ?? [])
+    return recentCashflows
       .filter(
         (row) =>
           String(row.occurred_at).slice(0, 7) === cashflowDetailsMonthKey,
@@ -418,7 +566,7 @@ export const Investments: React.FC = () => {
       .sort((a, b) =>
         String(b.occurred_at).localeCompare(String(a.occurred_at)),
       );
-  }, [cashflowDetailsMonthKey, overview?.recent_cashflows]);
+  }, [cashflowDetailsMonthKey, recentCashflows]);
   const cashflowDetailsLabel = useMemo(() => {
     if (!cashflowDetailsMonth) return null;
     const dt = new Date(`${cashflowDetailsMonth}T00:00:00Z`);
@@ -499,35 +647,65 @@ export const Investments: React.FC = () => {
         </motion.div>
         <motion.div
           variants={fadeInUp}
-          className="flex flex-wrap items-center justify-end gap-2"
+          className="flex flex-col items-end gap-2"
         >
-          <Button
-            size="sm"
-            onClick={() => openSnapshotDialog()}
-            disabled={!accountSummaries.length}
-          >
-            Update balances
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fetchOverview()}
-            disabled={loading}
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
-          {loading ? (
-            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600">
-              <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-              Loading
-            </span>
-          ) : null}
-          {error ? (
-            <span className="rounded-full bg-rose-50 px-3 py-1 text-sm text-rose-700">
-              Failed to load investments
-            </span>
-          ) : null}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className="text-xs text-slate-500">{rangeWindowLabel}</span>
+            <Tabs
+              value={overviewRange}
+              onValueChange={(value) =>
+                setOverviewRange(value as OverviewRange)
+              }
+              className="w-auto"
+            >
+              <TabsList className="h-9 bg-slate-100">
+                <TabsTrigger value="ytd" className="cursor-pointer text-xs">
+                  YTD
+                </TabsTrigger>
+                <TabsTrigger value="12m" className="cursor-pointer text-xs">
+                  12M
+                </TabsTrigger>
+                <TabsTrigger value="3y" className="cursor-pointer text-xs">
+                  3Y
+                </TabsTrigger>
+                <TabsTrigger value="5y" className="cursor-pointer text-xs">
+                  5Y
+                </TabsTrigger>
+                <TabsTrigger value="all" className="cursor-pointer text-xs">
+                  Total
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              size="sm"
+              onClick={() => openSnapshotDialog()}
+              disabled={!accountSummaries.length}
+            >
+              Update balances
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchOverview()}
+              disabled={loading}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
+            {loading ? (
+              <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600">
+                <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+                Loading
+              </span>
+            ) : null}
+            {error ? (
+              <span className="rounded-full bg-rose-50 px-3 py-1 text-sm text-rose-700">
+                Failed to load investments
+              </span>
+            ) : null}
+          </div>
         </motion.div>
       </StaggerWrap>
 
@@ -541,7 +719,7 @@ export const Investments: React.FC = () => {
             <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
               <div>
                 <CardTitle className="text-base font-semibold text-slate-900">
-                  Portfolio value
+                  Portfolio value ({rangeLabel})
                 </CardTitle>
                 <p className="text-xs text-slate-500">
                   Snapshot-based valuation over time.
@@ -572,7 +750,7 @@ export const Investments: React.FC = () => {
             <CardContent className="h-80 md:h-96">
               {isLoading ? (
                 <Skeleton className="h-full w-full" />
-              ) : portfolioSeries.length ? (
+              ) : visiblePortfolioSeries.length ? (
                 <ChartContainer
                   className="h-full w-full"
                   config={{
@@ -580,7 +758,7 @@ export const Investments: React.FC = () => {
                   }}
                 >
                   <AreaChart
-                    data={portfolioSeries}
+                    data={visiblePortfolioSeries}
                     margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
                   >
                     <defs>
@@ -635,9 +813,9 @@ export const Investments: React.FC = () => {
                       }
                     />
                     {Array.from(
-                      new Set(portfolioSeries.map((d) => d.year)),
+                      new Set(visiblePortfolioSeries.map((d) => d.year)),
                     ).map((year) => {
-                      const firstPoint = portfolioSeries.find(
+                      const firstPoint = visiblePortfolioSeries.find(
                         (d) => d.year === year,
                       );
                       return firstPoint ? (
@@ -669,7 +847,7 @@ export const Investments: React.FC = () => {
                 </ChartContainer>
               ) : (
                 <div className="flex h-full items-center justify-center rounded-lg border border-slate-100 bg-slate-50 text-sm text-slate-600">
-                  No investment snapshots yet.
+                  No investment snapshots in this range.
                 </div>
               )}
             </CardContent>
@@ -680,105 +858,55 @@ export const Investments: React.FC = () => {
           <Card className="h-full border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
             <CardHeader className="pb-2">
               <CardTitle className="text-base font-semibold text-slate-900">
-                Contributions & growth
+                Contributions & growth ({rangeLabel})
               </CardTitle>
               <p className="text-xs text-slate-500">
                 End value = start value + contributions + market growth.
               </p>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <Tabs
-                value={portfolioWindow}
-                onValueChange={(v) => setPortfolioWindow(v as "since" | "12m")}
-              >
-                <TabsList className="w-full">
-                  <TabsTrigger value="since">Since start</TabsTrigger>
-                  <TabsTrigger value="12m">12m</TabsTrigger>
-                </TabsList>
-                <TabsContent value="since" className="space-y-3">
-                  <div className="rounded-lg border border-slate-100 bg-white p-3">
-                    <MetricRow
-                      label="Deposited"
-                      value={formatSek(portfolioKpis.since.added)}
-                    />
-                    <MetricRow
-                      label="Withdrawn"
-                      value={formatSek(portfolioKpis.since.withdrawn)}
-                    />
-                    <MetricRow
-                      label="Net contributions"
-                      value={formatSignedSek(portfolioKpis.since.net)}
-                      valueClassName={
-                        portfolioKpis.since.net >= 0
-                          ? "text-emerald-700"
-                          : "text-rose-700"
-                      }
-                    />
-                  </div>
-                  <div className="rounded-lg border border-slate-100 bg-white p-3">
-                    <MetricRow
-                      label="Market growth"
-                      value={
-                        <>
-                          {formatSignedSek(portfolioKpis.since.marketGrowth)}{" "}
-                          {portfolioKpis.since.marketGrowthPct !== null
-                            ? `(${portfolioKpis.since.marketGrowthPct >= 0 ? "+" : ""}${portfolioKpis.since.marketGrowthPct.toFixed(1)}%)`
-                            : ""}
-                        </>
-                      }
-                      valueClassName={
-                        portfolioKpis.since.marketGrowth >= 0
-                          ? "text-emerald-700"
-                          : "text-rose-700"
-                      }
-                    />
-                  </div>
-                </TabsContent>
-                <TabsContent value="12m" className="space-y-3">
-                  <div className="rounded-lg border border-slate-100 bg-white p-3">
-                    <MetricRow
-                      label="Deposited"
-                      value={formatSek(portfolioKpis.twelve.added)}
-                    />
-                    <MetricRow
-                      label="Withdrawn"
-                      value={formatSek(portfolioKpis.twelve.withdrawn)}
-                    />
-                    <MetricRow
-                      label="Net contributions"
-                      value={formatSignedSek(portfolioKpis.twelve.net)}
-                      valueClassName={
-                        portfolioKpis.twelve.net >= 0
-                          ? "text-emerald-700"
-                          : "text-rose-700"
-                      }
-                    />
-                  </div>
-                  <div className="rounded-lg border border-slate-100 bg-white p-3">
-                    <MetricRow
-                      label="Market growth"
-                      value={
-                        <>
-                          {formatSignedSek(portfolioKpis.twelve.marketGrowth)}{" "}
-                          {portfolioKpis.twelve.marketGrowthPct !== null
-                            ? `(${portfolioKpis.twelve.marketGrowthPct >= 0 ? "+" : ""}${portfolioKpis.twelve.marketGrowthPct.toFixed(1)}%)`
-                            : ""}
-                        </>
-                      }
-                      valueClassName={
-                        portfolioKpis.twelve.marketGrowth >= 0
-                          ? "text-emerald-700"
-                          : "text-rose-700"
-                      }
-                    />
-                  </div>
-                </TabsContent>
-              </Tabs>
+              <div className="rounded-lg border border-slate-100 bg-white p-3">
+                <MetricRow
+                  label="Deposited"
+                  value={formatSek(portfolioRangeKpis.added)}
+                />
+                <MetricRow
+                  label="Withdrawn"
+                  value={formatSek(portfolioRangeKpis.withdrawn)}
+                />
+                <MetricRow
+                  label="Net contributions"
+                  value={formatSignedSek(portfolioRangeKpis.net)}
+                  valueClassName={
+                    portfolioRangeKpis.net >= 0
+                      ? "text-emerald-700"
+                      : "text-rose-700"
+                  }
+                />
+              </div>
+              <div className="rounded-lg border border-slate-100 bg-white p-3">
+                <MetricRow
+                  label="Market growth"
+                  value={
+                    <>
+                      {formatSignedSek(portfolioRangeKpis.marketGrowth)}{" "}
+                      {portfolioRangeKpis.marketGrowthPct !== null
+                        ? `(${portfolioRangeKpis.marketGrowthPct >= 0 ? "+" : ""}${portfolioRangeKpis.marketGrowthPct.toFixed(1)}%)`
+                        : ""}
+                    </>
+                  }
+                  valueClassName={
+                    portfolioRangeKpis.marketGrowth >= 0
+                      ? "text-emerald-700"
+                      : "text-rose-700"
+                  }
+                />
+              </div>
 
               <div className="rounded-lg border border-slate-100 bg-white p-3">
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-xs font-medium text-slate-500 uppercase">
-                    Recent deposits & withdrawals
+                    Recent deposits & withdrawals ({rangeLabel})
                   </div>
                   <button
                     type="button"
@@ -839,10 +967,11 @@ export const Investments: React.FC = () => {
             <CardHeader className="flex flex-col gap-2 pb-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle className="text-base font-semibold text-slate-900">
-                  Contributions vs market growth
+                  Contributions vs market growth ({rangeLabel})
                 </CardTitle>
                 <p className="text-xs text-slate-500">
-                  {contributionsGroupingLabel} decomposition of value change.
+                  {contributionsGroupingLabel} decomposition of value change in{" "}
+                  {rangeLabel}.
                 </p>
               </div>
               <Tabs
@@ -870,7 +999,7 @@ export const Investments: React.FC = () => {
             <CardContent className="h-80">
               {isLoading ? (
                 <Skeleton className="h-full w-full" />
-              ) : portfolioSeries.length &&
+              ) : visiblePortfolioSeries.length &&
                 contributionsVsGrowthGrouped.length ? (
                 <ChartContainer
                   className="h-full w-full"
@@ -945,9 +1074,9 @@ export const Investments: React.FC = () => {
                 </ChartContainer>
               ) : (
                 <div className="flex h-full items-center justify-center rounded-lg border border-slate-100 bg-slate-50 text-sm text-slate-600">
-                  {portfolioSeries.length
+                  {visiblePortfolioSeries.length
                     ? "No contributions detected yet."
-                    : "Add snapshots to see contributions vs growth."}
+                    : "Add snapshots to see contributions vs growth in this range."}
                 </div>
               )}
             </CardContent>
@@ -958,23 +1087,21 @@ export const Investments: React.FC = () => {
           <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
             <CardHeader className="pb-2">
               <CardTitle className="text-base font-semibold text-slate-900">
-                Investment accounts
+                Investment accounts ({rangeLabel})
               </CardTitle>
               <p className="text-xs text-slate-500">
                 Account-level contributions and growth. Click a row for details.
               </p>
             </CardHeader>
             <CardContent className="flex h-80 flex-col gap-3">
-              <Tabs
-                value={accountWindow}
-                onValueChange={(v) => setAccountWindow(v as "since" | "12m")}
-              >
-                <TabsList className="w-full">
-                  <TabsTrigger value="since">Since start</TabsTrigger>
-                  <TabsTrigger value="12m">12m</TabsTrigger>
-                </TabsList>
-              </Tabs>
-              {accountSummaries.length ? (
+              {overviewRange !== "12m" && overviewRange !== "all" ? (
+                <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  Deposited/withdrawn breakdown is available for 12M and Total.
+                  For {rangeLabel}, growth shows value change based on
+                  snapshots.
+                </div>
+              ) : null}
+              {accountRangeRows.length ? (
                 <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-slate-100">
                   <Table>
                     <TableHeader>
@@ -984,22 +1111,14 @@ export const Investments: React.FC = () => {
                         <TableHead className="text-right">Deposited</TableHead>
                         <TableHead className="text-right">Withdrawn</TableHead>
                         <TableHead className="text-right">
-                          Market growth
+                          {overviewRange === "12m" || overviewRange === "all"
+                            ? "Market growth"
+                            : "Value change"}
                         </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {accountSummaries.map((acct) => {
-                        const windowed =
-                          accountWindow === "since"
-                            ? {
-                                cashflow: acct.cashflowSince,
-                                growth: acct.growthSince,
-                              }
-                            : {
-                                cashflow: acct.cashflow12m,
-                                growth: acct.growth12m,
-                              };
+                      {accountRangeRows.map((acct) => {
                         const asOfBadge = freshnessBadge(acct.asOf);
                         return (
                           <TableRow
@@ -1045,22 +1164,26 @@ export const Investments: React.FC = () => {
                               {formatSek(acct.currentValue)}
                             </TableCell>
                             <TableCell className="text-right text-slate-700">
-                              {formatSek(windowed.cashflow.added)}
+                              {typeof acct.added === "number"
+                                ? formatSek(acct.added)
+                                : "—"}
                             </TableCell>
                             <TableCell className="text-right text-slate-700">
-                              {formatSek(windowed.cashflow.withdrawn)}
+                              {typeof acct.withdrawn === "number"
+                                ? formatSek(acct.withdrawn)
+                                : "—"}
                             </TableCell>
                             <TableCell
                               className={cn(
                                 "text-right font-medium",
-                                windowed.growth.amount >= 0
+                                acct.growthAmount >= 0
                                   ? "text-emerald-700"
                                   : "text-rose-700",
                               )}
                             >
-                              {formatSignedSek(windowed.growth.amount)}
-                              {windowed.growth.pct !== null
-                                ? ` (${windowed.growth.pct >= 0 ? "+" : ""}${windowed.growth.pct.toFixed(1)}%)`
+                              {formatSignedSek(acct.growthAmount)}
+                              {acct.growthPct !== null
+                                ? ` (${acct.growthPct >= 0 ? "+" : ""}${acct.growthPct.toFixed(1)}%)`
                                 : ""}
                             </TableCell>
                           </TableRow>
@@ -1197,7 +1320,7 @@ export const Investments: React.FC = () => {
           <DialogHeader>
             <DialogTitle>{cashflowsDialogTitle}</DialogTitle>
             <DialogDescription className="text-slate-600">
-              Showing all recent deposits and withdrawals in this view.
+              Showing deposits and withdrawals for {rangeLabel.toUpperCase()}.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

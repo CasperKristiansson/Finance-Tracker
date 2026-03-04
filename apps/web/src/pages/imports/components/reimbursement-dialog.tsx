@@ -60,6 +60,11 @@ const toNumeric = (value: string | number | null | undefined) => {
   return Number.isFinite(numeric) ? numeric : 0;
 };
 
+const hasOppositeSign = (left: number, right: number) => {
+  if (left === 0 || right === 0) return false;
+  return Math.sign(left) !== Math.sign(right);
+};
+
 export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
   open,
   onOpenChange,
@@ -147,7 +152,7 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
       });
     });
 
-    const updatedAmount = toNumeric(originalAmount) - reimbursementTotal;
+    const updatedAmount = toNumeric(originalAmount) + reimbursementTotal;
     const formattedAmount = updatedAmount.toFixed(2);
 
     commitForm.setValue(`rows.${commitIndex}.amount`, formattedAmount, {
@@ -203,6 +208,7 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
       baseRow.amount;
     const baseOriginalAmount =
       reimbursementsByRow[baseRow.id]?.originalAmount ?? baseAmountValue;
+    const baseOriginalAmountNumeric = toNumeric(baseOriginalAmount);
     const baseOccurredAt =
       commitForm.watch(`rows.${dialogState.commitIndex}.occurred_at`) ??
       baseRow.occurred_at;
@@ -235,7 +241,12 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
       const bDate = new Date(b.occurredAt ?? "").getTime();
       return bDate - aDate;
     });
-    const filteredCandidates = sortedCandidates.filter((row) =>
+    const reimbursableCandidates = sortedCandidates.filter((row) => {
+      const selected = selections.includes(row.id);
+      if (selected) return true;
+      return hasOppositeSign(baseOriginalAmountNumeric, row.amountNumber);
+    });
+    const filteredCandidates = reimbursableCandidates.filter((row) =>
       accountTypeFilter === "all"
         ? true
         : row.accountType === accountTypeFilter,
@@ -245,7 +256,13 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
       const candidate = candidateRows.find((row) => row.id === id);
       return sum + (candidate?.amountNumber ?? 0);
     }, 0);
-    const remainingAmount = toNumeric(baseOriginalAmount) - selectedTotal;
+    const remainingAmount = baseOriginalAmountNumeric + selectedTotal;
+    const remainingAbs = Math.abs(remainingAmount);
+    const originalAbs = Math.abs(baseOriginalAmountNumeric);
+    const overReimbursed =
+      baseOriginalAmountNumeric !== 0 &&
+      remainingAmount !== 0 &&
+      Math.sign(baseOriginalAmountNumeric) !== Math.sign(remainingAmount);
 
     return (
       <>
@@ -270,7 +287,7 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
               variant="secondary"
               className={cn(
                 "text-xs",
-                remainingAmount <= toNumeric(baseOriginalAmount)
+                !overReimbursed && remainingAbs <= originalAbs
                   ? "bg-emerald-100 text-emerald-800"
                   : "bg-amber-100 text-amber-800",
               )}
@@ -403,7 +420,7 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
               <div className="p-3 text-sm text-slate-500">
                 {sortedCandidates.length
                   ? "No transactions match the selected account type."
-                  : "No transactions available yet. Upload files or return after parsing completes to link reimbursements."}
+                  : "No eligible opposite-sign transactions available yet. Upload files or return after parsing completes to link reimbursements."}
               </div>
             )}
           </div>

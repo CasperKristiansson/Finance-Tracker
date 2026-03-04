@@ -38,6 +38,8 @@ import type {
   ImportDraftListResponse,
   ImportDraftSaveRequest,
   ImportDraftSaveResponse,
+  ImportPersistFilesRequest,
+  ImportPersistFilesResponse,
   ImportCategorySuggestJobRequest,
   ImportCategorySuggestJobResponse,
   ImportCategorySuggestRequest,
@@ -73,6 +75,7 @@ export const SaveImportDraft = createAction<{
   rows: NonNullable<ImportDraftSaveRequest["rows"]>;
   snapshot?: ImportDraftSaveRequest["snapshot"];
   note?: string;
+  showToast?: boolean;
 }>("imports/saveDraft");
 export const DeleteImportDraft = createAction<{ importBatchId: string }>(
   "imports/deleteDraft",
@@ -338,6 +341,46 @@ const buildDraftRowsFromPreview = (
     delete: false,
   }));
 
+const buildPersistFilesPayload = (
+  preview: ImportPreviewResponse,
+  request: ImportPreviewRequest,
+): EndpointRequest<"persistImportFiles"> => {
+  const remaining = [...request.files];
+  const files: ImportPersistFilesRequest["files"] = preview.files.map(
+    (previewFile, index) => {
+      let sourceIndex = remaining.findIndex(
+        (source) =>
+          source.filename === previewFile.filename &&
+          source.account_id === previewFile.account_id,
+      );
+      if (sourceIndex < 0) {
+        sourceIndex = index < remaining.length ? index : 0;
+      }
+      const source = remaining[sourceIndex];
+      if (!source) {
+        throw new Error(
+          "Unable to persist import files: missing source payload.",
+        );
+      }
+      remaining.splice(sourceIndex, 1);
+      return {
+        id: previewFile.id,
+        filename: previewFile.filename,
+        account_id: previewFile.account_id,
+        row_count: previewFile.row_count,
+        error_count: previewFile.error_count,
+        bank_import_type: previewFile.bank_import_type ?? null,
+        content_base64: source.content_base64,
+      };
+    },
+  );
+
+  return {
+    note: request.note,
+    files,
+  };
+};
+
 function* handlePreview(action: ReturnType<typeof PreviewImports>) {
   yield put(setImportsLoading(true));
   yield put(clearImportsError());
@@ -358,6 +401,17 @@ function* handlePreview(action: ReturnType<typeof PreviewImports>) {
         }),
         { loadingKey: "imports" },
       );
+      const persistFilesBody = buildPersistFilesPayload(response, body);
+      const persistFilesResponse: ImportPersistFilesResponse = yield call(
+        callApiWithAuth,
+        buildEndpointRequest("persistImportFiles", {
+          pathParams: { importBatchId: response.import_batch_id },
+          body: persistFilesBody,
+        }),
+        { loadingKey: `import-files-persist-${response.import_batch_id}` },
+      );
+      void persistFilesResponse;
+
       const draftRows = buildDraftRowsFromPreview(response);
       const bootstrapDraft: EndpointRequest<"saveImportDraft"> = {
         rows: draftRows,
@@ -619,10 +673,16 @@ function* handleSaveDraft(action: ReturnType<typeof SaveImportDraft>) {
       { loadingKey: `import-draft-save-${action.payload.importBatchId}` },
     );
     void response;
+    if (action.payload.showToast) {
+      toast.success("Draft saved");
+    }
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to save import draft.";
     yield put(setImportDraftsError(message));
+    if (action.payload.showToast) {
+      toast.error("Draft save failed", { description: message });
+    }
   } finally {
     yield put(setImportDraftSaving(false));
   }

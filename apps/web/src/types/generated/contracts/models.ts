@@ -473,6 +473,16 @@ export interface ImportFileRead {
   status: string;
 }
 
+export interface ImportPersistFilesRequest {
+  note?: string | null;
+  files: ImportCommitFile[];
+}
+
+export interface ImportPersistFilesResponse {
+  import_batch_id: string;
+  file_ids: string[];
+}
+
 export interface ImportPreviewAccountContextRead {
   account_id: string;
   recent_transactions?: ImportRelatedTransactionRead[];

@@ -19,11 +19,19 @@ from apps.api.handlers.imports import (
     delete_import_draft,
     get_import_draft,
     list_import_drafts,
+    persist_import_files,
     preview_imports,
     reset_handler_state,
     save_import_draft,
 )
-from apps.api.models import Account, Category, Transaction, TransactionLeg
+from apps.api.models import (
+    Account,
+    Category,
+    ImportFile,
+    Transaction,
+    TransactionImportBatch,
+    TransactionLeg,
+)
 from apps.api.schemas import ImportCategorySuggestionRead
 from apps.api.shared import (
     AccountType,
@@ -748,6 +756,108 @@ def test_commit_creates_batch_and_transactions():
     body = _json_body(response)
     assert body["import_batch_id"]
     assert body["transaction_ids"] and len(body["transaction_ids"]) == 1
+
+
+def test_commit_accepts_multi_file_rows_without_files_payload():
+    account_id = _create_account(bank_import_type="swedbank")
+    import_batch_id = UUID(int=987)
+    file_id_a = UUID(int=111)
+    file_id_b = UUID(int=222)
+
+    response = commit_imports(
+        {
+            "body": json.dumps(
+                {
+                    "import_batch_id": str(import_batch_id),
+                    "note": "commit multi file rows",
+                    "rows": [
+                        {
+                            "id": str(UUID(int=1)),
+                            "file_id": str(file_id_a),
+                            "account_id": str(account_id),
+                            "occurred_at": "2024-01-01",
+                            "amount": "-10.00",
+                            "description": "Row A",
+                        },
+                        {
+                            "id": str(UUID(int=2)),
+                            "file_id": str(file_id_b),
+                            "account_id": str(account_id),
+                            "occurred_at": "2024-01-02",
+                            "amount": "-20.00",
+                            "description": "Row B",
+                        },
+                    ],
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+
+    assert response["statusCode"] == 200
+    body = _json_body(response)
+    assert body["import_batch_id"] == str(import_batch_id)
+    assert len(body["transaction_ids"]) == 2
+
+    engine = get_engine()
+    with Session(engine) as session:
+        scope_session_to_user(session, get_default_user_id())
+        batch = session.get(TransactionImportBatch, import_batch_id)
+        assert batch is not None
+
+        files = session.exec(select(ImportFile).where(ImportFile.batch_id == import_batch_id)).all()
+        assert {f.id for f in files} == {file_id_a, file_id_b}
+
+
+def test_persist_import_files_stores_uploaded_file_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    class _Storage:
+        def build_object_key(self, **kwargs):
+            return f"imports/{kwargs['batch_id']}/{kwargs['file_id']}/{kwargs['filename']}"
+
+        def upload_file(self, **_kwargs):
+            return None
+
+    monkeypatch.setattr(
+        "apps.api.services.imports.service.ImportFileStorage.from_env",
+        classmethod(lambda cls: _Storage()),
+    )
+
+    account_id = _create_account(bank_import_type="swedbank")
+    import_batch_id = UUID(int=998)
+    file_id = UUID(int=444)
+    workbook_b64 = _swedbank_workbook()
+
+    persist_response = persist_import_files(
+        {
+            "pathParameters": {"importBatchId": str(import_batch_id)},
+            "body": json.dumps(
+                {
+                    "note": "persist files",
+                    "files": [
+                        {
+                            "id": str(file_id),
+                            "filename": "swedbank.xlsx",
+                            "account_id": str(account_id),
+                            "row_count": 2,
+                            "error_count": 0,
+                            "bank_import_type": "swedbank",
+                            "content_base64": workbook_b64,
+                            "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        }
+                    ],
+                }
+            ),
+            "isBase64Encoded": False,
+        },
+        None,
+    )
+    assert persist_response["statusCode"] == 200
+    persist_body = _json_body(persist_response)
+    assert persist_body["import_batch_id"] == str(import_batch_id)
+    assert persist_body["file_ids"] == [str(file_id)]
 
 
 def test_import_handler_validation_and_error_paths(monkeypatch: pytest.MonkeyPatch):

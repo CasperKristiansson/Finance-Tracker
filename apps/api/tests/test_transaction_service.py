@@ -11,9 +11,11 @@ from sqlmodel import select
 from apps.api.models import (
     Account,
     Category,
+    ImportFile,
     InvestmentSnapshot,
     Loan,
     Transaction,
+    TransactionImportBatch,
     TransactionLeg,
 )
 from apps.api.services.transaction import TransactionService
@@ -221,6 +223,45 @@ def test_classify_loan_event_zero_amount_returns_none(session) -> None:
         )
         is None
     )
+
+
+def test_classify_loan_event_for_import_counterparty_leg(session) -> None:
+    service = TransactionService(session)
+    source = Account(name="Checking", account_type=AccountType.NORMAL)
+    loan_account = Account(name="Loan", account_type=AccountType.DEBT)
+    session.add_all([source, loan_account])
+    session.commit()
+
+    batch = TransactionImportBatch(source_name="import")
+    session.add(batch)
+    session.commit()
+
+    import_file = ImportFile(
+        batch_id=batch.id,
+        filename="rows.csv",
+        account_id=source.id,
+        row_count=1,
+        error_count=0,
+        status="processed",
+        bank_type="manual",
+    )
+    session.add(import_file)
+    session.commit()
+
+    tx = Transaction(
+        transaction_type=TransactionType.TRANSFER,
+        occurred_at=datetime(2024, 2, 1, tzinfo=timezone.utc),
+        posted_at=datetime(2024, 2, 1, tzinfo=timezone.utc),
+        import_file_id=import_file.id,
+    )
+    leg = TransactionLeg(account_id=loan_account.id, amount=Decimal("100"))
+    event_type = service._classify_loan_event(
+        transaction_type=TransactionType.TRANSFER,
+        leg=leg,
+        category=None,
+        transaction=tx,
+    )
+    assert event_type == LoanEventType.PAYMENT_PRINCIPAL
 
 
 def test_transaction_service_private_branch_paths(session) -> None:

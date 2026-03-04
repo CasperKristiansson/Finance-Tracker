@@ -292,6 +292,89 @@ class InvestmentSnapshotService:
                 out[account_id] = (Decimal(deposits or 0), Decimal(withdrawals or 0))
             return out
 
+        latest_snapshot_date_by_account: dict[UUID, date] = {
+            account_id: series_points[-1][0]
+            for account_id, series_points in account_series_base.items()
+            if series_points
+        }
+        post_snapshot_delta_by_account: dict[UUID, Decimal] = {
+            account_id: Decimal(0) for account_id in latest_snapshot_date_by_account
+        }
+        post_snapshot_latest_tx_date_by_account: dict[UUID, date] = {}
+        if latest_snapshot_date_by_account:
+            post_snapshot_stmt = (
+                select(
+                    cast(Any, TransactionLeg.account_id),
+                    cast(Any, Transaction.occurred_at),
+                    cast(Any, TransactionLeg.amount),
+                )
+                .select_from(TransactionLeg)
+                .join(
+                    Transaction,
+                    cast(Any, TransactionLeg.transaction_id) == cast(Any, Transaction.id),
+                )
+                .where(
+                    cast(Any, TransactionLeg.account_id).in_(
+                        list(latest_snapshot_date_by_account.keys())
+                    ),
+                    cast(Any, Transaction.transaction_type).notin_(
+                        [TransactionType.ADJUSTMENT, TransactionType.INVESTMENT_EVENT]
+                    ),
+                    cast(Any, TransactionLeg.transaction_id).in_(
+                        select(cast(Any, noninv_tx_ids.c.transaction_id))
+                    ),
+                )
+            )
+            for account_id, occurred_at, amount in self.session.exec(post_snapshot_stmt).all():
+                if account_id is None or occurred_at is None:
+                    continue
+                snapshot_date = latest_snapshot_date_by_account.get(account_id)
+                if snapshot_date is None:
+                    continue
+                tx_date = cast(datetime, occurred_at).date()
+                if tx_date <= snapshot_date:
+                    continue
+                delta = Decimal(amount or 0)
+                post_snapshot_delta_by_account[account_id] = (
+                    post_snapshot_delta_by_account.get(account_id, Decimal(0)) + delta
+                )
+                prev_latest = post_snapshot_latest_tx_date_by_account.get(account_id)
+                if prev_latest is None or tx_date > prev_latest:
+                    post_snapshot_latest_tx_date_by_account[account_id] = tx_date
+
+        for account_id, delta in post_snapshot_delta_by_account.items():
+            if delta == 0:
+                continue
+            points = account_series.get(account_id)
+            if not points:
+                continue
+            if points[-1][0] == today:
+                points[-1] = (today, points[-1][1] + delta)
+            else:
+                points.append((today, points[-1][1] + delta))
+
+        portfolio_post_snapshot_delta = sum(post_snapshot_delta_by_account.values(), Decimal(0))
+        if portfolio_post_snapshot_delta != 0 and portfolio_series:
+            if portfolio_series[-1][0] == today:
+                portfolio_series[-1] = (
+                    today,
+                    portfolio_series[-1][1] + portfolio_post_snapshot_delta,
+                )
+            else:
+                portfolio_series.append(
+                    (today, portfolio_series[-1][1] + portfolio_post_snapshot_delta)
+                )
+            portfolio_current_value += portfolio_post_snapshot_delta
+
+        latest_post_snapshot_date = max(
+            post_snapshot_latest_tx_date_by_account.values(),
+            default=None,
+        )
+        if latest_post_snapshot_date is not None:
+            portfolio_as_of = max(
+                portfolio_as_of or latest_post_snapshot_date, latest_post_snapshot_date
+            )
+
         now = datetime.now(timezone.utc)
 
         cashflow_start_dt_ledger: Optional[datetime] = None
@@ -546,6 +629,16 @@ class InvestmentSnapshotService:
 
             as_of = series_base[-1][0] if series_base else None
             current_value = series_base[-1][1] if series_base else Decimal(0)
+            post_snapshot_delta = post_snapshot_delta_by_account.get(account.id, Decimal(0))
+            if post_snapshot_delta != 0:
+                current_value += post_snapshot_delta
+                latest_post_snapshot_for_account = post_snapshot_latest_tx_date_by_account.get(
+                    account.id
+                )
+                if latest_post_snapshot_for_account is not None:
+                    as_of = max(
+                        as_of or latest_post_snapshot_for_account, latest_post_snapshot_for_account
+                    )
 
             dep_acc_12m, wdr_acc_12m = sums_12m.get(account.id, (Decimal(0), Decimal(0)))
             net_acc_12m = dep_acc_12m - wdr_acc_12m

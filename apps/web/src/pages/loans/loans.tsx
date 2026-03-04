@@ -12,18 +12,7 @@ import {
 } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Bar, BarChart, CartesianGrid, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
 import { EmptyState } from "@/components/composed/empty-state";
@@ -71,23 +60,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageRoutes } from "@/data/routes";
 import { selectIsDemo, selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useLoansApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import { buildEndpointRequest } from "@/lib/apiEndpoints";
-import {
-  currency,
-  formatDate as formatDateLocale,
-  formatDateTime as formatDateTimeLocale,
-} from "@/lib/format";
+import { currency, formatDateTime as formatDateTimeLocale } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { AccountWithBalance } from "@/types/api";
+import type { AccountWithBalance, LoanEventRead } from "@/types/api";
 import { AccountType, InterestCompound, LoanEventType } from "@/types/api";
 
 const selectLikeInput =
   "flex h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
+const LOAN_EVENTS_PAGE_LIMIT = 200;
 
 const formatCurrency = (value: number) => currency(value);
 
@@ -96,31 +82,6 @@ const formatPercent = (value: string | null | undefined) => {
   const parsed = Number(value);
   if (Number.isNaN(parsed)) return "—";
   return `${parsed.toFixed(2)}%`;
-};
-
-const toInterestRateDecimal = (value: string | null | undefined) => {
-  if (!value) return null;
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) return null;
-  return parsed > 1 ? parsed / 100 : parsed;
-};
-
-const formatDate = (value: string | null | undefined) => {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return formatDateLocale(date, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-  });
-};
-
-const formatChartDate = (value: string | null | undefined) => {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return formatDateLocale(date, { month: "short", year: "numeric" });
 };
 
 const formatDateTime = (value: string | null | undefined) => {
@@ -212,6 +173,54 @@ const interestCompoundLabel = (value: InterestCompound | null | undefined) => {
   }
 };
 
+const sumPrincipalPayments = (events: LoanEventRead[] | undefined) => {
+  if (!events?.length) return 0;
+  return events.reduce((sum, event) => {
+    if (event.event_type !== LoanEventType.PAYMENT_PRINCIPAL) return sum;
+    const amount = Number(event.amount);
+    return sum + (Number.isFinite(amount) ? Math.max(0, amount) : 0);
+  }, 0);
+};
+
+const getLoanCurrentPrincipal = (account: AccountWithBalance) => {
+  const value = account.loan?.current_principal ?? account.balance ?? null;
+  const num = Number(value ?? 0);
+  return Number.isFinite(num) ? Math.max(0, num) : null;
+};
+
+const getLoanOriginPrincipal = (account: AccountWithBalance) => {
+  const origin = account.loan?.origin_principal;
+  const current = getLoanCurrentPrincipal(account);
+  if (origin === undefined || origin === null) return current;
+  const num = Number(origin);
+  if (!Number.isFinite(num)) return current;
+  return Math.max(0, num);
+};
+
+const getLoanPaidDown = (
+  account: AccountWithBalance,
+  accountEvents?: LoanEventRead[],
+) => {
+  const loanCreatedAtRaw = account.loan?.created_at;
+  const loanCreatedAt = loanCreatedAtRaw
+    ? Date.parse(loanCreatedAtRaw)
+    : Number.NaN;
+  const scopedEvents =
+    Number.isFinite(loanCreatedAt) && accountEvents
+      ? accountEvents.filter((event) => {
+          const occurredAt = Date.parse(event.occurred_at);
+          return Number.isFinite(occurredAt) && occurredAt >= loanCreatedAt;
+        })
+      : accountEvents;
+
+  const principalPayments = sumPrincipalPayments(scopedEvents);
+  const origin = getLoanOriginPrincipal(account);
+  const current = getLoanCurrentPrincipal(account);
+  const balanceDeltaPaidDown =
+    origin !== null && current !== null ? Math.max(0, origin - current) : 0;
+  return Math.max(principalPayments, balanceDeltaPaidDown);
+};
+
 const SummaryCard: React.FC<{
   label: string;
   value: React.ReactNode;
@@ -244,20 +253,8 @@ export const Loans: React.FC = () => {
     includeInactive,
     fetchAccounts,
   } = useAccountsApi();
-  const {
-    schedules,
-    events,
-    portfolioSeries,
-    loading,
-    error,
-    fetchLoanSchedule,
-    fetchLoanEvents,
-    fetchLoanPortfolioSeries,
-  } = useLoansApi();
+  const { events, loading, error, fetchLoanEvents } = useLoansApi();
 
-  const [asOfDate, setAsOfDate] = useState("");
-  const [periods, setPeriods] = useState(60);
-  const [activeTab, setActiveTab] = useState<"schedule" | "events">("schedule");
   const [createLoanOpen, setCreateLoanOpen] = useState(false);
   const [createLoanLoading, setCreateLoanLoading] = useState(false);
   const [editLoanOpen, setEditLoanOpen] = useState(false);
@@ -301,14 +298,8 @@ export const Loans: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (accountId) return;
-    fetchLoanPortfolioSeries();
-  }, [accountId, fetchLoanPortfolioSeries]);
-
-  useEffect(() => {
     if (!accountId) return;
-    fetchLoanSchedule({ accountId, asOfDate: asOfDate || undefined, periods });
-    fetchLoanEvents({ accountId, limit: 50, offset: 0 });
+    fetchLoanEvents({ accountId, limit: LOAN_EVENTS_PAGE_LIMIT, offset: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId]);
 
@@ -321,6 +312,20 @@ export const Loans: React.FC = () => {
     [accounts],
   );
 
+  useEffect(() => {
+    if (accountId) return;
+    for (const account of loanAccounts) {
+      const existing = events[account.id];
+      const isLoadingEvents = loading[`loan-events-${account.id}`];
+      if (existing !== undefined || isLoadingEvents) continue;
+      fetchLoanEvents({
+        accountId: account.id,
+        limit: LOAN_EVENTS_PAGE_LIMIT,
+        offset: 0,
+      });
+    }
+  }, [accountId, events, fetchLoanEvents, loading, loanAccounts]);
+
   const selectedAccount = useMemo(() => {
     if (!accountId) return null;
     return accounts.find((acc) => acc.id === accountId) ?? null;
@@ -328,29 +333,18 @@ export const Loans: React.FC = () => {
 
   const selectedLoan = selectedAccount?.loan;
   const selectedOriginPrincipal = useMemo(() => {
-    if (!selectedLoan) return null;
-    const origin = selectedLoan.origin_principal;
-    const fallback =
-      selectedLoan.current_principal ?? selectedAccount?.balance ?? null;
-    const value =
-      origin !== undefined && Number.isFinite(Number(origin))
-        ? Number(origin)
-        : Number(fallback ?? 0);
-    return Number.isFinite(value) ? value : null;
-  }, [selectedAccount?.balance, selectedLoan]);
+    if (!selectedAccount || !selectedLoan) return null;
+    return getLoanOriginPrincipal(selectedAccount);
+  }, [selectedAccount, selectedLoan]);
   const selectedCurrentPrincipal = useMemo(() => {
-    if (!selectedLoan) return null;
-    const value =
-      selectedLoan.current_principal ?? selectedAccount?.balance ?? null;
-    const num = Number(value ?? 0);
-    return Number.isFinite(num) ? num : null;
-  }, [selectedAccount?.balance, selectedLoan]);
+    if (!selectedAccount || !selectedLoan) return null;
+    return getLoanCurrentPrincipal(selectedAccount);
+  }, [selectedAccount, selectedLoan]);
+  const accountEvents = accountId ? events[accountId] : undefined;
   const selectedPaidDown = useMemo(() => {
-    if (selectedOriginPrincipal === null || selectedCurrentPrincipal === null) {
-      return null;
-    }
-    return Math.max(0, selectedOriginPrincipal - selectedCurrentPrincipal);
-  }, [selectedCurrentPrincipal, selectedOriginPrincipal]);
+    if (!selectedAccount || !selectedLoan) return null;
+    return getLoanPaidDown(selectedAccount, accountEvents);
+  }, [accountEvents, selectedAccount, selectedLoan]);
   const selectedPaidDownPct = useMemo(() => {
     if (
       selectedPaidDown === null ||
@@ -364,140 +358,39 @@ export const Loans: React.FC = () => {
       Math.max(0, (selectedPaidDown / selectedOriginPrincipal) * 100),
     );
   }, [selectedOriginPrincipal, selectedPaidDown]);
-  const selectedEstimatedMonthlyInterest = useMemo(() => {
-    if (!selectedLoan || selectedCurrentPrincipal === null) return null;
-    const rate = toInterestRateDecimal(selectedLoan.interest_rate_annual);
-    if (!Number.isFinite(selectedCurrentPrincipal) || rate === null)
-      return null;
-    return (selectedCurrentPrincipal * rate) / 12;
-  }, [selectedCurrentPrincipal, selectedLoan]);
-
-  const schedule = accountId ? schedules[accountId] : undefined;
-  const accountEvents = accountId ? events[accountId] : undefined;
-  const scheduleLoading = accountId
-    ? loading[`loan-schedule-${accountId}`]
-    : false;
   const eventsLoading = accountId ? loading[`loan-events-${accountId}`] : false;
 
   const totalPrincipal = useMemo(() => {
     return loanAccounts.reduce((sum, acc) => {
-      const principal =
-        acc.loan?.current_principal !== undefined
-          ? Number(acc.loan.current_principal)
-          : Math.abs(Number(acc.balance ?? 0));
-      return sum + (Number.isFinite(principal) ? principal : 0);
+      const principal = getLoanCurrentPrincipal(acc);
+      return sum + (principal ?? 0);
     }, 0);
   }, [loanAccounts]);
 
   const totalOriginPrincipal = useMemo(() => {
     return loanAccounts.reduce((sum, acc) => {
-      const origin = acc.loan?.origin_principal;
-      const fallback =
-        acc.loan?.current_principal !== undefined
-          ? Number(acc.loan.current_principal)
-          : Math.abs(Number(acc.balance ?? 0));
-      const value =
-        origin !== undefined && Number.isFinite(Number(origin))
-          ? Number(origin)
-          : fallback;
-      return sum + (Number.isFinite(value) ? value : 0);
+      const origin = getLoanOriginPrincipal(acc);
+      return sum + (origin ?? 0);
     }, 0);
   }, [loanAccounts]);
 
   const totalPaidDown = useMemo(
-    () => Math.max(0, totalOriginPrincipal - totalPrincipal),
-    [totalOriginPrincipal, totalPrincipal],
+    () =>
+      loanAccounts.reduce(
+        (sum, account) => sum + getLoanPaidDown(account, events[account.id]),
+        0,
+      ),
+    [events, loanAccounts],
   );
-
-  const estimatedMonthlyInterest = useMemo(() => {
-    return loanAccounts.reduce((sum, acc) => {
-      const rate = toInterestRateDecimal(acc.loan?.interest_rate_annual);
-      const principal =
-        acc.loan?.current_principal !== undefined
-          ? Number(acc.loan.current_principal)
-          : Math.abs(Number(acc.balance ?? 0));
-      if (!Number.isFinite(principal) || principal <= 0 || rate === null) {
-        return sum;
-      }
-      return sum + (principal * rate) / 12;
-    }, 0);
-  }, [loanAccounts]);
-
-  const loanPortfolioTrendData = useMemo(() => {
-    if (!portfolioSeries.length) return [];
-
-    const sortedSeries = portfolioSeries
-      .map((point) => ({
-        date: point.date,
-        total: Number(point.total),
-        ts: Date.parse(point.date),
-      }))
-      .filter(
-        (point) => Number.isFinite(point.ts) && Number.isFinite(point.total),
-      )
-      .sort((a, b) => a.ts - b.ts);
-
-    if (!sortedSeries.length) return [];
-
-    const baselineDate = new Date(sortedSeries[0].date);
-    const baseline = Number.isNaN(baselineDate.getTime())
-      ? null
-      : new Date(baselineDate);
-    if (baseline) {
-      baseline.setDate(baseline.getDate() - 1);
-    }
-
-    const series: Array<{ date: string; total: number }> = [
-      {
-        date: baseline
-          ? baseline.toISOString().slice(0, 10)
-          : sortedSeries[0].date,
-        total: 0,
-      },
-      ...sortedSeries.map((point) => ({
-        date: point.date,
-        total: point.total,
-      })),
-    ];
-
-    const todayKey = new Date().toISOString().slice(0, 10);
-    const lastPoint = series[series.length - 1];
-    if (
-      lastPoint &&
-      lastPoint.date !== todayKey &&
-      Date.parse(todayKey) > Date.parse(lastPoint.date)
-    ) {
-      series.push({ date: todayKey, total: lastPoint.total });
-    }
-
-    return series;
-  }, [portfolioSeries]);
-
-  const loanPortfolioLatestTotal = useMemo(() => {
-    if (!loanPortfolioTrendData.length) return 0;
-    return loanPortfolioTrendData[loanPortfolioTrendData.length - 1].total;
-  }, [loanPortfolioTrendData]);
-
-  const portfolioSeriesLoading = loading["loan-portfolio-series"] ?? false;
 
   const loanProgressData = useMemo(() => {
     return loanAccounts
       .map((acc) => {
-        const origin = acc.loan?.origin_principal
-          ? Number(acc.loan.origin_principal)
-          : null;
-        const current = acc.loan?.current_principal
-          ? Number(acc.loan.current_principal)
-          : Math.abs(Number(acc.balance ?? 0));
-        const safeCurrent = Number.isFinite(current) ? current : 0;
-        const baseOrigin =
-          origin !== null && Number.isFinite(origin) && origin > 0
-            ? origin
-            : safeCurrent;
-        const paid = Math.max(0, baseOrigin - safeCurrent);
+        const current = getLoanCurrentPrincipal(acc) ?? 0;
+        const paid = getLoanPaidDown(acc, events[acc.id]);
         return {
           name: acc.name,
-          remaining: Math.max(0, safeCurrent),
+          remaining: Math.max(0, current),
           paid,
         };
       })
@@ -507,40 +400,11 @@ export const Loans: React.FC = () => {
           Number.isFinite(item.paid) &&
           (item.remaining > 0 || item.paid > 0),
       );
-  }, [loanAccounts]);
-
-  const nextExpectedPayoff = useMemo(() => {
-    let best: { ts: number; value: string } | null = null;
-    for (const acc of loanAccounts) {
-      const date = acc.loan?.expected_maturity_date;
-      if (!date) continue;
-      const ts = Date.parse(date);
-      if (!Number.isFinite(ts)) continue;
-      if (!best || ts < best.ts) best = { ts, value: date };
-    }
-    return best?.value ?? null;
-  }, [loanAccounts]);
-
-  const scheduleChartData = useMemo(() => {
-    const raw = schedule?.schedule ?? [];
-    return raw.map((row) => ({
-      period: row.period,
-      remaining: Number(row.remaining_principal),
-      payment: Number(row.payment_amount),
-      interest: Number(row.interest_amount),
-      principal: Number(row.principal_amount),
-    }));
-  }, [schedule?.schedule]);
-
-  const payoffDate = useMemo(() => {
-    if (!schedule?.schedule?.length) return null;
-    return schedule.schedule[schedule.schedule.length - 1]?.due_date ?? null;
-  }, [schedule?.schedule]);
+  }, [events, loanAccounts]);
 
   const refreshLoanData = () => {
     if (!accountId) return;
-    fetchLoanSchedule({ accountId, asOfDate: asOfDate || undefined, periods });
-    fetchLoanEvents({ accountId, limit: 50, offset: 0 });
+    fetchLoanEvents({ accountId, limit: LOAN_EVENTS_PAGE_LIMIT, offset: 0 });
   };
 
   const selectedLoanEvent = useMemo(() => {
@@ -799,7 +663,7 @@ export const Loans: React.FC = () => {
             Debt accounts and amortization
           </h1>
           <p className="text-sm text-slate-500">
-            Track balances, schedules, and interest events for each loan.
+            Track balances and loan events for each loan.
           </p>
         </motion.div>
         <motion.div variants={fadeInUp} className="flex flex-wrap gap-2">
@@ -839,10 +703,7 @@ export const Loans: React.FC = () => {
         </div>
       ) : null}
 
-      <motion.div
-        variants={fadeInUp}
-        className="grid gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
-      >
+      <motion.div variants={fadeInUp} className="grid gap-3 md:grid-cols-2">
         <SummaryCard
           label="Total principal"
           value={formatCurrency(totalPrincipal)}
@@ -859,130 +720,13 @@ export const Loans: React.FC = () => {
                     Math.max(0, (totalPaidDown / totalOriginPrincipal) * 100),
                   ),
                 )}% of original`
-              : "Based on loan metadata"
+              : "Based on loan events"
           }
-        />
-        <SummaryCard
-          label="Est. monthly interest"
-          value={formatCurrency(estimatedMonthlyInterest)}
-          hint="Derived from current balances and annual rates"
-        />
-        <SummaryCard
-          label="Next expected payoff"
-          value={nextExpectedPayoff ? formatDate(nextExpectedPayoff) : "—"}
-          hint={
-            nextExpectedPayoff
-              ? "Earliest expected maturity date"
-              : "Set expected maturity per loan"
-          }
-        />
-        <SummaryCard
-          label="Included accounts"
-          value={includeInactive ? "Active + archived" : "Active only"}
-          hint="Loans are created as debt accounts"
         />
       </motion.div>
 
-      <motion.div variants={fadeInUp} className="grid gap-3 lg:grid-cols-5">
-        <Card className="border-slate-200 shadow-[0_10px_40px_-26px_rgba(15,23,42,0.35)] lg:col-span-3">
-          <CardHeader className="pb-2">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <CardTitle className="text-base font-semibold text-slate-900">
-                  Loan value trajectory
-                </CardTitle>
-                <p className="mt-1 text-xs text-slate-500">
-                  Cumulative loan value as new debt accounts are added.
-                </p>
-              </div>
-              <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                {formatCurrency(0)} → {formatCurrency(loanPortfolioLatestTotal)}
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                {formatCurrency(totalPaidDown)} paid down
-              </span>
-              <span className="inline-flex items-center gap-2 rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-                <span className="h-2 w-2 rounded-full bg-sky-500" />
-                {formatCurrency(estimatedMonthlyInterest)} est. monthly interest
-              </span>
-            </div>
-            <div className="h-48 w-full">
-              {portfolioSeriesLoading ? (
-                <Skeleton className="h-full w-full" />
-              ) : loanPortfolioTrendData.length ? (
-                <ChartContainer
-                  config={{
-                    total: {
-                      label: "Loan value",
-                      color: "hsl(221.2 83.2% 53.3%)",
-                    },
-                  }}
-                  className="h-full w-full"
-                >
-                  <AreaChart data={loanPortfolioTrendData}>
-                    <defs>
-                      <linearGradient
-                        id="loan-value-gradient"
-                        x1="0"
-                        y1="0"
-                        x2="0"
-                        y2="1"
-                      >
-                        <stop
-                          offset="5%"
-                          stopColor="var(--color-total)"
-                          stopOpacity={0.25}
-                        />
-                        <stop
-                          offset="95%"
-                          stopColor="var(--color-total)"
-                          stopOpacity={0.05}
-                        />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="date"
-                      tickFormatter={(value) => formatChartDate(value)}
-                      tickLine={false}
-                      axisLine={false}
-                      tick={{ fill: "#64748b" }}
-                    />
-                    <YAxis
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={(value) =>
-                        new Intl.NumberFormat("sv-SE", {
-                          notation: "compact",
-                          maximumFractionDigits: 1,
-                        }).format(value)
-                      }
-                    />
-                    <Tooltip content={<ChartTooltipContent />} />
-                    <Area
-                      type="monotoneX"
-                      dataKey="total"
-                      stroke="var(--color-total)"
-                      strokeWidth={2}
-                      fill="url(#loan-value-gradient)"
-                    />
-                  </AreaChart>
-                </ChartContainer>
-              ) : (
-                <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-600">
-                  Add loans to see cumulative value over time.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-slate-200 shadow-[0_10px_40px_-26px_rgba(15,23,42,0.35)] lg:col-span-2">
+      <motion.div variants={fadeInUp}>
+        <Card className="border-slate-200 shadow-[0_10px_40px_-26px_rgba(15,23,42,0.35)]">
           <CardHeader className="pb-2">
             <CardTitle className="text-base font-semibold text-slate-900">
               Principal vs. paid down
@@ -1078,25 +822,14 @@ export const Loans: React.FC = () => {
           </>
         ) : loanAccounts.length ? (
           loanAccounts.map((acc) => {
-            const current = acc.loan?.current_principal
-              ? Number(acc.loan.current_principal)
-              : Math.abs(Number(acc.balance ?? 0));
-            const origin = acc.loan?.origin_principal
-              ? Number(acc.loan.origin_principal)
-              : null;
+            const current = getLoanCurrentPrincipal(acc) ?? 0;
+            const origin = getLoanOriginPrincipal(acc);
             const rate = acc.loan?.interest_rate_annual ?? null;
             const minPay = acc.loan?.minimum_payment ?? null;
             const compound = acc.loan?.interest_compound ?? null;
-            const maturity = acc.loan?.expected_maturity_date ?? null;
-            const paidDown =
-              origin !== null &&
-              Number.isFinite(origin) &&
-              origin > 0 &&
-              Number.isFinite(current)
-                ? Math.max(0, origin - current)
-                : null;
+            const paidDown = getLoanPaidDown(acc, events[acc.id]);
             const paidDownPct =
-              paidDown !== null && origin !== null && origin > 0
+              origin !== null && origin > 0
                 ? Math.min(100, Math.max(0, (paidDown / origin) * 100))
                 : null;
 
@@ -1153,28 +886,23 @@ export const Loans: React.FC = () => {
                           {minPay ? formatCurrency(Number(minPay)) : "—"}
                         </div>
                       </div>
-                      <div className="rounded-lg border border-slate-200 bg-white p-3">
-                        <div className="text-xs text-slate-500">
-                          Expected payoff
-                        </div>
-                        <div className="text-lg font-semibold text-slate-900 tabular-nums">
-                          {maturity ? formatDate(maturity) : "—"}
-                        </div>
-                      </div>
                     </div>
 
-                    {paidDownPct !== null ? (
+                    {origin !== null && origin > 0 ? (
                       <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
                         <div className="flex items-center justify-between text-xs text-slate-600">
                           <span>Paid down</span>
                           <span className="font-medium tabular-nums">
-                            {Math.round(paidDownPct)}%
+                            {Math.round(paidDownPct ?? 0)}%
                           </span>
                         </div>
-                        <Progress value={paidDownPct} className="mt-2 h-2" />
+                        <Progress
+                          value={paidDownPct ?? 0}
+                          className="mt-2 h-2"
+                        />
                         <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
                           <span className="tabular-nums">
-                            {formatCurrency(paidDown ?? 0)} paid
+                            {formatCurrency(paidDown)} paid
                           </span>
                           <span className="tabular-nums">
                             {formatCurrency(
@@ -1200,7 +928,7 @@ export const Loans: React.FC = () => {
             <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm text-slate-600">
                 Create a debt account with loan details to start tracking
-                schedules and interest events.
+                balances and loan events.
               </p>
               <Button asChild className="gap-2">
                 <Link to={PageRoutes.accounts}>Add debt account</Link>
@@ -1305,7 +1033,7 @@ export const Loans: React.FC = () => {
                   {selectedAccount?.name ?? "Loan details"}
                 </h1>
                 <p className="text-sm text-slate-500">
-                  Schedule and events based on the current loan configuration.
+                  Current loan balance and recorded loan events.
                 </p>
               </div>
             </div>
@@ -1346,7 +1074,7 @@ export const Loans: React.FC = () => {
               Record activity
             </Button>
             <Button className="gap-2" onClick={refreshLoanData}>
-              {scheduleLoading || eventsLoading ? (
+              {eventsLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="h-4 w-4" />
@@ -1382,7 +1110,7 @@ export const Loans: React.FC = () => {
           </Card>
         ) : (
           <>
-            <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               <SummaryCard
                 label="Current principal"
                 value={
@@ -1390,7 +1118,7 @@ export const Loans: React.FC = () => {
                     ? formatCurrency(selectedCurrentPrincipal)
                     : "—"
                 }
-                hint="From loan metadata"
+                hint="Current outstanding amount"
               />
               <SummaryCard
                 label="Original principal"
@@ -1399,7 +1127,7 @@ export const Loans: React.FC = () => {
                     ? formatCurrency(selectedOriginPrincipal)
                     : "—"
                 }
-                hint="Baseline for payoff progress"
+                hint="Initial baseline"
               />
               <SummaryCard
                 label="Interest rate"
@@ -1418,17 +1146,8 @@ export const Loans: React.FC = () => {
                 hint={
                   selectedPaidDownPct !== null
                     ? `${Math.round(selectedPaidDownPct)}% of original`
-                    : "Based on original vs. current principal"
+                    : "From principal events since loan setup and balance deltas"
                 }
-              />
-              <SummaryCard
-                label="Est. monthly interest"
-                value={
-                  selectedEstimatedMonthlyInterest !== null
-                    ? formatCurrency(selectedEstimatedMonthlyInterest)
-                    : "—"
-                }
-                hint="Derived from current principal and annual rate"
               />
               <SummaryCard
                 label="Minimum payment"
@@ -1443,438 +1162,116 @@ export const Loans: React.FC = () => {
               />
             </div>
 
-            <Card className="border-slate-200 shadow-[0_10px_40px_-26px_rgba(15,23,42,0.35)]">
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <CardTitle className="text-base font-semibold text-slate-900">
-                      Loan insight
-                    </CardTitle>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Quick snapshot of progress and expected interest this
-                      month.
-                    </p>
-                  </div>
-                  {selectedPaidDownPct !== null ? (
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                      {Math.round(selectedPaidDownPct)}% paid
-                    </span>
-                  ) : null}
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <div className="text-xs text-slate-500">
-                      Current vs. original
-                    </div>
-                    <div className="mt-1 text-lg font-semibold text-slate-900 tabular-nums">
-                      {formatCurrency(selectedCurrentPrincipal ?? 0)} /{" "}
-                      {selectedOriginPrincipal !== null
-                        ? formatCurrency(selectedOriginPrincipal)
-                        : "—"}
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <div className="text-xs text-slate-500">
-                      Estimated monthly interest
-                    </div>
-                    <div className="mt-1 text-lg font-semibold text-slate-900 tabular-nums">
-                      {selectedEstimatedMonthlyInterest !== null
-                        ? formatCurrency(selectedEstimatedMonthlyInterest)
-                        : "—"}
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Based on current principal and annual rate
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-slate-200 bg-white p-3">
-                    <div className="text-xs text-slate-500">Payoff target</div>
-                    <div className="mt-1 text-lg font-semibold text-slate-900">
-                      {payoffDate ? formatDate(payoffDate) : "Not set"}
-                    </div>
-                    <p className="mt-1 text-xs text-slate-500">
-                      From the latest amortization schedule
-                    </p>
-                  </div>
-                </div>
-
-                {selectedPaidDownPct !== null ? (
-                  <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
-                    <div className="flex items-center justify-between text-xs text-slate-600">
-                      <span>Paydown progress</span>
-                      <span className="font-medium tabular-nums">
-                        {Math.round(selectedPaidDownPct)}%
-                      </span>
-                    </div>
-                    <Progress
-                      value={selectedPaidDownPct}
-                      className="mt-2 h-2"
-                    />
-                    <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
-                      <span className="tabular-nums">
-                        {formatCurrency(selectedPaidDown ?? 0)} paid toward
-                        principal
-                      </span>
-                      <span className="tabular-nums">
-                        {formatCurrency(
-                          Math.max(0, selectedCurrentPrincipal ?? 0),
-                        )}{" "}
-                        remaining
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-dashed border-slate-200 bg-white p-3 text-sm text-slate-600">
-                    Add an original principal to track paydown progress over
-                    time.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
             {(accountsError || error) && (
               <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
                 {accountsError || error}
               </div>
             )}
 
-            <Tabs
-              value={activeTab}
-              onValueChange={(value) =>
-                setActiveTab(value as "schedule" | "events")
-              }
-            >
-              <TabsList>
-                <TabsTrigger value="schedule">Schedule</TabsTrigger>
-                <TabsTrigger value="events">Events</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="schedule">
-                <div className="grid gap-3 lg:grid-cols-5">
-                  <Card className="border-slate-200 lg:col-span-2">
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <CardTitle className="text-base font-semibold text-slate-900">
-                            Remaining principal
-                          </CardTitle>
-                          <p className="mt-1 text-xs text-slate-500">
-                            Projection from amortization schedule. Generated at{" "}
-                            {formatDateTime(schedule?.generated_at)} · As of{" "}
-                            {formatDate(schedule?.as_of_date)}
-                          </p>
-                        </div>
+            <Card className="border-slate-200">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-semibold text-slate-900">
+                  Loan events
+                </CardTitle>
+                <p className="text-xs text-slate-500">
+                  Recorded loan activity from posted transactions.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {eventsLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                    <Skeleton className="h-10 w-full" />
+                  </div>
+                ) : accountEvents?.length ? (
+                  <div className="overflow-hidden rounded-lg border border-slate-200">
+                    <div className="max-h-[520px] overflow-auto">
+                      <Table>
+                        <TableHeader className="sticky top-0 bg-white">
+                          <TableRow>
+                            <TableHead className="px-3">When</TableHead>
+                            <TableHead className="px-3">Type</TableHead>
+                            <TableHead className="px-3 text-right">
+                              Amount
+                            </TableHead>
+                            <TableHead className="px-3">Transaction</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {accountEvents.map((row) => (
+                            <TableRow
+                              key={row.id}
+                              className={cn(
+                                "cursor-pointer transition-colors hover:bg-slate-50 focus-visible:bg-slate-50",
+                                loanEventDetailsId === row.id
+                                  ? "bg-slate-50"
+                                  : undefined,
+                              )}
+                              onClick={() => setLoanEventDetailsId(row.id)}
+                              onKeyDown={(event) => {
+                                if (
+                                  event.key === "Enter" ||
+                                  event.key === " "
+                                ) {
+                                  event.preventDefault();
+                                  setLoanEventDetailsId(row.id);
+                                }
+                              }}
+                              tabIndex={0}
+                            >
+                              <TableCell className="px-3 text-slate-700">
+                                {formatDateTime(row.occurred_at)}
+                              </TableCell>
+                              <TableCell className="px-3">
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                                    loanEventBadgeClass(row.event_type),
+                                  )}
+                                >
+                                  {loanEventLabel(row.event_type)}
+                                </span>
+                              </TableCell>
+                              <TableCell className="px-3 text-right font-semibold text-slate-900 tabular-nums">
+                                {formatCurrency(Number(row.amount))}
+                              </TableCell>
+                              <TableCell className="px-3">
+                                <div className="max-w-[16rem] truncate font-mono text-xs text-slate-700">
+                                  {row.transaction_id}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                ) : (
+                  <EmptyState
+                    className="rounded-lg"
+                    title="No events yet."
+                    description="Events appear when transactions post against this loan."
+                    action={
+                      <div className="flex flex-wrap justify-center gap-2">
                         <Button
-                          size="sm"
-                          className="gap-2"
+                          variant="outline"
+                          className="border-slate-300 text-slate-800"
                           onClick={refreshLoanData}
                         >
-                          {scheduleLoading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <RefreshCw className="h-4 w-4" />
-                          )}
-                          Generate
+                          Refresh
+                        </Button>
+                        <Button asChild variant="outline">
+                          <Link to={PageRoutes.transactions}>
+                            Open transactions
+                          </Link>
                         </Button>
                       </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="space-y-1.5">
-                          <label
-                            className="text-sm text-slate-700"
-                            htmlFor="asOfDate"
-                          >
-                            As of date (optional)
-                          </label>
-                          <div className="relative">
-                            <Calendar className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                            <Input
-                              id="asOfDate"
-                              type="date"
-                              value={asOfDate}
-                              onChange={(e) => setAsOfDate(e.target.value)}
-                              className="pl-9"
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1.5">
-                          <label
-                            className="text-sm text-slate-700"
-                            htmlFor="periods"
-                          >
-                            Periods
-                          </label>
-                          <Input
-                            id="periods"
-                            type="number"
-                            min={1}
-                            max={360}
-                            value={periods}
-                            onChange={(e) => {
-                              const value = Number(e.target.value);
-                              if (!Number.isFinite(value)) {
-                                setPeriods(60);
-                                return;
-                              }
-                              setPeriods(Math.min(360, Math.max(1, value)));
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="h-56">
-                        {scheduleLoading ? (
-                          <Skeleton className="h-full w-full" />
-                        ) : scheduleChartData.length ? (
-                          <ChartContainer
-                            config={{
-                              remaining: {
-                                label: "Remaining",
-                                color: "hsl(0 72% 51%)",
-                              },
-                            }}
-                            className="h-full w-full"
-                          >
-                            <LineChart data={scheduleChartData}>
-                              <CartesianGrid vertical={false} />
-                              <XAxis
-                                dataKey="period"
-                                tickLine={false}
-                                axisLine={false}
-                              />
-                              <YAxis
-                                tickLine={false}
-                                axisLine={false}
-                                tickFormatter={(value) =>
-                                  new Intl.NumberFormat("sv-SE", {
-                                    notation: "compact",
-                                    maximumFractionDigits: 1,
-                                  }).format(value)
-                                }
-                              />
-                              <Tooltip content={<ChartTooltipContent />} />
-                              <Line
-                                type="monotone"
-                                dataKey="remaining"
-                                stroke="var(--color-remaining)"
-                                strokeWidth={2}
-                                dot={false}
-                              />
-                            </LineChart>
-                          </ChartContainer>
-                        ) : (
-                          <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-600">
-                            No schedule generated yet.
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-slate-200 lg:col-span-3">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base font-semibold text-slate-900">
-                        Amortization table
-                      </CardTitle>
-                      <p className="text-xs text-slate-500">
-                        Payment, interest, and principal breakdown per period.
-                      </p>
-                    </CardHeader>
-                    <CardContent>
-                      {scheduleLoading ? (
-                        <div className="space-y-2">
-                          <Skeleton className="h-10 w-full" />
-                          <Skeleton className="h-10 w-full" />
-                          <Skeleton className="h-10 w-full" />
-                        </div>
-                      ) : schedule?.schedule?.length ? (
-                        <div className="overflow-hidden rounded-lg border border-slate-200">
-                          <div className="max-h-[480px] overflow-auto">
-                            <Table>
-                              <TableHeader className="sticky top-0 bg-white">
-                                <TableRow>
-                                  <TableHead className="w-16 px-3">#</TableHead>
-                                  <TableHead className="px-3">Due</TableHead>
-                                  <TableHead className="px-3 text-right">
-                                    Payment
-                                  </TableHead>
-                                  <TableHead className="px-3 text-right">
-                                    Interest
-                                  </TableHead>
-                                  <TableHead className="px-3 text-right">
-                                    Principal
-                                  </TableHead>
-                                  <TableHead className="px-3 text-right">
-                                    Remaining
-                                  </TableHead>
-                                </TableRow>
-                              </TableHeader>
-                              <TableBody>
-                                {schedule.schedule.map((row) => (
-                                  <TableRow key={row.period}>
-                                    <TableCell className="px-3 font-medium text-slate-900 tabular-nums">
-                                      {row.period}
-                                    </TableCell>
-                                    <TableCell className="px-3 text-slate-700">
-                                      {formatDate(row.due_date)}
-                                    </TableCell>
-                                    <TableCell className="px-3 text-right font-medium text-slate-900 tabular-nums">
-                                      {formatCurrency(
-                                        Number(row.payment_amount),
-                                      )}
-                                    </TableCell>
-                                    <TableCell className="px-3 text-right text-slate-700 tabular-nums">
-                                      {formatCurrency(
-                                        Number(row.interest_amount),
-                                      )}
-                                    </TableCell>
-                                    <TableCell className="px-3 text-right text-slate-700 tabular-nums">
-                                      {formatCurrency(
-                                        Number(row.principal_amount),
-                                      )}
-                                    </TableCell>
-                                    <TableCell className="px-3 text-right font-semibold text-slate-900 tabular-nums">
-                                      {formatCurrency(
-                                        Number(row.remaining_principal),
-                                      )}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3">
-                          <p className="text-sm text-slate-600">
-                            No schedule data returned for this account.
-                          </p>
-                          <Button
-                            variant="outline"
-                            className="border-slate-300 text-slate-800"
-                            onClick={refreshLoanData}
-                          >
-                            Retry
-                          </Button>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="events">
-                <Card className="border-slate-200">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-semibold text-slate-900">
-                      Loan events
-                    </CardTitle>
-                    <p className="text-xs text-slate-500">
-                      Derived from transactions (payments, interest accruals,
-                      adjustments).
-                    </p>
-                  </CardHeader>
-                  <CardContent>
-                    {eventsLoading ? (
-                      <div className="space-y-2">
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-10 w-full" />
-                        <Skeleton className="h-10 w-full" />
-                      </div>
-                    ) : accountEvents?.length ? (
-                      <div className="overflow-hidden rounded-lg border border-slate-200">
-                        <div className="max-h-[520px] overflow-auto">
-                          <Table>
-                            <TableHeader className="sticky top-0 bg-white">
-                              <TableRow>
-                                <TableHead className="px-3">When</TableHead>
-                                <TableHead className="px-3">Type</TableHead>
-                                <TableHead className="px-3 text-right">
-                                  Amount
-                                </TableHead>
-                                <TableHead className="px-3">
-                                  Transaction
-                                </TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {accountEvents.map((row) => (
-                                <TableRow
-                                  key={row.id}
-                                  className={cn(
-                                    "cursor-pointer transition-colors hover:bg-slate-50 focus-visible:bg-slate-50",
-                                    loanEventDetailsId === row.id
-                                      ? "bg-slate-50"
-                                      : undefined,
-                                  )}
-                                  onClick={() => setLoanEventDetailsId(row.id)}
-                                  onKeyDown={(event) => {
-                                    if (
-                                      event.key === "Enter" ||
-                                      event.key === " "
-                                    ) {
-                                      event.preventDefault();
-                                      setLoanEventDetailsId(row.id);
-                                    }
-                                  }}
-                                  tabIndex={0}
-                                >
-                                  <TableCell className="px-3 text-slate-700">
-                                    {formatDateTime(row.occurred_at)}
-                                  </TableCell>
-                                  <TableCell className="px-3">
-                                    <span
-                                      className={cn(
-                                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                                        loanEventBadgeClass(row.event_type),
-                                      )}
-                                    >
-                                      {loanEventLabel(row.event_type)}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell className="px-3 text-right font-semibold text-slate-900 tabular-nums">
-                                    {formatCurrency(Number(row.amount))}
-                                  </TableCell>
-                                  <TableCell className="px-3">
-                                    <div className="max-w-[16rem] truncate font-mono text-xs text-slate-700">
-                                      {row.transaction_id}
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </div>
-                    ) : (
-                      <EmptyState
-                        className="rounded-lg"
-                        title="No events yet."
-                        description="Events appear when transactions post against this loan (payments, interest accruals, adjustments)."
-                        action={
-                          <div className="flex flex-wrap justify-center gap-2">
-                            <Button
-                              variant="outline"
-                              className="border-slate-300 text-slate-800"
-                              onClick={refreshLoanData}
-                            >
-                              Refresh
-                            </Button>
-                            <Button asChild variant="outline">
-                              <Link to={PageRoutes.transactions}>
-                                Open transactions
-                              </Link>
-                            </Button>
-                          </div>
-                        }
-                      />
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
+                    }
+                  />
+                )}
+              </CardContent>
+            </Card>
           </>
         )}
       </MotionPage>

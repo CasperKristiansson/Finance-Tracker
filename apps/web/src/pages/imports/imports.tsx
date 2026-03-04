@@ -22,7 +22,7 @@ import React, {
   useState,
 } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
 import { ConfirmDialog } from "@/components/composed/confirm-dialog";
@@ -48,6 +48,9 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -64,6 +67,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { PageRoutes } from "@/data/routes";
 import { selectToken } from "@/features/auth/authSlice";
 import {
   useAccountsApi,
@@ -73,6 +77,7 @@ import {
 } from "@/hooks/use-api";
 import { renderCategoryIcon } from "@/lib/category-icons";
 import { currency } from "@/lib/format";
+import { useNavigationGuard } from "@/lib/navigation-guard";
 import { getDisplayTransactionType, isTaxEvent } from "@/lib/transactions";
 import { cn } from "@/lib/utils";
 import type {
@@ -86,6 +91,7 @@ import type {
   TransactionRead,
 } from "@/types/api";
 import {
+  AccountType,
   CategoryType,
   TaxEventType as TaxEventTypeEnum,
   TransactionType,
@@ -138,6 +144,36 @@ const inferTaxEventType = (amount: string | null | undefined): TaxEventType => {
   const numeric = Number(amount ?? "");
   return numeric > 0 ? TaxEventTypeEnum.REFUND : TaxEventTypeEnum.PAYMENT;
 };
+
+type TransferDirection = "incoming" | "outgoing";
+
+const getTransferDirection = (
+  amount: string | number | null | undefined,
+): TransferDirection => {
+  const numeric = Number(amount ?? "");
+  return Number.isFinite(numeric) && numeric > 0 ? "incoming" : "outgoing";
+};
+
+const getTransferDirectionLabels = (direction: TransferDirection) =>
+  direction === "incoming"
+    ? {
+        currentRole: "To account",
+        counterpartyRole: "From account",
+        description:
+          "This row is money coming into the selected account. Choose where it came from.",
+        createTabHint:
+          "Create an incoming transfer by choosing the source account.",
+        badgePrefix: "Transfer from",
+      }
+    : {
+        currentRole: "From account",
+        counterpartyRole: "To account",
+        description:
+          "This row is money leaving the selected account. Choose where it went.",
+        createTabHint:
+          "Create an outgoing transfer by choosing the destination account.",
+        badgePrefix: "Transfer to",
+      };
 
 const getCategoriesForAmount = (
   categories: CategoryRead[],
@@ -305,7 +341,9 @@ const bankLabel = (
 };
 
 export const Imports: React.FC = () => {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { setNavigationBlocker } = useNavigationGuard();
   const token = useAppSelector(selectToken);
   const {
     items: accounts,
@@ -390,6 +428,16 @@ export const Imports: React.FC = () => {
     string | null
   >(null);
   const [isHydratingImportId, setIsHydratingImportId] = useState(false);
+  const [leaveWarningOpen, setLeaveWarningOpen] = useState(false);
+  const [pendingNavigationPath, setPendingNavigationPath] = useState<
+    string | null
+  >(null);
+  const [draftSaveState, setDraftSaveState] = useState<"idle" | "saved">(
+    "idle",
+  );
+  const [autoSaveLeaveState, setAutoSaveLeaveState] = useState<
+    "idle" | "requested" | "saving"
+  >("idle");
   const [reconcilePromptOpen, setReconcilePromptOpen] = useState(false);
   const [postCommitReconcileAccountIds, setPostCommitReconcileAccountIds] =
     useState<string[]>([]);
@@ -403,6 +451,7 @@ export const Imports: React.FC = () => {
   const draftLoadRequestRef = useRef<string | null>(null);
   const lastDraftSnapshotRef = useRef<string | null>(null);
   const pendingDraftSnapshotRef = useRef<string | null>(null);
+  const suppressNavigationBlockRef = useRef(false);
 
   const commitForm = useForm<CommitFormValues>({
     defaultValues: { rows: [] },
@@ -690,7 +739,13 @@ export const Imports: React.FC = () => {
       const suggestion = suggestions[row.id];
       if (!suggestion?.category_id) return;
       const previewRow = preview?.rows.find((item) => item.id === row.id);
-      if (previewRow?.draft) return;
+      const draftCategoryId =
+        previewRow?.draft &&
+        typeof previewRow.draft === "object" &&
+        "category_id" in previewRow.draft
+          ? (previewRow.draft.category_id ?? null)
+          : null;
+      if (draftCategoryId) return;
       const currentCategory = commitForm.getValues(`rows.${idx}.category_id`);
       const taxEvent = commitForm.getValues(`rows.${idx}.tax_event_type`);
       const transferAccount = commitForm.getValues(
@@ -720,19 +775,137 @@ export const Imports: React.FC = () => {
         : [],
     [watchedRows],
   );
+  const getCurrentDraftRowsPayload = useCallback(() => {
+    const rows = commitForm.getValues("rows");
+    if (!Array.isArray(rows)) return [] as ImportCommitRow[];
+    return rows.map((row) => normalizeDraftRow(row));
+  }, [commitForm]);
   const draftSnapshot = useMemo(
     () => JSON.stringify(draftRowsPayload),
     [draftRowsPayload],
   );
+  const hasUnsavedDraftChanges = useMemo(() => {
+    if (step !== 4) return false;
+    if (!preview?.import_batch_id) return false;
+    if (!draftRowsPayload.length) return false;
+    const baseline = lastDraftSnapshotRef.current;
+    if (!baseline) return false;
+    return draftSnapshot !== baseline;
+  }, [step, preview?.import_batch_id, draftRowsPayload.length, draftSnapshot]);
+
+  const clearCurrentImportSession = useCallback(
+    ({ clearImportId = true }: { clearImportId?: boolean } = {}) => {
+      resetImports();
+      setStep(1);
+      setFiles([]);
+      setCommitTriggered(false);
+      setSuggestionsRequested(false);
+      setAutoParseRequested(false);
+      setActiveAuditFileId(null);
+      setIsHydratingImportId(false);
+      commitForm.reset({ rows: [] });
+      draftLoadRequestRef.current = null;
+      lastDraftSnapshotRef.current = null;
+      pendingDraftSnapshotRef.current = null;
+      if (!clearImportId) return;
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.delete("importId");
+        return next;
+      });
+    },
+    [commitForm, resetImports, setSearchParams],
+  );
+
+  const leaveToImportsList = useCallback(() => {
+    suppressNavigationBlockRef.current = true;
+    clearCurrentImportSession({ clearImportId: false });
+    navigate(PageRoutes.imports, { replace: true });
+    window.setTimeout(() => {
+      suppressNavigationBlockRef.current = false;
+    }, 0);
+  }, [clearCurrentImportSession, navigate]);
+
+  const blockAppNavigation = useCallback(
+    (to: string) => {
+      if (suppressNavigationBlockRef.current) return true;
+      if (!preview?.import_batch_id || step !== 4) return true;
+
+      const nextUrl = new URL(to, window.location.origin);
+      const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+      const currentImportId = searchParams.get("importId");
+      const nextImportId = nextUrl.searchParams.get("importId");
+      const stayingOnSameImport =
+        nextUrl.pathname === PageRoutes.imports &&
+        nextImportId === currentImportId;
+
+      if (stayingOnSameImport) return true;
+
+      setPendingNavigationPath(nextPath);
+      setLeaveWarningOpen(true);
+      return false;
+    },
+    [preview?.import_batch_id, searchParams, step],
+  );
+
+  useEffect(() => {
+    setNavigationBlocker(blockAppNavigation);
+    return () => {
+      setNavigationBlocker(null);
+    };
+  }, [blockAppNavigation, setNavigationBlocker]);
+
+  useEffect(() => {
+    if (!preview?.import_batch_id || step !== 4) return;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [preview?.import_batch_id, step]);
 
   useEffect(() => {
     if (draftSaving) return;
     if (!pendingDraftSnapshotRef.current) return;
     if (!draftsError) {
       lastDraftSnapshotRef.current = pendingDraftSnapshotRef.current;
+      setDraftSaveState("saved");
     }
     pendingDraftSnapshotRef.current = null;
   }, [draftSaving, draftsError]);
+
+  useEffect(() => {
+    if (draftSaveState !== "saved") return;
+    const timeout = window.setTimeout(() => setDraftSaveState("idle"), 2200);
+    return () => window.clearTimeout(timeout);
+  }, [draftSaveState]);
+
+  useEffect(() => {
+    if (draftSaveState !== "saved") return;
+    if (!hasUnsavedDraftChanges) return;
+    setDraftSaveState("idle");
+  }, [draftSaveState, hasUnsavedDraftChanges]);
+
+  useEffect(() => {
+    if (autoSaveLeaveState === "idle") return;
+    if (autoSaveLeaveState === "requested") {
+      if (draftSaving) {
+        setAutoSaveLeaveState("saving");
+      }
+      return;
+    }
+    if (autoSaveLeaveState !== "saving") return;
+    if (draftSaving) return;
+    if (draftsError) {
+      setAutoSaveLeaveState("idle");
+      return;
+    }
+    setAutoSaveLeaveState("idle");
+    leaveToImportsList();
+  }, [autoSaveLeaveState, draftSaving, draftsError, leaveToImportsList]);
 
   useEffect(() => {
     if (!preview) return;
@@ -937,7 +1110,25 @@ export const Imports: React.FC = () => {
       return;
     }
     if (step === 4) {
-      setStep(3);
+      if (!preview?.import_batch_id) {
+        setStep(3);
+        return;
+      }
+      if (saving || draftSaving) return;
+      if (hasUnsavedDraftChanges) {
+        const currentRowsPayload = getCurrentDraftRowsPayload();
+        if (!currentRowsPayload.length) return;
+        const currentSnapshot = JSON.stringify(currentRowsPayload);
+        setAutoSaveLeaveState("requested");
+        pendingDraftSnapshotRef.current = currentSnapshot;
+        saveImportDraft({
+          importBatchId: preview.import_batch_id,
+          rows: currentRowsPayload,
+          showToast: false,
+        });
+        return;
+      }
+      leaveToImportsList();
       return;
     }
   };
@@ -1398,6 +1589,25 @@ export const Imports: React.FC = () => {
     setTransferDraftSelectionKey(null);
   };
 
+  const applyLoanPaymentSelection = (
+    commitIndex: number,
+    loanAccountId: string,
+  ) => {
+    commitForm.setValue(
+      `rows.${commitIndex}.transfer_account_id`,
+      loanAccountId,
+      {
+        shouldDirty: true,
+      },
+    );
+    commitForm.setValue(`rows.${commitIndex}.tax_event_type`, null, {
+      shouldDirty: true,
+    });
+    commitForm.setValue(`rows.${commitIndex}.category_id`, null, {
+      shouldDirty: true,
+    });
+  };
+
   const handleOpenReimbursementDialog = (
     row: ImportPreviewResponse["rows"][number],
     commitIndex: number,
@@ -1435,29 +1645,6 @@ export const Imports: React.FC = () => {
       toast.error("Missing session", { description: "Please sign in again." });
       return;
     }
-    const commitFiles =
-      preview?.files
-        .map((file) => {
-          const local =
-            files.find((item) => item.previewFileId === file.id) ??
-            files.find(
-              (item) =>
-                item.filename === file.filename &&
-                item.accountId === file.account_id,
-            );
-          if (!local?.contentBase64) return null;
-          return {
-            id: file.id,
-            filename: file.filename,
-            account_id: file.account_id,
-            row_count: file.row_count,
-            error_count: file.error_count,
-            bank_import_type: file.bank_import_type ?? null,
-            content_base64: local.contentBase64,
-            content_type: local.contentType ?? undefined,
-          };
-        })
-        .filter(Boolean) ?? [];
     const normalizedRows = values.rows.map((row) => normalizeDraftRow(row));
     const affectedAccountIds = Array.from(
       new Set(
@@ -1473,9 +1660,6 @@ export const Imports: React.FC = () => {
       import_batch_id: preview?.import_batch_id,
       rows: normalizedRows,
     };
-    if (commitFiles.length) {
-      payload.files = commitFiles as NonNullable<ImportCommitRequest["files"]>;
-    }
     commitImports(payload);
     setCommitTriggered(true);
   });
@@ -1483,13 +1667,17 @@ export const Imports: React.FC = () => {
   const saveDraftNow = () => {
     if (!preview?.import_batch_id) return;
     if (step !== 4) return;
-    if (!draftRowsPayload.length) return;
     if (saving || draftSaving) return;
 
-    pendingDraftSnapshotRef.current = draftSnapshot;
+    const currentRowsPayload = getCurrentDraftRowsPayload();
+    if (!currentRowsPayload.length) return;
+
+    setDraftSaveState("idle");
+    pendingDraftSnapshotRef.current = JSON.stringify(currentRowsPayload);
     saveImportDraft({
       importBatchId: preview.import_batch_id,
-      rows: draftRowsPayload,
+      rows: currentRowsPayload,
+      showToast: true,
     });
   };
 
@@ -1562,6 +1750,24 @@ export const Imports: React.FC = () => {
       </MotionPage>
     );
   }
+
+  const transferDialogCommitRow = transferDialogState
+    ? commitRows[transferDialogState.commitIndex]
+    : null;
+  const transferDirection = getTransferDirection(
+    transferDialogCommitRow?.amount,
+  );
+  const transferDirectionLabels = getTransferDirectionLabels(transferDirection);
+  const transferCurrentAccountName = transferDialogState
+    ? (accounts.find((acc) => acc.id === transferDialogState.currentAccountId)
+        ?.name ?? "Unknown")
+    : "Unknown";
+  const transferSelectedAccountId =
+    transferDraftValue ?? transferDialogState?.value ?? null;
+  const transferSelectedAccountName = transferSelectedAccountId
+    ? (accounts.find((acc) => acc.id === transferSelectedAccountId)?.name ??
+      "Selected account")
+    : "Not selected";
 
   return (
     <MotionPage className="space-y-4">
@@ -1768,6 +1974,38 @@ export const Imports: React.FC = () => {
               });
               deleteImportDraft(draftPendingDelete.import_batch_id);
               setDraftPendingDeleteId(null);
+            }}
+          />
+
+          <ConfirmDialog
+            open={leaveWarningOpen}
+            onOpenChange={(open) => {
+              if (open) {
+                setLeaveWarningOpen(true);
+                return;
+              }
+              setLeaveWarningOpen(false);
+              setPendingNavigationPath(null);
+            }}
+            title="Leave import review?"
+            description="If you leave now, unsaved changes will be lost."
+            confirmLabel="Leave without saving"
+            cancelLabel="Stay"
+            confirmVariant="destructive"
+            onConfirm={() => {
+              const nextPath = pendingNavigationPath;
+              setLeaveWarningOpen(false);
+              setPendingNavigationPath(null);
+              if (!nextPath) return;
+              suppressNavigationBlockRef.current = true;
+              clearCurrentImportSession({ clearImportId: false });
+              const shouldReplace =
+                nextPath === PageRoutes.imports ||
+                nextPath.startsWith(`${PageRoutes.imports}?`);
+              navigate(nextPath, { replace: shouldReplace });
+              window.setTimeout(() => {
+                suppressNavigationBlockRef.current = false;
+              }, 0);
             }}
           />
 
@@ -2136,6 +2374,12 @@ export const Imports: React.FC = () => {
                                 "";
                               const amountValue =
                                 commitForm.watch(`rows.${idx}.amount`) ?? "";
+                              const rowTransferDirection =
+                                getTransferDirection(amountValue);
+                              const rowTransferDirectionLabels =
+                                getTransferDirectionLabels(
+                                  rowTransferDirection,
+                                );
 
                               const currentCategoryId =
                                 commitForm.watch(`rows.${idx}.category_id`) ??
@@ -2204,6 +2448,12 @@ export const Imports: React.FC = () => {
                                   ): option is NonNullable<typeof option> =>
                                     Boolean(option),
                                 );
+                              const loanPaymentTargets = accounts.filter(
+                                (account) =>
+                                  account.account_type === AccountType.DEBT &&
+                                  account.id !== commitRows[idx].account_id &&
+                                  account.is_active,
+                              );
 
                               return (
                                 <TableRow
@@ -2284,7 +2534,10 @@ export const Imports: React.FC = () => {
                                         ) : null}
                                         {transferTarget ? (
                                           <Badge className="bg-emerald-100 text-emerald-700">
-                                            Transfer → {transferTarget.name}
+                                            {transferTarget.account_type ===
+                                            AccountType.DEBT
+                                              ? `Loan payment → ${transferTarget.name}`
+                                              : `${rowTransferDirectionLabels.badgePrefix} ${transferTarget.name}`}
                                           </Badge>
                                         ) : null}
                                         {reimbursementCount ? (
@@ -2475,6 +2728,47 @@ export const Imports: React.FC = () => {
                                           <MoveRight className="h-3.5 w-3.5" />
                                           Manage transfer
                                         </DropdownMenuItem>
+                                        <DropdownMenuSub>
+                                          <DropdownMenuSubTrigger
+                                            disabled={Boolean(taxEventType)}
+                                            className="gap-2"
+                                          >
+                                            <MoveRight className="h-3.5 w-3.5" />
+                                            Loan payment
+                                          </DropdownMenuSubTrigger>
+                                          <DropdownMenuSubContent className="w-[260px]">
+                                            {loanPaymentTargets.length ? (
+                                              loanPaymentTargets.map(
+                                                (loanAccount) => (
+                                                  <DropdownMenuItem
+                                                    key={loanAccount.id}
+                                                    onSelect={() =>
+                                                      applyLoanPaymentSelection(
+                                                        idx,
+                                                        loanAccount.id,
+                                                      )
+                                                    }
+                                                    className="flex items-center justify-between gap-2"
+                                                  >
+                                                    <span className="truncate">
+                                                      {loanAccount.name}
+                                                    </span>
+                                                    {transferAccountId ===
+                                                    loanAccount.id ? (
+                                                      <CheckSquare className="h-4 w-4 text-slate-700" />
+                                                    ) : (
+                                                      <Square className="h-4 w-4 text-slate-400" />
+                                                    )}
+                                                  </DropdownMenuItem>
+                                                ),
+                                              )
+                                            ) : (
+                                              <div className="px-2 py-1.5 text-xs text-slate-500">
+                                                No debt accounts available.
+                                              </div>
+                                            )}
+                                          </DropdownMenuSubContent>
+                                        </DropdownMenuSub>
                                         <DropdownMenuItem
                                           onSelect={() =>
                                             handleToggleTaxEvent(
@@ -2529,7 +2823,9 @@ export const Imports: React.FC = () => {
             <Button
               variant="ghost"
               onClick={goBack}
-              disabled={step === 1 || loading || saving}
+              disabled={
+                step === 1 || loading || saving || autoSaveLeaveState !== "idle"
+              }
             >
               <ChevronLeft className="mr-2 h-4 w-4" />
               Back
@@ -2554,10 +2850,16 @@ export const Imports: React.FC = () => {
                   >
                     {draftSaving ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : draftSaveState === "saved" ? (
+                      <Check className="h-4 w-4 text-emerald-600" />
                     ) : (
                       <Save className="h-4 w-4" />
                     )}
-                    Save draft
+                    {draftSaving
+                      ? "Saving draft…"
+                      : draftSaveState === "saved"
+                        ? "Draft saved"
+                        : "Save draft"}
                   </Button>
                   <Button
                     className="gap-2"
@@ -2826,8 +3128,9 @@ export const Imports: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Manage transfer</DialogTitle>
             <DialogDescription>
-              Link this row to another transaction or mark it as a transfer
-              between accounts.
+              {transferDialogState
+                ? transferDirectionLabels.description
+                : "Link this row to another transaction or mark it as a transfer between accounts."}
             </DialogDescription>
           </DialogHeader>
 
@@ -2836,18 +3139,12 @@ export const Imports: React.FC = () => {
               <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-600">
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary" className="bg-slate-100">
-                    Current:{" "}
-                    {transferDialogState.value
-                      ? (accounts.find(
-                          (acc) => acc.id === transferDialogState.value,
-                        )?.name ?? "Selected account")
-                      : "Not a transfer"}
+                    {transferDirectionLabels.counterpartyRole}:{" "}
+                    {transferSelectedAccountName}
                   </Badge>
                   <Badge variant="secondary" className="bg-slate-100">
-                    From account:{" "}
-                    {accounts.find(
-                      (acc) => acc.id === transferDialogState.currentAccountId,
-                    )?.name ?? "Unknown"}
+                    {transferDirectionLabels.currentRole}:{" "}
+                    {transferCurrentAccountName}
                   </Badge>
                 </div>
               </div>
@@ -3123,7 +3420,7 @@ export const Imports: React.FC = () => {
 
                 <TabsContent value="create" className="space-y-3">
                   <p className="text-sm text-slate-600">
-                    Create a transfer to another account.
+                    {transferDirectionLabels.createTabHint}
                   </p>
                   <div className="grid gap-2 md:grid-cols-2">
                     {accounts
@@ -3167,6 +3464,7 @@ export const Imports: React.FC = () => {
                                     : "text-slate-500",
                                 )}
                               >
+                                {transferDirectionLabels.counterpartyRole} •{" "}
                                 {bankLabel(acc.bank_import_type)}
                               </span>
                             </div>
@@ -3179,7 +3477,7 @@ export const Imports: React.FC = () => {
 
               <DialogFooter className="flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-slate-600">
-                  Only one transfer target can be active. Applying will clear
+                  Only one counterparty account can be active. Applying clears
                   category.
                 </p>
                 <div className="flex items-center gap-2">

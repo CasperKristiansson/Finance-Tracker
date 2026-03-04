@@ -270,6 +270,18 @@ functions:
           method: POST
           authorizer: cognitoJwt
 
+  persistImportFiles:
+    handler: apps/api/handlers/imports.persist_import_files
+    memorySize: 512
+    timeout: 29
+    layers:
+      - ${self:custom.backendLayerArn}
+    events:
+      - httpApi:
+          path: /imports/{importBatchId}/files
+          method: POST
+          authorizer: cognitoJwt
+
   deleteImportDraft:
     handler: apps/api/handlers/imports.delete_import_draft
     memorySize: 512

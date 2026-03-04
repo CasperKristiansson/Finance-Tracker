@@ -17,6 +17,8 @@ from ..schemas import (
     ImportDraftListResponse,
     ImportDraftSaveRequest,
     ImportDraftSaveResponse,
+    ImportPersistFilesRequest,
+    ImportPersistFilesResponse,
     ImportPreviewRequest,
     ImportPreviewResponse,
 )
@@ -194,6 +196,42 @@ def save_import_draft(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     return json_response(200, response)
 
 
+def persist_import_files(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
+    """HTTP POST /imports/{importBatchId}/files."""
+
+    ensure_engine()
+    user_id = get_user_id(event)
+    import_batch_id = extract_path_uuid(
+        event,
+        param_names=("importBatchId", "import_batch_id"),
+    )
+    if import_batch_id is None:
+        return json_response(400, {"error": "importBatchId is required"})
+
+    parsed_body = parse_body(event)
+    try:
+        data = ImportPersistFilesRequest.model_validate(parsed_body)
+    except ValidationError as exc:
+        return json_response(400, {"error": exc.errors()})
+
+    try:
+        with session_scope(user_id=user_id) as session:
+            service = ImportService(session)
+            result = service.persist_import_files(
+                import_batch_id=import_batch_id,
+                payload=data,
+            )
+    except LookupError as exc:
+        return json_response(404, {"error": str(exc)})
+    except ValueError as exc:
+        return json_response(400, {"error": str(exc)})
+    except RuntimeError as exc:
+        return json_response(503, {"error": str(exc)})
+
+    response = ImportPersistFilesResponse.model_validate(result).model_dump(mode="json")
+    return json_response(200, response)
+
+
 def delete_import_draft(event: Dict[str, Any], _context: Any) -> Dict[str, Any]:
     """HTTP DELETE /imports/{importBatchId}."""
 
@@ -254,12 +292,6 @@ def _seed_commit_batch_from_payload(
 
     if payload.files:
         return
-
-    referenced_file_ids = {
-        row.file_id for row in payload.rows if not row.delete and row.file_id is not None
-    }
-    if len(referenced_file_ids) > 1:
-        raise ValueError("Rows reference multiple import files; include files payload")
 
     file_rows: dict[UUID, list[Any]] = {}
     for row in payload.rows:
@@ -333,6 +365,7 @@ __all__ = [
     "list_import_drafts",
     "get_import_draft",
     "save_import_draft",
+    "persist_import_files",
     "delete_import_draft",
     "reset_handler_state",
 ]

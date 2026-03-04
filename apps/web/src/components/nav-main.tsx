@@ -7,6 +7,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { useNavigationGuard } from "@/lib/navigation-guard";
 import { cn } from "@/lib/utils";
 
 export function NavMain({
@@ -22,6 +23,7 @@ export function NavMain({
 }) {
   const location = useLocation();
   const { state } = useSidebar();
+  const { canNavigate } = useNavigationGuard();
   const collapsed = state === "collapsed";
 
   return (
@@ -34,6 +36,24 @@ export function NavMain({
             <SidebarMenuItem key={item.url}>
               <Link
                 to={item.url}
+                onClick={(event) => {
+                  if (
+                    event.button !== 0 ||
+                    event.metaKey ||
+                    event.altKey ||
+                    event.ctrlKey ||
+                    event.shiftKey
+                  ) {
+                    return;
+                  }
+                  if (isActive) {
+                    event.preventDefault();
+                    return;
+                  }
+                  if (!canNavigate(item.url)) {
+                    event.preventDefault();
+                  }
+                }}
                 className={cn(
                   "group flex w-full items-center rounded-md p-2 text-sm transition-[color,padding,justify-content,gap] hover:text-slate-900",
                   collapsed ? "justify-center gap-0" : "gap-2",

@@ -5,8 +5,16 @@ from decimal import Decimal
 from types import SimpleNamespace
 from uuid import UUID
 
-from apps.api.models import Account, Loan
+from apps.api.models import (
+    Account,
+    ImportFile,
+    Loan,
+    Transaction,
+    TransactionImportBatch,
+    TransactionLeg,
+)
 from apps.api.services.loan import LoanService
+from apps.api.services.transaction import TransactionService
 from apps.api.shared import AccountType, InterestCompound, LoanEventType, TransactionType
 
 # mypy: ignore-errors
@@ -159,3 +167,63 @@ def test_record_activity_creates_transaction_and_syncs_principal(session) -> Non
     assert saved_loan.current_principal == Decimal("9750.00")
     assert saved_tx.transaction_type == TransactionType.TRANSFER
     assert len(saved_tx.legs) == 2
+
+
+def test_list_events_normalizes_import_counterparty_transfer_direction(session) -> None:
+    debt = Account(name="Debt", account_type=AccountType.DEBT, is_active=True)
+    funding = Account(name="Checking", account_type=AccountType.NORMAL, is_active=True)
+    session.add_all([debt, funding])
+    session.commit()
+
+    loan = Loan(
+        account_id=debt.id,
+        origin_principal=Decimal("10000"),
+        current_principal=Decimal("10000"),
+        interest_rate_annual=Decimal("0.04"),
+        interest_compound=InterestCompound.MONTHLY,
+    )
+    session.add(loan)
+    session.commit()
+
+    batch = TransactionImportBatch(source_name="import")
+    session.add(batch)
+    session.commit()
+
+    import_file = ImportFile(
+        batch_id=batch.id,
+        filename="rows.csv",
+        account_id=funding.id,
+        row_count=1,
+        error_count=0,
+        status="processed",
+        bank_type="manual",
+    )
+    session.add(import_file)
+    session.commit()
+
+    tx_service = TransactionService(session)
+    tx = Transaction(
+        transaction_type=TransactionType.TRANSFER,
+        occurred_at=datetime(2024, 3, 1, tzinfo=timezone.utc),
+        posted_at=datetime(2024, 3, 1, tzinfo=timezone.utc),
+        import_file_id=import_file.id,
+        description="Loan payment from import",
+    )
+    tx_service.create_transaction(
+        tx,
+        [
+            TransactionLeg(account_id=funding.id, amount=Decimal("-5202")),
+            TransactionLeg(account_id=debt.id, amount=Decimal("5202")),
+        ],
+    )
+
+    # Simulate stale event type persisted from old classification logic.
+    events = tx_service.list_loan_events(loan.id)
+    assert events
+    events[0].event_type = LoanEventType.DISBURSEMENT
+    session.add(events[0])
+    session.commit()
+
+    normalized = LoanService(session).list_events(debt.id)
+    assert normalized
+    assert normalized[0].event_type == LoanEventType.PAYMENT_PRINCIPAL

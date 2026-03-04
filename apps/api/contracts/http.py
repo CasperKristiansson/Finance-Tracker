@@ -42,6 +42,8 @@ from ..schemas import (
     ImportFileDownloadRequest,
     ImportFileDownloadResponse,
     ImportFileListResponse,
+    ImportPersistFilesRequest,
+    ImportPersistFilesResponse,
     ImportPreviewRequest,
     ImportPreviewResponse,
     InvestmentOverviewResponse,
@@ -151,6 +153,10 @@ HTTP_HANDLER_CONTRACTS: dict[str, HandlerHttpContract] = {
     "apps/api/handlers/imports.commit_imports": HandlerHttpContract(
         request_model=ImportCommitRequest,
         response_model=ImportCommitResponse,
+    ),
+    "apps/api/handlers/imports.persist_import_files": HandlerHttpContract(
+        request_model=ImportPersistFilesRequest,
+        response_model=ImportPersistFilesResponse,
     ),
     "apps/api/handlers/imports.list_import_drafts": HandlerHttpContract(
         response_model=ImportDraftListResponse

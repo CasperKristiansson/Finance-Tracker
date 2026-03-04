@@ -42,14 +42,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageRoutes } from "@/data/routes";
 import { selectToken } from "@/features/auth/authSlice";
@@ -65,6 +57,16 @@ const formatCompact = (value: number) => compactCurrency(value);
 
 const formatSignedSek = (value: number) =>
   `${value >= 0 ? "+" : "-"}${formatSek(Math.abs(value))}`;
+
+type DetailRange = "ytd" | "12m" | "3y" | "5y" | "all";
+
+const DETAIL_RANGE_LABEL: Record<DetailRange, string> = {
+  ytd: "YTD",
+  "12m": "12M",
+  "3y": "3Y",
+  "5y": "5Y",
+  all: "Total",
+};
 
 const coerceMoney = (value: unknown): number => {
   const num = Number(value);
@@ -111,10 +113,28 @@ const freshnessBadge = (isoDate: string | null) => {
   };
 };
 
-const monthShort = (monthIndex: number) =>
-  new Date(Date.UTC(2026, monthIndex, 1)).toLocaleDateString("en-US", {
-    month: "short",
-  });
+const subtractYearsInclusiveIso = (date: Date, years: number) => {
+  const result = new Date(date);
+  result.setFullYear(result.getFullYear() - years);
+  result.setDate(result.getDate() + 1);
+  return result.toISOString().slice(0, 10);
+};
+
+const monthKeyFromIso = (isoDate: string): number | null => {
+  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(isoDate);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return null;
+  if (month < 0 || month > 11) return null;
+  return year * 12 + month;
+};
+
+const monthKeyToIso = (monthKey: number): string => {
+  const year = Math.floor(monthKey / 12);
+  const month = (monthKey % 12) + 1;
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-01`;
+};
 
 const MetricRow: React.FC<{
   label: string;
@@ -134,21 +154,22 @@ const MetricRow: React.FC<{
 export const InvestmentDetails: React.FC = () => {
   const { accountId } = useParams<{ accountId: string }>();
   const token = useAppSelector(selectToken);
+  const today = useMemo(() => new Date(), []);
+  const todayIso = useMemo(() => today.toISOString().slice(0, 10), [today]);
   const {
     overview,
-    transactions,
     loading,
     error,
     updateLoading,
     updateError,
     fetchOverview,
-    fetchTransactions,
     createSnapshot,
   } = useInvestmentsApi();
 
   const [performanceWindow, setPerformanceWindow] = useState<"since" | "12m">(
-    "since",
+    "12m",
   );
+  const [detailRange, setDetailRange] = useState<DetailRange>("12m");
   const [snapshotDialogOpen, setSnapshotDialogOpen] = useState(false);
   const [snapshotBalance, setSnapshotBalance] = useState("");
   const [snapshotDate, setSnapshotDate] = useState(() =>
@@ -157,24 +178,12 @@ export const InvestmentDetails: React.FC = () => {
   const [snapshotNotes, setSnapshotNotes] = useState("");
   const [snapshotSubmitted, setSnapshotSubmitted] = useState(false);
 
-  const [projectionLoading, setProjectionLoading] = useState(false);
-  const [projectionError, setProjectionError] = useState<string | null>(null);
-  const [projection, setProjection] =
-    useState<EndpointResponse<"netWorthProjection"> | null>(null);
-
   const [cashflowForecastLoading, setCashflowForecastLoading] = useState(false);
   const [cashflowForecastError, setCashflowForecastError] = useState<
     string | null
   >(null);
   const [cashflowForecast, setCashflowForecast] =
     useState<EndpointResponse<"cashflowForecast"> | null>(null);
-
-  const [monthlyFlowLoading, setMonthlyFlowLoading] = useState(false);
-  const [monthlyFlowError, setMonthlyFlowError] = useState<string | null>(null);
-  const [monthlyFlow, setMonthlyFlow] = useState<
-    | EndpointResponse<"yearlyOverviewRange">["items"][number]["account_flows"][number]
-    | null
-  >(null);
 
   useEffect(() => {
     fetchOverview();
@@ -200,6 +209,31 @@ export const InvestmentDetails: React.FC = () => {
       .sort((a, b) => a.date.localeCompare(b.date));
   }, [account?.series]);
 
+  const detailRangeStartIso = useMemo(() => {
+    const currentYear = today.getFullYear();
+    if (detailRange === "ytd") return `${currentYear}-01-01`;
+    if (detailRange === "12m") return subtractYearsInclusiveIso(today, 1);
+    if (detailRange === "3y") return subtractYearsInclusiveIso(today, 3);
+    if (detailRange === "5y") return subtractYearsInclusiveIso(today, 5);
+    return null;
+  }, [detailRange, today]);
+
+  const detailRangeLabel = DETAIL_RANGE_LABEL[detailRange];
+  const detailRangeWindowLabel =
+    detailRangeStartIso === null
+      ? "All available history"
+      : `${detailRangeStartIso} → ${todayIso}`;
+
+  const visibleAccountSeries = useMemo(
+    () =>
+      accountSeries.filter((point) => {
+        if (detailRangeStartIso && point.date < detailRangeStartIso)
+          return false;
+        return point.date <= todayIso;
+      }),
+    [accountSeries, detailRangeStartIso, todayIso],
+  );
+
   const accountAsOf = toIsoDate(account?.as_of);
   const accountStartDate = toIsoDate(account?.start_date);
   const accountFreshness = freshnessBadge(accountAsOf);
@@ -209,54 +243,41 @@ export const InvestmentDetails: React.FC = () => {
     () =>
       (overview?.recent_cashflows ?? [])
         .filter((row) => row.account_id === accountId)
+        .filter((row) => {
+          const occurredAt = toIsoDate(row.occurred_at);
+          if (!occurredAt) return false;
+          if (detailRangeStartIso && occurredAt < detailRangeStartIso)
+            return false;
+          return occurredAt <= todayIso;
+        })
         .sort((a, b) =>
           String(b.occurred_at).localeCompare(String(a.occurred_at)),
         ),
-    [accountId, overview?.recent_cashflows],
+    [accountId, detailRangeStartIso, overview?.recent_cashflows, todayIso],
   );
 
   const accountDomain = useMemo<[number, number]>(() => {
-    if (!accountSeries.length) return [0, 0];
-    const values = accountSeries.map((point) => point.value);
+    if (!visibleAccountSeries.length) return [0, 0];
+    const values = visibleAccountSeries.map((point) => point.value);
     const max = Math.max(...values);
     const min = Math.min(...values);
     const span = Math.max(1, max - min);
     const lower = Math.max(0, min - span * 0.08);
     const upper = max + span * 0.08;
     return [lower, upper];
-  }, [accountSeries]);
-
-  useEffect(() => {
-    if (!account?.name) return;
-    fetchTransactions({
-      accountName: account.name,
-      limit: 120,
-      offset: 0,
-    });
-  }, [account?.name, fetchTransactions]);
+  }, [visibleAccountSeries]);
 
   useEffect(() => {
     if (!accountId || !token) {
-      setProjection(null);
       setCashflowForecast(null);
       return;
     }
 
     let cancelled = false;
-    setProjectionLoading(true);
-    setProjectionError(null);
     setCashflowForecastLoading(true);
     setCashflowForecastError(null);
 
     const loadForecasts = async () => {
-      const projectionPromise = apiFetch<
-        EndpointResponse<"netWorthProjection">
-      >(
-        buildEndpointRequest("netWorthProjection", {
-          query: { months: 24, account_ids: [accountId] },
-          token,
-        }),
-      );
       const cashflowPromise = apiFetch<EndpointResponse<"cashflowForecast">>(
         buildEndpointRequest("cashflowForecast", {
           query: { days: 120, account_ids: [accountId] },
@@ -264,85 +285,24 @@ export const InvestmentDetails: React.FC = () => {
         }),
       );
 
-      const [projectionResult, cashflowResult] = await Promise.allSettled([
-        projectionPromise,
-        cashflowPromise,
-      ]);
+      const cashflowResult = await cashflowPromise;
 
       if (cancelled) return;
-
-      if (projectionResult.status === "fulfilled") {
-        setProjection(projectionResult.value.data);
-      } else {
-        setProjection(null);
-        setProjectionError("Unable to load net worth projection.");
-      }
-      setProjectionLoading(false);
-
-      if (cashflowResult.status === "fulfilled") {
-        setCashflowForecast(cashflowResult.value.data);
-      } else {
+      try {
+        setCashflowForecast(cashflowResult.data);
+      } catch {
         setCashflowForecast(null);
         setCashflowForecastError("Unable to load cashflow forecast.");
       }
       setCashflowForecastLoading(false);
     };
 
-    void loadForecasts();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [accountId, token]);
-
-  useEffect(() => {
-    if (!accountId || !token) {
-      setMonthlyFlow(null);
-      return;
-    }
-
-    let cancelled = false;
-    const now = new Date();
-    const year = now.getFullYear();
-    setMonthlyFlowLoading(true);
-    setMonthlyFlowError(null);
-
-    const loadMonthly = async () => {
-      try {
-        const { data } = await apiFetch<
-          EndpointResponse<"yearlyOverviewRange">
-        >(
-          buildEndpointRequest("yearlyOverviewRange", {
-            query: {
-              start_year: year,
-              end_year: year,
-              account_ids: [accountId],
-            },
-            token,
-          }),
-        );
-
-        if (cancelled) return;
-
-        const overviewItem = data.items?.[0];
-        const accountFlow =
-          overviewItem?.account_flows?.find(
-            (flow) => flow.account_id === accountId,
-          ) ??
-          overviewItem?.account_flows?.[0] ??
-          null;
-        setMonthlyFlow(accountFlow);
-      } catch (fetchError) {
-        if (cancelled) return;
-        console.error("Failed to load account monthly flow", fetchError);
-        setMonthlyFlow(null);
-        setMonthlyFlowError("Unable to load monthly account momentum.");
-      } finally {
-        if (!cancelled) setMonthlyFlowLoading(false);
-      }
-    };
-
-    void loadMonthly();
+    void loadForecasts().catch(() => {
+      if (cancelled) return;
+      setCashflowForecast(null);
+      setCashflowForecastError("Unable to load cashflow forecast.");
+      setCashflowForecastLoading(false);
+    });
 
     return () => {
       cancelled = true;
@@ -372,36 +332,6 @@ export const InvestmentDetails: React.FC = () => {
 
   const snapshotSubmitDisabled =
     updateLoading || !accountId || !snapshotDate || !snapshotBalance.trim();
-
-  const projectionPoints = useMemo(() => {
-    return (projection?.points ?? [])
-      .map((point) => ({
-        date: String(point.date).slice(0, 10),
-        value: coerceMoney(point.net_worth),
-        low:
-          point.low !== null && point.low !== undefined
-            ? coerceMoney(point.low)
-            : null,
-        high:
-          point.high !== null && point.high !== undefined
-            ? coerceMoney(point.high)
-            : null,
-      }))
-      .sort((a, b) => a.date.localeCompare(b.date));
-  }, [projection?.points]);
-
-  const projectionDomain = useMemo<[number, number]>(() => {
-    if (!projectionPoints.length) return [0, 0];
-    const allValues = projectionPoints.flatMap((point) =>
-      [point.low, point.value, point.high].filter(
-        (value): value is number => typeof value === "number",
-      ),
-    );
-    const min = Math.min(...allValues);
-    const max = Math.max(...allValues);
-    const span = Math.max(1, max - min);
-    return [Math.max(0, min - span * 0.08), max + span * 0.08];
-  }, [projectionPoints]);
 
   const cashflowPoints = useMemo(() => {
     return (cashflowForecast?.points ?? [])
@@ -441,24 +371,58 @@ export const InvestmentDetails: React.FC = () => {
   }, [cashflowForecast?.threshold, cashflowPoints]);
 
   const momentumRows = useMemo(() => {
-    const monthlyChanges = monthlyFlow?.monthly_change ?? [];
-    return monthlyChanges.map((rawValue, monthIndex) => ({
-      month: monthShort(monthIndex),
-      value: coerceMoney(rawValue),
-    }));
-  }, [monthlyFlow?.monthly_change]);
+    if (!accountSeries.length) return [];
+
+    const monthlyEndValues = new Map<number, number>();
+    accountSeries.forEach((point) => {
+      const monthKey = monthKeyFromIso(point.date);
+      if (monthKey === null) return;
+      monthlyEndValues.set(monthKey, point.value);
+    });
+
+    const monthKeys = [...monthlyEndValues.keys()].sort((a, b) => a - b);
+    const includeYear =
+      detailRange === "3y" || detailRange === "5y" || detailRange === "all";
+
+    const rows: Array<{ month: string; value: number; monthIso: string }> = [];
+    let previousValue: number | null = null;
+
+    monthKeys.forEach((monthKey) => {
+      const monthIso = monthKeyToIso(monthKey);
+      const monthEndValue = monthlyEndValues.get(monthKey);
+      if (typeof monthEndValue !== "number") return;
+
+      const delta = previousValue === null ? 0 : monthEndValue - previousValue;
+      previousValue = monthEndValue;
+
+      if (detailRangeStartIso && monthIso < detailRangeStartIso) return;
+
+      const label = new Date(`${monthIso}T00:00:00Z`).toLocaleDateString(
+        "en-US",
+        includeYear ? { month: "short", year: "2-digit" } : { month: "short" },
+      );
+
+      rows.push({
+        month: label,
+        value: delta,
+        monthIso,
+      });
+    });
+
+    return rows;
+  }, [accountSeries, detailRange, detailRangeStartIso]);
 
   const insights = useMemo(() => {
     const rows: string[] = [];
-    if (accountSeries.length >= 2) {
-      const first = accountSeries[0].value;
-      const last = accountSeries[accountSeries.length - 1].value;
+    if (visibleAccountSeries.length >= 2) {
+      const first = visibleAccountSeries[0].value;
+      const last = visibleAccountSeries[visibleAccountSeries.length - 1].value;
       const change = last - first;
       const pct = first > 0 ? (change / first) * 100 : null;
       rows.push(
         pct !== null
-          ? `Since first snapshot, value changed ${formatSignedSek(change)} (${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%).`
-          : `Since first snapshot, value changed ${formatSignedSek(change)}.`,
+          ? `${detailRangeLabel} value changed ${formatSignedSek(change)} (${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%).`
+          : `${detailRangeLabel} value changed ${formatSignedSek(change)}.`,
       );
     }
 
@@ -467,28 +431,24 @@ export const InvestmentDetails: React.FC = () => {
       const worst = [...momentumRows].sort((a, b) => a.value - b.value)[0];
       if (best)
         rows.push(
-          `Best month this year: ${best.month} (${formatSignedSek(best.value)}).`,
+          `Best month (${detailRangeLabel}): ${best.month} (${formatSignedSek(best.value)}).`,
         );
       if (worst)
         rows.push(
-          `Weakest month this year: ${worst.month} (${formatSignedSek(worst.value)}).`,
+          `Weakest month (${detailRangeLabel}): ${worst.month} (${formatSignedSek(worst.value)}).`,
         );
     }
 
-    const net12m =
-      coerceMoney(account?.cashflow_12m_added) -
-      coerceMoney(account?.cashflow_12m_withdrawn);
+    const netInRange = accountCashflows.reduce((sum, row) => {
+      const amount = coerceMoney(row.amount_sek);
+      return row.direction === "deposit" ? sum + amount : sum - amount;
+    }, 0);
     rows.push(
-      `Net contributions over last 12 months: ${formatSignedSek(net12m)}.`,
+      `Net contributions (${detailRangeLabel}): ${formatSignedSek(netInRange)}.`,
     );
 
     return rows;
-  }, [
-    account?.cashflow_12m_added,
-    account?.cashflow_12m_withdrawn,
-    accountSeries,
-    momentumRows,
-  ]);
+  }, [accountCashflows, detailRangeLabel, momentumRows, visibleAccountSeries]);
 
   const visibleKpis =
     performanceWindow === "since"
@@ -549,44 +509,67 @@ export const InvestmentDetails: React.FC = () => {
         </motion.div>
         <motion.div
           variants={fadeInUp}
-          className="flex flex-wrap items-center justify-end gap-2"
+          className="flex flex-col items-end gap-2"
         >
-          <Button
-            size="sm"
-            onClick={() => setSnapshotDialogOpen(true)}
-            disabled={!account}
-          >
-            Update balance
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              fetchOverview();
-              if (account?.name) {
-                fetchTransactions({
-                  accountName: account.name,
-                  limit: 120,
-                  offset: 0,
-                });
-              }
-            }}
-            disabled={loading}
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
-          {loading ? (
-            <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600">
-              <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
-              Loading
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <span className="text-xs text-slate-500">
+              {detailRangeWindowLabel}
             </span>
-          ) : null}
-          {error ? (
-            <span className="rounded-full bg-rose-50 px-3 py-1 text-sm text-rose-700">
-              Failed to load investment data
-            </span>
-          ) : null}
+            <Tabs
+              value={detailRange}
+              onValueChange={(value) => setDetailRange(value as DetailRange)}
+              className="w-auto"
+            >
+              <TabsList className="h-9 bg-slate-100">
+                <TabsTrigger value="ytd" className="cursor-pointer text-xs">
+                  YTD
+                </TabsTrigger>
+                <TabsTrigger value="12m" className="cursor-pointer text-xs">
+                  12M
+                </TabsTrigger>
+                <TabsTrigger value="3y" className="cursor-pointer text-xs">
+                  3Y
+                </TabsTrigger>
+                <TabsTrigger value="5y" className="cursor-pointer text-xs">
+                  5Y
+                </TabsTrigger>
+                <TabsTrigger value="all" className="cursor-pointer text-xs">
+                  Total
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              size="sm"
+              onClick={() => setSnapshotDialogOpen(true)}
+              disabled={!account}
+            >
+              Update balance
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                fetchOverview();
+              }}
+              disabled={loading}
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
+            {loading ? (
+              <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-600">
+                <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+                Loading
+              </span>
+            ) : null}
+            {error ? (
+              <span className="rounded-full bg-rose-50 px-3 py-1 text-sm text-rose-700">
+                Failed to load investment data
+              </span>
+            ) : null}
+          </div>
         </motion.div>
       </StaggerWrap>
 
@@ -760,11 +743,11 @@ export const InvestmentDetails: React.FC = () => {
               <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base font-semibold text-slate-900">
-                    Value trajectory
+                    Value trajectory ({detailRangeLabel})
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="h-80 md:h-96">
-                  {accountSeries.length ? (
+                  {visibleAccountSeries.length ? (
                     <ChartContainer
                       className="h-full w-full"
                       config={{
@@ -775,7 +758,7 @@ export const InvestmentDetails: React.FC = () => {
                       }}
                     >
                       <AreaChart
-                        data={accountSeries}
+                        data={visibleAccountSeries}
                         margin={{ left: 0, right: 0, top: 10, bottom: 0 }}
                       >
                         <defs>
@@ -845,7 +828,7 @@ export const InvestmentDetails: React.FC = () => {
                     </ChartContainer>
                   ) : (
                     <div className="flex h-full items-center justify-center rounded-lg border border-slate-100 bg-slate-50 text-sm text-slate-600">
-                      No snapshots yet for this account.
+                      No snapshots in the selected range.
                     </div>
                   )}
                 </CardContent>
@@ -904,101 +887,7 @@ export const InvestmentDetails: React.FC = () => {
             </motion.div>
           </StaggerWrap>
 
-          <StaggerWrap className="grid gap-4 lg:grid-cols-2">
-            <motion.div variants={fadeInUp} {...subtleHover}>
-              <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-semibold text-slate-900">
-                    Net worth projection
-                  </CardTitle>
-                  <p className="text-xs text-slate-500">
-                    Account-scoped projection for the next 24 months.
-                  </p>
-                </CardHeader>
-                <CardContent className="h-72">
-                  {projectionLoading ? (
-                    <Skeleton className="h-full w-full" />
-                  ) : projectionPoints.length ? (
-                    <ChartContainer
-                      className="h-full w-full"
-                      config={{
-                        value: { label: "Projected value", color: "#0ea5e9" },
-                        low: { label: "Low", color: "#cbd5e1" },
-                        high: { label: "High", color: "#94a3b8" },
-                      }}
-                    >
-                      <LineChart
-                        data={projectionPoints}
-                        margin={{ left: 0, right: 0, top: 10 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                        <XAxis
-                          dataKey="date"
-                          tickFormatter={(value) =>
-                            new Date(value).toLocaleDateString("en-US", {
-                              month: "short",
-                              year: "2-digit",
-                            })
-                          }
-                          tickLine={false}
-                          axisLine={false}
-                        />
-                        <YAxis
-                          tickLine={false}
-                          axisLine={false}
-                          domain={projectionDomain}
-                          tickMargin={12}
-                          width={90}
-                          tickFormatter={(value) =>
-                            formatCompact(Number(value))
-                          }
-                        />
-                        <Tooltip
-                          content={
-                            <ChartTooltipContent
-                              formatter={(value) => (
-                                <span className="font-mono font-medium text-foreground tabular-nums">
-                                  {formatSek(Number(value))}
-                                </span>
-                              )}
-                            />
-                          }
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="low"
-                          stroke="var(--color-low)"
-                          strokeDasharray="4 4"
-                          dot={false}
-                          isAnimationActive={false}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="high"
-                          stroke="var(--color-high)"
-                          strokeDasharray="4 4"
-                          dot={false}
-                          isAnimationActive={false}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="value"
-                          stroke="var(--color-value)"
-                          strokeWidth={2}
-                          dot={false}
-                          isAnimationActive={false}
-                        />
-                      </LineChart>
-                    </ChartContainer>
-                  ) : (
-                    <div className="flex h-full items-center justify-center rounded-lg border border-slate-100 bg-slate-50 text-sm text-slate-600">
-                      {projectionError ?? "No projection available yet."}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-
+          <StaggerWrap className="grid gap-4">
             <motion.div variants={fadeInUp} {...subtleHover}>
               <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
                 <CardHeader className="pb-2">
@@ -1109,7 +998,7 @@ export const InvestmentDetails: React.FC = () => {
             </motion.div>
           </StaggerWrap>
 
-          <StaggerWrap className="grid gap-4 lg:grid-cols-2">
+          <StaggerWrap className="grid gap-4">
             <motion.div variants={fadeInUp} {...subtleHover}>
               <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
                 <CardHeader className="pb-2">
@@ -1117,13 +1006,11 @@ export const InvestmentDetails: React.FC = () => {
                     Monthly momentum
                   </CardTitle>
                   <p className="text-xs text-slate-500">
-                    Month-by-month balance movement for the current year.
+                    Month-by-month balance movement for {detailRangeLabel}.
                   </p>
                 </CardHeader>
                 <CardContent className="h-72">
-                  {monthlyFlowLoading ? (
-                    <Skeleton className="h-full w-full" />
-                  ) : momentumRows.length ? (
+                  {momentumRows.length ? (
                     <ChartContainer
                       className="h-full w-full"
                       config={{
@@ -1170,75 +1057,7 @@ export const InvestmentDetails: React.FC = () => {
                     </ChartContainer>
                   ) : (
                     <div className="flex h-full items-center justify-center rounded-lg border border-slate-100 bg-slate-50 text-sm text-slate-600">
-                      {monthlyFlowError ??
-                        "No monthly momentum data available."}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div variants={fadeInUp} {...subtleHover}>
-              <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.35)]">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base font-semibold text-slate-900">
-                    Latest transactions
-                  </CardTitle>
-                  <p className="text-xs text-slate-500">
-                    Most recent investment transactions for this account.
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  {transactions.length ? (
-                    <div className="max-h-72 overflow-auto rounded-md border border-slate-100">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Date</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Description</TableHead>
-                            <TableHead className="text-right">Amount</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {transactions.slice(0, 80).map((tx) => {
-                            const amount = coerceMoney(tx.amount_sek);
-                            const tone =
-                              amount > 0
-                                ? "text-emerald-700"
-                                : amount < 0
-                                  ? "text-rose-700"
-                                  : "text-slate-700";
-                            return (
-                              <TableRow key={tx.id}>
-                                <TableCell className="whitespace-nowrap">
-                                  {String(tx.occurred_at).slice(0, 10)}
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap">
-                                  {tx.transaction_type}
-                                </TableCell>
-                                <TableCell className="max-w-[14rem] truncate">
-                                  {tx.description ?? tx.holding_name ?? "—"}
-                                </TableCell>
-                                <TableCell
-                                  className={cn(
-                                    "text-right font-medium tabular-nums",
-                                    tone,
-                                  )}
-                                >
-                                  {formatSignedSek(amount)}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : (
-                    <div className="rounded-md border border-slate-100 bg-slate-50 p-3 text-sm text-slate-600">
-                      {loading
-                        ? "Loading transactions…"
-                        : "No transactions found for this account."}
+                      No monthly momentum data available in this range.
                     </div>
                   )}
                 </CardContent>

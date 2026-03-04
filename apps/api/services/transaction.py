@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 
 from ..models import (
     Category,
+    ImportFile,
     InvestmentSnapshot,
     Loan,
     LoanEvent,
@@ -36,6 +37,7 @@ class TransactionService:
     def __init__(self, session: Session):
         self.session = session
         self.repository = TransactionRepository(session)
+        self._import_file_account_cache: dict[UUID, UUID | None] = {}
 
     def list_transactions(
         self,
@@ -173,6 +175,50 @@ class TransactionService:
 
     def list_loan_events(self, loan_id: UUID) -> List[LoanEvent]:
         return self.repository.list_loan_events(loan_id)
+
+    def normalize_loan_events(self, events: Sequence[LoanEvent]) -> List[LoanEvent]:
+        if not events:
+            return list(events)
+
+        tx_cache: dict[UUID, Optional[Transaction]] = {}
+        leg_cache: dict[UUID, Optional[TransactionLeg]] = {}
+        category_cache: dict[UUID, Optional[Category]] = {}
+
+        for event in events:
+            if event.transaction_id not in tx_cache:
+                tx_cache[event.transaction_id] = self.repository.get(event.transaction_id)
+            transaction = tx_cache[event.transaction_id]
+            if transaction is None:
+                continue
+
+            leg: Optional[TransactionLeg] = None
+            if event.transaction_leg_id is not None:
+                if event.transaction_leg_id not in leg_cache:
+                    leg_cache[event.transaction_leg_id] = self.session.get(
+                        TransactionLeg, event.transaction_leg_id
+                    )
+                leg = leg_cache[event.transaction_leg_id]
+            if leg is None:
+                continue
+
+            category: Optional[Category] = None
+            if transaction.category_id is not None:
+                if transaction.category_id not in category_cache:
+                    category_cache[transaction.category_id] = self._get_category(
+                        transaction.category_id
+                    )
+                category = category_cache[transaction.category_id]
+
+            expected_type = self._classify_loan_event(
+                transaction_type=transaction.transaction_type,
+                leg=leg,
+                category=category,
+                transaction=transaction,
+            )
+            if expected_type is not None:
+                event.event_type = expected_type
+
+        return list(events)
 
     def create_loan_event(
         self,
@@ -315,6 +361,7 @@ class TransactionService:
                 transaction_type=transaction.transaction_type,
                 leg=leg,
                 category=category,
+                transaction=transaction,
             )
             if event_type is None:
                 continue
@@ -344,10 +391,18 @@ class TransactionService:
         transaction_type: TransactionType,
         leg: TransactionLeg,
         category: Optional[Category],
+        transaction: Optional[Transaction] = None,
     ) -> Optional[LoanEventType]:
         amount = coerce_decimal(leg.amount)
         if amount == Decimal("0"):
             return None
+
+        if transaction_type == TransactionType.TRANSFER:
+            return self._classify_transfer_loan_event(
+                amount=amount,
+                leg=leg,
+                transaction=transaction,
+            )
 
         if category is not None:
             if category.category_type == CategoryType.INTEREST:
@@ -355,12 +410,43 @@ class TransactionService:
                     LoanEventType.PAYMENT_INTEREST if amount < 0 else LoanEventType.INTEREST_ACCRUAL
                 )
             if category.category_type == CategoryType.LOAN:
-                return LoanEventType.DISBURSEMENT if amount > 0 else LoanEventType.PAYMENT_PRINCIPAL
-
-        if transaction_type == TransactionType.TRANSFER:
-            return LoanEventType.DISBURSEMENT if amount > 0 else LoanEventType.PAYMENT_PRINCIPAL
+                return self._classify_transfer_loan_event(
+                    amount=amount,
+                    leg=leg,
+                    transaction=transaction,
+                )
 
         return None
+
+    def _classify_transfer_loan_event(
+        self,
+        *,
+        amount: Decimal,
+        leg: TransactionLeg,
+        transaction: Optional[Transaction],
+    ) -> LoanEventType:
+        if amount == Decimal("0"):  # pragma: no cover - guarded by caller
+            return LoanEventType.DISBURSEMENT
+
+        import_file_account_id = self._import_file_account_id(
+            transaction.import_file_id if transaction is not None else None
+        )
+        if import_file_account_id is not None and leg.account_id != import_file_account_id:
+            return LoanEventType.PAYMENT_PRINCIPAL if amount > 0 else LoanEventType.DISBURSEMENT
+
+        return LoanEventType.DISBURSEMENT if amount > 0 else LoanEventType.PAYMENT_PRINCIPAL
+
+    def _import_file_account_id(self, import_file_id: Optional[UUID]) -> Optional[UUID]:
+        if import_file_id is None:
+            return None
+        if import_file_id in self._import_file_account_cache:
+            return self._import_file_account_cache[import_file_id]
+
+        account_id = self.session.exec(
+            select(ImportFile.account_id).where(ImportFile.id == import_file_id)
+        ).one_or_none()
+        self._import_file_account_cache[import_file_id] = account_id
+        return account_id
 
 
 __all__ = ["TransactionService"]

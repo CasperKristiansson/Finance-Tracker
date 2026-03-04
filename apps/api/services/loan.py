@@ -73,7 +73,8 @@ class LoanService:
         offset: int = 0,
     ) -> List[LoanEvent]:
         loan = self.get_loan(account_id)
-        return self.loan_repository.list_events(loan.id, limit=limit, offset=offset)
+        events = self.loan_repository.list_events(loan.id, limit=limit, offset=offset)
+        return TransactionService(self.session).normalize_loan_events(events)
 
     def portfolio_series(
         self,
