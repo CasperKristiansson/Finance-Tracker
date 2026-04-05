@@ -1,6 +1,14 @@
 import { createAction } from "@reduxjs/toolkit";
-import type { SagaIterator } from "redux-saga";
-import { call, put, select, takeLatest } from "redux-saga/effects";
+import type { SagaIterator, Task } from "redux-saga";
+import {
+  call,
+  cancel,
+  fork,
+  put,
+  select,
+  take,
+  takeLatest,
+} from "redux-saga/effects";
 import {
   demoLoanEvents,
   demoLoanPortfolioSeries,
@@ -159,8 +167,60 @@ function* handleFetchPortfolioSeries(
   }
 }
 
+function* watchLatestLoanScheduleByAccount(): SagaIterator {
+  const tasks = new Map<string, Task>();
+
+  while (true) {
+    const action: ReturnType<typeof FetchLoanSchedule> = yield take(
+      FetchLoanSchedule.type,
+    );
+    const { accountId } = action.payload;
+    const existingTask = tasks.get(accountId);
+
+    if (existingTask) {
+      yield cancel(existingTask);
+    }
+
+    const task: Task = yield fork(function* loanScheduleTask() {
+      try {
+        yield call(handleFetchSchedule, action);
+      } finally {
+        tasks.delete(accountId);
+      }
+    });
+
+    tasks.set(accountId, task);
+  }
+}
+
+function* watchLatestLoanEventsByAccount(): SagaIterator {
+  const tasks = new Map<string, Task>();
+
+  while (true) {
+    const action: ReturnType<typeof FetchLoanEvents> = yield take(
+      FetchLoanEvents.type,
+    );
+    const { accountId } = action.payload;
+    const existingTask = tasks.get(accountId);
+
+    if (existingTask) {
+      yield cancel(existingTask);
+    }
+
+    const task: Task = yield fork(function* loanEventsTask() {
+      try {
+        yield call(handleFetchEvents, action);
+      } finally {
+        tasks.delete(accountId);
+      }
+    });
+
+    tasks.set(accountId, task);
+  }
+}
+
 export function* LoansSaga(): SagaIterator {
-  yield takeLatest(FetchLoanSchedule.type, handleFetchSchedule);
-  yield takeLatest(FetchLoanEvents.type, handleFetchEvents);
+  yield fork(watchLatestLoanScheduleByAccount);
+  yield fork(watchLatestLoanEventsByAccount);
   yield takeLatest(FetchLoanPortfolioSeries.type, handleFetchPortfolioSeries);
 }

@@ -1,13 +1,29 @@
-import { ArchiveRestore, Loader2, Save } from "lucide-react";
-import React, { useEffect, useMemo } from "react";
+import { ArchiveRestore, FileDown, Loader2, Save } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
+import { useAppSelector } from "@/app/hooks";
 import { MotionPage } from "@/components/motion-presets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { selectToken } from "@/features/auth/authSlice";
 import { useSettings } from "@/hooks/use-api";
+import { apiFetch } from "@/lib/apiClient";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
+import type { EndpointResponse } from "@/types/contracts";
+import {
+  buildEconomySummaryMarkdown,
+  downloadMarkdownFile,
+} from "./economy-summary";
 
 const currencyOptions = ["SEK", "EUR", "USD"] as const;
 type CurrencyCode = (typeof currencyOptions)[number];
@@ -34,6 +50,7 @@ const resolveCurrencyCode = (value?: string): CurrencyCode => {
 };
 
 export const Settings: React.FC = () => {
+  const token = useAppSelector(selectToken);
   const {
     firstName,
     lastName,
@@ -49,6 +66,7 @@ export const Settings: React.FC = () => {
     changeLastName,
     changeCurrencyCode,
   } = useSettings();
+  const [summaryGenerating, setSummaryGenerating] = useState(false);
   const resolvedCurrencyCode = useMemo(
     () => resolveCurrencyCode(currencyCode),
     [currencyCode],
@@ -86,6 +104,71 @@ export const Settings: React.FC = () => {
     if (error) return "Needs attention";
     return "Ready";
   }, [error, loading, saving]);
+
+  const handleDownloadEconomySummary = async () => {
+    if (!token) {
+      toast.error("Summary export unavailable", {
+        description: "Sign in first so the reporting data can be loaded.",
+      });
+      return;
+    }
+
+    const currentYear = new Date().getFullYear();
+    setSummaryGenerating(true);
+
+    try {
+      const [totalResult, yearlyResult, taxResult] = await Promise.allSettled([
+        apiFetch<EndpointResponse<"totalOverview">>(
+          buildEndpointRequest("totalOverview", { token }),
+        ),
+        apiFetch<EndpointResponse<"yearlyOverview">>(
+          buildEndpointRequest("yearlyOverview", {
+            query: { year: currentYear },
+            token,
+          }),
+        ),
+        apiFetch<EndpointResponse<"taxTotalSummary">>(
+          buildEndpointRequest("taxTotalSummary", { token }),
+        ),
+      ]);
+
+      if (
+        totalResult.status !== "fulfilled" ||
+        yearlyResult.status !== "fulfilled"
+      ) {
+        throw new Error("Core reporting data could not be loaded.");
+      }
+
+      const ownerName =
+        [firstName, lastName].filter(Boolean).join(" ") || undefined;
+      const exportResult = buildEconomySummaryMarkdown({
+        totalOverview: totalResult.value.data,
+        yearlyOverview: yearlyResult.value.data,
+        taxTotalSummary:
+          taxResult.status === "fulfilled" ? taxResult.value.data : null,
+        currencyCode: resolvedCurrencyCode,
+        ownerName,
+      });
+
+      downloadMarkdownFile(exportResult.filename, exportResult.content);
+
+      toast.success("Markdown summary downloaded", {
+        description:
+          taxResult.status === "fulfilled"
+            ? "The economy overview file is ready to share with an LLM."
+            : "The file was generated without the tax totals section.",
+      });
+    } catch (downloadError) {
+      toast.error("Could not generate markdown summary", {
+        description:
+          downloadError instanceof Error
+            ? downloadError.message
+            : "Please try again shortly.",
+      });
+    } finally {
+      setSummaryGenerating(false);
+    }
+  };
 
   return (
     <MotionPage className="mx-auto max-w-4xl space-y-4">
@@ -241,6 +324,47 @@ export const Settings: React.FC = () => {
                 <ArchiveRestore className="h-4 w-4" />
               )}
               Run database backup
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-200 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.25)]">
+        <CardHeader>
+          <CardTitle className="text-sm text-slate-700">
+            AI summary markdown
+          </CardTitle>
+          <CardDescription>
+            Download a markdown brief with net worth, yearly income and
+            spending, all accounts, debt, investments, taxes, and current-year
+            drivers.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1 text-sm text-slate-600">
+              <p>
+                Use this when you want to give another LLM enough context to
+                discuss your economy without manual copy-paste.
+              </p>
+              <p className="text-xs text-slate-500">
+                The file is generated locally from the same reporting endpoints
+                that power the app.
+              </p>
+            </div>
+            <Button
+              type="button"
+              onClick={handleDownloadEconomySummary}
+              disabled={summaryGenerating}
+              className="gap-2"
+              variant="secondary"
+            >
+              {summaryGenerating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileDown className="h-4 w-4" />
+              )}
+              Generate markdown summary
             </Button>
           </div>
         </CardContent>
