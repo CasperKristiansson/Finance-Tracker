@@ -31,7 +31,7 @@ from ..shared.import_suggestions_state import (
 )
 from .utils import get_user_id, json_response, parse_body
 
-BEDROCK_MODEL_ID_DEFAULT = "anthropic.claude-3-haiku-20240307-v1:0"
+BEDROCK_MODEL_ID_DEFAULT = "anthropic.claude-haiku-4-5-20251001-v1:0"
 _MAX_HISTORY = 200
 _MAX_TRANSACTIONS = 200
 _TOOL_NAME = "categorize_transactions"
@@ -44,6 +44,7 @@ _CONNECTION_LOOKUP_DELAY_SECONDS = 0.2
 logger = logging.getLogger(__name__)
 
 _BEDROCK_REGION_ENV = "BEDROCK_REGION"
+_BEDROCK_MODEL_ID_ENV = "BEDROCK_MODEL_ID"
 _BEDROCK_CONNECT_TIMEOUT_ENV = "BEDROCK_CONNECT_TIMEOUT_SECONDS"
 _BEDROCK_READ_TIMEOUT_ENV = "BEDROCK_READ_TIMEOUT_SECONDS"
 _BEDROCK_CONNECT_TIMEOUT_DEFAULT = 5
@@ -402,7 +403,7 @@ def _build_bedrock_payload(
     )
     user_text = json.dumps(prompt_data, ensure_ascii=False)
 
-    model_id = request.model_id or BEDROCK_MODEL_ID_DEFAULT
+    model_id = request.model_id or os.getenv(_BEDROCK_MODEL_ID_ENV) or BEDROCK_MODEL_ID_DEFAULT
     max_tokens = request.max_tokens or 1200
     tools = [
         {

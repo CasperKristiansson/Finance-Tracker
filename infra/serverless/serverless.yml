@@ -18,6 +18,8 @@ provider:
     DB_USER: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/user}
     DB_PASSWORD: ${aws:ssm:/finance-tracker/${self:provider.stage}/db/password}
     AWS_BEARER_TOKEN_BEDROCK: ${aws:ssm:/finance-tracker/${self:provider.stage}/bedrock/bearer_token}
+    BEDROCK_REGION: ${self:provider.region}
+    BEDROCK_MODEL_ID: anthropic.claude-haiku-4-5-20251001-v1:0
     IMPORT_FILES_BUCKET: ${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/bucket}
     IMPORT_FILES_PREFIX: ${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/prefix}
     IMPORT_FILES_URL_EXPIRES_SECONDS: ${aws:ssm:/finance-tracker/${self:provider.stage}/imports/files/url_expires_seconds}

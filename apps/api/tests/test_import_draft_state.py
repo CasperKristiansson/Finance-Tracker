@@ -9,7 +9,7 @@ class _FakeTable:
     def __init__(self) -> None:
         self.items: dict[str, dict] = {}
 
-    def get_item(self, *, Key: dict) -> dict:
+    def get_item(self, *, Key: dict, **_kwargs) -> dict:
         item = self.items.get(str(Key["connection_id"]))
         if item is None:
             return {}

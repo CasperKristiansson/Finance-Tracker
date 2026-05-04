@@ -870,7 +870,10 @@ def test_commit_rejects_multi_file_rows_without_files_payload():
     )
 
     assert response["statusCode"] == 400
-    assert _json_body(response)["error"] == "Rows reference multiple import files; include files payload"
+    assert (
+        _json_body(response)["error"]
+        == "Rows reference multiple import files; include files payload"
+    )
 
 
 def test_persist_import_files_stores_uploaded_file_metadata(

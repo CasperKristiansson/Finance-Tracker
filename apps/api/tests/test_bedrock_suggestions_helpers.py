@@ -94,6 +94,19 @@ def test_prepare_prompt_data_and_payload_defaults() -> None:
     assert payload["tool_choice"]["name"] == "categorize_transactions"
 
 
+def test_build_bedrock_payload_uses_env_model_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    request = ImportCategorySuggestRequest(
+        categories=[],
+        history=[],
+        transactions=[ImportCategorySuggestTransaction(id=UUID(int=1), description="ICA")],
+    )
+    monkeypatch.setenv(bs._BEDROCK_MODEL_ID_ENV, "anthropic.current-model")
+
+    model_id, _payload = bs._build_bedrock_payload({"categories": [], "history": []}, request)
+
+    assert model_id == "anthropic.current-model"
+
+
 def test_parse_suggestions_clamps_and_expands_duplicates() -> None:
     groceries_id = UUID(int=1)
     tx_a = UUID(int=2)
