@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { AccountWithBalance } from "@/types/api";
+import { AccountType, type AccountWithBalance } from "@/types/api";
 
 type ReconcileAccountsDialogMode = "all" | "targets";
 
@@ -51,6 +51,9 @@ const formatCurrency = (value: number) =>
 const needsReconciliation = (account: AccountWithBalance) =>
   Boolean(account.needs_reconciliation);
 
+const isReconcileableAccount = (account: AccountWithBalance) =>
+  account.account_type !== AccountType.INVESTMENT;
+
 export function ReconcileAccountsDialog({
   open,
   onOpenChange,
@@ -68,25 +71,36 @@ export function ReconcileAccountsDialog({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [submitted, setSubmitted] = useState(false);
 
+  const reconcileableAccounts = useMemo(
+    () => accounts.filter(isReconcileableAccount),
+    [accounts],
+  );
+
+  const reconcileableTargets = useMemo(
+    () => targets.filter(isReconcileableAccount),
+    [targets],
+  );
+
   const displayAccounts = useMemo(
-    () => (mode === "all" ? accounts : targets),
-    [accounts, mode, targets],
+    () => (mode === "all" ? reconcileableAccounts : reconcileableTargets),
+    [mode, reconcileableAccounts, reconcileableTargets],
   );
 
   const selectedAccounts = useMemo(() => {
-    if (mode !== "all") return targets;
-    return accounts.filter((acc) => selectedIds.has(acc.id));
-  }, [accounts, mode, selectedIds, targets]);
+    if (mode !== "all") return reconcileableTargets;
+    return reconcileableAccounts.filter((acc) => selectedIds.has(acc.id));
+  }, [mode, reconcileableAccounts, reconcileableTargets, selectedIds]);
 
   useEffect(() => {
     if (!open) return;
-    const nextDisplayAccounts = mode === "all" ? accounts : targets;
+    const nextDisplayAccounts =
+      mode === "all" ? reconcileableAccounts : reconcileableTargets;
     setDrafts(
       Object.fromEntries(
         nextDisplayAccounts.map((acc) => [acc.id, acc.balance]),
       ),
     );
-    setSelectedIds(new Set(targets.map((acc) => acc.id)));
+    setSelectedIds(new Set(reconcileableTargets.map((acc) => acc.id)));
     setSubmitted(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
