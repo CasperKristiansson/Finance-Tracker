@@ -1331,6 +1331,409 @@ export interface TransactionUpdate {
   category_id?: string | null;
 }
 
+export interface VentureAccountLinkRead {
+  account_id: string;
+  include_in_synced_value?: boolean;
+  weight?: string;
+  id: string;
+  company_id: string;
+}
+
+export interface VentureAccountLinkRequest {
+  account_id: string;
+  include_in_synced_value?: boolean;
+  weight?: string;
+}
+
+export interface VentureCompanyCreateRequest {
+  name: string;
+  legal_name?: string | null;
+  description?: string | null;
+  company_type?:
+    | "startup"
+    | "private_company"
+    | "consulting"
+    | "holding"
+    | "other";
+  status?: "idea" | "ongoing" | "stale" | "exited" | "failed";
+  role?:
+    | "founder"
+    | "co-founder"
+    | "owner"
+    | "advisor"
+    | "investor"
+    | "board observer"
+    | "other";
+  valuation_mode?: "manual" | "account_balance_sync";
+  industry?: string | null;
+  stage?: string | null;
+  country?: string | null;
+  founded_on?: string | null;
+  joined_on?: string | null;
+  exited_on?: string | null;
+  closed_on?: string | null;
+  logo_storage_key?: string | null;
+  logo_file_name?: string | null;
+  logo_content_type?: string | null;
+  node_color?: string | null;
+  display_order?: number;
+  account_links?: VentureAccountLinkRequest[];
+  initial_valuation?: VentureValuationCreateRequest | null;
+  initial_ownership?: VentureOwnershipCreateRequest | null;
+}
+
+export interface VentureCompanyDetailResponse {
+  summary: VentureCompanySummaryRead;
+  valuations: VentureValuationRead[];
+  ownership_events: VentureOwnershipRead[];
+  timeline: VentureTimelineEventRead[];
+  notes: VentureNoteRead[];
+  documents: VentureDocumentRead[];
+  document_health: VentureDocumentHealthResponse;
+}
+
+export interface VentureCompanyRead {
+  id: string;
+  name: string;
+  legal_name?: string | null;
+  description?: string | null;
+  company_type: string;
+  status: string;
+  role: string;
+  valuation_mode: string;
+  industry?: string | null;
+  stage?: string | null;
+  country?: string | null;
+  founded_on?: string | null;
+  joined_on?: string | null;
+  exited_on?: string | null;
+  closed_on?: string | null;
+  logo_storage_key?: string | null;
+  logo_file_name?: string | null;
+  logo_content_type?: string | null;
+  node_color?: string | null;
+  display_order?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VentureCompanySummaryRead {
+  company: VentureCompanyRead;
+  latest_valuation?: VentureValuationRead | null;
+  latest_ownership?: VentureOwnershipRead | null;
+  account_links?: VentureAccountLinkRead[];
+  paper_value_sek?: string;
+  risk_adjusted_value_sek?: string;
+  realized_value_sek?: string;
+  ownership_pct?: string | null;
+  last_activity_at?: string | null;
+}
+
+export interface VentureCompanyUpdateRequest {
+  name?: string | null;
+  legal_name?: string | null;
+  description?: string | null;
+  company_type?:
+    | "startup"
+    | "private_company"
+    | "consulting"
+    | "holding"
+    | "other"
+    | null;
+  status?: "idea" | "ongoing" | "stale" | "exited" | "failed" | null;
+  role?:
+    | "founder"
+    | "co-founder"
+    | "owner"
+    | "advisor"
+    | "investor"
+    | "board observer"
+    | "other"
+    | null;
+  valuation_mode?: "manual" | "account_balance_sync" | null;
+  industry?: string | null;
+  stage?: string | null;
+  country?: string | null;
+  founded_on?: string | null;
+  joined_on?: string | null;
+  exited_on?: string | null;
+  closed_on?: string | null;
+  logo_storage_key?: string | null;
+  logo_file_name?: string | null;
+  logo_content_type?: string | null;
+  node_color?: string | null;
+  display_order?: number | null;
+  account_links?: VentureAccountLinkRequest[] | null;
+}
+
+export interface VentureDeleteResponse {
+  id: string;
+  deleted?: boolean;
+}
+
+export interface VentureDocumentCreateRequest {
+  title: string;
+  document_type: string;
+  category: string;
+  status?: "verified" | "linked" | "draft" | "pending_review" | "missing";
+  storage_key?: string | null;
+  external_url?: string | null;
+  file_name?: string | null;
+  mime_type?: string | null;
+  file_size_bytes?: number | null;
+  document_date?: string | null;
+  valuation_event_id?: string | null;
+  ownership_event_id?: string | null;
+  timeline_event_id?: string | null;
+}
+
+export interface VentureDocumentHealthResponse {
+  warnings?: VentureDocumentHealthWarning[];
+  missing_categories?: string[];
+}
+
+export interface VentureDocumentHealthWarning {
+  code: string;
+  message: string;
+  severity?: "info" | "warning";
+  category?: string | null;
+}
+
+export interface VentureDocumentListResponse {
+  documents: VentureDocumentRead[];
+  document_health: VentureDocumentHealthResponse;
+}
+
+export interface VentureDocumentRead {
+  title: string;
+  document_type: string;
+  category: string;
+  status?: "verified" | "linked" | "draft" | "pending_review" | "missing";
+  storage_key?: string | null;
+  external_url?: string | null;
+  file_name?: string | null;
+  mime_type?: string | null;
+  file_size_bytes?: number | null;
+  document_date?: string | null;
+  valuation_event_id?: string | null;
+  ownership_event_id?: string | null;
+  timeline_event_id?: string | null;
+  id: string;
+  company_id: string;
+  uploaded_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VentureGraphEdgeRead {
+  company_id: string;
+  owner_type: string;
+  owner_company_id?: string | null;
+  ownership_pct: string;
+  fully_diluted_ownership_pct?: string | null;
+}
+
+export interface VentureGraphLayoutNode {
+  company_id: string;
+  x: string;
+  y: string;
+  pinned?: boolean;
+}
+
+export interface VentureGraphLayoutRead {
+  layout_key?: string;
+  nodes?: VentureGraphLayoutNode[];
+  viewport?: VentureGraphViewport | null;
+}
+
+export interface VentureGraphLayoutUpdateRequest {
+  layout_key?: string;
+  nodes?: VentureGraphLayoutNode[];
+  viewport?: VentureGraphViewport | null;
+}
+
+export interface VentureGraphViewport {
+  x: string;
+  y: string;
+  zoom: string;
+}
+
+export interface VentureNoteCreateRequest {
+  title: string;
+  body_markdown: string;
+  tags?: string[];
+  pinned?: boolean;
+  note_date: string;
+  timeline_event_id?: string | null;
+  document_ids?: string[];
+}
+
+export interface VentureNoteListResponse {
+  notes: VentureNoteRead[];
+}
+
+export interface VentureNoteRead {
+  id: string;
+  company_id: string;
+  title: string;
+  body_markdown: string;
+  tags: string[];
+  pinned: boolean;
+  note_date: string;
+  timeline_event_id?: string | null;
+  document_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VentureNoteUpdateRequest {
+  title?: string | null;
+  body_markdown?: string | null;
+  tags?: string[] | null;
+  pinned?: boolean | null;
+  note_date?: string | null;
+  timeline_event_id?: string | null;
+  document_ids?: string[] | null;
+}
+
+export interface VentureOverviewKpis {
+  total_paper_value_sek: string;
+  total_risk_adjusted_value_sek: string;
+  total_realized_value_sek: string;
+  illiquid_paper_value_sek: string;
+  company_count: number;
+  status_counts: Record<string, number>;
+}
+
+export interface VentureOverviewResponse {
+  kpis: VentureOverviewKpis;
+  companies: VentureCompanySummaryRead[];
+  ownership_edges: VentureGraphEdgeRead[];
+  layout: VentureGraphLayoutRead;
+  recent_activity?: VentureTimelineEventRead[];
+}
+
+export interface VentureOwnershipCreateRequest {
+  owner_type?: "person" | "company";
+  owner_company_id?: string | null;
+  effective_date: string;
+  reason?: string | null;
+  direct_ownership_pct: string;
+  fully_diluted_ownership_pct?: string | null;
+  shares_owned?: string | null;
+  total_shares?: string | null;
+  share_class?: string | null;
+  voting_rights_pct?: string | null;
+  option_or_warrant_notes?: string | null;
+  invested_capital_sek?: string | null;
+  note?: string | null;
+  linked_document_ids?: string[];
+}
+
+export interface VentureOwnershipRead {
+  owner_type?: "person" | "company";
+  owner_company_id?: string | null;
+  effective_date: string;
+  reason?: string | null;
+  direct_ownership_pct: string;
+  fully_diluted_ownership_pct?: string | null;
+  shares_owned?: string | null;
+  total_shares?: string | null;
+  share_class?: string | null;
+  voting_rights_pct?: string | null;
+  option_or_warrant_notes?: string | null;
+  invested_capital_sek?: string | null;
+  note?: string | null;
+  linked_document_ids?: string[];
+  id: string;
+  company_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VenturePresignRequest {
+  operation: "upload" | "download";
+  purpose?: "logo" | "document";
+  company_id?: string | null;
+  document_id?: string | null;
+  storage_key?: string | null;
+  file_name?: string | null;
+  mime_type?: string | null;
+  file_size_bytes?: number | null;
+}
+
+export interface VenturePresignResponse {
+  url: string;
+  method: "PUT" | "GET";
+  storage_key: string;
+  headers?: Record<string, string>;
+  expires_in_seconds: number;
+}
+
+export interface VentureTimelineEventRead {
+  id: string;
+  company_id: string;
+  event_date: string;
+  event_type: string;
+  title: string;
+  description?: string | null;
+  valuation_event_id?: string | null;
+  ownership_event_id?: string | null;
+  note_id?: string | null;
+  document_id?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VentureValuationCreateRequest {
+  event_date: string;
+  label: string;
+  event_type?: string;
+  paper_value_sek: string;
+  haircut_percentage?: string;
+  realized_value_sek?: string;
+  valuation_source:
+    | "founder_estimate"
+    | "financing_round"
+    | "offer"
+    | "annual_accounts"
+    | "model"
+    | "external_valuation"
+    | "account_balance_sync";
+  liquidity_level?: "none" | "restricted" | "possible_secondary" | "liquid";
+  confidence_score?: number | null;
+  include_in_venture_totals?: boolean;
+  note?: string | null;
+  linked_document_ids?: string[];
+}
+
+export interface VentureValuationRead {
+  event_date: string;
+  label: string;
+  event_type?: string;
+  paper_value_sek: string;
+  haircut_percentage?: string;
+  realized_value_sek?: string;
+  valuation_source:
+    | "founder_estimate"
+    | "financing_round"
+    | "offer"
+    | "annual_accounts"
+    | "model"
+    | "external_valuation"
+    | "account_balance_sync";
+  liquidity_level?: "none" | "restricted" | "possible_secondary" | "liquid";
+  confidence_score?: number | null;
+  include_in_venture_totals?: boolean;
+  note?: string | null;
+  linked_document_ids?: string[];
+  id: string;
+  company_id: string;
+  risk_adjusted_value_sek: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface WarmupResponse {
   status: "ready" | "starting" | "error";
   message?: string | null;

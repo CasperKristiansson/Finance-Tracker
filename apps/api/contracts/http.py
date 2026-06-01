@@ -99,6 +99,26 @@ from ..schemas import (
     TransactionRecentQuery,
     TransactionRecentResponse,
     TransactionUpdate,
+    VentureCompanyCreateRequest,
+    VentureCompanyDetailResponse,
+    VentureCompanyUpdateRequest,
+    VentureDeleteResponse,
+    VentureDocumentCreateRequest,
+    VentureDocumentListResponse,
+    VentureDocumentRead,
+    VentureGraphLayoutRead,
+    VentureGraphLayoutUpdateRequest,
+    VentureNoteCreateRequest,
+    VentureNoteListResponse,
+    VentureNoteRead,
+    VentureNoteUpdateRequest,
+    VentureOverviewResponse,
+    VentureOwnershipCreateRequest,
+    VentureOwnershipRead,
+    VenturePresignRequest,
+    VenturePresignResponse,
+    VentureValuationCreateRequest,
+    VentureValuationRead,
     WarmupResponse,
     YearlyCategoryDetailQuery,
     YearlyCategoryDetailResponse,
@@ -345,6 +365,63 @@ HTTP_HANDLER_CONTRACTS: dict[str, HandlerHttpContract] = {
     "apps/api/handlers/investments.create_investment_snapshot": HandlerHttpContract(
         request_model=InvestmentSnapshotCreateRequest,
         response_model=InvestmentSnapshotCreateResponse,
+    ),
+    "apps/api/handlers/ventures.ventures_overview": HandlerHttpContract(
+        response_model=VentureOverviewResponse,
+    ),
+    "apps/api/handlers/ventures.create_venture_company": HandlerHttpContract(
+        request_model=VentureCompanyCreateRequest,
+        response_model=VentureCompanyDetailResponse,
+    ),
+    "apps/api/handlers/ventures.get_venture_company": HandlerHttpContract(
+        response_model=VentureCompanyDetailResponse,
+    ),
+    "apps/api/handlers/ventures.update_venture_company": HandlerHttpContract(
+        request_model=VentureCompanyUpdateRequest,
+        response_model=VentureCompanyDetailResponse,
+    ),
+    "apps/api/handlers/ventures.delete_venture_company": HandlerHttpContract(
+        response_model=VentureDeleteResponse,
+    ),
+    "apps/api/handlers/ventures.create_venture_valuation": HandlerHttpContract(
+        request_model=VentureValuationCreateRequest,
+        response_model=VentureValuationRead,
+    ),
+    "apps/api/handlers/ventures.create_venture_ownership_event": HandlerHttpContract(
+        request_model=VentureOwnershipCreateRequest,
+        response_model=VentureOwnershipRead,
+    ),
+    "apps/api/handlers/ventures.list_venture_notes": HandlerHttpContract(
+        response_model=VentureNoteListResponse,
+    ),
+    "apps/api/handlers/ventures.create_venture_note": HandlerHttpContract(
+        request_model=VentureNoteCreateRequest,
+        response_model=VentureNoteRead,
+    ),
+    "apps/api/handlers/ventures.update_venture_note": HandlerHttpContract(
+        request_model=VentureNoteUpdateRequest,
+        response_model=VentureNoteRead,
+    ),
+    "apps/api/handlers/ventures.delete_venture_note": HandlerHttpContract(
+        response_model=VentureDeleteResponse,
+    ),
+    "apps/api/handlers/ventures.list_venture_documents": HandlerHttpContract(
+        response_model=VentureDocumentListResponse,
+    ),
+    "apps/api/handlers/ventures.create_venture_document": HandlerHttpContract(
+        request_model=VentureDocumentCreateRequest,
+        response_model=VentureDocumentRead,
+    ),
+    "apps/api/handlers/ventures.delete_venture_document": HandlerHttpContract(
+        response_model=VentureDeleteResponse,
+    ),
+    "apps/api/handlers/ventures.update_venture_layout": HandlerHttpContract(
+        request_model=VentureGraphLayoutUpdateRequest,
+        response_model=VentureGraphLayoutRead,
+    ),
+    "apps/api/handlers/ventures.presign_venture_upload": HandlerHttpContract(
+        request_model=VenturePresignRequest,
+        response_model=VenturePresignResponse,
     ),
 }
 

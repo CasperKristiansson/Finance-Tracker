@@ -66,3 +66,12 @@ output "backup_parameter_paths" {
     bucket = module.resources.backup_bucket_parameter_name
   }
 }
+
+output "ventures_files_parameter_paths" {
+  description = "SSM parameter names containing Ventures file storage configuration."
+  value = {
+    bucket              = module.resources.ventures_files_bucket_parameter_name
+    prefix              = module.resources.ventures_files_prefix_parameter_name
+    url_expires_seconds = module.resources.ventures_files_url_expires_seconds_parameter_name
+  }
+}

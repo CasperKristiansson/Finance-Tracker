@@ -9,6 +9,7 @@ from .loan import LoanService
 from .reporting import ReportingService
 from .settings import SettingsService
 from .transaction import TransactionService
+from .ventures import VentureService
 
 __all__ = [
     "AccountService",
@@ -20,4 +21,5 @@ __all__ = [
     "InvestmentSnapshotService",
     "GoalService",
     "SettingsService",
+    "VentureService",
 ]

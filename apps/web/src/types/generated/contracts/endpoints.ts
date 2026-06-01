@@ -56,6 +56,33 @@ export type CreateTransactionResponse = Models.TransactionRead;
 export type CreateTransactionQuery = void;
 export type CreateTransactionPath = void;
 
+export type CreateVentureCompanyRequest = Models.VentureCompanyCreateRequest;
+export type CreateVentureCompanyResponse = Models.VentureCompanyDetailResponse;
+export type CreateVentureCompanyQuery = void;
+export type CreateVentureCompanyPath = void;
+
+export type CreateVentureDocumentRequest = Models.VentureDocumentCreateRequest;
+export type CreateVentureDocumentResponse = Models.VentureDocumentRead;
+export type CreateVentureDocumentQuery = void;
+export type CreateVentureDocumentPath = { companyId: string };
+
+export type CreateVentureNoteRequest = Models.VentureNoteCreateRequest;
+export type CreateVentureNoteResponse = Models.VentureNoteRead;
+export type CreateVentureNoteQuery = void;
+export type CreateVentureNotePath = { companyId: string };
+
+export type CreateVentureOwnershipEventRequest =
+  Models.VentureOwnershipCreateRequest;
+export type CreateVentureOwnershipEventResponse = Models.VentureOwnershipRead;
+export type CreateVentureOwnershipEventQuery = void;
+export type CreateVentureOwnershipEventPath = { companyId: string };
+
+export type CreateVentureValuationRequest =
+  Models.VentureValuationCreateRequest;
+export type CreateVentureValuationResponse = Models.VentureValuationRead;
+export type CreateVentureValuationQuery = void;
+export type CreateVentureValuationPath = { companyId: string };
+
 export type DashboardOverviewRequest = void;
 export type DashboardOverviewResponse = Models.DashboardOverviewResponse;
 export type DashboardOverviewQuery = Models.DashboardOverviewQuery;
@@ -81,6 +108,24 @@ export type DeleteTransactionResponse = void;
 export type DeleteTransactionQuery = void;
 export type DeleteTransactionPath = { transactionId: string };
 
+export type DeleteVentureCompanyRequest = void;
+export type DeleteVentureCompanyResponse = Models.VentureDeleteResponse;
+export type DeleteVentureCompanyQuery = void;
+export type DeleteVentureCompanyPath = { companyId: string };
+
+export type DeleteVentureDocumentRequest = void;
+export type DeleteVentureDocumentResponse = Models.VentureDeleteResponse;
+export type DeleteVentureDocumentQuery = void;
+export type DeleteVentureDocumentPath = {
+  companyId: string;
+  documentId: string;
+};
+
+export type DeleteVentureNoteRequest = void;
+export type DeleteVentureNoteResponse = Models.VentureDeleteResponse;
+export type DeleteVentureNoteQuery = void;
+export type DeleteVentureNotePath = { companyId: string; noteId: string };
+
 export type DownloadImportFileRequest = Models.ImportFileDownloadRequest;
 export type DownloadImportFileResponse = Models.ImportFileDownloadResponse;
 export type DownloadImportFileQuery = void;
@@ -105,6 +150,11 @@ export type GetSettingsRequest = void;
 export type GetSettingsResponse = Models.SettingsResponse;
 export type GetSettingsQuery = void;
 export type GetSettingsPath = void;
+
+export type GetVentureCompanyRequest = void;
+export type GetVentureCompanyResponse = Models.VentureCompanyDetailResponse;
+export type GetVentureCompanyQuery = void;
+export type GetVentureCompanyPath = { companyId: string };
 
 export type InvestmentOverviewRequest = void;
 export type InvestmentOverviewResponse = Models.InvestmentOverviewResponse;
@@ -178,6 +228,16 @@ export type ListTransactionsResponse = Models.TransactionListResponse;
 export type ListTransactionsQuery = Models.TransactionListQuery;
 export type ListTransactionsPath = void;
 
+export type ListVentureDocumentsRequest = void;
+export type ListVentureDocumentsResponse = Models.VentureDocumentListResponse;
+export type ListVentureDocumentsQuery = void;
+export type ListVentureDocumentsPath = { companyId: string };
+
+export type ListVentureNotesRequest = void;
+export type ListVentureNotesResponse = Models.VentureNoteListResponse;
+export type ListVentureNotesQuery = void;
+export type ListVentureNotesPath = { companyId: string };
+
 export type MergeCategoriesRequest = Models.MergeCategoriesRequest;
 export type MergeCategoriesResponse = Models.CategoryRead;
 export type MergeCategoriesQuery = void;
@@ -202,6 +262,11 @@ export type PersistImportFilesRequest = Models.ImportPersistFilesRequest;
 export type PersistImportFilesResponse = Models.ImportPersistFilesResponse;
 export type PersistImportFilesQuery = void;
 export type PersistImportFilesPath = { importBatchId: string };
+
+export type PresignVentureUploadRequest = Models.VenturePresignRequest;
+export type PresignVentureUploadResponse = Models.VenturePresignResponse;
+export type PresignVentureUploadQuery = void;
+export type PresignVentureUploadPath = void;
 
 export type PreviewImportsRequest = Models.ImportPreviewRequest;
 export type PreviewImportsResponse = Models.ImportPreviewResponse;
@@ -291,6 +356,26 @@ export type UpdateTransactionRequest = Models.TransactionUpdate;
 export type UpdateTransactionResponse = Models.TransactionRead;
 export type UpdateTransactionQuery = void;
 export type UpdateTransactionPath = { transactionId: string };
+
+export type UpdateVentureCompanyRequest = Models.VentureCompanyUpdateRequest;
+export type UpdateVentureCompanyResponse = Models.VentureCompanyDetailResponse;
+export type UpdateVentureCompanyQuery = void;
+export type UpdateVentureCompanyPath = { companyId: string };
+
+export type UpdateVentureLayoutRequest = Models.VentureGraphLayoutUpdateRequest;
+export type UpdateVentureLayoutResponse = Models.VentureGraphLayoutRead;
+export type UpdateVentureLayoutQuery = void;
+export type UpdateVentureLayoutPath = void;
+
+export type UpdateVentureNoteRequest = Models.VentureNoteUpdateRequest;
+export type UpdateVentureNoteResponse = Models.VentureNoteRead;
+export type UpdateVentureNoteQuery = void;
+export type UpdateVentureNotePath = { companyId: string; noteId: string };
+
+export type VenturesOverviewRequest = void;
+export type VenturesOverviewResponse = Models.VentureOverviewResponse;
+export type VenturesOverviewQuery = void;
+export type VenturesOverviewPath = void;
 
 export type WarmDatabaseRequest = void;
 export type WarmDatabaseResponse = Models.WarmupResponse;
@@ -428,6 +513,61 @@ export const endpoints = {
     handler: "apps/api/handlers/transactions.create_transaction",
     auth: true,
   }),
+  createVentureCompany: defineEndpoint<
+    CreateVentureCompanyRequest,
+    CreateVentureCompanyResponse,
+    CreateVentureCompanyQuery,
+    CreateVentureCompanyPath
+  >({
+    path: "/ventures/companies",
+    method: "POST",
+    handler: "apps/api/handlers/ventures.create_venture_company",
+    auth: true,
+  }),
+  createVentureDocument: defineEndpoint<
+    CreateVentureDocumentRequest,
+    CreateVentureDocumentResponse,
+    CreateVentureDocumentQuery,
+    CreateVentureDocumentPath
+  >({
+    path: "/ventures/companies/{companyId}/documents",
+    method: "POST",
+    handler: "apps/api/handlers/ventures.create_venture_document",
+    auth: true,
+  }),
+  createVentureNote: defineEndpoint<
+    CreateVentureNoteRequest,
+    CreateVentureNoteResponse,
+    CreateVentureNoteQuery,
+    CreateVentureNotePath
+  >({
+    path: "/ventures/companies/{companyId}/notes",
+    method: "POST",
+    handler: "apps/api/handlers/ventures.create_venture_note",
+    auth: true,
+  }),
+  createVentureOwnershipEvent: defineEndpoint<
+    CreateVentureOwnershipEventRequest,
+    CreateVentureOwnershipEventResponse,
+    CreateVentureOwnershipEventQuery,
+    CreateVentureOwnershipEventPath
+  >({
+    path: "/ventures/companies/{companyId}/ownership-events",
+    method: "POST",
+    handler: "apps/api/handlers/ventures.create_venture_ownership_event",
+    auth: true,
+  }),
+  createVentureValuation: defineEndpoint<
+    CreateVentureValuationRequest,
+    CreateVentureValuationResponse,
+    CreateVentureValuationQuery,
+    CreateVentureValuationPath
+  >({
+    path: "/ventures/companies/{companyId}/valuations",
+    method: "POST",
+    handler: "apps/api/handlers/ventures.create_venture_valuation",
+    auth: true,
+  }),
   dashboardOverview: defineEndpoint<
     DashboardOverviewRequest,
     DashboardOverviewResponse,
@@ -483,6 +623,39 @@ export const endpoints = {
     handler: "apps/api/handlers/transactions.delete_transaction",
     auth: true,
   }),
+  deleteVentureCompany: defineEndpoint<
+    DeleteVentureCompanyRequest,
+    DeleteVentureCompanyResponse,
+    DeleteVentureCompanyQuery,
+    DeleteVentureCompanyPath
+  >({
+    path: "/ventures/companies/{companyId}",
+    method: "DELETE",
+    handler: "apps/api/handlers/ventures.delete_venture_company",
+    auth: true,
+  }),
+  deleteVentureDocument: defineEndpoint<
+    DeleteVentureDocumentRequest,
+    DeleteVentureDocumentResponse,
+    DeleteVentureDocumentQuery,
+    DeleteVentureDocumentPath
+  >({
+    path: "/ventures/companies/{companyId}/documents/{documentId}",
+    method: "DELETE",
+    handler: "apps/api/handlers/ventures.delete_venture_document",
+    auth: true,
+  }),
+  deleteVentureNote: defineEndpoint<
+    DeleteVentureNoteRequest,
+    DeleteVentureNoteResponse,
+    DeleteVentureNoteQuery,
+    DeleteVentureNotePath
+  >({
+    path: "/ventures/companies/{companyId}/notes/{noteId}",
+    method: "DELETE",
+    handler: "apps/api/handlers/ventures.delete_venture_note",
+    auth: true,
+  }),
   downloadImportFile: defineEndpoint<
     DownloadImportFileRequest,
     DownloadImportFileResponse,
@@ -536,6 +709,17 @@ export const endpoints = {
     path: "/settings",
     method: "GET",
     handler: "apps/api/handlers/settings.get_settings",
+    auth: true,
+  }),
+  getVentureCompany: defineEndpoint<
+    GetVentureCompanyRequest,
+    GetVentureCompanyResponse,
+    GetVentureCompanyQuery,
+    GetVentureCompanyPath
+  >({
+    path: "/ventures/companies/{companyId}",
+    method: "GET",
+    handler: "apps/api/handlers/ventures.get_venture_company",
     auth: true,
   }),
   investmentOverview: defineEndpoint<
@@ -692,6 +876,28 @@ export const endpoints = {
     handler: "apps/api/handlers/transactions.list_transactions",
     auth: true,
   }),
+  listVentureDocuments: defineEndpoint<
+    ListVentureDocumentsRequest,
+    ListVentureDocumentsResponse,
+    ListVentureDocumentsQuery,
+    ListVentureDocumentsPath
+  >({
+    path: "/ventures/companies/{companyId}/documents",
+    method: "GET",
+    handler: "apps/api/handlers/ventures.list_venture_documents",
+    auth: true,
+  }),
+  listVentureNotes: defineEndpoint<
+    ListVentureNotesRequest,
+    ListVentureNotesResponse,
+    ListVentureNotesQuery,
+    ListVentureNotesPath
+  >({
+    path: "/ventures/companies/{companyId}/notes",
+    method: "GET",
+    handler: "apps/api/handlers/ventures.list_venture_notes",
+    auth: true,
+  }),
   mergeCategories: defineEndpoint<
     MergeCategoriesRequest,
     MergeCategoriesResponse,
@@ -745,6 +951,17 @@ export const endpoints = {
     path: "/imports/{importBatchId}/files",
     method: "POST",
     handler: "apps/api/handlers/imports.persist_import_files",
+    auth: true,
+  }),
+  presignVentureUpload: defineEndpoint<
+    PresignVentureUploadRequest,
+    PresignVentureUploadResponse,
+    PresignVentureUploadQuery,
+    PresignVentureUploadPath
+  >({
+    path: "/ventures/uploads/presign",
+    method: "POST",
+    handler: "apps/api/handlers/ventures.presign_venture_upload",
     auth: true,
   }),
   previewImports: defineEndpoint<
@@ -933,6 +1150,50 @@ export const endpoints = {
     path: "/transactions/{transactionId}",
     method: "PATCH",
     handler: "apps/api/handlers/transactions.update_transaction",
+    auth: true,
+  }),
+  updateVentureCompany: defineEndpoint<
+    UpdateVentureCompanyRequest,
+    UpdateVentureCompanyResponse,
+    UpdateVentureCompanyQuery,
+    UpdateVentureCompanyPath
+  >({
+    path: "/ventures/companies/{companyId}",
+    method: "PATCH",
+    handler: "apps/api/handlers/ventures.update_venture_company",
+    auth: true,
+  }),
+  updateVentureLayout: defineEndpoint<
+    UpdateVentureLayoutRequest,
+    UpdateVentureLayoutResponse,
+    UpdateVentureLayoutQuery,
+    UpdateVentureLayoutPath
+  >({
+    path: "/ventures/layout",
+    method: "PATCH",
+    handler: "apps/api/handlers/ventures.update_venture_layout",
+    auth: true,
+  }),
+  updateVentureNote: defineEndpoint<
+    UpdateVentureNoteRequest,
+    UpdateVentureNoteResponse,
+    UpdateVentureNoteQuery,
+    UpdateVentureNotePath
+  >({
+    path: "/ventures/companies/{companyId}/notes/{noteId}",
+    method: "PATCH",
+    handler: "apps/api/handlers/ventures.update_venture_note",
+    auth: true,
+  }),
+  venturesOverview: defineEndpoint<
+    VenturesOverviewRequest,
+    VenturesOverviewResponse,
+    VenturesOverviewQuery,
+    VenturesOverviewPath
+  >({
+    path: "/ventures/overview",
+    method: "GET",
+    handler: "apps/api/handlers/ventures.ventures_overview",
     auth: true,
   }),
   warmDatabase: defineEndpoint<

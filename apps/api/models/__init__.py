@@ -10,6 +10,17 @@ from .investment_transaction import InvestmentTransaction
 from .settings import UserSettings
 from .tax import TaxEvent
 from .transaction import LoanEvent, Transaction, TransactionLeg
+from .ventures import (
+    VentureCompany,
+    VentureCompanyAccountLink,
+    VentureDocument,
+    VentureDocumentRequirement,
+    VentureGraphLayout,
+    VentureNote,
+    VentureOwnershipEvent,
+    VentureTimelineEvent,
+    VentureValuationEvent,
+)
 
 __all__ = [
     "Account",
@@ -32,4 +43,13 @@ __all__ = [
     "InvestmentTransaction",
     "Goal",
     "UserSettings",
+    "VentureCompany",
+    "VentureValuationEvent",
+    "VentureOwnershipEvent",
+    "VentureTimelineEvent",
+    "VentureNote",
+    "VentureDocument",
+    "VentureCompanyAccountLink",
+    "VentureDocumentRequirement",
+    "VentureGraphLayout",
 ]
