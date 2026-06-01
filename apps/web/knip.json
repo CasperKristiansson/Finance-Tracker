@@ -3,10 +3,7 @@
   "project": ["src/**/*.{ts,tsx}"],
   "ignoreDependencies": [
     "@react-three/fiber",
-    "@types/dagre",
-    "@xyflow/react",
     "camera-controls",
-    "dagre",
     "react-markdown",
     "remark-gfm",
     "@types/three",

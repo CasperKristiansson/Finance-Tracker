@@ -1,4 +1,5 @@
 import { createRoot } from "react-dom/client";
+import "@xyflow/react/dist/style.css";
 import "./index.css";
 import { Provider } from "react-redux";
 import { BrowserRouter } from "react-router";
