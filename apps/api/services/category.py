@@ -12,6 +12,16 @@ from sqlmodel import Session
 
 from ..models import Category, Transaction
 from ..repositories.category import CategoryRepository, CategoryUsage
+from ..shared import CategoryType
+
+DEFAULT_ADJUSTMENT_CATEGORY_NAME = "Adjustment"
+FALLBACK_ADJUSTMENT_CATEGORY_NAMES = (
+    DEFAULT_ADJUSTMENT_CATEGORY_NAME,
+    "Balance adjustment",
+    "Reconciliation adjustment",
+)
+DEFAULT_ADJUSTMENT_CATEGORY_COLOR = "#64748b"
+DEFAULT_ADJUSTMENT_CATEGORY_ICON = "lucide:RefreshCw"
 
 
 class CategoryService:
@@ -49,6 +59,46 @@ class CategoryService:
 
     def create_category(self, category: Category) -> Category:
         return self.repository.create(category)
+
+    def get_or_create_adjustment_category(self) -> Category:
+        for name in FALLBACK_ADJUSTMENT_CATEGORY_NAMES:
+            category = self.repository.find_by_name(name)
+            if category is None:
+                category = Category(
+                    name=name,
+                    category_type=CategoryType.ADJUSTMENT,
+                    color_hex=DEFAULT_ADJUSTMENT_CATEGORY_COLOR,
+                    icon=DEFAULT_ADJUSTMENT_CATEGORY_ICON,
+                )
+                self.session.add(category)
+                self.session.flush()
+                return category
+
+            if category.category_type == CategoryType.ADJUSTMENT:
+                changed = False
+                if category.is_archived:
+                    category.is_archived = False
+                    changed = True
+                if not category.color_hex:
+                    category.color_hex = DEFAULT_ADJUSTMENT_CATEGORY_COLOR
+                    changed = True
+                if not category.icon:
+                    category.icon = DEFAULT_ADJUSTMENT_CATEGORY_ICON
+                    changed = True
+                if changed:
+                    self.session.add(category)
+                    self.session.flush()
+                return category
+
+        category = Category(
+            name="System adjustment",
+            category_type=CategoryType.ADJUSTMENT,
+            color_hex=DEFAULT_ADJUSTMENT_CATEGORY_COLOR,
+            icon=DEFAULT_ADJUSTMENT_CATEGORY_ICON,
+        )
+        self.session.add(category)
+        self.session.flush()
+        return category
 
     def update_category(self, category_id: UUID, **updates) -> Category:
         category = self.get_category(category_id)

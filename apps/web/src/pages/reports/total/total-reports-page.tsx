@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 import {
+  isSyntheticInvestmentId,
+  isSyntheticInvestmentLabel,
+} from "@/lib/investment-growth";
+import {
   fetchCustomReport,
   fetchTotalOverview,
   fetchYearlyReport,
@@ -49,12 +53,14 @@ type TotalReportsPageProps = {
   token: string | null;
   year: number;
   totalWindowPreset: "all" | "10" | "5" | "3";
+  includeInvestmentGrowth: boolean;
 };
 
 export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
   token,
   year,
   totalWindowPreset,
+  includeInvestmentGrowth,
 }) => {
   const routeMode: ReportMode = "total";
   const [totalOverview, setTotalOverview] =
@@ -160,6 +166,7 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
   } = useTotalAnalysis({
     totalOverview,
     totalWindowPreset,
+    includeInvestmentGrowth,
     netWorthForecastHorizonMonths,
   });
 
@@ -167,19 +174,37 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
     const savingsRateByYear = new Map(
       totalYearly.map((row) => [row.year, row.savingsRate]),
     );
+    const investmentMarketGrowthByYear = new Map(
+      totalYearly.map((row) => [row.year, row.investmentMarketGrowth ?? 0]),
+    );
 
     const rows =
       yearlyReport.length > 0
-        ? yearlyReport.map((row) => ({
-            year: row.year,
-            income: Number(row.income),
-            expense: Number(row.expense),
-            adjustmentInflow: Number(row.adjustment_inflow ?? 0),
-            adjustmentOutflow: Number(row.adjustment_outflow ?? 0),
-            adjustmentNet: Number(row.adjustment_net ?? 0),
-            net: Number(row.net),
-            savingsRate: savingsRateByYear.get(row.year) ?? null,
-          }))
+        ? yearlyReport.map((row) => {
+            const investmentMarketGrowth =
+              investmentMarketGrowthByYear.get(row.year) ?? 0;
+            const investmentIncome =
+              includeInvestmentGrowth && investmentMarketGrowth > 0
+                ? investmentMarketGrowth
+                : 0;
+            const investmentExpense =
+              includeInvestmentGrowth && investmentMarketGrowth < 0
+                ? Math.abs(investmentMarketGrowth)
+                : 0;
+            return {
+              year: row.year,
+              income: Number(row.income) + investmentIncome,
+              expense: Number(row.expense) + investmentExpense,
+              adjustmentInflow: Number(row.adjustment_inflow ?? 0),
+              adjustmentOutflow: Number(row.adjustment_outflow ?? 0),
+              adjustmentNet: Number(row.adjustment_net ?? 0),
+              net:
+                Number(row.net) +
+                (includeInvestmentGrowth ? investmentMarketGrowth : 0),
+              savingsRate: savingsRateByYear.get(row.year) ?? null,
+              investmentMarketGrowth,
+            };
+          })
         : totalYearly.map((row) => ({
             ...row,
             adjustmentInflow: 0,
@@ -189,7 +214,7 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
 
     const tableData = [...rows].sort((a, b) => b.year - a.year);
     return { chartData: rows, tableData };
-  }, [totalYearly, yearlyReport]);
+  }, [includeInvestmentGrowth, totalYearly, yearlyReport]);
 
   useEffect(() => {
     const loadDrilldown = async () => {
@@ -287,7 +312,13 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
   }, [token, totalDrilldown, totalDrilldownOpen]);
 
   const openTotalDrilldownDialog = (state: TotalDrilldownState) => {
-    setTotalDrilldown(state);
+    const normalizedState =
+      (state.kind === "category" &&
+        isSyntheticInvestmentId(state.categoryId)) ||
+      (state.kind === "source" && isSyntheticInvestmentLabel(state.source))
+        ? ({ kind: "investments" } satisfies TotalDrilldownState)
+        : state;
+    setTotalDrilldown(normalizedState);
     setTotalDrilldownOpen(true);
   };
 
@@ -306,6 +337,7 @@ export const TotalReportsPage: React.FC<TotalReportsPageProps> = ({
         year={year}
         overview={null}
         totalKpis={totalKpis}
+        includeInvestmentGrowth={includeInvestmentGrowth}
       />
 
       <div className="grid gap-3">

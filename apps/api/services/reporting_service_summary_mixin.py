@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -16,6 +17,12 @@ from ..repositories.reporting import (
     ReportingRepository,
     TransactionAmountRow,
     YearlyTotals,
+)
+from .reporting_investment_growth import (
+    investment_account_ids_for_user,
+    investment_market_growth_by_month,
+    month_starts_for_year,
+    portfolio_events_from_snapshots,
 )
 from .reporting_service_core_mixin import ReportingServiceCoreMixin
 from .reporting_total import build_total_overview
@@ -210,6 +217,42 @@ class ReportingServiceSummaryMixin(ReportingServiceCoreMixin):
         account_ids: Optional[Iterable[UUID]] = None,
     ) -> dict[str, object]:
         monthly = self.monthly_report(year=year, account_ids=account_ids, category_ids=None)
+        if account_ids is None:
+            as_of = min(date.today(), date(year, 12, 31))
+            investment_account_ids = investment_account_ids_for_user(
+                self.session,
+                self.repository.user_id,
+            )
+            snapshot_rows = self.repository.list_investment_snapshots_until(end=as_of)
+            growth_by_month = investment_market_growth_by_month(
+                session=self.session,
+                investment_account_ids=investment_account_ids,
+                portfolio_events=portfolio_events_from_snapshots(snapshot_rows),
+                months=month_starts_for_year(year),
+                as_of=as_of,
+            )
+            monthly_by_period = {row.period: row for row in monthly}
+            for period, growth in growth_by_month.items():
+                existing = monthly_by_period.get(period)
+                if existing is None:
+                    if growth == 0:
+                        continue
+                    monthly_by_period[period] = MonthlyTotals(
+                        period=period,
+                        income=Decimal("0"),
+                        expense=Decimal("0"),
+                        adjustment_inflow=Decimal("0"),
+                        adjustment_outflow=Decimal("0"),
+                        adjustment_net=Decimal("0"),
+                        net=Decimal("0"),
+                        investment_market_growth=growth,
+                    )
+                    continue
+                monthly_by_period[period] = replace(
+                    existing,
+                    investment_market_growth=growth,
+                )
+            monthly = [monthly_by_period[key] for key in sorted(monthly_by_period)]
         total = self.total_report(account_ids=account_ids, category_ids=None)
         net_worth = self.net_worth_history(account_ids=account_ids)
         return {

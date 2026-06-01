@@ -233,7 +233,7 @@ export const AccountDetails: React.FC = () => {
 
   useEffect(() => {
     if (categories.length) return;
-    fetchCategories({ includeArchived: true });
+    fetchCategories({ includeArchived: true, includeSpecial: true });
   }, [categories.length, fetchCategories]);
 
   useEffect(() => {

@@ -42,6 +42,7 @@ type InvestmentsSummary = {
   changePct: number | null;
   contributions: number;
   withdrawals: number;
+  marketGrowth: number;
   monthly: Array<{ month: string; value: number }>;
   accounts: Array<{
     name: string;
@@ -82,6 +83,7 @@ export const YearlyInvestmentsSummaryCard: React.FC<{
         : null,
       contributions: Number(overview.investments_summary.contributions),
       withdrawals: Number(overview.investments_summary.withdrawals),
+      marketGrowth: Number(overview.investments_summary.market_growth ?? 0),
       monthly,
       accounts,
     };
@@ -124,6 +126,7 @@ export const YearlyInvestmentsSummaryCard: React.FC<{
                 changePct: investmentsSummary.changePct,
                 contributions: investmentsSummary.contributions,
                 withdrawals: investmentsSummary.withdrawals,
+                marketGrowth: investmentsSummary.marketGrowth,
               },
             });
           }}
@@ -162,7 +165,7 @@ export const YearlyInvestmentsSummaryCard: React.FC<{
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div className="rounded-md border border-slate-100 bg-white p-3">
                 <p className="text-xs tracking-wide text-slate-500 uppercase">
                   Contributions
@@ -177,6 +180,21 @@ export const YearlyInvestmentsSummaryCard: React.FC<{
                 </p>
                 <p className="font-semibold text-slate-900">
                   {currency(investmentsSummary.withdrawals)}
+                </p>
+              </div>
+              <div className="rounded-md border border-slate-100 bg-white p-3">
+                <p className="text-xs tracking-wide text-slate-500 uppercase">
+                  Market growth
+                </p>
+                <p
+                  className={
+                    investmentsSummary.marketGrowth >= 0
+                      ? "font-semibold text-indigo-700"
+                      : "font-semibold text-rose-700"
+                  }
+                >
+                  {investmentsSummary.marketGrowth >= 0 ? "+" : "−"}
+                  {currency(Math.abs(investmentsSummary.marketGrowth))}
                 </p>
               </div>
             </div>

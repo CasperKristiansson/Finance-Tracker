@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { isSyntheticInvestmentId } from "@/lib/investment-growth";
 
 import type {
   TotalDrilldownState,
@@ -193,6 +194,16 @@ export const TotalCategoryByYearCard: React.FC<{
                           setHover({ year, categoryName: row.name, value })
                         }
                         onClick={() => {
+                          if (isSyntheticInvestmentId(row.categoryId)) {
+                            onOpenDrilldownDialog({
+                              kind: "category",
+                              flow,
+                              categoryId: row.categoryId,
+                              name: row.name,
+                              color: row.color,
+                            });
+                            return;
+                          }
                           const { yearTotal, sharePct, yoyDelta, yoyDeltaPct } =
                             row.cells[idx];
                           onOpenHeatmapDialog({

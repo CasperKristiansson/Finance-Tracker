@@ -4,6 +4,7 @@ export interface SettingsState {
   firstName?: string;
   lastName?: string;
   currencyCode?: string;
+  includeInvestmentGrowth: boolean;
   loading: boolean;
   saving: boolean;
   backingUp: boolean;
@@ -13,10 +14,20 @@ export interface SettingsState {
 
 const SETTINGS_STORAGE_KEY = "finance-tracker-settings";
 
-const safeParseLocalSettings = (): Partial<SettingsState> | undefined => {
+const getLocalStorage = (): Storage | undefined => {
   if (typeof window === "undefined") return undefined;
   try {
-    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    return window.localStorage || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const safeParseLocalSettings = (): Partial<SettingsState> | undefined => {
+  const storage = getLocalStorage();
+  if (!storage) return undefined;
+  try {
+    const raw = storage.getItem(SETTINGS_STORAGE_KEY);
     if (!raw) return undefined;
     return JSON.parse(raw) as Partial<SettingsState>;
   } catch (error) {
@@ -31,6 +42,7 @@ const initialState: SettingsState = {
   firstName: cachedSettings?.firstName,
   lastName: cachedSettings?.lastName,
   currencyCode: cachedSettings?.currencyCode,
+  includeInvestmentGrowth: cachedSettings?.includeInvestmentGrowth ?? true,
   loading: false,
   saving: false,
   backingUp: false,
@@ -50,6 +62,8 @@ const settingsSlice = createSlice({
         state.lastName = payload.lastName || undefined;
       if (payload.currencyCode !== undefined)
         state.currencyCode = payload.currencyCode || undefined;
+      if (payload.includeInvestmentGrowth !== undefined)
+        state.includeInvestmentGrowth = payload.includeInvestmentGrowth;
       if (payload.lastSavedAt) state.lastSavedAt = payload.lastSavedAt;
       state.error = undefined;
     },
@@ -71,6 +85,9 @@ const settingsSlice = createSlice({
     setCurrencyCode(state, action: PayloadAction<string | undefined>) {
       state.currencyCode = action.payload || undefined;
     },
+    setIncludeInvestmentGrowth(state, action: PayloadAction<boolean>) {
+      state.includeInvestmentGrowth = action.payload;
+    },
     setFirstName(state, action: PayloadAction<string>) {
       state.firstName = action.payload;
     },
@@ -87,6 +104,7 @@ const settingsSlice = createSlice({
     selectSettingsError: (state) => state.error,
     selectSettingsLastSavedAt: (state) => state.lastSavedAt,
     selectCurrencyCode: (state) => state.currencyCode,
+    selectIncludeInvestmentGrowth: (state) => state.includeInvestmentGrowth,
     selectBackingUp: (state) => state.backingUp,
   },
 });
@@ -101,6 +119,7 @@ export const {
   setFirstName,
   setLastName,
   setCurrencyCode,
+  setIncludeInvestmentGrowth,
 } = settingsSlice.actions;
 
 export const {
@@ -112,6 +131,7 @@ export const {
   selectSettingsError,
   selectSettingsLastSavedAt,
   selectCurrencyCode,
+  selectIncludeInvestmentGrowth,
   selectBackingUp,
 } = settingsSlice.selectors;
 

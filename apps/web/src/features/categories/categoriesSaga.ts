@@ -24,10 +24,12 @@ import type { CategoryRead } from "@/types/api";
 import type { EndpointRequest, EndpointResponse } from "@/types/contracts";
 
 export const FetchCategories = createAction<
-  Partial<Pick<CategoriesState, "includeArchived">> | undefined
+  | Partial<Pick<CategoriesState, "includeArchived" | "includeSpecial">>
+  | undefined
 >("categories/fetch");
 export const FetchCategoryOptions = createAction<
-  Pick<CategoriesState, "includeArchived"> | undefined
+  | Partial<Pick<CategoriesState, "includeArchived" | "includeSpecial">>
+  | undefined
 >("categories/fetchOptions");
 export const CreateCategory =
   createAction<EndpointRequest<"createCategory">>("categories/create");
@@ -45,6 +47,9 @@ function* handleFetchCategories(
   action: ReturnType<typeof FetchCategories>,
 ): SagaIterator {
   const filters = action.payload ?? {};
+  const state: CategoriesState = yield select(selectCategoriesState);
+  const includeArchived = filters.includeArchived ?? state.includeArchived;
+  const includeSpecial = filters.includeSpecial ?? state.includeSpecial;
   yield put(setCategoriesLoading(true));
   const isDemo: boolean = yield select(selectIsDemo);
   if (action.payload) {
@@ -58,7 +63,8 @@ function* handleFetchCategories(
     }
 
     const query = {
-      include_archived: filters.includeArchived ?? false,
+      include_archived: includeArchived,
+      include_special: includeSpecial,
     };
 
     const response: EndpointResponse<"listCategories"> = yield call(
@@ -93,6 +99,7 @@ function* handleFetchCategoryOptions(
   const state: CategoriesState = yield select(selectCategoriesState);
   const includeArchived =
     action.payload?.includeArchived ?? state.includeArchived;
+  const includeSpecial = action.payload?.includeSpecial ?? state.includeSpecial;
   yield put(setCategoryOptionsLoading(true));
   const isDemo: boolean = yield select(selectIsDemo);
 
@@ -115,7 +122,7 @@ function* handleFetchCategoryOptions(
       buildEndpointRequest("listCategoryOptions", {
         query: {
           include_archived: includeArchived,
-          include_special: false,
+          include_special: includeSpecial,
         },
       }),
       { loadingKey: "category-options" },

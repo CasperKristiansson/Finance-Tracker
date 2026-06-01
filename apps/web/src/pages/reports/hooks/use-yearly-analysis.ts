@@ -1,5 +1,15 @@
 import { useMemo } from "react";
 
+import {
+  INVESTMENT_GROWTH_COLOR,
+  INVESTMENT_GROWTH_ID,
+  INVESTMENT_GROWTH_LABEL,
+  INVESTMENT_LOSS_ID,
+  INVESTMENT_LOSS_COLOR,
+  INVESTMENT_LOSS_LABEL,
+  applyInvestmentGrowth,
+  splitInvestmentGrowth,
+} from "@/lib/investment-growth";
 import type { YearlyOverviewResponse } from "@/types/api";
 
 import type {
@@ -25,21 +35,59 @@ export const useYearlyAnalysis = ({
   overview,
   prevOverview,
   year,
+  includeInvestmentGrowth,
 }: {
   overview: YearlyOverviewResponse | null;
   prevOverview: YearlyOverviewResponse | null;
   year: number;
+  includeInvestmentGrowth: boolean;
 }) => {
+  const investmentGrowthMonthly = useMemo(
+    () =>
+      overview?.monthly.map((row) =>
+        Number(row.investment_market_growth ?? 0),
+      ) ?? Array.from({ length: 12 }, () => 0),
+    [overview?.monthly],
+  );
+
+  const prevInvestmentGrowthMonthly = useMemo(
+    () =>
+      prevOverview?.monthly.map((row) =>
+        Number(row.investment_market_growth ?? 0),
+      ) ?? Array.from({ length: 12 }, () => 0),
+    [prevOverview?.monthly],
+  );
+
   const categoryChartData = useMemo(() => {
     if (!overview?.category_breakdown) return [];
-    return overview.category_breakdown.map((item) => ({
+    const rows = overview.category_breakdown.map((item) => ({
       id: item.category_id ?? null,
       name: item.name,
       total: Number(item.total),
       color: item.color_hex ?? "#ef4444",
       monthly: item.monthly.map((v) => Number(v)),
     }));
-  }, [overview?.category_breakdown]);
+    if (includeInvestmentGrowth) {
+      const monthlyLoss = investmentGrowthMonthly.map(
+        (value) => splitInvestmentGrowth(value).expenseLike,
+      );
+      const total = monthlyLoss.reduce((sum, value) => sum + value, 0);
+      if (total > 0) {
+        rows.push({
+          id: INVESTMENT_LOSS_ID,
+          name: INVESTMENT_LOSS_LABEL,
+          total,
+          color: INVESTMENT_LOSS_COLOR,
+          monthly: monthlyLoss,
+        });
+      }
+    }
+    return rows;
+  }, [
+    includeInvestmentGrowth,
+    investmentGrowthMonthly,
+    overview?.category_breakdown,
+  ]);
 
   const heatmap = useMemo(() => {
     if (!categoryChartData.length) return { rows: [], max: 0 };
@@ -52,14 +100,34 @@ export const useYearlyAnalysis = ({
 
   const incomeCategoryChartData = useMemo(() => {
     if (!overview?.income_category_breakdown) return [];
-    return overview.income_category_breakdown.map((item) => ({
+    const rows = overview.income_category_breakdown.map((item) => ({
       id: item.category_id ?? null,
       name: item.name,
       total: Number(item.total),
       color: item.color_hex ?? "#10b981",
       monthly: item.monthly.map((v) => Number(v)),
     }));
-  }, [overview?.income_category_breakdown]);
+    if (includeInvestmentGrowth) {
+      const monthlyGrowth = investmentGrowthMonthly.map(
+        (value) => splitInvestmentGrowth(value).incomeLike,
+      );
+      const total = monthlyGrowth.reduce((sum, value) => sum + value, 0);
+      if (total > 0) {
+        rows.push({
+          id: INVESTMENT_GROWTH_ID,
+          name: INVESTMENT_GROWTH_LABEL,
+          total,
+          color: INVESTMENT_GROWTH_COLOR,
+          monthly: monthlyGrowth,
+        });
+      }
+    }
+    return rows;
+  }, [
+    includeInvestmentGrowth,
+    investmentGrowthMonthly,
+    overview?.income_category_breakdown,
+  ]);
 
   const incomeHeatmap = useMemo(() => {
     if (!incomeCategoryChartData.length) return { rows: [], max: 0 };
@@ -82,7 +150,7 @@ export const useYearlyAnalysis = ({
 
   const incomeSourceRows = useMemo(() => {
     if (!overview?.income_sources) return [];
-    return overview.income_sources
+    const rows = overview.income_sources
       .map((row) => ({
         source: row.source,
         total: Number(row.total),
@@ -93,11 +161,32 @@ export const useYearlyAnalysis = ({
         })),
       }))
       .sort((a, b) => b.total - a.total);
-  }, [overview?.income_sources, year]);
+    if (includeInvestmentGrowth) {
+      const monthly = investmentGrowthMonthly.map((value, idx) => ({
+        month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
+        total: splitInvestmentGrowth(value).incomeLike,
+      }));
+      const total = monthly.reduce((sum, row) => sum + row.total, 0);
+      if (total > 0) {
+        rows.push({
+          source: INVESTMENT_GROWTH_LABEL,
+          total,
+          txCount: 0,
+          monthly,
+        });
+      }
+    }
+    return rows.sort((a, b) => b.total - a.total);
+  }, [
+    includeInvestmentGrowth,
+    investmentGrowthMonthly,
+    overview?.income_sources,
+    year,
+  ]);
 
   const expenseSourceRows = useMemo(() => {
     if (!overview?.expense_sources) return [];
-    return overview.expense_sources
+    const rows = overview.expense_sources
       .map((row) => ({
         source: row.source,
         total: Number(row.total),
@@ -108,12 +197,33 @@ export const useYearlyAnalysis = ({
         })),
       }))
       .sort((a, b) => b.total - a.total);
-  }, [overview?.expense_sources, year]);
+    if (includeInvestmentGrowth) {
+      const monthly = investmentGrowthMonthly.map((value, idx) => ({
+        month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
+        total: splitInvestmentGrowth(value).expenseLike,
+      }));
+      const total = monthly.reduce((sum, row) => sum + row.total, 0);
+      if (total > 0) {
+        rows.push({
+          source: INVESTMENT_LOSS_LABEL,
+          total,
+          txCount: 0,
+          monthly,
+        });
+      }
+    }
+    return rows.sort((a, b) => b.total - a.total);
+  }, [
+    includeInvestmentGrowth,
+    investmentGrowthMonthly,
+    overview?.expense_sources,
+    year,
+  ]);
 
   const prevIncomeSourceRows = useMemo(() => {
     if (!prevOverview?.income_sources) return [];
     const prevYear = year - 1;
-    return prevOverview.income_sources
+    const rows = prevOverview.income_sources
       .map((row) => ({
         source: row.source,
         total: Number(row.total),
@@ -124,12 +234,33 @@ export const useYearlyAnalysis = ({
         })),
       }))
       .sort((a, b) => b.total - a.total);
-  }, [prevOverview?.income_sources, year]);
+    if (includeInvestmentGrowth) {
+      const monthly = prevInvestmentGrowthMonthly.map((value, idx) => ({
+        month: monthLabel(new Date(Date.UTC(prevYear, idx, 1)).toISOString()),
+        total: splitInvestmentGrowth(value).incomeLike,
+      }));
+      const total = monthly.reduce((sum, row) => sum + row.total, 0);
+      if (total > 0) {
+        rows.push({
+          source: INVESTMENT_GROWTH_LABEL,
+          total,
+          txCount: 0,
+          monthly,
+        });
+      }
+    }
+    return rows.sort((a, b) => b.total - a.total);
+  }, [
+    includeInvestmentGrowth,
+    prevInvestmentGrowthMonthly,
+    prevOverview?.income_sources,
+    year,
+  ]);
 
   const prevExpenseSourceRows = useMemo(() => {
     if (!prevOverview?.expense_sources) return [];
     const prevYear = year - 1;
-    return prevOverview.expense_sources
+    const rows = prevOverview.expense_sources
       .map((row) => ({
         source: row.source,
         total: Number(row.total),
@@ -140,7 +271,28 @@ export const useYearlyAnalysis = ({
         })),
       }))
       .sort((a, b) => b.total - a.total);
-  }, [prevOverview?.expense_sources, year]);
+    if (includeInvestmentGrowth) {
+      const monthly = prevInvestmentGrowthMonthly.map((value, idx) => ({
+        month: monthLabel(new Date(Date.UTC(prevYear, idx, 1)).toISOString()),
+        total: splitInvestmentGrowth(value).expenseLike,
+      }));
+      const total = monthly.reduce((sum, row) => sum + row.total, 0);
+      if (total > 0) {
+        rows.push({
+          source: INVESTMENT_LOSS_LABEL,
+          total,
+          txCount: 0,
+          monthly,
+        });
+      }
+    }
+    return rows.sort((a, b) => b.total - a.total);
+  }, [
+    includeInvestmentGrowth,
+    prevInvestmentGrowthMonthly,
+    prevOverview?.expense_sources,
+    year,
+  ]);
 
   const yearlyExpenseCategoryDeltas = useMemo(() => {
     if (!overview || !prevOverview) return [];
@@ -172,6 +324,30 @@ export const useYearlyAnalysis = ({
         total: Number(row.total),
       });
     });
+    if (includeInvestmentGrowth) {
+      const currentLoss = investmentGrowthMonthly.reduce(
+        (sum, value) => sum + splitInvestmentGrowth(value).expenseLike,
+        0,
+      );
+      const previousLoss = prevInvestmentGrowthMonthly.reduce(
+        (sum, value) => sum + splitInvestmentGrowth(value).expenseLike,
+        0,
+      );
+      if (currentLoss > 0) {
+        currentMap.set(INVESTMENT_LOSS_ID, {
+          id: INVESTMENT_LOSS_ID,
+          name: INVESTMENT_LOSS_LABEL,
+          total: currentLoss,
+        });
+      }
+      if (previousLoss > 0) {
+        prevMap.set(INVESTMENT_LOSS_ID, {
+          id: INVESTMENT_LOSS_ID,
+          name: INVESTMENT_LOSS_LABEL,
+          total: previousLoss,
+        });
+      }
+    }
 
     const keys = new Set([...currentMap.keys(), ...prevMap.keys()]);
     return Array.from(keys)
@@ -194,7 +370,13 @@ export const useYearlyAnalysis = ({
       })
       .filter((row) => row.name !== "Other")
       .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-  }, [overview, prevOverview]);
+  }, [
+    includeInvestmentGrowth,
+    investmentGrowthMonthly,
+    overview,
+    prevInvestmentGrowthMonthly,
+    prevOverview,
+  ]);
 
   const yearlyIncomeCategoryDeltas = useMemo(() => {
     if (!overview || !prevOverview) return [];
@@ -226,6 +408,30 @@ export const useYearlyAnalysis = ({
         total: Number(row.total),
       });
     });
+    if (includeInvestmentGrowth) {
+      const currentGrowth = investmentGrowthMonthly.reduce(
+        (sum, value) => sum + splitInvestmentGrowth(value).incomeLike,
+        0,
+      );
+      const previousGrowth = prevInvestmentGrowthMonthly.reduce(
+        (sum, value) => sum + splitInvestmentGrowth(value).incomeLike,
+        0,
+      );
+      if (currentGrowth > 0) {
+        currentMap.set(INVESTMENT_GROWTH_ID, {
+          id: INVESTMENT_GROWTH_ID,
+          name: INVESTMENT_GROWTH_LABEL,
+          total: currentGrowth,
+        });
+      }
+      if (previousGrowth > 0) {
+        prevMap.set(INVESTMENT_GROWTH_ID, {
+          id: INVESTMENT_GROWTH_ID,
+          name: INVESTMENT_GROWTH_LABEL,
+          total: previousGrowth,
+        });
+      }
+    }
 
     const keys = new Set([...currentMap.keys(), ...prevMap.keys()]);
     return Array.from(keys)
@@ -248,7 +454,13 @@ export const useYearlyAnalysis = ({
       })
       .filter((row) => row.name !== "Other")
       .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-  }, [overview, prevOverview]);
+  }, [
+    includeInvestmentGrowth,
+    investmentGrowthMonthly,
+    overview,
+    prevInvestmentGrowthMonthly,
+    prevOverview,
+  ]);
 
   const yearlyExpenseSourceDeltas = useMemo(() => {
     if (!overview || !prevOverview) return [];
@@ -372,12 +584,32 @@ export const useYearlyAnalysis = ({
 
   const yearlySavingsDecomposition = useMemo(() => {
     if (!overview || !prevOverview) return null;
-    const incomeNow = Number(overview.stats.total_income);
-    const expenseNow = Number(overview.stats.total_expense);
-    const netNow = Number(overview.stats.net_savings);
-    const incomePrev = Number(prevOverview.stats.total_income);
-    const expensePrev = Number(prevOverview.stats.total_expense);
-    const netPrev = Number(prevOverview.stats.net_savings);
+    const currentGrowth = investmentGrowthMonthly.reduce(
+      (sum, value) => sum + value,
+      0,
+    );
+    const previousGrowth = prevInvestmentGrowthMonthly.reduce(
+      (sum, value) => sum + value,
+      0,
+    );
+    const currentAdjusted = applyInvestmentGrowth(
+      Number(overview.stats.total_income),
+      Number(overview.stats.total_expense),
+      currentGrowth,
+      includeInvestmentGrowth,
+    );
+    const previousAdjusted = applyInvestmentGrowth(
+      Number(prevOverview.stats.total_income),
+      Number(prevOverview.stats.total_expense),
+      previousGrowth,
+      includeInvestmentGrowth,
+    );
+    const incomeNow = currentAdjusted.income;
+    const expenseNow = currentAdjusted.expense;
+    const netNow = currentAdjusted.net;
+    const incomePrev = previousAdjusted.income;
+    const expensePrev = previousAdjusted.expense;
+    const netPrev = previousAdjusted.net;
     const incomeDelta = incomeNow - incomePrev;
     const expenseDelta = expenseNow - expensePrev;
     const netDelta = netNow - netPrev;
@@ -423,7 +655,10 @@ export const useYearlyAnalysis = ({
     };
   }, [
     overview,
+    includeInvestmentGrowth,
+    investmentGrowthMonthly,
     prevOverview,
+    prevInvestmentGrowthMonthly,
     yearlyExpenseCategoryDeltas,
     yearlyIncomeCategoryDeltas,
   ]);
@@ -432,13 +667,16 @@ export const useYearlyAnalysis = ({
     useMemo<CashflowVolatilitySummary | null>(() => {
       if (!overview?.monthly?.length) return null;
       const series = overview.monthly.map((row) => ({
+        ...applyInvestmentGrowth(
+          Number(row.income),
+          Number(row.expense),
+          Number(row.investment_market_growth ?? 0),
+          includeInvestmentGrowth,
+        ),
         date: row.date,
         label: monthLabel(
           new Date(Date.UTC(year, row.month - 1, 1)).toISOString(),
         ),
-        income: Number(row.income),
-        expense: Number(row.expense),
-        net: Number(row.net),
       }));
 
       const incomeValues = series.map((row) => row.income);
@@ -506,7 +744,7 @@ export const useYearlyAnalysis = ({
         stabilityScore,
         spikes,
       };
-    }, [overview?.monthly, year]);
+    }, [includeInvestmentGrowth, overview?.monthly, year]);
 
   return {
     categoryChartData,

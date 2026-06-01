@@ -2,6 +2,7 @@ import React from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { PageRoutes } from "@/data/routes";
 
 import type { ReportMode } from "../reports-types";
@@ -12,12 +13,16 @@ export const ReportsHeader: React.FC<{
   yearOptions: number[];
   totalWindowPreset: "all" | "10" | "5" | "3";
   onTotalWindowPresetChange: (preset: "all" | "10" | "5" | "3") => void;
+  includeInvestmentGrowth: boolean;
+  onIncludeInvestmentGrowthChange: (checked: boolean) => void;
 }> = ({
   routeMode,
   year,
   yearOptions,
   totalWindowPreset,
   onTotalWindowPresetChange,
+  includeInvestmentGrowth,
+  onIncludeInvestmentGrowthChange,
 }) => {
   const navigate = useNavigate();
 
@@ -39,7 +44,15 @@ export const ReportsHeader: React.FC<{
           .
         </p>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700">
+          <Switch
+            checked={includeInvestmentGrowth}
+            onCheckedChange={onIncludeInvestmentGrowthChange}
+            aria-label="Include market growth"
+          />
+          <span>Include market growth</span>
+        </label>
         <div className="w-[110px]">
           {routeMode === "yearly" ? (
             <select

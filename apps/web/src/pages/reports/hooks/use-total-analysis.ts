@@ -1,5 +1,15 @@
 import { useMemo } from "react";
 
+import {
+  INVESTMENT_GROWTH_COLOR,
+  INVESTMENT_GROWTH_ID,
+  INVESTMENT_GROWTH_LABEL,
+  INVESTMENT_LOSS_ID,
+  INVESTMENT_LOSS_COLOR,
+  INVESTMENT_LOSS_LABEL,
+  applyInvestmentGrowth,
+  splitInvestmentGrowth,
+} from "@/lib/investment-growth";
 import type { TotalOverviewResponse } from "@/types/api";
 
 import type {
@@ -93,6 +103,30 @@ const shouldUseProvidedCategoryColor = (
 function categoryAbsTotal(category: MixCategory) {
   return Math.abs(Number(category.total));
 }
+
+const latestYoyYears = (totalOverview: TotalOverviewResponse) => {
+  const years = totalOverview.yearly
+    .map((row) => row.year)
+    .sort((a, b) => a - b);
+  const asOfYear = new Date(totalOverview.as_of).getUTCFullYear();
+  const completeYears = years.filter((yr) => yr < asOfYear);
+  const latest =
+    completeYears.length > 0
+      ? completeYears[completeYears.length - 1]
+      : years[years.length - 1];
+  const prev =
+    completeYears.length >= 2 ? completeYears[completeYears.length - 2] : null;
+  return { latest: latest ?? null, prev };
+};
+
+const investmentGrowthForYear = (
+  totalOverview: TotalOverviewResponse,
+  year: number | null,
+) => {
+  if (year === null) return 0;
+  const row = totalOverview.yearly.find((entry) => entry.year === year);
+  return Number(row?.investment_market_growth ?? 0);
+};
 
 const volatilityStats = (values: number[]): CashflowVolatilityMetric => {
   if (!values.length) {
@@ -191,10 +225,12 @@ const buildComposition = (
 export const useTotalAnalysis = ({
   totalOverview,
   totalWindowPreset,
+  includeInvestmentGrowth,
   netWorthForecastHorizonMonths = 12,
 }: {
   totalOverview: TotalOverviewResponse | null;
   totalWindowPreset: TotalWindowPreset;
+  includeInvestmentGrowth: boolean;
   netWorthForecastHorizonMonths?: number;
 }) => {
   const totalAllRange = useMemo<TotalWindowRange>(() => {
@@ -228,20 +264,36 @@ export const useTotalAnalysis = ({
     const investmentsValue = kpis.investments_value
       ? Number(kpis.investments_value)
       : null;
+    const rawIncome = Number(kpis.lifetime_income);
+    const rawExpense = Number(kpis.lifetime_expense);
+    const rawSaved = rawIncome - rawExpense;
+    const growth = totalOverview.monthly_income_expense.reduce(
+      (sum, row) => sum + Number(row.investment_market_growth ?? 0),
+      0,
+    );
+    const adjusted = applyInvestmentGrowth(
+      rawIncome,
+      rawExpense,
+      growth,
+      includeInvestmentGrowth,
+    );
     return {
       netWorth,
       cashBalance,
       debtTotal,
       investmentsValue,
       totalMoney: netWorth + debtTotal,
-      lifetimeIncome: Number(kpis.lifetime_income),
-      lifetimeExpense: Number(kpis.lifetime_expense),
-      lifetimeSaved: Number(kpis.lifetime_saved),
-      lifetimeSavingsRate: kpis.lifetime_savings_rate_pct
-        ? Number(kpis.lifetime_savings_rate_pct)
-        : null,
+      lifetimeIncome: adjusted.income,
+      lifetimeExpense: adjusted.expense,
+      lifetimeSaved: adjusted.net,
+      lifetimeSavingsRate:
+        kpis.lifetime_savings_rate_pct != null
+          ? Number(kpis.lifetime_savings_rate_pct)
+          : rawIncome > 0
+            ? (rawSaved / rawIncome) * 100
+            : null,
     };
-  }, [totalOverview]);
+  }, [includeInvestmentGrowth, totalOverview]);
 
   const totalNetWorthSeriesAll = useMemo(() => {
     if (!totalOverview) return [];
@@ -319,11 +371,15 @@ export const useTotalAnalysis = ({
         date: row.date,
         year: parsed.getUTCFullYear(),
         month: parsed.getUTCMonth() + 1,
-        income: Number(row.income),
-        expense: Number(row.expense),
+        ...applyInvestmentGrowth(
+          Number(row.income),
+          Number(row.expense),
+          Number(row.investment_market_growth ?? 0),
+          includeInvestmentGrowth,
+        ),
       };
     });
-  }, [totalOverview]);
+  }, [includeInvestmentGrowth, totalOverview]);
 
   const totalAverageMonthlyExpense = useMemo<TotalAverageExpense | null>(() => {
     if (!totalWindowRange) return null;
@@ -637,14 +693,31 @@ export const useTotalAnalysis = ({
     return totalOverview.yearly
       .filter((row) => (windowStartYear ? row.year >= windowStartYear : true))
       .sort((a, b) => a.year - b.year)
-      .map((row) => ({
-        year: row.year,
-        income: Number(row.income),
-        expense: Number(row.expense),
-        net: Number(row.net),
-        savingsRate: row.savings_rate_pct ? Number(row.savings_rate_pct) : null,
-      }));
-  }, [totalOverview, totalWindowRange]);
+      .map((row) => {
+        const rawIncome = Number(row.income);
+        const rawExpense = Number(row.expense);
+        const rawNet = rawIncome - rawExpense;
+        const adjusted = applyInvestmentGrowth(
+          rawIncome,
+          rawExpense,
+          Number(row.investment_market_growth ?? 0),
+          includeInvestmentGrowth,
+        );
+        return {
+          year: row.year,
+          income: adjusted.income,
+          expense: adjusted.expense,
+          net: adjusted.net,
+          savingsRate:
+            row.savings_rate_pct != null
+              ? Number(row.savings_rate_pct)
+              : rawIncome > 0
+                ? (rawNet / rawIncome) * 100
+                : null,
+          investmentMarketGrowth: Number(row.investment_market_growth ?? 0),
+        };
+      });
+  }, [includeInvestmentGrowth, totalOverview, totalWindowRange]);
 
   const totalYearlyTable = useMemo(
     () => [...totalYearly].sort((a, b) => b.year - a.year),
@@ -655,8 +728,36 @@ export const useTotalAnalysis = ({
     if (!totalOverview)
       return { data: [], keys: [], colors: {} as Record<string, string> };
     const startYear = new Date(totalOverview.as_of).getUTCFullYear() - 5;
+    const growthByYear = new Map(
+      totalOverview.yearly.map((row) => [
+        row.year,
+        Number(row.investment_market_growth ?? 0),
+      ]),
+    );
     const rows = totalOverview.expense_category_mix_by_year
       .filter((row) => row.year >= startYear)
+      .map((row) => {
+        const loss = splitInvestmentGrowth(
+          growthByYear.get(row.year) ?? 0,
+        ).expenseLike;
+        return {
+          ...row,
+          categories:
+            includeInvestmentGrowth && loss > 0
+              ? [
+                  ...row.categories,
+                  {
+                    category_id: INVESTMENT_LOSS_ID,
+                    name: INVESTMENT_LOSS_LABEL,
+                    total: String(loss),
+                    icon: null,
+                    color_hex: INVESTMENT_LOSS_COLOR,
+                    transaction_count: 0,
+                  },
+                ]
+              : row.categories,
+        };
+      })
       .sort((a, b) => a.year - b.year);
     if (!rows.length)
       return { data: [], keys: [], colors: {} as Record<string, string> };
@@ -695,14 +796,42 @@ export const useTotalAnalysis = ({
       return base;
     });
     return { data, keys, colors };
-  }, [totalOverview]);
+  }, [includeInvestmentGrowth, totalOverview]);
 
   const totalIncomeMix = useMemo(() => {
     if (!totalOverview)
       return { data: [], keys: [], colors: {} as Record<string, string> };
     const startYear = new Date(totalOverview.as_of).getUTCFullYear() - 5;
+    const growthByYear = new Map(
+      totalOverview.yearly.map((row) => [
+        row.year,
+        Number(row.investment_market_growth ?? 0),
+      ]),
+    );
     const rows = totalOverview.income_category_mix_by_year
       .filter((row) => row.year >= startYear)
+      .map((row) => {
+        const growth = splitInvestmentGrowth(
+          growthByYear.get(row.year) ?? 0,
+        ).incomeLike;
+        return {
+          ...row,
+          categories:
+            includeInvestmentGrowth && growth > 0
+              ? [
+                  ...row.categories,
+                  {
+                    category_id: INVESTMENT_GROWTH_ID,
+                    name: INVESTMENT_GROWTH_LABEL,
+                    total: String(growth),
+                    icon: null,
+                    color_hex: INVESTMENT_GROWTH_COLOR,
+                    transaction_count: 0,
+                  },
+                ]
+              : row.categories,
+        };
+      })
       .sort((a, b) => a.year - b.year);
     if (!rows.length)
       return { data: [], keys: [], colors: {} as Record<string, string> };
@@ -739,7 +868,7 @@ export const useTotalAnalysis = ({
       return base;
     });
     return { data, keys, colors };
-  }, [totalOverview]);
+  }, [includeInvestmentGrowth, totalOverview]);
 
   const totalInvestments = useMemo(() => {
     if (!totalOverview?.investments) return null;
@@ -778,7 +907,7 @@ export const useTotalAnalysis = ({
 
   const totalExpenseCategoriesLifetime = useMemo(() => {
     if (!totalOverview) return [];
-    return totalOverview.expense_categories_lifetime
+    const rows = totalOverview.expense_categories_lifetime
       .map((row) => ({
         id: row.category_id ?? null,
         name: row.category_id ? row.name : "Adjustment",
@@ -787,11 +916,29 @@ export const useTotalAnalysis = ({
         txCount: row.transaction_count,
       }))
       .sort((a, b) => b.total - a.total);
-  }, [totalOverview]);
+    if (includeInvestmentGrowth) {
+      const loss = totalOverview.monthly_income_expense.reduce(
+        (sum, row) =>
+          sum +
+          splitInvestmentGrowth(row.investment_market_growth ?? 0).expenseLike,
+        0,
+      );
+      if (loss > 0) {
+        rows.push({
+          id: INVESTMENT_LOSS_ID,
+          name: INVESTMENT_LOSS_LABEL,
+          total: loss,
+          color: INVESTMENT_LOSS_COLOR,
+          txCount: 0,
+        });
+      }
+    }
+    return rows.sort((a, b) => b.total - a.total);
+  }, [includeInvestmentGrowth, totalOverview]);
 
   const totalIncomeCategoriesLifetime = useMemo(() => {
     if (!totalOverview) return [];
-    return totalOverview.income_categories_lifetime
+    const rows = totalOverview.income_categories_lifetime
       .map((row) => ({
         id: row.category_id ?? null,
         name: row.category_id ? row.name : "Adjustment",
@@ -800,7 +947,25 @@ export const useTotalAnalysis = ({
         txCount: row.transaction_count,
       }))
       .sort((a, b) => b.total - a.total);
-  }, [totalOverview]);
+    if (includeInvestmentGrowth) {
+      const growth = totalOverview.monthly_income_expense.reduce(
+        (sum, row) =>
+          sum +
+          splitInvestmentGrowth(row.investment_market_growth ?? 0).incomeLike,
+        0,
+      );
+      if (growth > 0) {
+        rows.push({
+          id: INVESTMENT_GROWTH_ID,
+          name: INVESTMENT_GROWTH_LABEL,
+          total: growth,
+          color: INVESTMENT_GROWTH_COLOR,
+          txCount: 0,
+        });
+      }
+    }
+    return rows.sort((a, b) => b.total - a.total);
+  }, [includeInvestmentGrowth, totalOverview]);
 
   const totalExpenseCategoryConcentration = useMemo(
     () => computeCategoryConcentration(totalExpenseCategoriesLifetime),
@@ -814,73 +979,159 @@ export const useTotalAnalysis = ({
 
   const totalExpenseCategoryChanges = useMemo(() => {
     if (!totalOverview) return [];
-    return totalOverview.expense_category_changes_yoy
-      .map((row) => ({
-        id: row.category_id ?? null,
-        name: row.name,
-        amount: Number(row.amount),
-        prev: Number(row.prev_amount),
-        delta: Number(row.delta),
-        deltaPct: row.delta_pct ? Number(row.delta_pct) : null,
-      }))
-      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-  }, [totalOverview]);
+    const rows = totalOverview.expense_category_changes_yoy.map((row) => ({
+      id: row.category_id ?? null,
+      name: row.name,
+      amount: Number(row.amount),
+      prev: Number(row.prev_amount),
+      delta: Number(row.delta),
+      deltaPct: row.delta_pct ? Number(row.delta_pct) : null,
+    }));
+    if (includeInvestmentGrowth) {
+      const { latest, prev } = latestYoyYears(totalOverview);
+      const currentLoss = splitInvestmentGrowth(
+        investmentGrowthForYear(totalOverview, latest),
+      ).expenseLike;
+      const prevLoss = splitInvestmentGrowth(
+        investmentGrowthForYear(totalOverview, prev),
+      ).expenseLike;
+      if (currentLoss > 0 || prevLoss > 0) {
+        const delta = currentLoss - prevLoss;
+        rows.push({
+          id: INVESTMENT_LOSS_ID,
+          name: INVESTMENT_LOSS_LABEL,
+          amount: currentLoss,
+          prev: prevLoss,
+          delta,
+          deltaPct: prevLoss > 0 ? (delta / prevLoss) * 100 : null,
+        });
+      }
+    }
+    return rows.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  }, [includeInvestmentGrowth, totalOverview]);
 
   const totalIncomeCategoryChanges = useMemo(() => {
     if (!totalOverview) return [];
-    return totalOverview.income_category_changes_yoy
-      .map((row) => ({
-        id: row.category_id ?? null,
-        name: row.name,
-        amount: Number(row.amount),
-        prev: Number(row.prev_amount),
-        delta: Number(row.delta),
-        deltaPct: row.delta_pct ? Number(row.delta_pct) : null,
-      }))
-      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-  }, [totalOverview]);
+    const rows = totalOverview.income_category_changes_yoy.map((row) => ({
+      id: row.category_id ?? null,
+      name: row.name,
+      amount: Number(row.amount),
+      prev: Number(row.prev_amount),
+      delta: Number(row.delta),
+      deltaPct: row.delta_pct ? Number(row.delta_pct) : null,
+    }));
+    if (includeInvestmentGrowth) {
+      const { latest, prev } = latestYoyYears(totalOverview);
+      const currentGrowth = splitInvestmentGrowth(
+        investmentGrowthForYear(totalOverview, latest),
+      ).incomeLike;
+      const prevGrowth = splitInvestmentGrowth(
+        investmentGrowthForYear(totalOverview, prev),
+      ).incomeLike;
+      if (currentGrowth > 0 || prevGrowth > 0) {
+        const delta = currentGrowth - prevGrowth;
+        rows.push({
+          id: INVESTMENT_GROWTH_ID,
+          name: INVESTMENT_GROWTH_LABEL,
+          amount: currentGrowth,
+          prev: prevGrowth,
+          delta,
+          deltaPct: prevGrowth > 0 ? (delta / prevGrowth) * 100 : null,
+        });
+      }
+    }
+    return rows.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  }, [includeInvestmentGrowth, totalOverview]);
 
   const totalIncomeSourcesLifetime = useMemo(() => {
     if (!totalOverview) return [];
-    return totalOverview.income_sources_lifetime
+    const rows = totalOverview.income_sources_lifetime
       .map((row) => ({
         source: row.source,
         total: Number(row.total),
         txCount: row.transaction_count,
       }))
       .sort((a, b) => b.total - a.total);
-  }, [totalOverview]);
+    if (includeInvestmentGrowth) {
+      const growth = totalOverview.monthly_income_expense.reduce(
+        (sum, row) =>
+          sum +
+          splitInvestmentGrowth(row.investment_market_growth ?? 0).incomeLike,
+        0,
+      );
+      if (growth > 0) {
+        rows.push({
+          source: INVESTMENT_GROWTH_LABEL,
+          total: growth,
+          txCount: 0,
+        });
+      }
+    }
+    return rows.sort((a, b) => b.total - a.total);
+  }, [includeInvestmentGrowth, totalOverview]);
 
   const totalExpenseSourcesLifetime = useMemo(() => {
     if (!totalOverview) return [];
-    return totalOverview.expense_sources_lifetime
+    const rows = totalOverview.expense_sources_lifetime
       .map((row) => ({
         source: row.source,
         total: Number(row.total),
         txCount: row.transaction_count,
       }))
       .sort((a, b) => b.total - a.total);
-  }, [totalOverview]);
+    if (includeInvestmentGrowth) {
+      const loss = totalOverview.monthly_income_expense.reduce(
+        (sum, row) =>
+          sum +
+          splitInvestmentGrowth(row.investment_market_growth ?? 0).expenseLike,
+        0,
+      );
+      if (loss > 0) {
+        rows.push({
+          source: INVESTMENT_LOSS_LABEL,
+          total: loss,
+          txCount: 0,
+        });
+      }
+    }
+    return rows.sort((a, b) => b.total - a.total);
+  }, [includeInvestmentGrowth, totalOverview]);
 
   const totalIncomeSourceChanges = useMemo(() => {
     if (!totalOverview) return [];
-    return totalOverview.income_source_changes_yoy
-      .map((row) => ({
-        source: row.source,
-        delta: Number(row.delta),
-      }))
-      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-  }, [totalOverview]);
+    const rows = totalOverview.income_source_changes_yoy.map((row) => ({
+      source: row.source,
+      delta: Number(row.delta),
+    }));
+    if (includeInvestmentGrowth) {
+      const { latest, prev } = latestYoyYears(totalOverview);
+      const delta =
+        splitInvestmentGrowth(investmentGrowthForYear(totalOverview, latest))
+          .incomeLike -
+        splitInvestmentGrowth(investmentGrowthForYear(totalOverview, prev))
+          .incomeLike;
+      if (delta !== 0) rows.push({ source: INVESTMENT_GROWTH_LABEL, delta });
+    }
+    return rows.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  }, [includeInvestmentGrowth, totalOverview]);
 
   const totalExpenseSourceChanges = useMemo(() => {
     if (!totalOverview) return [];
-    return totalOverview.expense_source_changes_yoy
-      .map((row) => ({
-        source: row.source,
-        delta: Number(row.delta),
-      }))
-      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-  }, [totalOverview]);
+    const rows = totalOverview.expense_source_changes_yoy.map((row) => ({
+      source: row.source,
+      delta: Number(row.delta),
+    }));
+    if (includeInvestmentGrowth) {
+      const { latest, prev } = latestYoyYears(totalOverview);
+      const delta =
+        splitInvestmentGrowth(investmentGrowthForYear(totalOverview, latest))
+          .expenseLike -
+        splitInvestmentGrowth(investmentGrowthForYear(totalOverview, prev))
+          .expenseLike;
+      if (delta !== 0) rows.push({ source: INVESTMENT_LOSS_LABEL, delta });
+    }
+    return rows.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  }, [includeInvestmentGrowth, totalOverview]);
 
   const totalAccountsOverview = useMemo(() => {
     if (!totalOverview) return [];
@@ -1010,9 +1261,25 @@ export const useTotalAnalysis = ({
       color: row.color_hex ?? null,
       totals: yearIndices.map((entry) => Number(row.totals[entry.idx] ?? 0)),
     }));
+    if (includeInvestmentGrowth) {
+      const totals = years.map(
+        (yr) =>
+          splitInvestmentGrowth(investmentGrowthForYear(totalOverview, yr))
+            .expenseLike,
+      );
+      if (totals.some((value) => value > 0)) {
+        rows.push({
+          categoryId: INVESTMENT_LOSS_ID,
+          name: INVESTMENT_LOSS_LABEL,
+          icon: null,
+          color: INVESTMENT_LOSS_COLOR,
+          totals,
+        });
+      }
+    }
     const max = Math.max(0, ...rows.flatMap((row) => row.totals));
     return { years, rows, max };
-  }, [totalOverview, totalWindowRange]);
+  }, [includeInvestmentGrowth, totalOverview, totalWindowRange]);
 
   const totalIncomeCategoryYearHeatmap = useMemo(() => {
     if (!totalOverview) return null;
@@ -1033,9 +1300,25 @@ export const useTotalAnalysis = ({
       color: row.color_hex ?? null,
       totals: yearIndices.map((entry) => Number(row.totals[entry.idx] ?? 0)),
     }));
+    if (includeInvestmentGrowth) {
+      const totals = years.map(
+        (yr) =>
+          splitInvestmentGrowth(investmentGrowthForYear(totalOverview, yr))
+            .incomeLike,
+      );
+      if (totals.some((value) => value > 0)) {
+        rows.push({
+          categoryId: INVESTMENT_GROWTH_ID,
+          name: INVESTMENT_GROWTH_LABEL,
+          icon: null,
+          color: INVESTMENT_GROWTH_COLOR,
+          totals,
+        });
+      }
+    }
     const max = Math.max(0, ...rows.flatMap((row) => row.totals));
     return { years, rows, max };
-  }, [totalOverview, totalWindowRange]);
+  }, [includeInvestmentGrowth, totalOverview, totalWindowRange]);
 
   return {
     totalAllRange,

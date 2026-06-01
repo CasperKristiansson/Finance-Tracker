@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from "react";
 
 import {
+  isSyntheticInvestmentId,
+  isSyntheticInvestmentLabel,
+} from "@/lib/investment-growth";
+import {
   fetchYearlyCategoryDetail,
   fetchYearlyOverviewRange,
 } from "@/services/reports";
@@ -37,11 +41,13 @@ import { monthLabel } from "../reports-utils";
 type YearlyReportsPageProps = {
   token: string | null;
   year: number;
+  includeInvestmentGrowth: boolean;
 };
 
 export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
   token,
   year,
+  includeInvestmentGrowth,
 }) => {
   const [overview, setOverview] = useState<YearlyOverviewResponse | null>(null);
   const [overviewLoading, setOverviewLoading] = useState(false);
@@ -87,6 +93,7 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
     overview,
     prevOverview,
     year,
+    includeInvestmentGrowth,
   });
 
   useEffect(() => {
@@ -148,10 +155,56 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
     setDetailDialogOpen(true);
   };
 
+  const openInvestmentsDetail = () => {
+    if (!overview?.investments_summary) return;
+    const summary = overview.investments_summary;
+    openDetailDialog({
+      kind: "investments",
+      title: `Investments (${year})`,
+      asOf: summary.as_of,
+      monthly: summary.monthly_values.map((value, idx) => ({
+        month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
+        value: Number(value),
+      })),
+      accounts: summary.accounts.map((row) => ({
+        name: row.account_name,
+        start: Number(row.start_value),
+        end: Number(row.end_value),
+        change: Number(row.change),
+      })),
+      summary: {
+        start: Number(summary.start_value),
+        end: Number(summary.end_value),
+        change: Number(summary.change),
+        changePct: summary.change_pct ? Number(summary.change_pct) : null,
+        contributions: Number(summary.contributions),
+        withdrawals: Number(summary.withdrawals),
+        marketGrowth: Number(summary.market_growth ?? 0),
+      },
+    });
+  };
+
+  const selectCategoryOrInvestment = (
+    flow: "income" | "expense",
+    categoryId: string,
+  ) => {
+    if (isSyntheticInvestmentId(categoryId)) {
+      openInvestmentsDetail();
+      return;
+    }
+    setSelectedCategoryFlow(flow);
+    setSelectedCategoryId(categoryId);
+  };
+
   const openYearlySourceDetail = (
     flow: "income" | "expense",
     source: string,
   ) => {
+    if (isSyntheticInvestmentLabel(source)) {
+      openInvestmentsDetail();
+      return;
+    }
+
     const zeroMonthly = (yearForLabels: number) =>
       Array.from({ length: 12 }, (_, idx) => ({
         month: monthLabel(
@@ -195,6 +248,7 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
         year={year}
         overview={overview}
         totalKpis={null}
+        includeInvestmentGrowth={includeInvestmentGrowth}
       />
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -202,6 +256,7 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
           year={year}
           overview={overview}
           overviewLoading={overviewLoading}
+          includeInvestmentGrowth={includeInvestmentGrowth}
         />
 
         <YearlyNetWorthGrowthCard
@@ -238,7 +293,7 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
           volatility={yearlyCashflowVolatility}
         />
 
-        <YearlySavingsRateCard savings={overview?.savings} />
+        <YearlySavingsRateCard savings={overview?.savings ?? null} />
       </div>
 
       <YearlyDriversGrid
@@ -251,10 +306,7 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
         yearlySavingsDecomposition={yearlySavingsDecomposition}
         onOpenExtraDialog={setYearlyExtraDialog}
         onOpenSourceDetail={openYearlySourceDetail}
-        onSelectCategory={(flow, categoryId) => {
-          setSelectedCategoryFlow(flow);
-          setSelectedCategoryId(categoryId);
-        }}
+        onSelectCategory={selectCategoryOrInvestment}
       />
 
       <div className="grid gap-3 lg:grid-cols-2">
@@ -262,10 +314,9 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
           flow="expense"
           loading={overviewLoading}
           rows={categoryChartData}
-          onSelectCategory={(categoryId) => {
-            setSelectedCategoryFlow("expense");
-            setSelectedCategoryId(categoryId);
-          }}
+          onSelectCategory={(categoryId) =>
+            selectCategoryOrInvestment("expense", categoryId)
+          }
         />
 
         <YearlyCategoryHeatmapCard
@@ -275,6 +326,9 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
           hasOverview={Boolean(overview)}
           heatmap={heatmap}
           color="expense"
+          onSelectSyntheticCategory={(categoryId) =>
+            selectCategoryOrInvestment("expense", categoryId)
+          }
         />
       </div>
 
@@ -283,10 +337,9 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
           flow="income"
           loading={overviewLoading}
           rows={incomeCategoryChartData}
-          onSelectCategory={(categoryId) => {
-            setSelectedCategoryFlow("income");
-            setSelectedCategoryId(categoryId);
-          }}
+          onSelectCategory={(categoryId) =>
+            selectCategoryOrInvestment("income", categoryId)
+          }
         />
 
         <YearlyCategoryHeatmapCard
@@ -296,6 +349,9 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
           hasOverview={Boolean(overview)}
           heatmap={incomeHeatmap}
           color="income"
+          onSelectSyntheticCategory={(categoryId) =>
+            selectCategoryOrInvestment("income", categoryId)
+          }
         />
       </div>
 
@@ -340,8 +396,7 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
         overview={overview}
         onOpenOneOffs={() => setYearlyExtraDialog({ kind: "oneOffs" })}
         onSelectExpenseCategory={(categoryId) => {
-          setSelectedCategoryFlow("expense");
-          setSelectedCategoryId(categoryId);
+          selectCategoryOrInvestment("expense", categoryId);
         }}
       />
 
@@ -357,10 +412,7 @@ export const YearlyReportsPage: React.FC<YearlyReportsPageProps> = ({
         yearlySavingsDecomposition={yearlySavingsDecomposition}
         onClose={() => setYearlyExtraDialog(null)}
         onSetState={(next) => setYearlyExtraDialog(next)}
-        onSelectCategory={(flow, categoryId) => {
-          setSelectedCategoryFlow(flow);
-          setSelectedCategoryId(categoryId);
-        }}
+        onSelectCategory={selectCategoryOrInvestment}
         onOpenYearlySourceDetail={(flow, source) =>
           openYearlySourceDetail(flow, source)
         }

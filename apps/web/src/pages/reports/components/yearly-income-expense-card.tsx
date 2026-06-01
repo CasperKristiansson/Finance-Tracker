@@ -15,6 +15,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { PageRoutes } from "@/data/routes";
+import { applyInvestmentGrowth } from "@/lib/investment-growth";
 import type { YearlyOverviewResponse } from "@/types/api";
 
 import {
@@ -31,22 +32,33 @@ type MonthPoint = {
   income: number;
   expense: number | null;
   net: number;
+  investmentMarketGrowth: number;
 };
 
 export const YearlyIncomeExpenseCard: React.FC<{
   year: number;
   overview: YearlyOverviewResponse | null;
   overviewLoading: boolean;
-}> = ({ year, overview, overviewLoading }) => {
+  includeInvestmentGrowth: boolean;
+}> = ({ year, overview, overviewLoading, includeInvestmentGrowth }) => {
   const monthly = useMemo(() => {
     const rows: MonthPoint[] = (overview?.monthly || []).map(
-      (row, monthIndex) => ({
-        month: monthLabel(row.date),
-        monthIndex,
-        income: Number(row.income),
-        expense: Number(row.expense),
-        net: Number(row.net),
-      }),
+      (row, monthIndex) => {
+        const adjusted = applyInvestmentGrowth(
+          Number(row.income),
+          Number(row.expense),
+          Number(row.investment_market_growth ?? 0),
+          includeInvestmentGrowth,
+        );
+        return {
+          month: monthLabel(row.date),
+          monthIndex,
+          income: adjusted.income,
+          expense: adjusted.expense,
+          net: adjusted.net,
+          investmentMarketGrowth: adjusted.investmentMarketGrowth,
+        };
+      },
     );
     return rows.map((row) => ({
       ...row,
@@ -55,7 +67,7 @@ export const YearlyIncomeExpenseCard: React.FC<{
           ? Math.abs(row.expense)
           : null,
     }));
-  }, [overview?.monthly]);
+  }, [includeInvestmentGrowth, overview?.monthly]);
 
   return (
     <ChartCard
@@ -124,6 +136,10 @@ export const YearlyIncomeExpenseCard: React.FC<{
                     : null;
 
                 const net = typeof record.net === "number" ? record.net : null;
+                const investmentMarketGrowth =
+                  typeof record.investmentMarketGrowth === "number"
+                    ? record.investmentMarketGrowth
+                    : 0;
 
                 const buildBreakdown = (
                   breakdown:
@@ -185,6 +201,14 @@ export const YearlyIncomeExpenseCard: React.FC<{
                       <p className="pt-1 font-semibold text-slate-900 tabular-nums">
                         Net: {net !== null ? currency(net) : "—"}
                       </p>
+                      {investmentMarketGrowth !== 0 ? (
+                        <p className="text-slate-600">
+                          {investmentMarketGrowth > 0
+                            ? "Investment growth"
+                            : "Investment loss"}
+                          : {currency(Math.abs(investmentMarketGrowth))}
+                        </p>
+                      ) : null}
                     </div>
 
                     {overviewLoading ? (

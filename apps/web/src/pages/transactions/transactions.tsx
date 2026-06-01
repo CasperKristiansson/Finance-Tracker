@@ -183,7 +183,7 @@ export const Transactions: React.FC = () => {
       view: "summary",
     });
     fetchAccounts({});
-    fetchCategories();
+    fetchCategories({ includeSpecial: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

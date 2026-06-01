@@ -48,6 +48,16 @@ const sum = (values: number[]) =>
 const toMoney = (value: number) => value.toFixed(2);
 const scaleSeries = (values: number[], factor: number) =>
   values.map((value) => Math.round(value * factor));
+const getDemoInvestmentGrowthSeries = (year: number) => {
+  const yearOffset = year - demoYear;
+  const trend = yearOffset * 1800;
+  return [
+    18000, -22000, 42000, 16000, -34000, 58000, 24000, 39000, -18000, 47000,
+    26000, 52000,
+  ].map((value) => value + trend);
+};
+const getDemoInvestmentGrowthTotal = (year: number) =>
+  sum(getDemoInvestmentGrowthSeries(year));
 const demoMonthIndex = new Date().getMonth();
 const demoMonth = (offset: number) =>
   pad2(Math.max(0, Math.min(11, demoMonthIndex + offset)) + 1);
@@ -66,8 +76,9 @@ const buildMonthlyReport = (
   year: number,
   income: number[],
   expense: number[],
-): MonthlyReportEntry[] =>
-  income.map((value, idx) => {
+): MonthlyReportEntry[] => {
+  const investmentGrowth = getDemoInvestmentGrowthSeries(year);
+  return income.map((value, idx) => {
     const exp = expense[idx] ?? 0;
     return {
       period: `${year}-${pad2(idx + 1)}`,
@@ -77,8 +88,10 @@ const buildMonthlyReport = (
       adjustment_outflow: "0.00",
       adjustment_net: "0.00",
       net: toMoney(value - exp),
+      investment_market_growth: toMoney(investmentGrowth[idx] ?? 0),
     };
   });
+};
 
 const buildQuarterlyReport = (
   year: number,
@@ -117,6 +130,7 @@ const buildYearlyReport = (
         adjustment_outflow: "0.00",
         adjustment_net: "0.00",
         net: toMoney(currentIncome - currentExpense),
+        investment_market_growth: toMoney(getDemoInvestmentGrowthTotal(year)),
       };
     }
     const incomeFactor = 0.72 + idx * 0.05;
@@ -131,6 +145,7 @@ const buildYearlyReport = (
       adjustment_outflow: "0.00",
       adjustment_net: "0.00",
       net: toMoney(income - expense),
+      investment_market_growth: toMoney(getDemoInvestmentGrowthTotal(year)),
     };
   });
 
@@ -1151,6 +1166,7 @@ const buildInvestmentsSummary = (year: number) => {
   const endValue = Math.max(1000000, startValue + 620000 + yearOffset * 40000);
   const contributions = Math.max(200000, 920000 + yearOffset * 60000);
   const withdrawals = Math.max(50000, 180000 + yearOffset * 20000);
+  const monthlyMarketGrowth = getDemoInvestmentGrowthSeries(year).map(toMoney);
   const monthlyValues = buildLinearSeries(startValue, endValue, 12).map(
     toMoney,
   );
@@ -1164,7 +1180,9 @@ const buildInvestmentsSummary = (year: number) => {
     contributions: toMoney(contributions),
     withdrawals: toMoney(withdrawals),
     net_contributions: toMoney(contributions - withdrawals),
+    market_growth: toMoney(getDemoInvestmentGrowthTotal(year)),
     monthly_values: monthlyValues,
+    monthly_market_growth: monthlyMarketGrowth,
     accounts: [
       {
         account_name: "Global Brokerage",
@@ -1178,6 +1196,7 @@ const buildInvestmentsSummary = (year: number) => {
 
 export const getDemoYearlyOverview = (year: number): YearlyOverviewResponse => {
   const { income, expense } = buildMonthlyTotals(year);
+  const investmentGrowth = getDemoInvestmentGrowthSeries(year);
   const monthly = income.map((incomeValue, idx) => {
     const exp = expense[idx] ?? 0;
     return {
@@ -1186,6 +1205,7 @@ export const getDemoYearlyOverview = (year: number): YearlyOverviewResponse => {
       income: toMoney(incomeValue),
       expense: toMoney(exp),
       net: toMoney(incomeValue - exp),
+      investment_market_growth: toMoney(investmentGrowth[idx] ?? 0),
     };
   });
 
@@ -1540,6 +1560,7 @@ export const getDemoTotalOverview = (): TotalOverviewResponse => {
       date: periodToDate(row.period),
       income: row.income,
       expense: row.expense,
+      investment_market_growth: row.investment_market_growth ?? "0.00",
     })),
     yearly,
     best_year: demoYearlyReport.reduce(

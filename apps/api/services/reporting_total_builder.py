@@ -16,6 +16,11 @@ from ..models import Account, Transaction, TransactionLeg
 from ..models.investment_snapshot import InvestmentSnapshot
 from ..repositories.reporting import ReportingRepository
 from ..shared import AccountType, TransactionType, coerce_decimal
+from .reporting_investment_growth import (
+    investment_market_growth_by_month,
+    month_start,
+    portfolio_events_from_snapshots,
+)
 from .reporting_total_helpers import (
     build_category_heatmap,
     compress_points_monthly,
@@ -69,6 +74,13 @@ def build_total_overview(
 
     debt_ids = [acc.id for acc in accounts if acc.account_type == AccountType.DEBT]
     cash_ids = [acc.id for acc in accounts if acc.account_type == AccountType.NORMAL]
+    investment_account_ids = [
+        acc.id for acc in accounts if acc.account_type == AccountType.INVESTMENT and acc.id
+    ]
+    investment_snapshot_rows: List[Tuple[date, Decimal]] = (
+        repository.list_investment_snapshots_until(end=as_of) if account_id_list is None else []
+    )
+    investment_market_growth: Dict[date, Decimal] = {}
 
     def balance_at(day: date, ids: List[UUID]) -> Decimal:
         cutoff = datetime.combine(day + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
@@ -138,11 +150,6 @@ def build_total_overview(
             life_src["transaction_count"] += 1
 
     if account_id_list is None:
-        investment_account_ids = [
-            acc.id
-            for acc in accounts
-            if acc.account_type == AccountType.INVESTMENT and acc.id is not None
-        ]
         if investment_account_ids:
             noninv_tx_ids = (
                 select(cast(Any, TransactionLeg.transaction_id))
@@ -206,9 +213,32 @@ def build_total_overview(
             contributions_lifetime = sum(contributions_by_year.values(), Decimal("0"))
             withdrawals_lifetime = sum(withdrawals_by_year.values(), Decimal("0"))
 
+    if account_id_list is None and investment_snapshot_rows:
+        market_growth_months = set(monthly)
+        market_growth_months.update(month_start(day) for day, _value in investment_snapshot_rows)
+        for day, _value in investment_snapshot_rows:
+            yearly.setdefault(day.year, {"income": Decimal("0"), "expense": Decimal("0")})
+        investment_market_growth = investment_market_growth_by_month(
+            session=session,
+            investment_account_ids=investment_account_ids,
+            portfolio_events=portfolio_events_from_snapshots(investment_snapshot_rows),
+            months=market_growth_months,
+            as_of=as_of,
+        )
+        for month, growth in investment_market_growth.items():
+            if growth == 0:
+                continue
+            monthly.setdefault(month, {"income": Decimal("0"), "expense": Decimal("0")})
+            yearly.setdefault(month.year, {"income": Decimal("0"), "expense": Decimal("0")})
+
     years_sorted = sorted(yearly.keys())
     monthly_income_expense = [
-        {"date": month.isoformat(), "income": totals["income"], "expense": totals["expense"]}
+        {
+            "date": month.isoformat(),
+            "income": totals["income"],
+            "expense": totals["expense"],
+            "investment_market_growth": investment_market_growth.get(month, Decimal("0")),
+        }
         for month, totals in sorted(monthly.items(), key=lambda item: item[0])
     ]
     lifetime_income = sum((yearly[y]["income"] for y in years_sorted), Decimal("0"))
@@ -235,7 +265,21 @@ def build_total_overview(
         net = inc - exp
         rate = net / inc * Decimal("100") if inc > 0 else None
         yearly_rows.append(
-            {"year": year, "income": inc, "expense": exp, "net": net, "savings_rate_pct": rate}
+            {
+                "year": year,
+                "income": inc,
+                "expense": exp,
+                "net": net,
+                "savings_rate_pct": rate,
+                "investment_market_growth": sum(
+                    (
+                        growth
+                        for month, growth in investment_market_growth.items()
+                        if month.year == year
+                    ),
+                    Decimal("0"),
+                ),
+            }
         )
         if best_net is None or net > best_net:
             best_net = net
@@ -393,7 +437,7 @@ def build_total_overview(
     investments_payload = None
     investments_value = None
     if account_id_list is None:
-        snap_rows = repository.list_investment_snapshots_until(end=as_of)
+        snap_rows = investment_snapshot_rows
         investment_series: List[InvestmentSeriesPoint] = [
             {"date": day.isoformat(), "value": value} for day, value in snap_rows
         ]
@@ -474,7 +518,6 @@ def build_total_overview(
         yearly_investments: List[InvestmentYearRow] = []
         snap_idx = 0
         latest_value = Decimal("0")
-        prev_end = None
         for year in investment_years:
             if year > as_of.year:
                 continue
@@ -485,9 +528,14 @@ def build_total_overview(
             contrib = contributions_by_year.get(year, Decimal("0"))
             withdr = withdrawals_by_year.get(year, Decimal("0"))
             net_contrib = contrib - withdr
-            implied = None
-            if prev_end is not None:
-                implied = (latest_value - prev_end) - net_contrib
+            implied = sum(
+                (
+                    growth
+                    for month, growth in investment_market_growth.items()
+                    if month.year == year
+                ),
+                Decimal("0"),
+            )
             yearly_investments.append(
                 {
                     "year": year,
@@ -498,7 +546,6 @@ def build_total_overview(
                     "implied_return": implied,
                 }
             )
-            prev_end = latest_value
         investments_value = (
             yearly_investments[-1]["end_value"] if yearly_investments else Decimal("0")
         )

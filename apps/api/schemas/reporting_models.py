@@ -6,7 +6,7 @@ from datetime import date
 from decimal import Decimal
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..shared import AccountType
 
@@ -23,6 +23,7 @@ class MonthlyReportEntry(BaseModel):
     adjustment_outflow: Decimal
     adjustment_net: Decimal
     net: Decimal
+    investment_market_growth: Decimal = Decimal("0")
 
 
 class MonthlyReportResponse(BaseModel):
@@ -43,6 +44,7 @@ class YearlyReportEntry(BaseModel):
     adjustment_outflow: Decimal
     adjustment_net: Decimal
     net: Decimal
+    investment_market_growth: Decimal = Decimal("0")
 
 
 class YearlyReportResponse(BaseModel):
@@ -143,6 +145,7 @@ class TotalYearEntry(BaseModel):
     expense: Decimal
     net: Decimal
     savings_rate_pct: Optional[Decimal] = None
+    investment_market_growth: Decimal = Decimal("0")
 
 
 class YearCategoryMixEntry(BaseModel):
@@ -227,6 +230,7 @@ class MonthlyIncomeExpensePoint(BaseModel):
     date: str
     income: Decimal
     expense: Decimal
+    investment_market_growth: Decimal = Decimal("0")
 
 
 class CategoryYearHeatmapRow(BaseModel):
@@ -346,6 +350,7 @@ class YearlyOverviewMonthEntry(BaseModel):
     income: Decimal
     expense: Decimal
     net: Decimal
+    investment_market_growth: Decimal = Decimal("0")
 
 
 class NetWorthSeriesPoint(BaseModel):
@@ -431,7 +436,9 @@ class InvestmentsSummary(BaseModel):
     contributions: Decimal
     withdrawals: Decimal
     net_contributions: Decimal
+    market_growth: Decimal = Decimal("0")
     monthly_values: List[Decimal]
+    monthly_market_growth: List[Decimal] = Field(default_factory=list)
     accounts: List[InvestmentAccountSummaryEntry]
 
 

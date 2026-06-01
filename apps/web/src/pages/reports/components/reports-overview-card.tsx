@@ -1,6 +1,7 @@
 import React from "react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { applyInvestmentGrowth } from "@/lib/investment-growth";
 import type { YearlyOverviewResponse } from "@/types/api";
 
 import type { ReportMode } from "../reports-types";
@@ -23,7 +24,8 @@ export const ReportsOverviewCard: React.FC<{
   year: number;
   overview: YearlyOverviewResponse | null;
   totalKpis: TotalKpis;
-}> = ({ routeMode, year, overview, totalKpis }) => (
+  includeInvestmentGrowth: boolean;
+}> = ({ routeMode, year, overview, totalKpis, includeInvestmentGrowth }) => (
   <Card className="border-slate-200 shadow-[0_12px_36px_-26px_rgba(15,23,42,0.35)]">
     <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
       <div>
@@ -35,46 +37,64 @@ export const ReportsOverviewCard: React.FC<{
     </CardHeader>
     {routeMode === "yearly" && overview ? (
       <CardContent className="grid gap-3 md:grid-cols-4">
-        {[
-          {
-            label: "Income",
-            value: Number(overview.stats.total_income),
-            color: "text-emerald-700",
-          },
-          {
-            label: "Expense",
-            value: Number(overview.stats.total_expense),
-            color: "text-rose-700",
-          },
-          {
-            label: "Net saved",
-            value: Number(overview.stats.net_savings),
-            color: "text-slate-900",
-          },
-          {
-            label: "Savings rate",
-            value: overview.stats.savings_rate_pct
+        {(() => {
+          const growth = overview.monthly.reduce(
+            (sum, row) => sum + Number(row.investment_market_growth ?? 0),
+            0,
+          );
+          const adjusted = applyInvestmentGrowth(
+            Number(overview.stats.total_income),
+            Number(overview.stats.total_expense),
+            growth,
+            includeInvestmentGrowth,
+          );
+          const savingsRate =
+            overview.stats.savings_rate_pct != null
               ? Number(overview.stats.savings_rate_pct)
-              : null,
-            color: "text-slate-900",
-          },
-        ].map((item) => (
-          <div
-            key={item.label}
-            className="space-y-1 rounded-lg border border-slate-100 bg-slate-50 p-4"
-          >
-            <p className="text-xs tracking-wide text-slate-500 uppercase">
-              {item.label}
-            </p>
-            <div className={`text-2xl font-semibold ${item.color}`}>
-              {item.value === null
-                ? "—"
-                : item.label === "Savings rate"
-                  ? `${Math.round(item.value)}%`
-                  : currency(item.value)}
+              : Number(overview.stats.total_income) > 0
+                ? (Number(overview.stats.net_savings) /
+                    Number(overview.stats.total_income)) *
+                  100
+                : null;
+          return [
+            {
+              label: "Income",
+              value: adjusted.income,
+              color: "text-emerald-700",
+            },
+            {
+              label: "Expense",
+              value: adjusted.expense,
+              color: "text-rose-700",
+            },
+            {
+              label: "Net saved",
+              value: adjusted.net,
+              color: "text-slate-900",
+            },
+            {
+              label: "Savings rate",
+              value: savingsRate,
+              color: "text-slate-900",
+            },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="space-y-1 rounded-lg border border-slate-100 bg-slate-50 p-4"
+            >
+              <p className="text-xs tracking-wide text-slate-500 uppercase">
+                {item.label}
+              </p>
+              <div className={`text-2xl font-semibold ${item.color}`}>
+                {item.value === null
+                  ? "—"
+                  : item.label === "Savings rate"
+                    ? `${Math.round(item.value)}%`
+                    : currency(item.value)}
+              </div>
             </div>
-          </div>
-        ))}
+          ));
+        })()}
       </CardContent>
     ) : routeMode === "total" && totalKpis ? (
       <CardContent className="grid gap-3 md:grid-cols-6">

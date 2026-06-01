@@ -212,13 +212,21 @@ export const useCategoriesApi = () => {
   const state = useAppSelector(selectCategoriesState);
 
   const fetchCategories = useCallback(
-    (filters?: Partial<Pick<CategoriesState, "includeArchived">>) => {
+    (
+      filters?: Partial<
+        Pick<CategoriesState, "includeArchived" | "includeSpecial">
+      >,
+    ) => {
       dispatch(FetchCategories(filters));
     },
     [dispatch],
   );
   const fetchCategoryOptions = useCallback(
-    (filters?: Pick<CategoriesState, "includeArchived">) => {
+    (
+      filters?: Partial<
+        Pick<CategoriesState, "includeArchived" | "includeSpecial">
+      >,
+    ) => {
       dispatch(FetchCategoryOptions(filters));
     },
     [dispatch],

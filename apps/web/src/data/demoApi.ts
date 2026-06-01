@@ -69,6 +69,50 @@ export const resolveDemoRequest = (request: DemoApiRequest) => {
         const year = getNumber(request.query?.year, new Date().getFullYear());
         return getDemoYearlyOverview(year);
       }
+      case "/reports/yearly-overview-range": {
+        const currentYear = new Date().getFullYear();
+        const startYear = getNumber(request.query?.start_year, currentYear - 1);
+        const endYear = getNumber(request.query?.end_year, currentYear);
+        return {
+          start_year: startYear,
+          end_year: endYear,
+          items: Array.from(
+            { length: Math.max(0, endYear - startYear + 1) },
+            (_, idx) => getDemoYearlyOverview(startYear + idx),
+          ),
+        };
+      }
+      case "/reports/dashboard-overview": {
+        const year = getNumber(request.query?.year, new Date().getFullYear());
+        const monthly = getDemoMonthlyReport(year).map((row) => ({
+          ...row,
+          period: `${row.period}-01`,
+        }));
+        const totalIncome = monthly.reduce(
+          (sum, row) => sum + Number(row.income),
+          0,
+        );
+        const totalExpense = monthly.reduce(
+          (sum, row) => sum + Number(row.expense),
+          0,
+        );
+        return {
+          year,
+          monthly,
+          total: {
+            income: totalIncome.toFixed(2),
+            expense: totalExpense.toFixed(2),
+            adjustment_inflow: "0.00",
+            adjustment_outflow: "0.00",
+            adjustment_net: "0.00",
+            net: (totalIncome - totalExpense).toFixed(2),
+          },
+          net_worth: getDemoYearlyOverview(year).net_worth.map((row) => ({
+            period: row.date,
+            net_worth: row.net_worth,
+          })),
+        };
+      }
       case "/reports/total-overview": {
         return getDemoTotalOverview();
       }

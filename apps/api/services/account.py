@@ -13,6 +13,7 @@ from ..models import Account, BalanceSnapshot, Loan, Transaction, TransactionLeg
 from ..models.investment_snapshot import InvestmentSnapshot
 from ..repositories.account import AccountRepository
 from ..repositories.transaction import TransactionRepository
+from ..services.category import CategoryService
 from ..services.transaction import TransactionService
 from ..shared import AccountType, TransactionType, coerce_decimal
 
@@ -141,12 +142,17 @@ class AccountService:
         if delta != 0:
             # Create a reconciliation transaction to bring ledger in sync.
             offset_account = self._get_or_create_offset_account()
+            resolved_category_id = category_id
+            if resolved_category_id is None:
+                resolved_category_id = (
+                    CategoryService(self.session).get_or_create_adjustment_category().id
+                )
             legs = [
                 TransactionLeg(account_id=account_id, amount=delta),
                 TransactionLeg(account_id=offset_account.id, amount=-delta),
             ]
             adjustment_transaction = Transaction(
-                category_id=category_id,
+                category_id=resolved_category_id,
                 transaction_type=TransactionType.ADJUSTMENT,
                 description=description or "Balance reconciliation",
                 notes=None,

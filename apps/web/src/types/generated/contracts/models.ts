@@ -712,7 +712,9 @@ export interface InvestmentsSummary {
   contributions: string;
   withdrawals: string;
   net_contributions: string;
+  market_growth?: string;
   monthly_values: string[];
+  monthly_market_growth?: string[];
   accounts: InvestmentAccountSummaryEntry[];
 }
 
@@ -883,6 +885,7 @@ export interface MonthlyIncomeExpensePoint {
   date: string;
   income: string;
   expense: string;
+  investment_market_growth?: string;
 }
 
 export interface MonthlyReportEntry {
@@ -893,6 +896,7 @@ export interface MonthlyReportEntry {
   adjustment_outflow: string;
   adjustment_net: string;
   net: string;
+  investment_market_growth?: string;
 }
 
 export interface MonthlyReportQuery {
@@ -1232,6 +1236,7 @@ export interface TotalYearEntry {
   expense: string;
   net: string;
   savings_rate_pct?: string | null;
+  investment_market_growth?: string;
 }
 
 export interface TransactionCreate {
@@ -1373,6 +1378,7 @@ export interface YearlyOverviewMonthEntry {
   income: string;
   expense: string;
   net: string;
+  investment_market_growth?: string;
 }
 
 export interface YearlyOverviewQuery {
@@ -1430,6 +1436,7 @@ export interface YearlyReportEntry {
   adjustment_outflow: string;
   adjustment_net: string;
   net: string;
+  investment_market_growth?: string;
 }
 
 export interface YearlyReportQuery {

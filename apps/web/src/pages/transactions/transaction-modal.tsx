@@ -193,7 +193,7 @@ export const TransactionModal: React.FC<{
   useEffect(() => {
     if (open) {
       fetchAccounts({ includeInactive: true });
-      fetchCategories();
+      fetchCategories({ includeSpecial: true });
       if (!transaction) {
         reset({
           transaction_type: "transaction",

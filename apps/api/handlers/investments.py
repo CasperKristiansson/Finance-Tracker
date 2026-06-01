@@ -16,7 +16,12 @@ from ..schemas import (
     InvestmentTransactionListResponse,
     InvestmentTransactionRead,
 )
-from ..services import AccountService, InvestmentSnapshotService, TransactionService
+from ..services import (
+    AccountService,
+    CategoryService,
+    InvestmentSnapshotService,
+    TransactionService,
+)
 from ..shared import AccountType, TransactionType, coerce_decimal, session_scope
 from .utils import (
     ensure_engine,
@@ -150,6 +155,7 @@ def create_investment_snapshot(event: Dict[str, Any], _context: Any) -> Dict[str
                     tzinfo=timezone.utc,
                 )
                 transaction = Transaction(
+                    category_id=CategoryService(session).get_or_create_adjustment_category().id,
                     transaction_type=TransactionType.INVESTMENT_EVENT,
                     description=data.notes or "Investment balance update",
                     notes=None,

@@ -16,6 +16,7 @@ import {
   SETTINGS_STORAGE_KEY,
   hydrateSettings,
   setBackingUp,
+  setIncludeInvestmentGrowth,
   selectSettingsState,
   setLastSavedAt,
   setSettingsError,
@@ -28,10 +29,20 @@ export const LoadSettings = createAction("settings/load");
 export const SaveSettings = createAction("settings/save");
 export const RunBackup = createAction("settings/run-backup");
 
-const readCachedSettings = (): Partial<SettingsState> | undefined => {
+const getLocalStorage = (): Storage | undefined => {
   if (typeof window === "undefined") return undefined;
   try {
-    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    return window.localStorage || undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+const readCachedSettings = (): Partial<SettingsState> | undefined => {
+  const storage = getLocalStorage();
+  if (!storage) return undefined;
+  try {
+    const raw = storage.getItem(SETTINGS_STORAGE_KEY);
     if (!raw) return undefined;
     return JSON.parse(raw) as Partial<SettingsState>;
   } catch (error) {
@@ -44,14 +55,16 @@ const persistLocalSettings = (
   state: SettingsState,
   overrideTimestamp?: string,
 ): void => {
-  if (typeof window === "undefined") return;
+  const storage = getLocalStorage();
+  if (!storage) return;
   const payload: Partial<SettingsState> = {
     firstName: state.firstName,
     lastName: state.lastName,
     currencyCode: state.currencyCode,
+    includeInvestmentGrowth: state.includeInvestmentGrowth,
     lastSavedAt: overrideTimestamp ?? state.lastSavedAt,
   };
-  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
+  storage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(payload));
 };
 
 function* handleLoadSettings() {
@@ -83,6 +96,7 @@ function* handleLoadSettings() {
         const payload: Partial<SettingsState> = {
           firstName: response.settings.first_name || undefined,
           lastName: response.settings.last_name || undefined,
+          includeInvestmentGrowth: cached?.includeInvestmentGrowth ?? true,
         };
         yield put(hydrateSettings(payload));
         const currentState: SettingsState =
@@ -179,8 +193,17 @@ function* handleRunBackup() {
   }
 }
 
+function* handlePersistLocalPreference() {
+  const state: SettingsState = yield* TypedSelect(selectSettingsState);
+  persistLocalSettings(state);
+}
+
 export function* SettingsSaga() {
   yield takeLatest(LoadSettings.type, handleLoadSettings);
   yield takeLatest(SaveSettings.type, handleSaveSettings);
   yield takeLatest(RunBackup.type, handleRunBackup);
+  yield takeLatest(
+    setIncludeInvestmentGrowth.type,
+    handlePersistLocalPreference,
+  );
 }

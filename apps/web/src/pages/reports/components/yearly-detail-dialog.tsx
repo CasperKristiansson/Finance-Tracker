@@ -91,6 +91,23 @@ export const YearlyDetailDialog: React.FC<{
                     {currency(detailDialog.summary.withdrawals)}
                   </p>
                 </div>
+                {typeof detailDialog.summary.marketGrowth === "number" ? (
+                  <div className="rounded-md border border-slate-100 bg-white p-3 sm:col-span-2">
+                    <p className="text-xs tracking-wide text-slate-500 uppercase">
+                      Market growth
+                    </p>
+                    <p
+                      className={
+                        detailDialog.summary.marketGrowth >= 0
+                          ? "font-semibold text-indigo-700"
+                          : "font-semibold text-rose-700"
+                      }
+                    >
+                      {detailDialog.summary.marketGrowth >= 0 ? "+" : "−"}
+                      {currency(Math.abs(detailDialog.summary.marketGrowth))}
+                    </p>
+                  </div>
+                ) : null}
               </div>
               <div className="h-60 rounded-md border border-slate-100 bg-white p-2">
                 <ResponsiveContainer width="100%" height="100%">

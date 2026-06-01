@@ -24,6 +24,7 @@ class MonthlyTotals:
     adjustment_outflow: Decimal
     adjustment_net: Decimal
     net: Decimal
+    investment_market_growth: Decimal = Decimal("0")
 
 
 @dataclass(frozen=True)
@@ -37,6 +38,7 @@ class YearlyTotals:
     adjustment_outflow: Decimal
     adjustment_net: Decimal
     net: Decimal
+    investment_market_growth: Decimal = Decimal("0")
 
 
 @dataclass(frozen=True)

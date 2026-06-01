@@ -10,8 +10,11 @@ type IncomeExpensePoint = {
   label: string;
   monthIndex: number;
   year: number;
+  cashIncome?: number;
+  cashExpense?: number;
   income: number;
   expense: number;
+  investmentMarketGrowth?: number;
 };
 
 type IncomeExpenseChartCardProps = {
@@ -111,6 +114,10 @@ export const IncomeExpenseChartCard: React.FC<IncomeExpenseChartCardProps> = ({
               expenseItem?.value !== undefined && expenseItem.value !== null
                 ? Math.abs(Number(expenseItem.value))
                 : null;
+            const investmentMarketGrowth =
+              typeof payload[0]?.payload?.investmentMarketGrowth === "number"
+                ? payload[0].payload.investmentMarketGrowth
+                : 0;
 
             const buildBreakdown = (
               breakdown:
@@ -168,6 +175,17 @@ export const IncomeExpenseChartCard: React.FC<IncomeExpenseChartCardProps> = ({
                       {expenseTotal !== null ? currency(expenseTotal) : "—"}
                     </span>
                   </p>
+                  {investmentMarketGrowth !== 0 ? (
+                    <p className="text-slate-600">
+                      {investmentMarketGrowth > 0
+                        ? "Investment growth"
+                        : "Investment loss"}
+                      :{" "}
+                      <span className="font-medium text-slate-800 tabular-nums">
+                        {currency(Math.abs(investmentMarketGrowth))}
+                      </span>
+                    </p>
+                  ) : null}
                 </div>
 
                 {yearlyOverviewLoading ? (

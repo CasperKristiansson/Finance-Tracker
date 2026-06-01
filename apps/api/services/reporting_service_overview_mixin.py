@@ -333,6 +333,13 @@ class ReportingServiceOverviewMixin(ReportingServiceCoreMixin):
                     "income": monthly_income[month],
                     "expense": monthly_expense[month],
                     "net": monthly_income[month] - monthly_expense[month],
+                    "investment_market_growth": cast(
+                        List[Decimal],
+                        investments_summary.get(
+                            "monthly_market_growth",
+                            [Decimal("0") for _ in range(12)],
+                        ),
+                    )[month],
                 }
                 for month in range(12)
             ],

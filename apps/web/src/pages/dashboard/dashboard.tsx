@@ -3,7 +3,7 @@ import { ArrowDownRight, ArrowUpRight, Plus, Upload } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Area, AreaChart, Tooltip, XAxis, YAxis } from "recharts";
-import { useAppSelector } from "@/app/hooks";
+import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import {
   MotionPage,
   StaggerWrap,
@@ -14,8 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltipContent } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { PageRoutes } from "@/data/routes";
 import { selectIsAuthenticated, selectToken } from "@/features/auth/authSlice";
+import {
+  selectIncludeInvestmentGrowth,
+  setIncludeInvestmentGrowth,
+} from "@/features/settings/settingsSlice";
 import {
   useAccountsApi,
   useCategoriesApi,
@@ -24,6 +29,14 @@ import {
 import { apiFetch } from "@/lib/apiClient";
 import { buildEndpointRequest } from "@/lib/apiEndpoints";
 import { currency } from "@/lib/format";
+import {
+  INVESTMENT_GROWTH_COLOR,
+  INVESTMENT_GROWTH_LABEL,
+  INVESTMENT_LOSS_COLOR,
+  INVESTMENT_LOSS_LABEL,
+  applyInvestmentGrowth,
+  splitInvestmentGrowth,
+} from "@/lib/investment-growth";
 import {
   getDisplayTransactionType,
   getTransactionTypeLabel,
@@ -58,6 +71,7 @@ import {
 } from "./dashboard-utils";
 
 export const Dashboard: React.FC = () => {
+  const dispatch = useAppDispatch();
   const { recent, fetchRecentTransactions } = useTransactionsApi();
   const {
     items: accounts,
@@ -67,6 +81,7 @@ export const Dashboard: React.FC = () => {
   const { options: categories, fetchCategoryOptions } = useCategoriesApi();
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const token = useAppSelector(selectToken);
+  const includeInvestmentGrowth = useAppSelector(selectIncludeInvestmentGrowth);
   const hasFetched = useRef(false);
   const [filteredMonthly, setFilteredMonthly] = useState<MonthlyReportEntry[]>(
     [],
@@ -113,7 +128,7 @@ export const Dashboard: React.FC = () => {
     hasFetched.current = true;
     setAccountsRequested(true);
     fetchAccounts();
-    fetchCategoryOptions();
+    fetchCategoryOptions({ includeSpecial: true });
   }, [fetchAccounts, fetchCategoryOptions, isAuthenticated]);
 
   useEffect(() => {
@@ -254,24 +269,57 @@ export const Dashboard: React.FC = () => {
       ? filteredMonthly
       : monthlyWindowData;
     const byMonth = new Map<string, { income: number; expense: number }>();
+    const investmentGrowthByMonth = new Map<string, number>();
     cashFlowSource.forEach((entry) => {
       byMonth.set(getPeriodMonthKey(entry.period), {
         income: Number(entry.income),
         expense: Number(entry.expense),
       });
     });
-    const trailing = rollingSlots.map((slot) => byMonth.get(slot.monthKey));
+    monthlyWindowData.forEach((entry) => {
+      investmentGrowthByMonth.set(
+        getPeriodMonthKey(entry.period),
+        Number(entry.investment_market_growth ?? 0),
+      );
+    });
+    const trailing = rollingSlots.map((slot) => {
+      const entry = byMonth.get(slot.monthKey);
+      return applyInvestmentGrowth(
+        entry?.income ?? 0,
+        entry?.expense ?? 0,
+        investmentGrowthByMonth.get(slot.monthKey) ?? 0,
+        includeInvestmentGrowth,
+      );
+    });
+    const trailingCash = rollingSlots.map((slot) => {
+      const entry = byMonth.get(slot.monthKey);
+      return {
+        income: entry?.income ?? 0,
+        expense: entry?.expense ?? 0,
+      };
+    });
     const trailingIncome = trailing.reduce(
-      (sum, entry) => sum + (entry?.income ?? 0),
+      (sum, entry) => sum + entry.income,
       0,
     );
     const trailingExpense = trailing.reduce(
-      (sum, entry) => sum + (entry?.expense ?? 0),
+      (sum, entry) => sum + entry.expense,
       0,
     );
     const trailingNet = trailingIncome - trailingExpense;
+    const trailingCashIncome = trailingCash.reduce(
+      (sum, entry) => sum + entry.income,
+      0,
+    );
+    const trailingCashExpense = trailingCash.reduce(
+      (sum, entry) => sum + entry.expense,
+      0,
+    );
+    const trailingCashNet = trailingCashIncome - trailingCashExpense;
     const trailingSavingsRate =
-      trailingIncome > 0 ? Math.round((trailingNet / trailingIncome) * 100) : 0;
+      trailingCashIncome > 0
+        ? Math.round((trailingCashNet / trailingCashIncome) * 100)
+        : 0;
     const netWorthNow = netWorthWindowData.length
       ? Number(netWorthWindowData[netWorthWindowData.length - 1]?.net_worth)
       : 0;
@@ -284,11 +332,15 @@ export const Dashboard: React.FC = () => {
         helper: "As of now",
       },
       {
-        title: "Cash flow (12m)",
+        title: includeInvestmentGrowth
+          ? "Economic flow (12m)"
+          : "Cash flow (12m)",
         value: currency(trailingNet),
         delta: formatCurrencyDelta(trailingNet, currency),
         trend: trailingNet >= 0 ? "up" : "down",
-        helper: "Last 12 months",
+        helper: includeInvestmentGrowth
+          ? "Cashflow + market growth"
+          : "Last 12 months",
       },
       {
         title: "Savings rate",
@@ -297,12 +349,18 @@ export const Dashboard: React.FC = () => {
         trend: trailingSavingsRate >= 0 ? "up" : "down",
       },
     ];
-  }, [filteredMonthly, monthlyWindowData, netWorthWindowData]);
+  }, [
+    filteredMonthly,
+    includeInvestmentGrowth,
+    monthlyWindowData,
+    netWorthWindowData,
+  ]);
 
   const incomeExpenseChart = useMemo(() => {
     const rollingSlots = buildRollingMonthSlots();
     const source = filteredMonthly.length ? filteredMonthly : monthlyWindowData;
     const byMonth = new Map<string, { income: number; expense: number }>();
+    const investmentGrowthByMonth = new Map<string, number>();
 
     source.forEach((entry) => {
       byMonth.set(getPeriodMonthKey(entry.period), {
@@ -310,20 +368,37 @@ export const Dashboard: React.FC = () => {
         expense: Number(entry.expense),
       });
     });
+    monthlyWindowData.forEach((entry) => {
+      investmentGrowthByMonth.set(
+        getPeriodMonthKey(entry.period),
+        Number(entry.investment_market_growth ?? 0),
+      );
+    });
 
     return rollingSlots.map((slot) => {
       const entry = byMonth.get(slot.monthKey);
+      const investmentMarketGrowth =
+        investmentGrowthByMonth.get(slot.monthKey) ?? 0;
+      const adjusted = applyInvestmentGrowth(
+        entry?.income ?? 0,
+        entry?.expense ?? 0,
+        investmentMarketGrowth,
+        includeInvestmentGrowth,
+      );
       return {
         month: MONTH_LABELS[slot.monthIndex] ?? "",
         label: slot.label,
         monthIndex: slot.monthIndex,
         year: slot.year,
         monthKey: slot.monthKey,
-        income: entry?.income ?? 0,
-        expense: entry?.expense ?? 0,
+        cashIncome: entry?.income ?? 0,
+        cashExpense: entry?.expense ?? 0,
+        income: adjusted.income,
+        expense: adjusted.expense,
+        investmentMarketGrowth,
       };
     });
-  }, [filteredMonthly, monthlyWindowData]);
+  }, [filteredMonthly, includeInvestmentGrowth, monthlyWindowData]);
 
   const rollingCategoryBreakdown = useMemo(() => {
     const rollingSlots = buildRollingMonthSlots();
@@ -371,6 +446,41 @@ export const Dashboard: React.FC = () => {
       addTotals(overview.category_breakdown, slot.monthIndex, expenseTotals);
     });
 
+    if (includeInvestmentGrowth) {
+      const growthByMonth = new Map<string, number>();
+      monthlyWindowData.forEach((entry) => {
+        growthByMonth.set(
+          getPeriodMonthKey(entry.period),
+          Number(entry.investment_market_growth ?? 0),
+        );
+      });
+      rollingSlots.forEach((slot) => {
+        const { incomeLike, expenseLike } = splitInvestmentGrowth(
+          growthByMonth.get(slot.monthKey) ?? 0,
+        );
+        if (incomeLike > 0) {
+          const existing = incomeTotals.get(INVESTMENT_GROWTH_LABEL);
+          if (existing) existing.total += incomeLike;
+          else
+            incomeTotals.set(INVESTMENT_GROWTH_LABEL, {
+              name: INVESTMENT_GROWTH_LABEL,
+              total: incomeLike,
+              color: INVESTMENT_GROWTH_COLOR,
+            });
+        }
+        if (expenseLike > 0) {
+          const existing = expenseTotals.get(INVESTMENT_LOSS_LABEL);
+          if (existing) existing.total += expenseLike;
+          else
+            expenseTotals.set(INVESTMENT_LOSS_LABEL, {
+              name: INVESTMENT_LOSS_LABEL,
+              total: expenseLike,
+              color: INVESTMENT_LOSS_COLOR,
+            });
+        }
+      });
+    }
+
     const income = Array.from(incomeTotals.values()).sort(
       (a, b) => b.total - a.total,
     );
@@ -381,7 +491,7 @@ export const Dashboard: React.FC = () => {
     const expenseTotal = expense.reduce((sum, row) => sum + row.total, 0);
 
     return { income, expense, incomeTotal, expenseTotal };
-  }, [yearlyOverviewsByYear]);
+  }, [includeInvestmentGrowth, monthlyWindowData, yearlyOverviewsByYear]);
 
   const categoryBreakdown = useMemo(() => {
     const { incomeTotal, expenseTotal } = rollingCategoryBreakdown;
@@ -404,8 +514,9 @@ export const Dashboard: React.FC = () => {
       });
     });
     return rollingSlots.map((slot) => {
-      const income = byMonth.get(slot.monthKey)?.income ?? 0;
-      const expense = byMonth.get(slot.monthKey)?.expense ?? 0;
+      const entry = byMonth.get(slot.monthKey);
+      const income = entry?.income ?? 0;
+      const expense = entry?.expense ?? 0;
       const status: SavingsMonthStatus =
         income <= 0 && expense <= 0
           ? "no-activity"
@@ -592,7 +703,20 @@ export const Dashboard: React.FC = () => {
             Live net worth, cash flow, and savings snapshot.
           </p>
         </motion.div>
-        <motion.div variants={fadeInUp} className="flex flex-wrap gap-2">
+        <motion.div
+          variants={fadeInUp}
+          className="flex flex-wrap items-center gap-2"
+        >
+          <label className="flex h-9 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700">
+            <Switch
+              checked={includeInvestmentGrowth}
+              onCheckedChange={(checked) =>
+                dispatch(setIncludeInvestmentGrowth(checked))
+              }
+              aria-label="Include market growth"
+            />
+            <span>Include market growth</span>
+          </label>
           <motion.div {...subtleHover}>
             <Button asChild variant="default" className="gap-2">
               <Link to={PageRoutes.transactions}>

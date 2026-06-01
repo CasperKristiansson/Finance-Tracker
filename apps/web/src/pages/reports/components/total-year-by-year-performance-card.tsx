@@ -38,6 +38,7 @@ export const TotalYearByYearPerformanceCard: React.FC<{
     savingsRate: number | null;
     adjustmentInflow?: number;
     adjustmentOutflow?: number;
+    investmentMarketGrowth?: number;
   }>;
   tableData: Array<{
     year: number;
@@ -48,6 +49,7 @@ export const TotalYearByYearPerformanceCard: React.FC<{
     savingsRate: number | null;
     adjustmentInflow?: number;
     adjustmentOutflow?: number;
+    investmentMarketGrowth?: number;
   }>;
   onOpenDrilldownDialog: (state: TotalDrilldownState) => void;
 }> = ({
@@ -132,6 +134,9 @@ export const TotalYearByYearPerformanceCard: React.FC<{
                         const income = Number(record?.income ?? 0);
                         const expense = Number(record?.expense ?? 0);
                         const net = Number(record?.net ?? 0);
+                        const investmentMarketGrowth = Number(
+                          record?.investmentMarketGrowth ?? 0,
+                        );
                         return (
                           <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
                             <p className="font-semibold text-slate-800">
@@ -146,6 +151,14 @@ export const TotalYearByYearPerformanceCard: React.FC<{
                             <p className="text-slate-600">
                               Net: {currency(net)}
                             </p>
+                            {investmentMarketGrowth !== 0 ? (
+                              <p className="text-slate-600">
+                                {investmentMarketGrowth > 0
+                                  ? "Investment growth"
+                                  : "Investment loss"}
+                                : {currency(Math.abs(investmentMarketGrowth))}
+                              </p>
+                            ) : null}
                           </div>
                         );
                       }}
@@ -177,6 +190,7 @@ export const TotalYearByYearPerformanceCard: React.FC<{
                     <TableHead className="text-right">Income</TableHead>
                     <TableHead className="text-right">Expense</TableHead>
                     <TableHead className="text-right">Adjustments</TableHead>
+                    <TableHead className="text-right">Market</TableHead>
                     <TableHead className="text-right">Net</TableHead>
                     <TableHead className="hidden text-right md:table-cell">
                       Savings rate
@@ -206,6 +220,12 @@ export const TotalYearByYearPerformanceCard: React.FC<{
                         <span>
                           {row.adjustmentNet >= 0 ? "+" : "−"}
                           {currency(Math.abs(row.adjustmentNet))}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-indigo-700">
+                        <span>
+                          {(row.investmentMarketGrowth ?? 0) >= 0 ? "+" : "−"}
+                          {currency(Math.abs(row.investmentMarketGrowth ?? 0))}
                         </span>
                       </TableCell>
                       <TableCell className="text-right font-semibold">

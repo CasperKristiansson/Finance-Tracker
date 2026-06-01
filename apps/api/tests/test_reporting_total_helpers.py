@@ -196,16 +196,28 @@ def test_build_total_overview_includes_investments_when_unscoped(session) -> Non
     session.add_all([cash, investment])
     session.commit()
 
-    snapshot = InvestmentSnapshot(
-        provider="manual",
-        report_type="portfolio_report",
-        account_name="Broker",
-        snapshot_date=date(2024, 2, 1),
-        portfolio_value=Decimal("1200"),
-        raw_text="raw",
-        parsed_payload={"accounts": {"Broker": 1200}},
+    session.add_all(
+        [
+            InvestmentSnapshot(
+                provider="manual",
+                report_type="portfolio_report",
+                account_name="Broker",
+                snapshot_date=date(2024, 1, 1),
+                portfolio_value=Decimal("1000"),
+                raw_text="raw",
+                parsed_payload={"accounts": {"Broker": 1000}},
+            ),
+            InvestmentSnapshot(
+                provider="manual",
+                report_type="portfolio_report",
+                account_name="Broker",
+                snapshot_date=date(2024, 2, 1),
+                portfolio_value=Decimal("1200"),
+                raw_text="raw",
+                parsed_payload={"accounts": {"Broker": 1200}},
+            ),
+        ]
     )
-    session.add(snapshot)
 
     tx = Transaction(
         transaction_type=TransactionType.TRANSFER,
@@ -239,7 +251,10 @@ def test_build_total_overview_includes_investments_when_unscoped(session) -> Non
             tuple(sorted([str(investment.id)])): Decimal("100"),
         },
         networth=[],
-        snapshots=[(date(2024, 2, 1), Decimal("1200"))],
+        snapshots=[
+            (date(2024, 1, 1), Decimal("1000")),
+            (date(2024, 2, 1), Decimal("1200")),
+        ],
     )
 
     result = build_total_overview(
@@ -256,6 +271,170 @@ def test_build_total_overview_includes_investments_when_unscoped(session) -> Non
     investments = result["investments"]
     assert investments["accounts_latest"]
     assert result["kpis"]["investments_value"] == Decimal("1200")
+    assert result["yearly"][0]["investment_market_growth"] == Decimal("100")
+    assert investments["yearly"][0]["implied_return"] == Decimal("100")
+    assert result["monthly_income_expense"][1]["investment_market_growth"] == Decimal("100")
+
+
+def test_build_total_overview_investment_withdrawal_is_not_market_loss(session) -> None:
+    cash = Account(name="Cash", account_type=AccountType.NORMAL)
+    investment = Account(name="Broker", account_type=AccountType.INVESTMENT)
+    session.add_all([cash, investment])
+    session.commit()
+
+    session.add_all(
+        [
+            InvestmentSnapshot(
+                provider="manual",
+                report_type="portfolio_report",
+                account_name="Broker",
+                snapshot_date=date(2024, 1, 1),
+                portfolio_value=Decimal("1000"),
+                raw_text="raw",
+                parsed_payload={"accounts": {"Broker": 1000}},
+            ),
+            InvestmentSnapshot(
+                provider="manual",
+                report_type="portfolio_report",
+                account_name="Broker",
+                snapshot_date=date(2024, 2, 1),
+                portfolio_value=Decimal("500"),
+                raw_text="raw",
+                parsed_payload={"accounts": {"Broker": 500}},
+            ),
+        ]
+    )
+    tx = Transaction(
+        transaction_type=TransactionType.TRANSFER,
+        occurred_at=datetime(2024, 1, 15, tzinfo=timezone.utc),
+        posted_at=datetime(2024, 1, 15, tzinfo=timezone.utc),
+    )
+    session.add(tx)
+    session.flush()
+    session.add_all(
+        [
+            TransactionLeg(transaction_id=tx.id, account_id=investment.id, amount=Decimal("-500")),
+            TransactionLeg(transaction_id=tx.id, account_id=cash.id, amount=Decimal("500")),
+        ]
+    )
+    session.commit()
+
+    result = build_total_overview(
+        session=session,
+        repository=_RepoStub(
+            user_id="integration-user",
+            rows_all=[],
+            rows_by_account={cash.id: [], investment.id: []},
+            balances={},
+            networth=[],
+            snapshots=[
+                (date(2024, 1, 1), Decimal("1000")),
+                (date(2024, 2, 1), Decimal("500")),
+            ],
+        ),
+        as_of=date(2024, 2, 1),
+        account_id_list=None,
+        net_worth_points=[],
+        classify_income_expense=lambda row: (row.inflow, row.outflow),
+        merchant_key=lambda raw: raw or "Unknown",
+    )
+
+    assert result["yearly"][0]["investment_market_growth"] == Decimal("0")
+    assert result["investments"]["yearly"][0]["implied_return"] == Decimal("0")
+
+
+def test_build_total_overview_negative_investment_market_growth(session) -> None:
+    investment = Account(name="Broker", account_type=AccountType.INVESTMENT)
+    session.add(investment)
+    session.commit()
+
+    session.add_all(
+        [
+            InvestmentSnapshot(
+                provider="manual",
+                report_type="portfolio_report",
+                account_name="Broker",
+                snapshot_date=date(2024, 1, 1),
+                portfolio_value=Decimal("1000"),
+                raw_text="raw",
+                parsed_payload={"accounts": {"Broker": 1000}},
+            ),
+            InvestmentSnapshot(
+                provider="manual",
+                report_type="portfolio_report",
+                account_name="Broker",
+                snapshot_date=date(2024, 2, 1),
+                portfolio_value=Decimal("800"),
+                raw_text="raw",
+                parsed_payload={"accounts": {"Broker": 800}},
+            ),
+        ]
+    )
+    session.commit()
+
+    result = build_total_overview(
+        session=session,
+        repository=_RepoStub(
+            user_id="integration-user",
+            rows_all=[],
+            rows_by_account={investment.id: []},
+            balances={},
+            networth=[],
+            snapshots=[
+                (date(2024, 1, 1), Decimal("1000")),
+                (date(2024, 2, 1), Decimal("800")),
+            ],
+        ),
+        as_of=date(2024, 2, 1),
+        account_id_list=None,
+        net_worth_points=[],
+        classify_income_expense=lambda row: (row.inflow, row.outflow),
+        merchant_key=lambda raw: raw or "Unknown",
+    )
+
+    assert result["yearly"][0]["investment_market_growth"] == Decimal("-200")
+    february = next(row for row in result["monthly_income_expense"] if row["date"] == "2024-02-01")
+    assert february["investment_market_growth"] == Decimal("-200")
+    assert result["investments"]["yearly"][0]["implied_return"] == Decimal("-200")
+
+
+def test_build_total_overview_first_investment_snapshot_is_not_market_growth(session) -> None:
+    investment = Account(name="Broker", account_type=AccountType.INVESTMENT)
+    session.add(investment)
+    session.commit()
+
+    session.add(
+        InvestmentSnapshot(
+            provider="manual",
+            report_type="portfolio_report",
+            account_name="Broker",
+            snapshot_date=date(2024, 1, 31),
+            portfolio_value=Decimal("1000"),
+            raw_text="raw",
+            parsed_payload={"accounts": {"Broker": 1000}},
+        )
+    )
+    session.commit()
+
+    result = build_total_overview(
+        session=session,
+        repository=_RepoStub(
+            user_id="integration-user",
+            rows_all=[],
+            rows_by_account={investment.id: []},
+            balances={},
+            networth=[],
+            snapshots=[(date(2024, 1, 31), Decimal("1000"))],
+        ),
+        as_of=date(2024, 1, 31),
+        account_id_list=None,
+        net_worth_points=[],
+        classify_income_expense=lambda row: (row.inflow, row.outflow),
+        merchant_key=lambda raw: raw or "Unknown",
+    )
+
+    assert result["yearly"][0]["investment_market_growth"] == Decimal("0")
+    assert result["investments"]["yearly"][0]["implied_return"] == Decimal("0")
 
 
 def test_build_total_overview_yoy_and_no_investment_accounts(session) -> None:

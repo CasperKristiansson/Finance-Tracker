@@ -829,29 +829,53 @@ export const TotalDrilldownDialog: React.FC<{
                           Net contrib
                         </TableHead>
                         <TableHead className="hidden text-right md:table-cell">
+                          Market
+                        </TableHead>
+                        <TableHead className="hidden text-right md:table-cell">
                           Implied return
                         </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {totalInvestmentsYearlyTable.map((row) => (
-                        <TableRow key={row.year}>
-                          <TableCell className="font-medium">
-                            {row.year}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold">
-                            {currency(row.endValue)}
-                          </TableCell>
-                          <TableCell className="hidden text-right md:table-cell">
-                            {currency(row.netContributions)}
-                          </TableCell>
-                          <TableCell className="hidden text-right md:table-cell">
-                            {row.impliedReturn === null
-                              ? "—"
-                              : currency(row.impliedReturn)}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {totalInvestmentsYearlyTable.map((row) =>
+                        (() => {
+                          const marketGrowth = Number(
+                            totalOverview?.yearly.find(
+                              (entry) => entry.year === row.year,
+                            )?.investment_market_growth ?? 0,
+                          );
+                          return (
+                            <TableRow key={row.year}>
+                              <TableCell className="font-medium">
+                                {row.year}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {currency(row.endValue)}
+                              </TableCell>
+                              <TableCell className="hidden text-right md:table-cell">
+                                {currency(row.netContributions)}
+                              </TableCell>
+                              <TableCell className="hidden text-right md:table-cell">
+                                <span
+                                  className={
+                                    marketGrowth >= 0
+                                      ? "text-indigo-700"
+                                      : "text-rose-700"
+                                  }
+                                >
+                                  {marketGrowth >= 0 ? "+" : "−"}
+                                  {currency(Math.abs(marketGrowth))}
+                                </span>
+                              </TableCell>
+                              <TableCell className="hidden text-right md:table-cell">
+                                {row.impliedReturn === null
+                                  ? "—"
+                                  : currency(row.impliedReturn)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })(),
+                      )}
                     </TableBody>
                   </Table>
                 </div>

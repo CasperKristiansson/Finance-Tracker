@@ -17,9 +17,16 @@ from apps.api.handlers.investments import (
     list_investment_transactions,
     reset_handler_state,
 )
-from apps.api.models import Account, InvestmentSnapshot, InvestmentTransaction, Transaction
+from apps.api.models import (
+    Account,
+    Category,
+    InvestmentSnapshot,
+    InvestmentTransaction,
+    Transaction,
+)
 from apps.api.shared import (
     AccountType,
+    CategoryType,
     TransactionType,
     configure_engine,
     get_default_user_id,
@@ -200,6 +207,11 @@ def test_create_investment_snapshot_creates_snapshot_and_adjustment_transaction(
             )
         ).all()
         assert len(txs) == 1
+        assert txs[0].category_id is not None
+        category = session.get(Category, txs[0].category_id)
+        assert category is not None
+        assert category.name == "Adjustment"
+        assert category.category_type == CategoryType.ADJUSTMENT
 
 
 def test_create_investment_snapshot_zero_delta_skips_adjustment_and_covers_overview_loop(

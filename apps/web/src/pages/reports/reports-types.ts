@@ -41,6 +41,7 @@ export type DetailDialogState =
         changePct: number | null;
         contributions: number;
         withdrawals: number;
+        marketGrowth?: number;
       };
     }
   | {

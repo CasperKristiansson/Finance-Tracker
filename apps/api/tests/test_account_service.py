@@ -7,9 +7,16 @@ from uuid import UUID
 import pytest
 from sqlmodel import select
 
-from apps.api.models import Account, BalanceSnapshot, InvestmentSnapshot, Loan, Transaction
+from apps.api.models import (
+    Account,
+    BalanceSnapshot,
+    Category,
+    InvestmentSnapshot,
+    Loan,
+    Transaction,
+)
 from apps.api.services.account import AccountService
-from apps.api.shared import AccountType, InterestCompound, TransactionType
+from apps.api.shared import AccountType, CategoryType, InterestCompound, TransactionType
 
 # pylint: disable=protected-access
 
@@ -78,6 +85,11 @@ def test_reconcile_account_posts_adjustment_when_delta_non_zero(session) -> None
     tx = result["transaction"]
     assert tx is not None
     assert tx.transaction_type == TransactionType.ADJUSTMENT
+    assert tx.category_id is not None
+    category = session.get(Category, tx.category_id)
+    assert category is not None
+    assert category.name == "Adjustment"
+    assert category.category_type == CategoryType.ADJUSTMENT
     assert result["delta"] == Decimal("250")
     assert service.get_or_create_offset_account().name == "Offset"
 

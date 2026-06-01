@@ -34,7 +34,7 @@ export const YearlySavingsRateCard: React.FC<{
     <Card className="h-full border-slate-200 shadow-[0_10px_40px_-20px_rgba(15,23,42,0.4)]">
       <CardHeader className="pb-2">
         <CardTitle className="text-base font-semibold text-slate-900">
-          Saving rate
+          Savings rate
         </CardTitle>
         <p className="text-xs text-slate-500">
           Income, expense, and what you kept.

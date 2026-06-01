@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { isSyntheticInvestmentId } from "@/lib/investment-growth";
 import { cn } from "@/lib/utils";
 
 import { currency, monthLabel, monthName, percent } from "../reports-utils";
@@ -29,7 +30,16 @@ export const YearlyCategoryHeatmapCard: React.FC<{
   hasOverview: boolean;
   heatmap: Heatmap;
   color: "income" | "expense";
-}> = ({ title, description, year, hasOverview, heatmap, color }) => {
+  onSelectSyntheticCategory?: (categoryId: string) => void;
+}> = ({
+  title,
+  description,
+  year,
+  hasOverview,
+  heatmap,
+  color,
+  onSelectSyntheticCategory,
+}) => {
   const rgb = color === "income" ? "16, 185, 129" : "239, 68, 68";
   const [selectedCell, setSelectedCell] = useState<{
     row: Heatmap["rows"][number];
@@ -76,9 +86,16 @@ export const YearlyCategoryHeatmapCard: React.FC<{
                         key={idx}
                         title={`${row.name} — ${monthName(year, idx + 1)}: ${currency(value)}`}
                         type="button"
-                        onClick={() =>
-                          setSelectedCell({ row, monthIndex: idx, value })
-                        }
+                        onClick={() => {
+                          if (
+                            isSyntheticInvestmentId(row.id) &&
+                            onSelectSyntheticCategory
+                          ) {
+                            onSelectSyntheticCategory(row.id);
+                            return;
+                          }
+                          setSelectedCell({ row, monthIndex: idx, value });
+                        }}
                         className="h-7 rounded-sm border border-slate-100 transition hover:border-slate-200 hover:shadow-xs focus-visible:ring-2 focus-visible:ring-slate-400/60 focus-visible:ring-offset-1 focus-visible:ring-offset-white"
                         style={{
                           backgroundColor: value > 0 ? bg : undefined,

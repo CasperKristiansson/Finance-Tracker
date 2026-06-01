@@ -18,10 +18,11 @@ from apps.api.handlers import (
     reset_account_handler_state,
     update_account,
 )
-from apps.api.models import Account, Transaction, TransactionLeg
+from apps.api.models import Account, Category, Transaction, TransactionLeg
 from apps.api.services import TransactionService
 from apps.api.shared import (
     AccountType,
+    CategoryType,
     TransactionType,
     configure_engine,
     get_default_user_id,
@@ -219,6 +220,14 @@ def test_reconcile_account_creates_adjustment_transaction() -> None:
     assert Decimal(body["delta_posted"]) == Decimal("150.00")
     assert body["snapshot_id"]
     assert body["transaction_id"]
+    with Session(get_engine()) as session:
+        transaction = session.get(Transaction, UUID(body["transaction_id"]))
+        assert transaction is not None
+        assert transaction.category_id is not None
+        category = session.get(Category, transaction.category_id)
+        assert category is not None
+        assert category.name == "Adjustment"
+        assert category.category_type == CategoryType.ADJUSTMENT
 
 
 def test_reconcile_account_validation_and_not_found() -> None:

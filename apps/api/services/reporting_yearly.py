@@ -18,6 +18,11 @@ from ..models import Account, Transaction, TransactionLeg
 from ..models.investment_snapshot import InvestmentSnapshot
 from ..repositories.reporting import ReportingRepository, TransactionAmountRow
 from ..shared import AccountType, TransactionType, coerce_decimal
+from .reporting_investment_growth import (
+    investment_market_growth_by_month,
+    month_starts_for_year,
+    portfolio_events_from_account_snapshots,
+)
 
 IncomeExpenseClassifier = Callable[[TransactionAmountRow], Tuple[Decimal, Decimal]]
 MerchantKeyFn = Callable[[Optional[str]], str]
@@ -137,7 +142,9 @@ def build_yearly_overview_enhancements(
         "contributions": Decimal("0"),
         "withdrawals": Decimal("0"),
         "net_contributions": Decimal("0"),
+        "market_growth": Decimal("0"),
         "monthly_values": [Decimal("0") for _ in range(12)],
+        "monthly_market_growth": [Decimal("0") for _ in range(12)],
         "accounts": [],
     }
 
@@ -439,6 +446,19 @@ def build_yearly_overview_enhancements(
                 _portfolio_value_at(snapshots=investment_snapshots, target=target)
             )
 
+        monthly_market_growth_by_month = investment_market_growth_by_month(
+            session=session,
+            investment_account_ids=investment_account_ids,
+            portfolio_events=portfolio_events_from_account_snapshots(investment_snapshots),
+            months=month_starts_for_year(year),
+            as_of=as_of_date,
+        )
+        monthly_market_growth = [
+            monthly_market_growth_by_month.get(date(year, month, 1), Decimal("0"))
+            for month in range(1, 13)
+        ]
+        market_growth = sum(monthly_market_growth, Decimal("0"))
+
         investments_summary = {
             "as_of": as_of_date.isoformat(),
             "start_value": start_value,
@@ -448,7 +468,9 @@ def build_yearly_overview_enhancements(
             "contributions": contributions,
             "withdrawals": withdrawals,
             "net_contributions": contributions - withdrawals,
+            "market_growth": market_growth,
             "monthly_values": monthly_values,
+            "monthly_market_growth": monthly_market_growth,
             "accounts": account_rows_summary,
         }
 

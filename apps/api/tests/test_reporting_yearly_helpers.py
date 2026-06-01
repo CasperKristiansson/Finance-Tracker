@@ -124,16 +124,28 @@ def test_build_yearly_overview_enhancements_unscoped_investments(session) -> Non
     session.add_all([cash, investment])
     session.commit()
 
-    snapshot = InvestmentSnapshot(
-        provider="manual",
-        report_type="portfolio_report",
-        account_name="Broker",
-        snapshot_date=date(2024, 2, 1),
-        portfolio_value=Decimal("1400"),
-        raw_text="raw",
-        parsed_payload={"accounts": {"Broker": 1400}},
+    session.add_all(
+        [
+            InvestmentSnapshot(
+                provider="manual",
+                report_type="portfolio_report",
+                account_name="Broker",
+                snapshot_date=date(2024, 1, 1),
+                portfolio_value=Decimal("1000"),
+                raw_text="raw",
+                parsed_payload={"accounts": {"Broker": 1000}},
+            ),
+            InvestmentSnapshot(
+                provider="manual",
+                report_type="portfolio_report",
+                account_name="Broker",
+                snapshot_date=date(2024, 2, 28),
+                portfolio_value=Decimal("1400"),
+                raw_text="raw",
+                parsed_payload={"accounts": {"Broker": 1400}},
+            ),
+        ]
     )
-    session.add(snapshot)
 
     tx = Transaction(
         transaction_type=TransactionType.TRANSFER,
@@ -187,6 +199,8 @@ def test_build_yearly_overview_enhancements_unscoped_investments(session) -> Non
     )
 
     assert investments_summary["end_value"] == Decimal("1400")
+    assert investments_summary["market_growth"] == Decimal("300")
+    assert investments_summary["monthly_market_growth"][1] == Decimal("300")
     assert investments_summary["accounts"]
     assert account_flows
 

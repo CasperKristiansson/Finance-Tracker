@@ -16,6 +16,7 @@ export interface CategoriesState {
   updateLoading: boolean;
   mutationError?: string;
   includeArchived: boolean;
+  includeSpecial: boolean;
 }
 
 const initialState: CategoriesState = {
@@ -26,6 +27,7 @@ const initialState: CategoriesState = {
   createLoading: false,
   updateLoading: false,
   includeArchived: false,
+  includeSpecial: false,
 };
 
 const categoriesSlice = createSlice({
@@ -63,10 +65,16 @@ const categoriesSlice = createSlice({
     },
     setCategoriesFilters(
       state,
-      action: PayloadAction<{ includeArchived?: boolean }>,
+      action: PayloadAction<{
+        includeArchived?: boolean;
+        includeSpecial?: boolean;
+      }>,
     ) {
       if (action.payload.includeArchived !== undefined) {
         state.includeArchived = action.payload.includeArchived;
+      }
+      if (action.payload.includeSpecial !== undefined) {
+        state.includeSpecial = action.payload.includeSpecial;
       }
     },
   },
