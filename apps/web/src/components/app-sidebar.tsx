@@ -12,6 +12,7 @@ import {
   Layers,
   Receipt,
   Archive,
+  Network,
 } from "lucide-react";
 import * as React from "react";
 import { useAppSelector } from "@/app/hooks";
@@ -88,6 +89,11 @@ const data = {
       title: "Investments",
       url: PageRoutes.investments,
       icon: PieChart,
+    },
+    {
+      title: "Ventures",
+      url: PageRoutes.ventures,
+      icon: Network,
     },
     {
       title: "Goals",

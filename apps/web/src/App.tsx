@@ -37,6 +37,8 @@ import { Reports } from "./pages/reports/reports.tsx";
 import { Settings } from "./pages/settings/settings.tsx";
 import { Taxes } from "./pages/taxes/taxes.tsx";
 import { Transactions } from "./pages/transactions/transactions.tsx";
+import { CompanyWorkspace } from "./pages/ventures/company-workspace.tsx";
+import { Ventures } from "./pages/ventures/ventures.tsx";
 
 const NavigationWrapper: React.FC<{
   children: React.ReactNode;
@@ -190,6 +192,22 @@ export const App: React.FC = () => {
           element={
             <NavigationWrapper title="Investments">
               <InvestmentDetails />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.ventures}
+          element={
+            <NavigationWrapper title="Ventures">
+              <Ventures />
+            </NavigationWrapper>
+          }
+        />
+        <Route
+          path={PageRoutes.ventureCompany}
+          element={
+            <NavigationWrapper title="Ventures">
+              <CompanyWorkspace />
             </NavigationWrapper>
           }
         />

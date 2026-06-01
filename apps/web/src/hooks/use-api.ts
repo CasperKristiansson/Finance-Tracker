@@ -131,6 +131,25 @@ import {
   selectRunningBalanceByAccount,
   type TransactionFilters,
 } from "@/features/transactions/transactionsSlice";
+import {
+  CreateVentureCompany,
+  CreateVentureDocument,
+  CreateVentureNote,
+  CreateVentureOwnershipEvent,
+  CreateVentureValuation,
+  DeleteVentureCompany,
+  DeleteVentureDocument,
+  DeleteVentureNote,
+  FetchVentureCompany,
+  FetchVenturesOverview,
+  ListVentureDocuments,
+  ListVentureNotes,
+  PresignVentureUpload,
+  UpdateVentureCompany,
+  UpdateVentureLayout,
+  UpdateVentureNote,
+} from "@/features/ventures/venturesSaga";
+import { selectVenturesState } from "@/features/ventures/venturesSlice";
 import type {
   CategoryCreateRequest,
   CategoryUpdateRequest,
@@ -348,6 +367,135 @@ export const useInvestmentsApi = () => {
     fetchTransactions,
     fetchOverview,
     createSnapshot,
+  };
+};
+
+export const useVenturesApi = () => {
+  const dispatch = useAppDispatch();
+  const state = useAppSelector(selectVenturesState);
+
+  const fetchOverview = useCallback(
+    () => dispatch(FetchVenturesOverview()),
+    [dispatch],
+  );
+
+  const fetchCompany = useCallback(
+    (companyId: string) => dispatch(FetchVentureCompany({ companyId })),
+    [dispatch],
+  );
+
+  const createCompany = useCallback(
+    (data: Parameters<typeof CreateVentureCompany>[0]["data"]) =>
+      dispatch(CreateVentureCompany({ data })),
+    [dispatch],
+  );
+
+  const updateCompany = useCallback(
+    (
+      companyId: string,
+      data: Parameters<typeof UpdateVentureCompany>[0]["data"],
+    ) => dispatch(UpdateVentureCompany({ companyId, data })),
+    [dispatch],
+  );
+
+  const deleteCompany = useCallback(
+    (companyId: string) => dispatch(DeleteVentureCompany({ companyId })),
+    [dispatch],
+  );
+
+  const createValuation = useCallback(
+    (
+      companyId: string,
+      data: Parameters<typeof CreateVentureValuation>[0]["data"],
+    ) => dispatch(CreateVentureValuation({ companyId, data })),
+    [dispatch],
+  );
+
+  const createOwnershipEvent = useCallback(
+    (
+      companyId: string,
+      data: Parameters<typeof CreateVentureOwnershipEvent>[0]["data"],
+    ) => dispatch(CreateVentureOwnershipEvent({ companyId, data })),
+    [dispatch],
+  );
+
+  const listNotes = useCallback(
+    (companyId: string) => dispatch(ListVentureNotes({ companyId })),
+    [dispatch],
+  );
+
+  const createNote = useCallback(
+    (
+      companyId: string,
+      data: Parameters<typeof CreateVentureNote>[0]["data"],
+    ) => dispatch(CreateVentureNote({ companyId, data })),
+    [dispatch],
+  );
+
+  const updateNote = useCallback(
+    (
+      companyId: string,
+      noteId: string,
+      data: Parameters<typeof UpdateVentureNote>[0]["data"],
+    ) => dispatch(UpdateVentureNote({ companyId, noteId, data })),
+    [dispatch],
+  );
+
+  const deleteNote = useCallback(
+    (companyId: string, noteId: string) =>
+      dispatch(DeleteVentureNote({ companyId, noteId })),
+    [dispatch],
+  );
+
+  const listDocuments = useCallback(
+    (companyId: string) => dispatch(ListVentureDocuments({ companyId })),
+    [dispatch],
+  );
+
+  const createDocument = useCallback(
+    (
+      companyId: string,
+      data: Parameters<typeof CreateVentureDocument>[0]["data"],
+    ) => dispatch(CreateVentureDocument({ companyId, data })),
+    [dispatch],
+  );
+
+  const deleteDocument = useCallback(
+    (companyId: string, documentId: string) =>
+      dispatch(DeleteVentureDocument({ companyId, documentId })),
+    [dispatch],
+  );
+
+  const updateLayout = useCallback(
+    (data: Parameters<typeof UpdateVentureLayout>[0]["data"]) =>
+      dispatch(UpdateVentureLayout({ data })),
+    [dispatch],
+  );
+
+  const presignUpload = useCallback(
+    (data: Parameters<typeof PresignVentureUpload>[0]["data"]) =>
+      dispatch(PresignVentureUpload({ data })),
+    [dispatch],
+  );
+
+  return {
+    ...state,
+    fetchOverview,
+    fetchCompany,
+    createCompany,
+    updateCompany,
+    deleteCompany,
+    createValuation,
+    createOwnershipEvent,
+    listNotes,
+    createNote,
+    updateNote,
+    deleteNote,
+    listDocuments,
+    createDocument,
+    deleteDocument,
+    updateLayout,
+    presignUpload,
   };
 };
 

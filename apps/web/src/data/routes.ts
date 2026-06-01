@@ -19,6 +19,8 @@ export const PageRoutes = {
   loans: "/loans",
   investments: "/investments",
   investmentDetails: "/investments/:accountId",
+  ventures: "/ventures",
+  ventureCompany: "/ventures/:companyId",
   goals: "/goals",
   settings: "/settings",
 };

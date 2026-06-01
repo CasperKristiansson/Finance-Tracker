@@ -10,6 +10,7 @@ import { LoansReducer } from "@/features/loans/loansSlice";
 import { ReportsReducer } from "@/features/reports/reportsSlice";
 import { SettingsReducer } from "@/features/settings/settingsSlice";
 import { TransactionsReducer } from "@/features/transactions/transactionsSlice";
+import { VenturesReducer } from "@/features/ventures/venturesSlice";
 import { WarmupReducer } from "@/features/warmup/warmupSlice";
 import { RootSaga } from "./rootSaga";
 
@@ -27,6 +28,7 @@ export const Store = configureStore({
     loans: LoansReducer,
     imports: ImportsReducer,
     investments: InvestmentsReducer,
+    ventures: VenturesReducer,
     settings: SettingsReducer,
   },
   middleware: (getDefaultMiddleware) =>
