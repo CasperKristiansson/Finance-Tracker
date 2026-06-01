@@ -91,7 +91,9 @@ def test_prepare_prompt_data_and_payload_defaults() -> None:
 
     model_id, payload = bs._build_bedrock_payload(prompt_data, request)
     assert model_id == bs.BEDROCK_MODEL_ID_DEFAULT
+    assert model_id.startswith("eu.")
     assert payload["tool_choice"]["name"] == "categorize_transactions"
+    assert "top_p" not in payload
 
 
 def test_build_bedrock_payload_uses_env_model_id(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -202,6 +204,28 @@ def test_post_to_connection_handles_gone_exception(monkeypatch: pytest.MonkeyPat
     connection = bs.SuggestionConnection("conn-1", "https://api", "token")
     bs._post_to_connection(connection, {"type": "x"})
     assert removed == ["conn-1"]
+
+
+def test_post_to_connection_handles_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    removed: list[str] = []
+    monkeypatch.setattr(
+        bs, "_remove_connection", lambda connection_id: removed.append(connection_id)
+    )
+
+    class _ApiClient:
+        def post_to_connection(self, **_kwargs):
+            raise ClientError(
+                {
+                    "Error": {"Code": "404", "Message": "Not Found"},
+                    "ResponseMetadata": {"HTTPStatusCode": 404},
+                },
+                "PostToConnection",
+            )
+
+    monkeypatch.setattr(bs.boto3, "client", lambda *_args, **_kwargs: _ApiClient())
+    connection = bs.SuggestionConnection("conn-404", "https://api", "token")
+    bs._post_to_connection(connection, {"type": "x"})
+    assert removed == ["conn-404"]
 
 
 def test_send_to_client_respects_token(monkeypatch: pytest.MonkeyPatch) -> None:

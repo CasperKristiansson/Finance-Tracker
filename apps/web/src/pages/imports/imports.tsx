@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Link2,
   Loader2,
-  MoreHorizontal,
   MoveRight,
   Save,
   Scissors,
@@ -78,7 +77,6 @@ import {
 import { renderCategoryIcon } from "@/lib/category-icons";
 import { currency } from "@/lib/format";
 import { useNavigationGuard } from "@/lib/navigation-guard";
-import { getDisplayTransactionType, isTaxEvent } from "@/lib/transactions";
 import { cn } from "@/lib/utils";
 import type {
   AccountWithBalance,
@@ -88,13 +86,11 @@ import type {
   ImportPreviewResponse,
   ImportPreviewRequest,
   TaxEventType,
-  TransactionRead,
 } from "@/types/api";
 import {
   AccountType,
   CategoryType,
   TaxEventType as TaxEventTypeEnum,
-  TransactionType,
 } from "@/types/api";
 import {
   ReimbursementDialog,
@@ -138,6 +134,50 @@ const toOccurredAt = (
   const prev = String(previous ?? "");
   const time = prev.includes("T") ? prev.slice(prev.indexOf("T")) : "T00:00:00";
   return `${dateValue}${time.startsWith("T") ? time : "T00:00:00"}`;
+};
+
+const toAmountCents = (value: string | number | null | undefined) => {
+  const numeric = Number(value ?? "");
+  if (!Number.isFinite(numeric)) return null;
+  return Math.round(numeric * 100);
+};
+
+const isOppositeExactAmount = (
+  a: string | number | null | undefined,
+  b: string | number | null | undefined,
+) => {
+  const aCents = toAmountCents(a);
+  const bCents = toAmountCents(b);
+  return aCents !== null && bCents !== null && aCents + bCents === 0;
+};
+
+const toDateMs = (value: string | null | undefined) => {
+  const dateValue = toDateInputValue(value);
+  if (!dateValue) return null;
+  const ms = new Date(`${dateValue}T00:00:00`).getTime();
+  return Number.isFinite(ms) ? ms : null;
+};
+
+const daysBetween = (
+  a: string | null | undefined,
+  b: string | null | undefined,
+) => {
+  const aMs = toDateMs(a);
+  const bMs = toDateMs(b);
+  if (aMs === null || bMs === null) return Number.POSITIVE_INFINITY;
+  return Math.abs(aMs - bMs) / 86_400_000;
+};
+
+const subtractMonthsDateInput = (
+  value: string | null | undefined,
+  months: number,
+) => {
+  const dateValue = toDateInputValue(value);
+  if (!dateValue) return "";
+  const date = new Date(`${dateValue}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setMonth(date.getMonth() - months);
+  return date.toISOString().slice(0, 10);
 };
 
 const inferTaxEventType = (amount: string | null | undefined): TaxEventType => {
@@ -278,10 +318,13 @@ type TransferOption = {
   key: string;
   accountId: string;
   description: string;
+  source: "batch" | "existing";
   occurredAt?: string | null;
   categoryName?: string | null;
   amount?: string;
   fileLabel?: string;
+  transactionId?: string;
+  rowId?: string;
 };
 
 type TransferDialogState = {
@@ -290,7 +333,6 @@ type TransferDialogState = {
   currentAccountId: string;
   value: string | null;
   batchOptions: TransferOption[];
-  existingOptions: TransferOption[];
 };
 
 type SplitPreviewRow = ImportPreviewResponse["rows"][number] & {
@@ -358,7 +400,6 @@ export const Imports: React.FC = () => {
     items: transferTransactions,
     loading: transferTransactionsLoading,
     error: transferTransactionsError,
-    pagination: transferTransactionsPagination,
     fetchTransactions: fetchTransferTransactions,
   } = useTransactionsApi();
   const {
@@ -410,14 +451,7 @@ export const Imports: React.FC = () => {
   const [transferDialogOpen, setTransferDialogOpen] = useState(false);
   const [transferDialogState, setTransferDialogState] =
     useState<TransferDialogState | null>(null);
-  const [transferSearch, setTransferSearch] = useState("");
-  const [transferStartDate, setTransferStartDate] = useState("");
-  const [transferEndDate, setTransferEndDate] = useState("");
-  const [transferAccountFilter, setTransferAccountFilter] = useState("");
-  const [transferCategoryFilter, setTransferCategoryFilter] = useState("");
-  const [transferMinAmount, setTransferMinAmount] = useState("");
-  const [transferMaxAmount, setTransferMaxAmount] = useState("");
-  const [transferTab, setTransferTab] = useState("upload");
+  const [transferTab, setTransferTab] = useState("suggested");
   const [reimbursementDialogOpen, setReimbursementDialogOpen] = useState(false);
   const [reimbursementDialogState, setReimbursementDialogState] =
     useState<ReimbursementDialogState | null>(null);
@@ -499,32 +533,28 @@ export const Imports: React.FC = () => {
     setSplitDialogOpen(false);
     setTransferDialogOpen(false);
     setTransferDialogState(null);
-    setTransferSearch("");
-    setTransferStartDate("");
-    setTransferEndDate("");
-    setTransferAccountFilter("");
-    setTransferCategoryFilter("");
-    setTransferMinAmount("");
-    setTransferMaxAmount("");
-    setTransferTab("upload");
+    setTransferTab("suggested");
     setReimbursementDialogOpen(false);
     setReimbursementDialogState(null);
     setReimbursementsByRow({});
   }, [preview]);
 
   useEffect(() => {
-    if (!transferDialogOpen || transferTab !== "existing") return;
+    if (!transferDialogOpen || !transferDialogState) return;
+    const row = commitForm.getValues(`rows.${transferDialogState.commitIndex}`);
+    if (!row) return;
+    const amountCents = toAmountCents(row.amount);
+    const endDate = toDateInputValue(row.occurred_at);
+    if (amountCents === null || amountCents === 0 || !endDate) return;
+    const amount = (Math.abs(amountCents) / 100).toFixed(2);
     const debounce = setTimeout(() => {
       fetchTransferTransactions({
-        limit: transferTransactionsPagination.limit,
+        limit: 50,
         offset: 0,
-        search: transferSearch.trim(),
-        accountIds: transferAccountFilter ? [transferAccountFilter] : [],
-        categoryIds: transferCategoryFilter ? [transferCategoryFilter] : [],
-        startDate: transferStartDate,
-        endDate: transferEndDate,
-        minAmount: transferMinAmount,
-        maxAmount: transferMaxAmount,
+        startDate: subtractMonthsDateInput(row.occurred_at, 3),
+        endDate,
+        minAmount: amount,
+        maxAmount: amount,
         sortBy: "occurred_at",
         sortDir: "desc",
         includeRunningBalances: false,
@@ -534,17 +564,10 @@ export const Imports: React.FC = () => {
     }, 250);
     return () => clearTimeout(debounce);
   }, [
+    commitForm,
     fetchTransferTransactions,
-    transferAccountFilter,
-    transferCategoryFilter,
     transferDialogOpen,
-    transferEndDate,
-    transferMaxAmount,
-    transferMinAmount,
-    transferSearch,
-    transferStartDate,
-    transferTab,
-    transferTransactionsPagination.limit,
+    transferDialogState,
   ]);
 
   useEffect(() => {
@@ -999,6 +1022,50 @@ export const Imports: React.FC = () => {
     return map;
   }, [commitRows]);
 
+  useEffect(() => {
+    if (!preview?.import_batch_id || !commitRows.length) return;
+    const rows = commitForm.getValues("rows");
+    rows.forEach((row, idx) => {
+      if (!row?.transfer_account_id || row.delete) return;
+      const counterpart = rows
+        .map((candidate, candidateIndex) => ({
+          candidate,
+          candidateIndex,
+          distance: daysBetween(row.occurred_at, candidate.occurred_at),
+        }))
+        .filter(({ candidate, candidateIndex, distance }) => {
+          if (candidateIndex === idx) return false;
+          if (candidate.delete) return false;
+          if (candidate.transfer_account_id) return false;
+          if (candidate.account_id !== row.transfer_account_id) return false;
+          if (!isOppositeExactAmount(row.amount, candidate.amount))
+            return false;
+          return distance <= 3;
+        })
+        .sort((a, b) => a.distance - b.distance)[0];
+
+      if (!counterpart) return;
+      commitForm.setValue(
+        `rows.${counterpart.candidateIndex}.transfer_account_id`,
+        row.account_id,
+        { shouldDirty: true },
+      );
+      commitForm.setValue(
+        `rows.${counterpart.candidateIndex}.category_id`,
+        null,
+        { shouldDirty: true },
+      );
+      commitForm.setValue(
+        `rows.${counterpart.candidateIndex}.tax_event_type`,
+        null,
+        { shouldDirty: true },
+      );
+      commitForm.setValue(`rows.${counterpart.candidateIndex}.delete`, true, {
+        shouldDirty: true,
+      });
+    });
+  }, [commitForm, commitRows.length, preview?.import_batch_id]);
+
   const contextTxById = useMemo(() => {
     const map = new Map<
       string,
@@ -1310,86 +1377,6 @@ export const Imports: React.FC = () => {
   const formatTransferCurrency = (value: number) =>
     currency(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  const getTransferDisplayAmount = (tx: TransactionRead) => {
-    const knownLegs = tx.legs.filter((leg) =>
-      Boolean(accountLookup[leg.account_id]),
-    );
-    if (transferAccountFilter) {
-      return knownLegs
-        .filter((leg) => leg.account_id === transferAccountFilter)
-        .reduce((sum, leg) => sum + Number(leg.amount), 0);
-    }
-
-    const sumKnown = knownLegs.reduce(
-      (sum, leg) => sum + Number(leg.amount),
-      0,
-    );
-    if (sumKnown !== 0) return sumKnown;
-
-    const largest = knownLegs.reduce<null | { amount: number }>((best, leg) => {
-      const numeric = Number(leg.amount);
-      if (!best) return { amount: numeric };
-      return Math.abs(numeric) > Math.abs(best.amount)
-        ? { amount: numeric }
-        : best;
-    }, null);
-    return largest ? Math.abs(largest.amount) : 0;
-  };
-
-  const getTransferAccountsLabel = (tx: TransactionRead) => {
-    const knownLegs = tx.legs.filter((leg) =>
-      Boolean(accountLookup[leg.account_id]),
-    );
-    if (tx.transaction_type === TransactionType.TRANSFER) {
-      const fromLeg =
-        knownLegs.find((leg) => Number(leg.amount) < 0) ?? knownLegs[0];
-      const toLeg =
-        knownLegs.find((leg) => Number(leg.amount) > 0) ?? knownLegs[1];
-
-      const fromName = fromLeg ? accountLookup[fromLeg.account_id] : undefined;
-      const toName = toLeg ? accountLookup[toLeg.account_id] : undefined;
-
-      if (fromName && toName) return `${fromName} → ${toName}`;
-      if (fromName) return `${fromName} → (unknown)`;
-      if (toName) return `(unknown) → ${toName}`;
-      return "Internal transfer";
-    }
-
-    const primary = knownLegs[0];
-    if (!primary) return "Internal transfer";
-    return accountLookup[primary.account_id] ?? "Internal transfer";
-  };
-
-  const getTransferTargetAccountId = (tx: TransactionRead) => {
-    const currentAccountId = transferDialogState?.currentAccountId;
-    if (!tx.legs.length) return null;
-    if (currentAccountId) {
-      const otherLeg = tx.legs.find(
-        (leg) => leg.account_id !== currentAccountId,
-      );
-      if (otherLeg) return otherLeg.account_id;
-    }
-    return tx.legs[0]?.account_id ?? null;
-  };
-
-  const loadMoreTransferTransactions = () => {
-    if (
-      !transferTransactionsPagination.hasMore ||
-      transferTransactionsLoading
-    ) {
-      return;
-    }
-    fetchTransferTransactions({
-      offset:
-        transferTransactionsPagination.offset +
-        transferTransactionsPagination.limit,
-      limit: transferTransactionsPagination.limit,
-      includeRunningBalances: false,
-      includeTaxEvent: true,
-      view: "summary",
-    });
-  };
-
   const applySplitDraft = () => {
     if (!splitBaseRow) return;
     const baseIdx = commitIndexByRowId.get(splitBaseRow.id);
@@ -1546,7 +1533,6 @@ export const Imports: React.FC = () => {
     row: ImportPreviewResponse["rows"][number],
     commitIndex: number,
     batchOptions: TransferOption[],
-    existingOptions: TransferOption[],
     currentValue: string | null,
   ) => {
     setTransferDialogState({
@@ -1555,34 +1541,91 @@ export const Imports: React.FC = () => {
       currentAccountId: commitRows[commitIndex].account_id,
       value: currentValue,
       batchOptions,
-      existingOptions,
     });
     setTransferDraftValue(currentValue);
     setTransferDraftSelectionKey(null);
-    setTransferSearch("");
-    setTransferStartDate("");
-    setTransferEndDate("");
-    setTransferAccountFilter("");
-    setTransferCategoryFilter("");
-    setTransferMinAmount("");
-    setTransferMaxAmount("");
-    setTransferTab(batchOptions.length ? "upload" : "existing");
+    setTransferTab("suggested");
     setTransferDialogOpen(true);
+  };
+
+  const setTransferRowState = (
+    rowIndex: number,
+    accountId: string | null,
+    options: { coveredByLinkedRow?: boolean } = {},
+  ) => {
+    commitForm.setValue(`rows.${rowIndex}.transfer_account_id`, accountId, {
+      shouldDirty: true,
+    });
+    commitForm.setValue(`rows.${rowIndex}.tax_event_type`, null, {
+      shouldDirty: true,
+    });
+    if (accountId) {
+      commitForm.setValue(`rows.${rowIndex}.category_id`, null, {
+        shouldDirty: true,
+      });
+    }
+    if (options.coveredByLinkedRow !== undefined) {
+      commitForm.setValue(
+        `rows.${rowIndex}.delete`,
+        options.coveredByLinkedRow,
+        {
+          shouldDirty: true,
+        },
+      );
+    }
+  };
+
+  const findCoveredBatchCounterpartIndex = (commitIndex: number) => {
+    const rows = commitForm.getValues("rows");
+    const row = rows[commitIndex];
+    if (!row?.transfer_account_id) return null;
+    let bestIndex: number | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+    rows.forEach((candidate, idx) => {
+      if (idx === commitIndex) return;
+      if (!candidate.delete) return;
+      if (candidate.account_id !== row.transfer_account_id) return;
+      if (candidate.transfer_account_id !== row.account_id) return;
+      if (!isOppositeExactAmount(row.amount, candidate.amount)) return;
+      const distance = daysBetween(row.occurred_at, candidate.occurred_at);
+      if (distance < bestDistance) {
+        bestIndex = idx;
+        bestDistance = distance;
+      }
+    });
+    return bestIndex;
   };
 
   const applyTransferSelection = (accountId: string | null) => {
     if (!transferDialogState) return;
     const { commitIndex } = transferDialogState;
-    commitForm.setValue(`rows.${commitIndex}.transfer_account_id`, accountId, {
-      shouldDirty: true,
-    });
-    if (accountId) {
-      commitForm.setValue(`rows.${commitIndex}.tax_event_type`, null, {
-        shouldDirty: true,
+    const currentRow = commitForm.getValues(`rows.${commitIndex}`);
+    const selectedBatchOption = transferDialogState.batchOptions.find(
+      (option) => option.key === transferDraftSelectionKey,
+    );
+
+    if (!accountId) {
+      const counterpartIndex = findCoveredBatchCounterpartIndex(commitIndex);
+      setTransferRowState(commitIndex, null);
+      if (counterpartIndex !== null) {
+        setTransferRowState(counterpartIndex, null, {
+          coveredByLinkedRow: false,
+        });
+      }
+    } else {
+      setTransferRowState(commitIndex, accountId, {
+        coveredByLinkedRow: false,
       });
-      commitForm.setValue(`rows.${commitIndex}.category_id`, null, {
-        shouldDirty: true,
-      });
+      if (selectedBatchOption?.rowId && currentRow) {
+        const counterpartIndex = commitIndexByRowId.get(
+          selectedBatchOption.rowId,
+        );
+        if (counterpartIndex !== undefined) {
+          setTransferRowState(counterpartIndex, currentRow.account_id, {
+            coveredByLinkedRow: true,
+          });
+        }
+      }
     }
     setTransferDialogOpen(false);
     setTransferDialogState(null);
@@ -1754,6 +1797,41 @@ export const Imports: React.FC = () => {
   const transferDialogCommitRow = transferDialogState
     ? commitRows[transferDialogState.commitIndex]
     : null;
+  const suggestedExistingOptions: TransferOption[] = (() => {
+    if (!transferDialogState || !transferDialogCommitRow) return [];
+    const currentAmountCents = toAmountCents(transferDialogCommitRow.amount);
+    if (currentAmountCents === null || currentAmountCents === 0) return [];
+    const wantedLegCents = -currentAmountCents;
+    return transferTransactions
+      .flatMap((tx) => {
+        const matchingLeg = tx.legs.find((leg) => {
+          if (leg.account_id === transferDialogState.currentAccountId) {
+            return false;
+          }
+          if (!accountLookup[leg.account_id]) return false;
+          return toAmountCents(leg.amount) === wantedLegCents;
+        });
+        if (!matchingLeg) return [];
+        const option: TransferOption = {
+          key: `existing:${tx.id}`,
+          source: "existing",
+          transactionId: tx.id,
+          accountId: matchingLeg.account_id,
+          description: tx.description || "Existing transaction",
+          occurredAt: tx.occurred_at,
+          amount: String(matchingLeg.amount),
+          categoryName: tx.category_id
+            ? (categoriesById.get(tx.category_id)?.name ?? null)
+            : null,
+        };
+        return [option];
+      })
+      .sort(
+        (a, b) =>
+          daysBetween(transferDialogCommitRow.occurred_at, a.occurredAt) -
+          daysBetween(transferDialogCommitRow.occurred_at, b.occurredAt),
+      );
+  })();
   const transferDirection = getTransferDirection(
     transferDialogCommitRow?.amount,
   );
@@ -2414,32 +2492,46 @@ export const Imports: React.FC = () => {
                                   : null;
 
                               const batchTransferOptions = preview.rows
-                                .filter((row) => row.id !== previewRow.id)
+                                .filter((row) => {
+                                  if (row.id === previewRow.id) return false;
+                                  if (
+                                    row.account_id ===
+                                    commitRows[idx].account_id
+                                  ) {
+                                    return false;
+                                  }
+                                  return isOppositeExactAmount(
+                                    amountValue,
+                                    row.draft &&
+                                      typeof row.draft === "object" &&
+                                      "amount" in row.draft
+                                      ? String(row.draft.amount)
+                                      : row.amount,
+                                  );
+                                })
                                 .map((row) => {
                                   const fileMeta = fileById.get(row.file_id);
                                   const fileLabel = fileMeta
                                     ? fileMeta.filename
                                     : undefined;
+                                  const rowIndex = commitIndexByRowId.get(
+                                    row.id,
+                                  );
+                                  const draftRow =
+                                    rowIndex !== undefined
+                                      ? commitForm.getValues(`rows.${rowIndex}`)
+                                      : null;
                                   return {
-                                    key: row.id,
+                                    key: `batch:${row.id}`,
+                                    source: "batch" as const,
+                                    rowId: row.id,
                                     accountId: row.account_id,
-                                    description: row.description,
-                                    amount: row.amount,
-                                    occurredAt: row.occurred_at,
+                                    description:
+                                      draftRow?.description ?? row.description,
+                                    amount: draftRow?.amount ?? row.amount,
+                                    occurredAt:
+                                      draftRow?.occurred_at ?? row.occurred_at,
                                     fileLabel,
-                                  };
-                                });
-
-                              const existingTransferOptions = rowSimilarIds
-                                .map((txId) => {
-                                  const tx = contextTxById.get(txId);
-                                  if (!tx || !tx.account_id) return null;
-                                  return {
-                                    key: txId,
-                                    accountId: tx.account_id,
-                                    description: tx.description,
-                                    occurredAt: tx.occurred_at,
-                                    categoryName: tx.category_name,
                                   };
                                 })
                                 .filter(
@@ -2447,6 +2539,11 @@ export const Imports: React.FC = () => {
                                     option,
                                   ): option is NonNullable<typeof option> =>
                                     Boolean(option),
+                                )
+                                .sort(
+                                  (a, b) =>
+                                    daysBetween(occurredAt, a.occurredAt) -
+                                    daysBetween(occurredAt, b.occurredAt),
                                 );
                               const loanPaymentTargets = accounts.filter(
                                 (account) =>
@@ -2718,7 +2815,6 @@ export const Imports: React.FC = () => {
                                               previewRow,
                                               idx,
                                               batchTransferOptions,
-                                              existingTransferOptions ?? [],
                                               transferAccountId,
                                             )
                                           }
@@ -3113,14 +3209,7 @@ export const Imports: React.FC = () => {
             setTransferDialogState(null);
             setTransferDraftValue(null);
             setTransferDraftSelectionKey(null);
-            setTransferSearch("");
-            setTransferStartDate("");
-            setTransferEndDate("");
-            setTransferAccountFilter("");
-            setTransferCategoryFilter("");
-            setTransferMinAmount("");
-            setTransferMaxAmount("");
-            setTransferTab("upload");
+            setTransferTab("suggested");
           }
         }}
       >
@@ -3150,271 +3239,198 @@ export const Imports: React.FC = () => {
               </div>
 
               <Tabs value={transferTab} onValueChange={setTransferTab}>
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="upload">This upload</TabsTrigger>
-                  <TabsTrigger value="existing">Existing</TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="suggested">Suggested</TabsTrigger>
                   <TabsTrigger value="create">New transfer</TabsTrigger>
                 </TabsList>
-                <TabsContent value="upload" className="space-y-3">
-                  <p className="text-sm text-slate-600">
-                    Pair with another row from the same upload.
-                  </p>
-                  <div className="rounded-lg border border-slate-200">
-                    {transferDialogState.batchOptions.length ? (
-                      <div className="max-h-[360px] overflow-x-auto overflow-y-auto">
-                        <Table className="min-w-[720px]">
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Description</TableHead>
-                              <TableHead>Date</TableHead>
-                              <TableHead>Amount</TableHead>
-                              <TableHead>Account</TableHead>
-                              <TableHead>File</TableHead>
-                              <TableHead className="text-right">
-                                Select
-                              </TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {transferDialogState.batchOptions.map((option) => {
-                              const account = accounts.find(
-                                (acc) => acc.id === option.accountId,
-                              );
-                              const selected =
-                                transferDraftSelectionKey === option.key;
-                              return (
-                                <TableRow
-                                  key={option.key}
-                                  className="cursor-pointer"
-                                  data-state={selected ? "selected" : undefined}
-                                  onClick={() => {
-                                    setTransferDraftSelectionKey(option.key);
-                                    setTransferDraftValue(option.accountId);
-                                  }}
-                                >
-                                  <TableCell className="font-semibold text-slate-900">
-                                    {option.description || "Transfer row"}
-                                  </TableCell>
-                                  <TableCell className="text-slate-600">
-                                    {option.occurredAt?.slice(0, 10) ??
-                                      "Unknown"}
-                                  </TableCell>
-                                  <TableCell className="text-slate-600">
-                                    {option.amount ?? "—"}
-                                  </TableCell>
-                                  <TableCell className="text-slate-600">
-                                    {account?.name ?? "Account"}
-                                  </TableCell>
-                                  <TableCell className="text-slate-600">
-                                    {option.fileLabel ?? "—"}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant={selected ? "default" : "outline"}
+                <TabsContent value="suggested" className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-800">
+                        This upload
+                      </p>
+                      <Badge variant="secondary" className="bg-slate-100">
+                        Exact opposite amount
+                      </Badge>
+                    </div>
+                    <div className="rounded-lg border border-slate-200">
+                      {transferDialogState.batchOptions.length ? (
+                        <div className="max-h-[260px] overflow-x-auto overflow-y-auto">
+                          <Table className="min-w-[720px]">
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Description</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Amount</TableHead>
+                                <TableHead>Account</TableHead>
+                                <TableHead>File</TableHead>
+                                <TableHead className="text-right">
+                                  Select
+                                </TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {transferDialogState.batchOptions.map(
+                                (option) => {
+                                  const account = accounts.find(
+                                    (acc) => acc.id === option.accountId,
+                                  );
+                                  const selected =
+                                    transferDraftSelectionKey === option.key;
+                                  return (
+                                    <TableRow
+                                      key={option.key}
+                                      className="cursor-pointer"
+                                      data-state={
+                                        selected ? "selected" : undefined
+                                      }
+                                      onClick={() => {
+                                        setTransferDraftSelectionKey(
+                                          option.key,
+                                        );
+                                        setTransferDraftValue(option.accountId);
+                                      }}
                                     >
-                                      {selected ? "Selected" : "Select"}
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    ) : (
-                      <div className="p-3 text-sm text-slate-500">
-                        No other rows in this upload.
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="existing" className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Input
-                      placeholder="Search description, category, date…"
-                      value={transferSearch}
-                      onChange={(e) => setTransferSearch(e.target.value)}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setTransferSearch("")}
-                    >
-                      Clear
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-2 text-[13px] shadow-[0_6px_16px_-12px_rgba(15,23,42,0.3)]">
-                    <input
-                      type="date"
-                      className="h-8 rounded border border-slate-200 px-2 text-slate-800"
-                      value={transferStartDate}
-                      onChange={(e) => setTransferStartDate(e.target.value)}
-                    />
-                    <span className="text-slate-500">to</span>
-                    <input
-                      type="date"
-                      className="h-8 rounded border border-slate-200 px-2 text-slate-800"
-                      value={transferEndDate}
-                      onChange={(e) => setTransferEndDate(e.target.value)}
-                    />
-                    <select
-                      className="h-8 rounded border border-slate-200 bg-white px-2 text-slate-800"
-                      value={transferAccountFilter}
-                      onChange={(e) => setTransferAccountFilter(e.target.value)}
-                    >
-                      <option value="">All accounts</option>
-                      {accounts.map((acc) => (
-                        <option key={acc.id} value={acc.id}>
-                          {acc.name}
-                        </option>
-                      ))}
-                    </select>
-                    <select
-                      className="h-8 rounded border border-slate-200 bg-white px-2 text-slate-800"
-                      value={transferCategoryFilter}
-                      onChange={(e) =>
-                        setTransferCategoryFilter(e.target.value)
-                      }
-                    >
-                      <option value="">All categories</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="Min"
-                      className="h-8 w-24 rounded border border-slate-200 px-2 text-slate-800"
-                      value={transferMinAmount}
-                      onChange={(e) => setTransferMinAmount(e.target.value)}
-                    />
-                    <input
-                      type="number"
-                      step="0.01"
-                      placeholder="Max"
-                      className="h-8 w-24 rounded border border-slate-200 px-2 text-slate-800"
-                      value={transferMaxAmount}
-                      onChange={(e) => setTransferMaxAmount(e.target.value)}
-                    />
-                  </div>
-                  <div className="rounded-lg border border-slate-200">
-                    {transferTransactions.length ? (
-                      <div className="max-h-[360px] overflow-x-auto overflow-y-auto">
-                        <Table className="min-w-[720px]">
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Description</TableHead>
-                              <TableHead>Date</TableHead>
-                              <TableHead>Category</TableHead>
-                              <TableHead>Account</TableHead>
-                              <TableHead className="text-right">
-                                Amount
-                              </TableHead>
-                              <TableHead className="text-right">
-                                Select
-                              </TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {transferTransactions.map((tx) => {
-                              const displayType = getDisplayTransactionType(tx);
-                              const taxLinked = isTaxEvent(tx);
-                              const targetAccountId =
-                                getTransferTargetAccountId(tx);
-                              const selected =
-                                transferDraftSelectionKey === tx.id;
-                              const categoryLabel = tx.category_id
-                                ? categoriesById.get(tx.category_id)?.name
-                                : null;
-                              return (
-                                <TableRow
-                                  key={tx.id}
-                                  className="cursor-pointer"
-                                  data-state={selected ? "selected" : undefined}
-                                  onClick={() => {
-                                    if (!targetAccountId) return;
-                                    setTransferDraftSelectionKey(tx.id);
-                                    setTransferDraftValue(targetAccountId);
-                                  }}
-                                >
-                                  <TableCell className="font-semibold text-slate-900">
-                                    {tx.description || "Existing transaction"}
-                                  </TableCell>
-                                  <TableCell className="text-slate-600">
-                                    {tx.occurred_at?.slice(0, 10) ?? "Unknown"}
-                                  </TableCell>
-                                  <TableCell className="text-slate-600">
-                                    {displayType === TransactionType.TRANSFER &&
-                                    !taxLinked
-                                      ? "—"
-                                      : (categoryLabel ?? "Uncategorized")}
-                                  </TableCell>
-                                  <TableCell className="text-slate-600">
-                                    {getTransferAccountsLabel(tx)}
-                                  </TableCell>
-                                  <TableCell className="text-right text-slate-600">
-                                    {formatTransferCurrency(
-                                      getTransferDisplayAmount(tx),
-                                    )}
-                                  </TableCell>
-                                  <TableCell className="text-right">
-                                    <Button
-                                      type="button"
-                                      size="sm"
-                                      variant={selected ? "default" : "outline"}
-                                      disabled={!targetAccountId}
-                                    >
-                                      {selected ? "Selected" : "Select"}
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    ) : transferTransactionsLoading ? (
-                      <div className="p-3 text-sm text-slate-500">
-                        Loading transactions…
-                      </div>
-                    ) : transferTransactionsError ? (
-                      <div className="p-3 text-sm text-slate-500">
-                        Unable to load transactions.
-                      </div>
-                    ) : (
-                      <div className="p-3 text-sm text-slate-500">
-                        No matching transactions found.
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-end">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="gap-2 border-slate-300 text-slate-700"
-                      onClick={loadMoreTransferTransactions}
-                      disabled={
-                        !transferTransactionsPagination.hasMore ||
-                        transferTransactionsLoading
-                      }
-                    >
-                      {transferTransactionsLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      <TableCell className="font-semibold text-slate-900">
+                                        {option.description || "Transfer row"}
+                                      </TableCell>
+                                      <TableCell className="text-slate-600">
+                                        {option.occurredAt?.slice(0, 10) ??
+                                          "Unknown"}
+                                      </TableCell>
+                                      <TableCell className="text-slate-600">
+                                        {option.amount ?? "—"}
+                                      </TableCell>
+                                      <TableCell className="text-slate-600">
+                                        {account?.name ?? "Account"}
+                                      </TableCell>
+                                      <TableCell className="text-slate-600">
+                                        {option.fileLabel ?? "—"}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant={
+                                            selected ? "default" : "outline"
+                                          }
+                                        >
+                                          {selected ? "Selected" : "Select"}
+                                        </Button>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                },
+                              )}
+                            </TableBody>
+                          </Table>
+                        </div>
                       ) : (
-                        <MoreHorizontal className="h-4 w-4" />
+                        <div className="p-3 text-sm text-slate-500">
+                          No exact opposite transfer rows in this upload.
+                        </div>
                       )}
-                      {transferTransactionsPagination.hasMore
-                        ? "Load more"
-                        : "End of list"}
-                    </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-800">
+                        Existing transactions
+                      </p>
+                      {transferTransactionsLoading ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          Loading
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="rounded-lg border border-slate-200">
+                      {suggestedExistingOptions.length ? (
+                        <div className="max-h-[260px] overflow-x-auto overflow-y-auto">
+                          <Table className="min-w-[720px]">
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Description</TableHead>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Category</TableHead>
+                                <TableHead>Account</TableHead>
+                                <TableHead className="text-right">
+                                  Amount
+                                </TableHead>
+                                <TableHead className="text-right">
+                                  Select
+                                </TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {suggestedExistingOptions.map((option) => {
+                                const selected =
+                                  transferDraftSelectionKey === option.key;
+                                return (
+                                  <TableRow
+                                    key={option.key}
+                                    className="cursor-pointer"
+                                    data-state={
+                                      selected ? "selected" : undefined
+                                    }
+                                    onClick={() => {
+                                      setTransferDraftSelectionKey(option.key);
+                                      setTransferDraftValue(option.accountId);
+                                    }}
+                                  >
+                                    <TableCell className="font-semibold text-slate-900">
+                                      {option.description ||
+                                        "Existing transaction"}
+                                    </TableCell>
+                                    <TableCell className="text-slate-600">
+                                      {option.occurredAt?.slice(0, 10) ??
+                                        "Unknown"}
+                                    </TableCell>
+                                    <TableCell className="text-slate-600">
+                                      {option.categoryName ?? "Uncategorized"}
+                                    </TableCell>
+                                    <TableCell className="text-slate-600">
+                                      {accountLookup[option.accountId] ??
+                                        "Account"}
+                                    </TableCell>
+                                    <TableCell className="text-right text-slate-600">
+                                      {formatTransferCurrency(
+                                        Number(option.amount ?? 0),
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={
+                                          selected ? "default" : "outline"
+                                        }
+                                      >
+                                        {selected ? "Selected" : "Select"}
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      ) : transferTransactionsLoading ? (
+                        <div className="p-3 text-sm text-slate-500">
+                          Loading transactions…
+                        </div>
+                      ) : transferTransactionsError ? (
+                        <div className="p-3 text-sm text-slate-500">
+                          Unable to load transactions.
+                        </div>
+                      ) : (
+                        <div className="p-3 text-sm text-slate-500">
+                          No exact opposite transactions in the last three
+                          months.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </TabsContent>
 
@@ -3435,7 +3451,10 @@ export const Imports: React.FC = () => {
                             key={acc.id}
                             variant={selected ? "default" : "outline"}
                             className="h-auto justify-start gap-3 text-left"
-                            onClick={() => setTransferDraftValue(acc.id)}
+                            onClick={() => {
+                              setTransferDraftSelectionKey(`create:${acc.id}`);
+                              setTransferDraftValue(acc.id);
+                            }}
                           >
                             <div
                               className={cn(

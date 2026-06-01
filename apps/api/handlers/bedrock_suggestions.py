@@ -31,7 +31,7 @@ from ..shared.import_suggestions_state import (
 )
 from .utils import get_user_id, json_response, parse_body
 
-BEDROCK_MODEL_ID_DEFAULT = "anthropic.claude-haiku-4-5-20251001-v1:0"
+BEDROCK_MODEL_ID_DEFAULT = "eu.anthropic.claude-haiku-4-5-20251001-v1:0"
 _MAX_HISTORY = 200
 _MAX_TRANSACTIONS = 200
 _TOOL_NAME = "categorize_transactions"
@@ -220,7 +220,8 @@ def process_import_category_suggestions(event: Dict[str, Any], _context: Any) ->
         ) as exc:
             error_text = str(exc) or "Unable to suggest categories."
             logger.warning(
-                "import suggestions failed",
+                "import suggestions failed: %s",
+                error_text,
                 extra={
                     "job_id": job_id,
                     "import_batch_id": (
@@ -306,6 +307,7 @@ def _suggest_with_bedrock(
             body=json.dumps(payload),
         )
     except (BotoCoreError, ClientError) as exc:  # pragma: no cover - environment dependent
+        logger.warning("Bedrock invocation failed for model %s: %s", model_id, exc)
         raise SuggestionError(f"Bedrock invocation failed: {exc}") from exc
 
     raw_body = response.get("body")
@@ -438,7 +440,6 @@ def _build_bedrock_payload(
         "tool_choice": {"type": "tool", "name": _TOOL_NAME},
         "max_tokens": max_tokens,
         "temperature": 0.0,
-        "top_p": 0.9,
     }
     return model_id, payload
 
@@ -585,11 +586,18 @@ def _post_to_connection(connection: SuggestionConnection, payload: dict[str, Any
             Data=json.dumps(payload).encode("utf-8"),
         )
     except ClientError as exc:  # pragma: no cover - environment dependent
-        code = exc.response.get("Error", {}).get("Code")
-        if code == "GoneException":
+        if _is_stale_connection_error(exc):
             _remove_connection(connection.connection_id)
             return
         raise
+
+
+def _is_stale_connection_error(exc: ClientError) -> bool:
+    error = exc.response.get("Error", {})
+    metadata = exc.response.get("ResponseMetadata", {})
+    code = str(error.get("Code") or "")
+    status_code = metadata.get("HTTPStatusCode")
+    return code in {"GoneException", "NotFoundException", "404"} or status_code == 404
 
 
 def _send_to_client(client_id: UUID, client_token: str, payload: dict[str, Any]) -> None:
