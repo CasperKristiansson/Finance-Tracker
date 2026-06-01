@@ -401,8 +401,9 @@ export const Investments: React.FC = () => {
         : fallbackMarketGrowth;
 
     const baseValue = visiblePortfolioSeries[0]?.value ?? null;
+    const growthBase = baseValue !== null ? baseValue + net : null;
     const marketGrowthPct =
-      baseValue && baseValue > 0 ? (marketGrowth / baseValue) * 100 : null;
+      growthBase && growthBase > 0 ? (marketGrowth / growthBase) * 100 : null;
 
     return { added, withdrawn, net, marketGrowth, marketGrowthPct };
   }, [
