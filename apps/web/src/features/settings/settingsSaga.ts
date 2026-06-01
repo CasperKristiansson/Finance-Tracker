@@ -1,6 +1,6 @@
 import { createAction } from "@reduxjs/toolkit";
-import { call, put, takeLatest } from "redux-saga/effects";
 import { toast } from "sonner";
+import { call, put, takeLatest } from "typed-redux-saga";
 import { TypedSelect } from "@/app/rootSaga";
 import { callApiWithAuth } from "@/features/api/apiSaga";
 import { ApiError } from "@/lib/apiClient";
@@ -68,11 +68,11 @@ const persistLocalSettings = (
 };
 
 function* handleLoadSettings() {
-  yield put(setSettingsLoading(true));
+  yield* put(setSettingsLoading(true));
   try {
     const cached = readCachedSettings();
     if (cached) {
-      yield put(
+      yield* put(
         hydrateSettings({
           ...cached,
         }),
@@ -87,8 +87,8 @@ function* handleLoadSettings() {
     }
 
     try {
-      const response: SettingsResponse = yield call(
-        callApiWithAuth,
+      const response: SettingsResponse = yield* call(
+        callApiWithAuth<SettingsResponse>,
         buildEndpointRequest("getSettings"),
         { loadingKey: "settings", silent: true },
       );
@@ -98,23 +98,23 @@ function* handleLoadSettings() {
           lastName: response.settings.last_name || undefined,
           includeInvestmentGrowth: cached?.includeInvestmentGrowth ?? true,
         };
-        yield put(hydrateSettings(payload));
+        yield* put(hydrateSettings(payload));
         const currentState: SettingsState =
           yield* TypedSelect(selectSettingsState);
         persistLocalSettings(currentState);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      yield put(setSettingsError(message));
+      yield* put(setSettingsError(message));
     }
   } finally {
-    yield put(setSettingsLoading(false));
+    yield* put(setSettingsLoading(false));
   }
 }
 
 function* handleSaveSettings() {
-  yield put(setSettingsSaving(true));
-  yield put(setSettingsError(undefined));
+  yield* put(setSettingsSaving(true));
+  yield* put(setSettingsError(undefined));
   const timestamp = new Date().toISOString();
   try {
     const state: SettingsState = yield* TypedSelect(selectSettingsState);
@@ -123,7 +123,7 @@ function* handleSaveSettings() {
 
     if (!token || isDemo) {
       persistLocalSettings(state, timestamp);
-      yield put(setLastSavedAt(timestamp));
+      yield* put(setLastSavedAt(timestamp));
       toast.success("Profile saved", {
         description: "Cached locally on this device.",
       });
@@ -136,13 +136,13 @@ function* handleSaveSettings() {
         last_name: state.lastName ?? null,
       };
       const request: EndpointRequest<"saveSettings"> = { settings: payload };
-      yield call(
+      yield* call(
         callApiWithAuth,
         buildEndpointRequest("saveSettings", { body: request }),
         { loadingKey: "settings", silent: true },
       );
       persistLocalSettings(state, timestamp);
-      yield put(setLastSavedAt(timestamp));
+      yield* put(setLastSavedAt(timestamp));
       toast.success("Profile saved", {
         description: "Synced with the database.",
       });
@@ -154,16 +154,16 @@ function* handleSaveSettings() {
       } else {
         const message = error instanceof Error ? error.message : undefined;
         toast.error("Could not sync profile", { description: message });
-        yield put(setSettingsError(message));
+        yield* put(setSettingsError(message));
       }
     }
   } finally {
-    yield put(setSettingsSaving(false));
+    yield* put(setSettingsSaving(false));
   }
 }
 
 function* handleRunBackup() {
-  yield put(setBackingUp(true));
+  yield* put(setBackingUp(true));
   try {
     const token: string | undefined = yield* TypedSelect(selectToken);
     const isDemo: boolean = yield* TypedSelect(selectIsDemo);
@@ -176,7 +176,7 @@ function* handleRunBackup() {
     }
 
     try {
-      yield call(
+      yield* call(
         callApiWithAuth<EndpointResponse<"runTransactionsBackup">>,
         buildEndpointRequest("runTransactionsBackup", {}),
         { loadingKey: "settings", silent: true },
@@ -189,7 +189,7 @@ function* handleRunBackup() {
       toast.error("Could not run backup", { description: message });
     }
   } finally {
-    yield put(setBackingUp(false));
+    yield* put(setBackingUp(false));
   }
 }
 
@@ -199,10 +199,10 @@ function* handlePersistLocalPreference() {
 }
 
 export function* SettingsSaga() {
-  yield takeLatest(LoadSettings.type, handleLoadSettings);
-  yield takeLatest(SaveSettings.type, handleSaveSettings);
-  yield takeLatest(RunBackup.type, handleRunBackup);
-  yield takeLatest(
+  yield* takeLatest(LoadSettings.type, handleLoadSettings);
+  yield* takeLatest(SaveSettings.type, handleSaveSettings);
+  yield* takeLatest(RunBackup.type, handleRunBackup);
+  yield* takeLatest(
     setIncludeInvestmentGrowth.type,
     handlePersistLocalPreference,
   );

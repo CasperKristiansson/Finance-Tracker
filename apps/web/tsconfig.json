@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
     /* Language and Environment */
-    "target": "ES2021" /* Set a more recent JavaScript version that supports modern features. */,
+    "target": "ES2022" /* Set a more recent JavaScript version that supports modern features. */,
     "lib": [
-      "ES2021",
+      "ES2022",
       "DOM",
       "DOM.Iterable"
     ] /* Include relevant library files for React and modern JavaScript features. */,
@@ -12,9 +12,8 @@
     /* Modules */
     "module": "ESNext" /* Use ESNext module system which is more aligned with modern JavaScript and bundlers. */,
     "moduleResolution": "Bundler" /* Use Node.js module resolution algorithm. */,
-    "baseUrl": "./src" /* Set the base directory to resolve non-relative module names. */,
     "paths": {
-      "@/*": ["*"]
+      "@/*": ["./src/*"]
     },
     "resolveJsonModule": true /* Enable importing .json files. */,
     "allowImportingTsExtensions": true,

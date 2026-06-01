@@ -71,7 +71,11 @@ const coerceMoney = (value: unknown): number => {
 
 const toIsoDate = (value: unknown) => {
   if (!value) return null;
-  return String(value).slice(0, 10);
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value).slice(0, 10);
+  }
+  return null;
 };
 
 const daysSinceIsoDate = (isoDate: string | null): number | null => {
@@ -588,23 +592,25 @@ export const Investments: React.FC = () => {
   useEffect(() => {
     if (!snapshotDialogOpen) return;
     if (!snapshotAccountId && accountSummaries.length) {
-      setSnapshotAccountId(accountSummaries[0].accountId);
+      const timer = window.setTimeout(
+        () => setSnapshotAccountId(accountSummaries[0].accountId),
+        0,
+      );
+      return () => window.clearTimeout(timer);
     }
+    return undefined;
   }, [accountSummaries, snapshotAccountId, snapshotDialogOpen]);
 
   useEffect(() => {
     if (!snapshotDialogOpen) return;
-    if (!snapshotAccount) {
-      setSnapshotBalance("");
-      setSnapshotDate(new Date().toISOString().slice(0, 10));
+    const timer = window.setTimeout(() => {
+      const today = new Date().toISOString().slice(0, 10);
+      setSnapshotBalance(snapshotAccount?.currentValue.toFixed(2) ?? "");
+      setSnapshotDate(today);
       setSnapshotNotes("");
       setSnapshotSubmitted(false);
-      return;
-    }
-    setSnapshotBalance(snapshotAccount.currentValue.toFixed(2));
-    setSnapshotDate(new Date().toISOString().slice(0, 10));
-    setSnapshotNotes("");
-    setSnapshotSubmitted(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [snapshotAccount, snapshotDialogOpen]);
 
   useEffect(() => {
@@ -616,8 +622,11 @@ export const Investments: React.FC = () => {
         ? `${snapshotAccount.accountName} balance updated.`
         : "Investment balance updated.",
     );
-    setSnapshotDialogOpen(false);
-    setSnapshotSubmitted(false);
+    const timer = window.setTimeout(() => {
+      setSnapshotDialogOpen(false);
+      setSnapshotSubmitted(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [snapshotAccount, snapshotSubmitted, updateError, updateLoading]);
 
   const snapshotSubmitDisabled =
@@ -785,7 +794,7 @@ export const Investments: React.FC = () => {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis
                       dataKey="date"
-                      tickFormatter={(value) =>
+                      tickFormatter={(value: string | number | Date) =>
                         new Date(value).toLocaleDateString("en-US", {
                           month: "short",
                         })
@@ -1019,7 +1028,9 @@ export const Investments: React.FC = () => {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis
                       dataKey="period"
-                      tickFormatter={(value) => formatContributionsTick(value)}
+                      tickFormatter={(value: string) =>
+                        formatContributionsTick(value)
+                      }
                       tickLine={false}
                       axisLine={false}
                     />
@@ -1053,7 +1064,13 @@ export const Investments: React.FC = () => {
                       isAnimationActive={false}
                       onClick={(data) => {
                         if (contributionsGrouping !== "month") return;
-                        const period = String(data?.payload?.period ?? "");
+                        const record = data?.payload as
+                          | Partial<ContributionPoint>
+                          | undefined;
+                        const period =
+                          typeof record?.period === "string"
+                            ? record.period
+                            : "";
                         if (!period) return;
                         setCashflowDetailsMonth(period);
                       }}
@@ -1066,7 +1083,13 @@ export const Investments: React.FC = () => {
                       isAnimationActive={false}
                       onClick={(data) => {
                         if (contributionsGrouping !== "month") return;
-                        const period = String(data?.payload?.period ?? "");
+                        const record = data?.payload as
+                          | Partial<ContributionPoint>
+                          | undefined;
+                        const period =
+                          typeof record?.period === "string"
+                            ? record.period
+                            : "";
                         if (!period) return;
                         setCashflowDetailsMonth(period);
                       }}
@@ -1128,14 +1151,14 @@ export const Investments: React.FC = () => {
                             role="button"
                             tabIndex={0}
                             onClick={() =>
-                              navigate(
+                              void navigate(
                                 `${PageRoutes.investments}/${acct.accountId}`,
                               )
                             }
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
-                                navigate(
+                                void navigate(
                                   `${PageRoutes.investments}/${acct.accountId}`,
                                 );
                               }

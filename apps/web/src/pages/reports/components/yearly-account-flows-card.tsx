@@ -40,9 +40,10 @@ export const YearlyAccountFlowsCard: React.FC<{
   overview: YearlyOverviewResponse | null;
   onOpenDetailDialog: (state: DetailDialogState) => void;
 }> = ({ year, overview, onOpenDetailDialog }) => {
+  const accountFlows = overview?.account_flows;
   const rows = useMemo<AccountFlowRow[]>(() => {
-    if (!overview?.account_flows) return [];
-    return overview.account_flows
+    if (!accountFlows) return [];
+    return accountFlows
       .map((row) => {
         const monthly = Array.from({ length: 12 }, (_, idx) => ({
           month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
@@ -65,7 +66,7 @@ export const YearlyAccountFlowsCard: React.FC<{
         };
       })
       .sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
-  }, [overview?.account_flows, year]);
+  }, [accountFlows, year]);
 
   const hasOverview = Boolean(overview);
   return (

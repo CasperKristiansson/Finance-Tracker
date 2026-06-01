@@ -57,15 +57,14 @@ export const YearlyInvestmentsSummaryCard: React.FC<{
   overview: YearlyOverviewResponse | null;
   onOpenDetailDialog: (state: DetailDialogState) => void;
 }> = ({ year, overview, onOpenDetailDialog }) => {
+  const summary = overview?.investments_summary;
   const investmentsSummary = useMemo<InvestmentsSummary | null>(() => {
-    if (!overview?.investments_summary) return null;
-    const monthly = overview.investments_summary.monthly_values.map(
-      (value, idx) => ({
-        month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
-        value: Number(value),
-      }),
-    );
-    const accounts = overview.investments_summary.accounts
+    if (!summary) return null;
+    const monthly = summary.monthly_values.map((value, idx) => ({
+      month: monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString()),
+      value: Number(value),
+    }));
+    const accounts = summary.accounts
       .map((row) => ({
         name: row.account_name,
         start: Number(row.start_value),
@@ -74,20 +73,18 @@ export const YearlyInvestmentsSummaryCard: React.FC<{
       }))
       .sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
     return {
-      asOf: overview.investments_summary.as_of,
-      start: Number(overview.investments_summary.start_value),
-      end: Number(overview.investments_summary.end_value),
-      change: Number(overview.investments_summary.change),
-      changePct: overview.investments_summary.change_pct
-        ? Number(overview.investments_summary.change_pct)
-        : null,
-      contributions: Number(overview.investments_summary.contributions),
-      withdrawals: Number(overview.investments_summary.withdrawals),
-      marketGrowth: Number(overview.investments_summary.market_growth ?? 0),
+      asOf: summary.as_of,
+      start: Number(summary.start_value),
+      end: Number(summary.end_value),
+      change: Number(summary.change),
+      changePct: summary.change_pct ? Number(summary.change_pct) : null,
+      contributions: Number(summary.contributions),
+      withdrawals: Number(summary.withdrawals),
+      marketGrowth: Number(summary.market_growth ?? 0),
       monthly,
       accounts,
     };
-  }, [overview?.investments_summary, year]);
+  }, [summary, year]);
 
   const hasOverview = Boolean(overview);
   return (

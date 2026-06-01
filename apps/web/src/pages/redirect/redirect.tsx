@@ -21,7 +21,7 @@ export const Redirect = (): JSX.Element => {
   }, [location]);
 
   useEffect(() => {
-    if (reRoute) navigate(reRoute);
+    if (reRoute) void navigate(reRoute);
   }, [navigate, reRoute]);
 
   useEffect(() => {
@@ -39,13 +39,13 @@ export const Redirect = (): JSX.Element => {
         location.pathname === PageRoutes.login ||
         location.pathname === PageRoutes.landing
       ) {
-        navigate(PageRoutes.home);
+        void navigate(PageRoutes.home);
       }
       return;
     }
 
     if (!publicRoutes.includes(location.pathname)) {
-      navigate(PageRoutes.login);
+      void navigate(PageRoutes.login);
     }
   }, [initialLoad, location, isAuthenticated, navigate]);
 

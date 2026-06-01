@@ -1,6 +1,6 @@
 import { Loader2 } from "lucide-react";
 import React, { useCallback, useEffect } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { LucideIconPicker } from "@/components/lucide-icon-picker";
 import { Button } from "@/components/ui/button";
@@ -66,8 +66,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
       account_type: account?.account_type ?? AccountType.NORMAL,
       is_active: account?.is_active ?? true,
       icon: account?.icon ?? "",
-      bank_import_type:
-        (account?.bank_import_type as BankImportType | null) ?? null,
+      bank_import_type: account?.bank_import_type ?? null,
       loan: {
         origin_principal: account?.loan?.origin_principal ?? "",
         current_principal: account?.loan?.current_principal ?? "",
@@ -82,12 +81,12 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
 
   const {
     register,
-    watch,
     handleSubmit,
     reset,
     setValue,
     clearErrors,
     setError,
+    control,
     formState: { errors: formErrors, isSubmitting },
   } = useForm<AccountFormValues>({
     defaultValues: getDefaults(),
@@ -97,14 +96,15 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
     reset(getDefaults());
   }, [account, getDefaults, open, reset]);
 
-  const accountType = watch("account_type");
-  const isActive = watch("is_active");
-  const bankImportType = watch("bank_import_type");
+  const accountType = useWatch({ control, name: "account_type" });
+  const isActive = useWatch({ control, name: "is_active" });
+  const bankImportType = useWatch({ control, name: "bank_import_type" });
+  const icon = useWatch({ control, name: "icon" });
   const accountTypeField = register("account_type");
   const isActiveField = register("is_active");
   const bankImportTypeField = register("bank_import_type");
 
-  const onSubmit = async (values: AccountFormValues) => {
+  const onSubmit = (values: AccountFormValues) => {
     if (isDebt(values.account_type)) {
       const required: Array<
         "origin_principal" | "current_principal" | "interest_rate_annual"
@@ -267,7 +267,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
               </label>
               <LucideIconPicker
                 inputId="lucide-icon"
-                value={watch("icon")}
+                value={icon}
                 onChange={(icon) =>
                   setValue("icon", icon, { shouldDirty: true })
                 }
@@ -284,10 +284,10 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
                 value={accountType}
                 onChange={(e) => {
-                  accountTypeField.onChange(e);
+                  void accountTypeField.onChange(e);
                   setValue("account_type", e.target.value as AccountType);
                 }}
-                onBlur={accountTypeField.onBlur}
+                onBlur={(event) => void accountTypeField.onBlur(event)}
                 name={accountTypeField.name}
               >
                 <option value={AccountType.NORMAL}>Cash</option>
@@ -307,13 +307,13 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
                 value={bankImportType ?? ""}
                 onChange={(e) => {
-                  bankImportTypeField.onChange(e);
+                  void bankImportTypeField.onChange(e);
                   setValue(
                     "bank_import_type",
                     (e.target.value || null) as BankImportType | null,
                   );
                 }}
-                onBlur={bankImportTypeField.onBlur}
+                onBlur={(event) => void bankImportTypeField.onBlur(event)}
                 name={bankImportTypeField.name}
               >
                 <option value="">None</option>
@@ -329,10 +329,10 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
               type="checkbox"
               checked={isActive}
               onChange={(e) => {
-                isActiveField.onChange(e);
+                void isActiveField.onChange(e);
                 setValue("is_active", e.target.checked);
               }}
-              onBlur={isActiveField.onBlur}
+              onBlur={(event) => void isActiveField.onBlur(event)}
               name={isActiveField.name}
             />
             Active
@@ -463,7 +463,7 @@ export const AccountModal: React.FC<Props> = ({ open, onClose, account }) => {
               Cancel
             </Button>
             <Button
-              onClick={handleSubmit(onSubmit)}
+              onClick={(event) => void handleSubmit(onSubmit)(event)}
               disabled={mutationBusy}
               className="gap-2"
             >

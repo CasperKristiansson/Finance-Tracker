@@ -7,7 +7,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
 import { LucideIconPicker } from "@/components/lucide-icon-picker";
@@ -58,6 +58,11 @@ const selectableCategoryTypes = [
   CategoryType.INCOME,
   CategoryType.EXPENSE,
 ] as const;
+
+const deferEffectUpdate = (callback: () => void) => {
+  const timer = window.setTimeout(callback, 0);
+  return () => window.clearTimeout(timer);
+};
 
 type CategoryFormValues = {
   name: string;
@@ -185,6 +190,14 @@ export const Categories: React.FC = () => {
       color_hex: "",
     },
   });
+  const createColorHex = useWatch({
+    control: createForm.control,
+    name: "color_hex",
+  });
+  const createIcon = useWatch({
+    control: createForm.control,
+    name: "icon",
+  });
 
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -204,6 +217,18 @@ export const Categories: React.FC = () => {
       color_hex: "",
       is_archived: false,
     },
+  });
+  const editingIsArchived = useWatch({
+    control: editForm.control,
+    name: "is_archived",
+  });
+  const editingColorHex = useWatch({
+    control: editForm.control,
+    name: "color_hex",
+  });
+  const editingIcon = useWatch({
+    control: editForm.control,
+    name: "icon",
   });
 
   useEffect(() => {
@@ -237,7 +262,15 @@ export const Categories: React.FC = () => {
   });
 
   const escapeCsv = (value: unknown) => {
-    const str = value === null || value === undefined ? "" : String(value);
+    const str =
+      value === null || value === undefined
+        ? ""
+        : typeof value === "string" ||
+            typeof value === "number" ||
+            typeof value === "boolean" ||
+            typeof value === "bigint"
+          ? String(value)
+          : JSON.stringify(value);
     return `"${str.replace(/"/g, '""')}"`;
   };
 
@@ -286,7 +319,7 @@ export const Categories: React.FC = () => {
   const handleImportCategories = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
-      const text = String(reader.result ?? "");
+      const text = typeof reader.result === "string" ? reader.result : "";
       const rows = parseCsvRows(text);
       rows.forEach((row) => {
         const name = row["name"]?.trim();
@@ -356,6 +389,20 @@ export const Categories: React.FC = () => {
     [detailsId, items],
   );
 
+  const detailsTrend = useMemo(
+    () =>
+      (detailsCategory?.recent_months ?? []).map((point) =>
+        Number(point.total ?? 0),
+      ),
+    [detailsCategory?.recent_months],
+  );
+
+  const detailsTrendStroke =
+    detailsCategory?.color_hex ??
+    (detailsCategory?.category_type === CategoryType.INCOME
+      ? "#10b981"
+      : "#ef4444");
+
   const mergeSource = useMemo(
     () => (mergeSourceId ? items.find((c) => c.id === mergeSourceId) : null),
     [items, mergeSourceId],
@@ -392,9 +439,12 @@ export const Categories: React.FC = () => {
     if (!detailsId || !token) return;
 
     let cancelled = false;
-    setDetailsTransactions([]);
-    setDetailsLoading(true);
-    setDetailsError(null);
+    const statusTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      setDetailsTransactions([]);
+      setDetailsLoading(true);
+      setDetailsError(null);
+    }, 0);
 
     apiFetch<TransactionListResponse>(
       buildEndpointRequest("listTransactions", {
@@ -430,46 +480,54 @@ export const Categories: React.FC = () => {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(statusTimer);
     };
   }, [detailsId, token]);
 
   useEffect(() => {
     if (detailsId && !detailsCategory) {
-      setDetailsId(null);
-      setDetailsTransactions([]);
-      setDetailsLoading(false);
-      setDetailsError(null);
+      return deferEffectUpdate(() => {
+        setDetailsId(null);
+        setDetailsTransactions([]);
+        setDetailsLoading(false);
+        setDetailsError(null);
+      });
     }
+    return undefined;
   }, [detailsId, detailsCategory]);
 
   useEffect(() => {
     if (!createSubmitted) return;
     if (createLoading) return;
-    if (mutationError) {
+    return deferEffectUpdate(() => {
+      if (mutationError) {
+        setCreateSubmitted(false);
+        return;
+      }
+      toast.success("Category created");
+      createForm.reset({
+        name: "",
+        category_type: createForm.getValues("category_type"),
+        icon: "",
+        color_hex: "",
+      });
+      setShowNewSheet(false);
       setCreateSubmitted(false);
-      return;
-    }
-    toast.success("Category created");
-    createForm.reset({
-      name: "",
-      category_type: createForm.getValues("category_type"),
-      icon: "",
-      color_hex: "",
     });
-    setShowNewSheet(false);
-    setCreateSubmitted(false);
   }, [createForm, createLoading, createSubmitted, mutationError]);
 
   useEffect(() => {
     if (!updateSubmitted) return;
     if (updateLoading) return;
-    if (mutationError) {
+    return deferEffectUpdate(() => {
+      if (mutationError) {
+        setUpdateSubmitted(false);
+        return;
+      }
+      toast.success("Category updated");
+      setEditingId(null);
       setUpdateSubmitted(false);
-      return;
-    }
-    toast.success("Category updated");
-    setEditingId(null);
-    setUpdateSubmitted(false);
+    });
   }, [mutationError, updateLoading, updateSubmitted]);
 
   const submitMerge = () => {
@@ -628,8 +686,8 @@ export const Categories: React.FC = () => {
 
             {loading ? (
               <div className="space-y-2 rounded-md border border-slate-100 bg-white p-3">
-                {[...Array(6)].map((_, idx) => (
-                  <Skeleton key={idx} className="h-12 w-full" />
+                {["one", "two", "three", "four", "five", "six"].map((item) => (
+                  <Skeleton key={item} className="h-12 w-full" />
                 ))}
               </div>
             ) : (
@@ -820,7 +878,10 @@ export const Categories: React.FC = () => {
               </DialogDescription>
             </DialogHeader>
             {editingCategory ? (
-              <form className="space-y-4" onSubmit={handleEditSave}>
+              <form
+                className="space-y-4"
+                onSubmit={(event) => void handleEditSave(event)}
+              >
                 <div className="space-y-1.5">
                   <label
                     className="text-sm text-slate-700"
@@ -868,7 +929,7 @@ export const Categories: React.FC = () => {
                       <span>Archived</span>
                       <Switch
                         aria-label="Archived"
-                        checked={editForm.watch("is_archived")}
+                        checked={editingIsArchived}
                         onCheckedChange={(checked) =>
                           editForm.setValue("is_archived", checked, {
                             shouldDirty: true,
@@ -885,7 +946,7 @@ export const Categories: React.FC = () => {
                   <div className="flex items-center gap-3">
                     <input
                       type="color"
-                      value={editForm.watch("color_hex") || "#94a3b8"}
+                      value={editingColorHex || "#94a3b8"}
                       onChange={(e) =>
                         editForm.setValue("color_hex", e.target.value, {
                           shouldDirty: true,
@@ -934,7 +995,7 @@ export const Categories: React.FC = () => {
                     <LucideIconPicker
                       inputId="edit-lucide-icon"
                       maxLength={16}
-                      value={editForm.watch("icon")}
+                      value={editingIcon}
                       onChange={(icon) =>
                         editForm.setValue("icon", icon, { shouldDirty: true })
                       }
@@ -1078,39 +1139,28 @@ export const Categories: React.FC = () => {
                     <div className="mb-2 text-sm font-semibold text-slate-900">
                       Last 6 months
                     </div>
-                    {(() => {
-                      const trend = (detailsCategory.recent_months ?? []).map(
-                        (p) => Number(p.total ?? 0),
-                      );
-                      const hasTrend = trend.length >= 2;
-                      const stroke =
-                        detailsCategory.color_hex ??
-                        (detailsCategory.category_type === CategoryType.INCOME
-                          ? "#10b981"
-                          : "#ef4444");
-                      return hasTrend ? (
-                        <svg
-                          width="100%"
-                          height="80"
-                          viewBox="0 0 320 80"
-                          preserveAspectRatio="none"
-                          className="overflow-visible"
-                        >
-                          <path
-                            d={sparklinePath(trend, 320, 80)}
-                            fill="none"
-                            stroke={stroke}
-                            strokeWidth="2.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      ) : (
-                        <div className="text-sm text-slate-500">
-                          No recent activity.
-                        </div>
-                      );
-                    })()}
+                    {detailsTrend.length >= 2 ? (
+                      <svg
+                        width="100%"
+                        height="80"
+                        viewBox="0 0 320 80"
+                        preserveAspectRatio="none"
+                        className="overflow-visible"
+                      >
+                        <path
+                          d={sparklinePath(detailsTrend, 320, 80)}
+                          fill="none"
+                          stroke={detailsTrendStroke}
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    ) : (
+                      <div className="text-sm text-slate-500">
+                        No recent activity.
+                      </div>
+                    )}
                   </div>
 
                   <div className="rounded-lg border border-slate-100 bg-white p-3">
@@ -1309,7 +1359,10 @@ export const Categories: React.FC = () => {
                 Close
               </Button>
             </div>
-            <form className="space-y-3" onSubmit={handleCreate}>
+            <form
+              className="space-y-3"
+              onSubmit={(event) => void handleCreate(event)}
+            >
               <div className="space-y-2">
                 <label className="text-sm text-slate-600">Name</label>
                 <Input
@@ -1346,7 +1399,7 @@ export const Categories: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
-                    value={createForm.watch("color_hex") || "#94a3b8"}
+                    value={createColorHex || "#94a3b8"}
                     onChange={(e) =>
                       createForm.setValue("color_hex", e.target.value)
                     }
@@ -1388,7 +1441,7 @@ export const Categories: React.FC = () => {
                   <LucideIconPicker
                     inputId="category-lucide-icon"
                     maxLength={16}
-                    value={createForm.watch("icon")}
+                    value={createIcon}
                     onChange={(icon) =>
                       createForm.setValue("icon", icon, { shouldDirty: true })
                     }

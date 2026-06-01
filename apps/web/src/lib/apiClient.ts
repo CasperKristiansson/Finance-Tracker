@@ -66,13 +66,22 @@ const buildQueryString = (query?: ApiRequest["query"]) => {
   return qs ? `?${qs}` : "";
 };
 
-const parseResponse = async (response: Response) => {
+const parseResponse = async (response: Response): Promise<unknown> => {
   const contentType = response.headers.get("content-type");
   if (contentType?.includes("application/json")) {
-    return await response.json();
+    return (await response.json()) as unknown;
   }
   const text = await response.text();
   return text || null;
+};
+
+const readErrorMessage = (payload: unknown, fallback: string): string => {
+  if (payload && typeof payload === "object") {
+    const record = payload as Record<string, unknown>;
+    if (typeof record.error === "string") return record.error;
+    if (typeof record.message === "string") return record.message;
+  }
+  return fallback;
 };
 
 export const apiFetch = async <T>(
@@ -137,10 +146,7 @@ export const apiFetch = async <T>(
         return { data: payload as T, status: response.status, response };
       }
 
-      const errorMessage =
-        (payload as { error?: string; message?: string })?.error ??
-        (payload as { message?: string })?.message ??
-        response.statusText;
+      const errorMessage = readErrorMessage(payload, response.statusText);
 
       const apiError = new ApiError(
         response.status,

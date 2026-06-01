@@ -114,7 +114,7 @@ const renderAccountIcon = (icon: string | null | undefined, name: string) => {
       LucideIcons as unknown as Record<string, LucideIcon | undefined>
     )[key];
     if (IconComp) {
-      const Icon = IconComp as LucideIcon;
+      const Icon = IconComp;
       return (
         <Icon className="h-9 w-9 rounded-full border border-slate-100 bg-white p-1 text-slate-700" />
       );
@@ -250,7 +250,6 @@ export const AccountDetails: React.FC = () => {
     token,
   ]);
 
-  const [, setAvailableYears] = useState<number[]>([]);
   const [availableYearsLoading, setAvailableYearsLoading] = useState(false);
   const [yearlyOverviews, setYearlyOverviews] = useState<
     Record<number, YearlyOverviewResponse>
@@ -261,7 +260,7 @@ export const AccountDetails: React.FC = () => {
     const loadOverviews = async () => {
       if (!token) return;
       if (!accountId) return;
-      let years: number[] = [];
+      let years: number[];
       if (range === "all") {
         setAvailableYearsLoading(true);
         try {
@@ -273,10 +272,8 @@ export const AccountDetails: React.FC = () => {
             .map((row: { year: number | string }) => Number(row.year))
             .filter((y: number) => Number.isFinite(y))
             .sort((a: number, b: number) => a - b);
-          setAvailableYears(years);
         } catch (err) {
           console.error("Failed to fetch yearly totals for account", err);
-          setAvailableYears([]);
           years = [];
         } finally {
           setAvailableYearsLoading(false);
@@ -643,7 +640,11 @@ export const AccountDetails: React.FC = () => {
   };
 
   useEffect(() => {
-    void loadTransactions({ reset: true });
+    const timer = window.setTimeout(
+      () => void loadTransactions({ reset: true }),
+      0,
+    );
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accountId, endIso, range, rangeStartIso, refreshSeq, token]);
 
@@ -1330,7 +1331,7 @@ export const AccountDetails: React.FC = () => {
                   <Button
                     variant="outline"
                     className="gap-2 border-slate-300 text-slate-700"
-                    onClick={() => loadTransactions({ reset: true })}
+                    onClick={() => void loadTransactions({ reset: true })}
                     disabled={txLoading}
                   >
                     {txLoading ? (
@@ -1357,7 +1358,7 @@ export const AccountDetails: React.FC = () => {
                       <Button
                         variant="outline"
                         className="border-slate-300 text-slate-700"
-                        onClick={() => loadTransactions({ reset: true })}
+                        onClick={() => void loadTransactions({ reset: true })}
                         disabled={txLoading}
                       >
                         <RefreshCw className="mr-2 h-4 w-4" />
@@ -1512,7 +1513,7 @@ export const AccountDetails: React.FC = () => {
                       <Button
                         variant="outline"
                         className="w-full border-slate-300 text-slate-700"
-                        onClick={() => loadTransactions({ reset: false })}
+                        onClick={() => void loadTransactions({ reset: false })}
                         disabled={txLoading || !txHasMore}
                       >
                         {txLoading ? (

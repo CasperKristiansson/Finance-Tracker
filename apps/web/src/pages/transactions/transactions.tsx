@@ -1,4 +1,3 @@
-/* eslint-disable react/prop-types */
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   ArrowDownWideNarrow,
@@ -11,6 +10,7 @@ import {
   MoreHorizontal,
   Pencil,
   Plus,
+  RefreshCw,
   Tag,
   AlertCircle,
 } from "lucide-react";
@@ -35,6 +35,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   useAccountsApi,
   useCategoriesApi,
@@ -57,7 +63,7 @@ import {
   type CategoryRead,
   type TransactionRead,
 } from "@/types/api";
-import TransactionModal from "./transaction-modal";
+import { TransactionModal } from "./transaction-modal";
 import {
   ColumnToggle,
   columnWidthClass,
@@ -112,6 +118,8 @@ const accountTypeTone: Record<AccountType, string> = {
   [AccountType.DEBT]: "bg-rose-100 text-rose-700",
   [AccountType.INVESTMENT]: "bg-indigo-100 text-indigo-700",
 };
+
+const transactionSkeletonRows = Array.from({ length: 12 }, (_, index) => index);
 
 export const Transactions: React.FC = () => {
   const location = useLocation();
@@ -291,6 +299,55 @@ export const Transactions: React.FC = () => {
   const selectedIsTax = selectedTransaction
     ? isTaxEvent(selectedTransaction)
     : false;
+  const selectedCategoryLabel = useMemo(() => {
+    if (!selectedTransaction?.category_id) return "Unassigned";
+    const category = categoryLookup.get(selectedTransaction.category_id);
+    if (!category) return "Assigned";
+    return formatCategoryLabel(category.name, category.icon);
+  }, [categoryLookup, selectedTransaction?.category_id]);
+
+  const selectedSimilarTransactions = useMemo(() => {
+    if (!selectedTransaction) {
+      return { merchant: [], category: [] };
+    }
+
+    const merchantKey = normalizeMerchantKey(selectedTransaction.description);
+    const merchant = merchantKey
+      ? items
+          .filter((tx) => tx.id !== selectedTransaction.id)
+          .filter((tx) => {
+            const key = normalizeMerchantKey(tx.description);
+            if (!key) return false;
+            return (
+              key === merchantKey ||
+              key.includes(merchantKey) ||
+              merchantKey.includes(key)
+            );
+          })
+          .sort(
+            (a, b) =>
+              new Date(b.occurred_at).getTime() -
+              new Date(a.occurred_at).getTime(),
+          )
+          .slice(0, 8)
+      : [];
+
+    const category =
+      selectedTransaction.category_id &&
+      selectedDisplayType !== TransactionType.TRANSFER
+        ? items
+            .filter((tx) => tx.id !== selectedTransaction.id)
+            .filter((tx) => tx.category_id === selectedTransaction.category_id)
+            .sort(
+              (a, b) =>
+                new Date(b.occurred_at).getTime() -
+                new Date(a.occurred_at).getTime(),
+            )
+            .slice(0, 8)
+        : [];
+
+    return { merchant, category };
+  }, [items, selectedDisplayType, selectedTransaction]);
 
   const openCreateModal = () => {
     setModalTransaction(null);
@@ -313,6 +370,7 @@ export const Transactions: React.FC = () => {
   const rows = items;
 
   const parentRef = useRef<HTMLDivElement | null>(null);
+  // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual exposes imperative helpers that stay local to this component.
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
@@ -343,6 +401,7 @@ export const Transactions: React.FC = () => {
   const visibleColumns = columns.filter(
     (col) => columnVisibility[col.key] !== false,
   );
+  const showInitialSkeleton = loading && rows.length === 0;
 
   const headerCellClass = (col: ColumnConfig) =>
     cn(
@@ -354,6 +413,30 @@ export const Transactions: React.FC = () => {
 
   const bodyCellClass = (key: ColumnKey, extra?: string) =>
     cn("py-1 align-middle", "px-3", columnWidthClass[key], extra);
+
+  const renderSkeletonCell = (col: ColumnConfig) => {
+    if (col.key === "type") {
+      return <Skeleton className="h-6 w-16 rounded-full" />;
+    }
+    if (col.key === "accounts" || col.key === "category") {
+      return (
+        <div className="flex min-w-0 items-center gap-2">
+          <Skeleton className="h-6 w-6 shrink-0 rounded-full" />
+          <Skeleton className="h-4 w-28 max-w-[70%]" />
+        </div>
+      );
+    }
+    if (col.key === "amount") {
+      return <Skeleton className="ml-auto h-4 w-24" />;
+    }
+    if (col.key === "notes") {
+      return <Skeleton className="h-4 w-32 max-w-[75%]" />;
+    }
+    if (col.key === "date") {
+      return <Skeleton className="h-4 w-24" />;
+    }
+    return <Skeleton className="h-4 w-56 max-w-[85%]" />;
+  };
 
   return (
     <MotionPage className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
@@ -377,22 +460,33 @@ export const Transactions: React.FC = () => {
               setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
             }
           />
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2 border-slate-300 text-slate-700"
-            onClick={() =>
-              fetchTransactions({
-                limit: pagination.limit,
-                offset: 0,
-                includeRunningBalances: false,
-                includeTaxEvent: true,
-                view: "summary",
-              })
-            }
-          >
-            <RefreshIcon className="h-4 w-4" /> Refresh
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 border-slate-300 text-slate-700"
+                onClick={() =>
+                  fetchTransactions({
+                    limit: pagination.limit,
+                    offset: 0,
+                    includeRunningBalances: false,
+                    includeTaxEvent: true,
+                    view: "summary",
+                  })
+                }
+                disabled={loading}
+                aria-label="Refresh transactions"
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Refresh transactions</TooltipContent>
+          </Tooltip>
           <Button size="sm" className="gap-2" onClick={openCreateModal}>
             <Plus className="h-4 w-4" /> Add transaction
           </Button>
@@ -727,286 +821,325 @@ export const Transactions: React.FC = () => {
                 style={{
                   position: "relative",
                   display: "block",
-                  height: rowVirtualizer.getTotalSize(),
+                  height: showInitialSkeleton
+                    ? transactionSkeletonRows.length * 48
+                    : rowVirtualizer.getTotalSize(),
                   width: "100%",
                 }}
               >
-                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                  const row = rows[virtualRow.index];
-                  if (!row) return null;
-                  const displayType = getDisplayTransactionType(row);
-                  const taxLinked = isTaxEvent(row);
-                  const knownLegs = row.legs.filter((leg) =>
-                    Boolean(accountLookup.get(leg.account_id)),
-                  );
-                  const displayAmount = (() => {
-                    if (accountFilter) {
-                      return knownLegs
-                        .filter((leg) => leg.account_id === accountFilter)
-                        .reduce((sum, leg) => sum + Number(leg.amount), 0);
-                    }
-
-                    const sumKnown = knownLegs.reduce(
-                      (sum, leg) => sum + Number(leg.amount),
-                      0,
-                    );
-                    if (sumKnown !== 0) return sumKnown;
-
-                    const largest = knownLegs.reduce<null | { amount: number }>(
-                      (best, leg) => {
-                        const numeric = Number(leg.amount);
-                        if (!best) return { amount: numeric };
-                        return Math.abs(numeric) > Math.abs(best.amount)
-                          ? { amount: numeric }
-                          : best;
-                      },
-                      null,
-                    );
-                    return largest ? Math.abs(largest.amount) : 0;
-                  })();
-
-                  const accountsLabel = (() => {
-                    if (
-                      displayType === TransactionType.TRANSFER &&
-                      !taxLinked
-                    ) {
-                      const fromLeg =
-                        knownLegs.find((leg) => Number(leg.amount) < 0) ??
-                        knownLegs[0];
-                      const toLeg =
-                        knownLegs.find((leg) => Number(leg.amount) > 0) ??
-                        knownLegs[1];
-
-                      const fromAccount = fromLeg
-                        ? accountLookup.get(fromLeg.account_id)
-                        : undefined;
-                      const toAccount = toLeg
-                        ? accountLookup.get(toLeg.account_id)
-                        : undefined;
-                      const fromName = fromAccount?.name;
-                      const toName = toAccount?.name;
-
-                      if (fromName && toName) return `${fromName} → ${toName}`;
-                      if (fromName) return `${fromName} → (unknown)`;
-                      if (toName) return `(unknown) → ${toName}`;
-                      return "Internal transfer";
-                    }
-
-                    const primary = knownLegs[0];
-                    if (!primary) return "Internal transfer";
-                    return (
-                      accountLookup.get(primary.account_id)?.name ??
-                      "Internal transfer"
-                    );
-                  })();
-                  const primaryAccount = knownLegs[0]
-                    ? accountLookup.get(knownLegs[0].account_id)
-                    : null;
-                  const transferFrom =
-                    displayType === TransactionType.TRANSFER && !taxLinked
-                      ? accountLookup.get(
-                          knownLegs.find((leg) => Number(leg.amount) < 0)
-                            ?.account_id ?? "",
-                        )
-                      : null;
-                  const transferTo =
-                    displayType === TransactionType.TRANSFER && !taxLinked
-                      ? accountLookup.get(
-                          knownLegs.find((leg) => Number(leg.amount) > 0)
-                            ?.account_id ?? "",
-                        )
-                      : null;
-
-                  return (
-                    <tr
-                      key={row.id}
-                      data-index={virtualRow.index}
-                      className="cursor-pointer border-b hover:bg-slate-50"
-                      onClick={() => openDetails(row.id)}
-                      style={{
-                        position: "absolute",
-                        top: 0,
-                        left: 0,
-                        transform: `translateY(${virtualRow.start}px)`,
-                        width: "100%",
-                        height: `${virtualRow.size}px`,
-                        display: "table",
-                        tableLayout: "fixed",
-                      }}
-                    >
-                      {visibleColumns.map((col) => {
-                        if (col.key === "date") {
-                          return (
-                            <td
-                              key={`${row.id}-date`}
-                              className={bodyCellClass("date")}
-                            >
-                              <div className="text-[13px] leading-none font-medium text-slate-900">
-                                {formatDate(row.occurred_at)}
-                              </div>
-                            </td>
-                          );
-                        }
-                        if (col.key === "type") {
-                          return (
-                            <td
-                              key={`${row.id}-type`}
-                              className={bodyCellClass("type")}
-                            >
-                              {typeBadge(row)}
-                            </td>
-                          );
-                        }
-                        if (col.key === "description") {
-                          return (
-                            <td
-                              key={`${row.id}-desc`}
-                              className={bodyCellClass(
-                                "description",
-                                "min-w-0",
-                              )}
-                            >
-                              <div className="truncate leading-none font-semibold text-slate-900">
-                                {row.description || "(No description)"}
-                              </div>
-                            </td>
-                          );
-                        }
-                        if (col.key === "accounts") {
-                          return (
-                            <td
-                              key={`${row.id}-accounts`}
-                              className={bodyCellClass(
-                                "accounts",
-                                "min-w-0 text-slate-700",
-                              )}
-                            >
-                              {displayType === TransactionType.TRANSFER &&
-                              !taxLinked ? (
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <span className="flex min-w-0 items-center gap-2">
-                                    {renderAccountIcon(
-                                      transferFrom?.icon ?? null,
-                                      transferFrom?.name ?? "?",
-                                      "h-6 w-6 rounded-full border border-slate-100 bg-white p-1 text-slate-700",
-                                    )}
-                                    <span className="truncate">
-                                      {transferFrom?.name ?? "Unknown"}
-                                    </span>
-                                  </span>
-                                  <ArrowRight className="h-3 w-3 text-slate-400" />
-                                  <span className="flex min-w-0 items-center gap-2">
-                                    {renderAccountIcon(
-                                      transferTo?.icon ?? null,
-                                      transferTo?.name ?? "?",
-                                      "h-6 w-6 rounded-full border border-slate-100 bg-white p-1 text-slate-700",
-                                    )}
-                                    <span className="truncate">
-                                      {transferTo?.name ?? "Unknown"}
-                                    </span>
-                                  </span>
-                                </div>
-                              ) : (
-                                <div className="flex min-w-0 items-center gap-2 truncate">
-                                  {renderAccountIcon(
-                                    primaryAccount?.icon ?? null,
-                                    primaryAccount?.name ?? "Account",
-                                    "h-6 w-6 rounded-full border border-slate-100 bg-white p-1 text-slate-700",
-                                  )}
-                                  <span className="truncate">
-                                    {accountsLabel}
-                                  </span>
-                                </div>
-                              )}
-                            </td>
-                          );
-                        }
-                        if (col.key === "category") {
-                          const category = row.category_id
-                            ? categoryLookup.get(row.category_id)
-                            : null;
-                          return (
-                            <td
-                              key={`${row.id}-category`}
-                              className={bodyCellClass(
-                                "category",
-                                "min-w-0 text-slate-700",
-                              )}
-                            >
-                              <div className="flex min-w-0 items-center gap-2 truncate">
-                                {displayType === TransactionType.TRANSFER &&
-                                !taxLinked ? (
-                                  "—"
-                                ) : category ? (
-                                  <>
-                                    <span
-                                      className={cn(
-                                        "flex h-6 w-6 items-center justify-center rounded-full border",
-                                        category.color_hex
-                                          ? "border-transparent text-white"
-                                          : "border-slate-200 bg-slate-100 text-slate-700",
-                                      )}
-                                      style={
-                                        category.color_hex
-                                          ? {
-                                              backgroundColor:
-                                                category.color_hex,
-                                            }
-                                          : undefined
-                                      }
-                                    >
-                                      {renderCategoryIcon(
-                                        category.icon,
-                                        category.name,
-                                        category.color_hex
-                                          ? "h-4 w-4 text-white"
-                                          : "h-4 w-4 text-slate-700",
-                                      )}
-                                    </span>
-                                    <span className="truncate">
-                                      {formatCategoryLabel(
-                                        category.name,
-                                        category.icon,
-                                      )}
-                                    </span>
-                                  </>
-                                ) : row.category_id ? (
-                                  "Assigned"
-                                ) : (
-                                  "Unassigned"
-                                )}
-                              </div>
-                            </td>
-                          );
-                        }
-                        if (col.key === "amount") {
-                          return (
-                            <td
-                              key={`${row.id}-amount`}
-                              className={bodyCellClass(
-                                "amount",
-                                "text-right font-semibold text-slate-900",
-                              )}
-                            >
-                              {formatCurrency(displayAmount)}
-                            </td>
-                          );
-                        }
-                        return (
+                {showInitialSkeleton
+                  ? transactionSkeletonRows.map((rowIndex) => (
+                      <tr
+                        key={`transaction-skeleton-${rowIndex}`}
+                        aria-hidden="true"
+                        className="border-b"
+                        style={{
+                          position: "absolute",
+                          top: 0,
+                          left: 0,
+                          transform: `translateY(${rowIndex * 48}px)`,
+                          width: "100%",
+                          height: "48px",
+                          display: "table",
+                          tableLayout: "fixed",
+                        }}
+                      >
+                        {visibleColumns.map((col) => (
                           <td
-                            key={`${row.id}-notes`}
+                            key={`transaction-skeleton-${rowIndex}-${col.key}`}
                             className={bodyCellClass(
-                              "notes",
-                              "min-w-0 text-slate-600",
+                              col.key,
+                              col.align === "right" ? "text-right" : undefined,
                             )}
                           >
-                            <div className="truncate">{row.notes || ""}</div>
+                            {renderSkeletonCell(col)}
                           </td>
+                        ))}
+                      </tr>
+                    ))
+                  : rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                      const row = rows[virtualRow.index];
+                      if (!row) return null;
+                      const displayType = getDisplayTransactionType(row);
+                      const taxLinked = isTaxEvent(row);
+                      const knownLegs = row.legs.filter((leg) =>
+                        Boolean(accountLookup.get(leg.account_id)),
+                      );
+                      let displayAmount: number;
+                      if (accountFilter) {
+                        displayAmount = knownLegs
+                          .filter((leg) => leg.account_id === accountFilter)
+                          .reduce((sum, leg) => sum + Number(leg.amount), 0);
+                      } else {
+                        const sumKnown = knownLegs.reduce(
+                          (sum, leg) => sum + Number(leg.amount),
+                          0,
                         );
-                      })}
-                    </tr>
-                  );
-                })}
+                        const largest = knownLegs.reduce<null | {
+                          amount: number;
+                        }>((best, leg) => {
+                          const numeric = Number(leg.amount);
+                          if (!best) return { amount: numeric };
+                          return Math.abs(numeric) > Math.abs(best.amount)
+                            ? { amount: numeric }
+                            : best;
+                        }, null);
+
+                        displayAmount =
+                          sumKnown !== 0
+                            ? sumKnown
+                            : largest
+                              ? Math.abs(largest.amount)
+                              : 0;
+                      }
+
+                      let accountsLabel: string;
+                      if (
+                        displayType === TransactionType.TRANSFER &&
+                        !taxLinked
+                      ) {
+                        const fromLeg =
+                          knownLegs.find((leg) => Number(leg.amount) < 0) ??
+                          knownLegs[0];
+                        const toLeg =
+                          knownLegs.find((leg) => Number(leg.amount) > 0) ??
+                          knownLegs[1];
+
+                        const fromAccount = fromLeg
+                          ? accountLookup.get(fromLeg.account_id)
+                          : undefined;
+                        const toAccount = toLeg
+                          ? accountLookup.get(toLeg.account_id)
+                          : undefined;
+                        const fromName = fromAccount?.name;
+                        const toName = toAccount?.name;
+
+                        if (fromName && toName) {
+                          accountsLabel = `${fromName} → ${toName}`;
+                        } else if (fromName) {
+                          accountsLabel = `${fromName} → (unknown)`;
+                        } else if (toName) {
+                          accountsLabel = `(unknown) → ${toName}`;
+                        } else {
+                          accountsLabel = "Internal transfer";
+                        }
+                      } else {
+                        const primary = knownLegs[0];
+                        accountsLabel = primary
+                          ? (accountLookup.get(primary.account_id)?.name ??
+                            "Internal transfer")
+                          : "Internal transfer";
+                      }
+                      const primaryAccount = knownLegs[0]
+                        ? accountLookup.get(knownLegs[0].account_id)
+                        : null;
+                      const transferFrom =
+                        displayType === TransactionType.TRANSFER && !taxLinked
+                          ? accountLookup.get(
+                              knownLegs.find((leg) => Number(leg.amount) < 0)
+                                ?.account_id ?? "",
+                            )
+                          : null;
+                      const transferTo =
+                        displayType === TransactionType.TRANSFER && !taxLinked
+                          ? accountLookup.get(
+                              knownLegs.find((leg) => Number(leg.amount) > 0)
+                                ?.account_id ?? "",
+                            )
+                          : null;
+
+                      return (
+                        <tr
+                          key={row.id}
+                          data-index={virtualRow.index}
+                          className="cursor-pointer border-b hover:bg-slate-50"
+                          onClick={() => openDetails(row.id)}
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            transform: `translateY(${virtualRow.start}px)`,
+                            width: "100%",
+                            height: `${virtualRow.size}px`,
+                            display: "table",
+                            tableLayout: "fixed",
+                          }}
+                        >
+                          {visibleColumns.map((col) => {
+                            if (col.key === "date") {
+                              return (
+                                <td
+                                  key={`${row.id}-date`}
+                                  className={bodyCellClass("date")}
+                                >
+                                  <div className="text-[13px] leading-none font-medium text-slate-900">
+                                    {formatDate(row.occurred_at)}
+                                  </div>
+                                </td>
+                              );
+                            }
+                            if (col.key === "type") {
+                              return (
+                                <td
+                                  key={`${row.id}-type`}
+                                  className={bodyCellClass("type")}
+                                >
+                                  {typeBadge(row)}
+                                </td>
+                              );
+                            }
+                            if (col.key === "description") {
+                              return (
+                                <td
+                                  key={`${row.id}-desc`}
+                                  className={bodyCellClass(
+                                    "description",
+                                    "min-w-0",
+                                  )}
+                                >
+                                  <div className="truncate leading-none font-semibold text-slate-900">
+                                    {row.description || "(No description)"}
+                                  </div>
+                                </td>
+                              );
+                            }
+                            if (col.key === "accounts") {
+                              return (
+                                <td
+                                  key={`${row.id}-accounts`}
+                                  className={bodyCellClass(
+                                    "accounts",
+                                    "min-w-0 text-slate-700",
+                                  )}
+                                >
+                                  {displayType === TransactionType.TRANSFER &&
+                                  !taxLinked ? (
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      <span className="flex min-w-0 items-center gap-2">
+                                        {renderAccountIcon(
+                                          transferFrom?.icon ?? null,
+                                          transferFrom?.name ?? "?",
+                                          "h-6 w-6 rounded-full border border-slate-100 bg-white p-1 text-slate-700",
+                                        )}
+                                        <span className="truncate">
+                                          {transferFrom?.name ?? "Unknown"}
+                                        </span>
+                                      </span>
+                                      <ArrowRight className="h-3 w-3 text-slate-400" />
+                                      <span className="flex min-w-0 items-center gap-2">
+                                        {renderAccountIcon(
+                                          transferTo?.icon ?? null,
+                                          transferTo?.name ?? "?",
+                                          "h-6 w-6 rounded-full border border-slate-100 bg-white p-1 text-slate-700",
+                                        )}
+                                        <span className="truncate">
+                                          {transferTo?.name ?? "Unknown"}
+                                        </span>
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex min-w-0 items-center gap-2 truncate">
+                                      {renderAccountIcon(
+                                        primaryAccount?.icon ?? null,
+                                        primaryAccount?.name ?? "Account",
+                                        "h-6 w-6 rounded-full border border-slate-100 bg-white p-1 text-slate-700",
+                                      )}
+                                      <span className="truncate">
+                                        {accountsLabel}
+                                      </span>
+                                    </div>
+                                  )}
+                                </td>
+                              );
+                            }
+                            if (col.key === "category") {
+                              const category = row.category_id
+                                ? categoryLookup.get(row.category_id)
+                                : null;
+                              return (
+                                <td
+                                  key={`${row.id}-category`}
+                                  className={bodyCellClass(
+                                    "category",
+                                    "min-w-0 text-slate-700",
+                                  )}
+                                >
+                                  <div className="flex min-w-0 items-center gap-2 truncate">
+                                    {displayType === TransactionType.TRANSFER &&
+                                    !taxLinked ? (
+                                      "—"
+                                    ) : category ? (
+                                      <>
+                                        <span
+                                          className={cn(
+                                            "flex h-6 w-6 items-center justify-center rounded-full border",
+                                            category.color_hex
+                                              ? "border-transparent text-white"
+                                              : "border-slate-200 bg-slate-100 text-slate-700",
+                                          )}
+                                          style={
+                                            category.color_hex
+                                              ? {
+                                                  backgroundColor:
+                                                    category.color_hex,
+                                                }
+                                              : undefined
+                                          }
+                                        >
+                                          {renderCategoryIcon(
+                                            category.icon,
+                                            category.name,
+                                            category.color_hex
+                                              ? "h-4 w-4 text-white"
+                                              : "h-4 w-4 text-slate-700",
+                                          )}
+                                        </span>
+                                        <span className="truncate">
+                                          {formatCategoryLabel(
+                                            category.name,
+                                            category.icon,
+                                          )}
+                                        </span>
+                                      </>
+                                    ) : row.category_id ? (
+                                      "Assigned"
+                                    ) : (
+                                      "Unassigned"
+                                    )}
+                                  </div>
+                                </td>
+                              );
+                            }
+                            if (col.key === "amount") {
+                              return (
+                                <td
+                                  key={`${row.id}-amount`}
+                                  className={bodyCellClass(
+                                    "amount",
+                                    "text-right font-semibold text-slate-900",
+                                  )}
+                                >
+                                  {formatCurrency(displayAmount)}
+                                </td>
+                              );
+                            }
+                            return (
+                              <td
+                                key={`${row.id}-notes`}
+                                className={bodyCellClass(
+                                  "notes",
+                                  "min-w-0 text-slate-600",
+                                )}
+                              >
+                                <div className="truncate">
+                                  {row.notes || ""}
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
               </tbody>
             </table>
           </div>
@@ -1050,18 +1183,7 @@ export const Transactions: React.FC = () => {
                   selectedIsTax ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
                       <Tag className="h-3.5 w-3.5" />
-                      {selectedTransaction.category_id
-                        ? (() => {
-                            const category = categoryLookup.get(
-                              selectedTransaction.category_id,
-                            );
-                            if (!category) return "Assigned";
-                            return formatCategoryLabel(
-                              category.name,
-                              category.icon,
-                            );
-                          })()
-                        : "Unassigned"}
+                      {selectedCategoryLabel}
                     </span>
                   ) : null}
                 </SheetDescription>
@@ -1163,104 +1285,77 @@ export const Transactions: React.FC = () => {
                   </div>
                 </div>
 
-                {(() => {
-                  const merchantKey = normalizeMerchantKey(
-                    selectedTransaction.description,
-                  );
-                  const similarByMerchant = merchantKey
-                    ? items
-                        .filter((tx) => tx.id !== selectedTransaction.id)
-                        .filter((tx) => {
-                          const key = normalizeMerchantKey(tx.description);
-                          if (!key) return false;
-                          return (
-                            key === merchantKey ||
-                            key.includes(merchantKey) ||
-                            merchantKey.includes(key)
-                          );
-                        })
-                        .sort(
-                          (a, b) =>
-                            new Date(b.occurred_at).getTime() -
-                            new Date(a.occurred_at).getTime(),
-                        )
-                        .slice(0, 8)
-                    : [];
-
-                  const similarByCategory =
-                    selectedTransaction.category_id &&
-                    selectedDisplayType !== TransactionType.TRANSFER
-                      ? items
-                          .filter((tx) => tx.id !== selectedTransaction.id)
-                          .filter(
-                            (tx) =>
-                              tx.category_id ===
-                              selectedTransaction.category_id,
-                          )
-                          .sort(
-                            (a, b) =>
-                              new Date(b.occurred_at).getTime() -
-                              new Date(a.occurred_at).getTime(),
-                          )
-                          .slice(0, 8)
-                      : [];
-
-                  const renderSimilar = (tx: (typeof items)[number]) => (
-                    <button
-                      key={tx.id}
-                      type="button"
-                      className="flex w-full items-start justify-between gap-3 rounded-md border border-slate-100 px-3 py-2 text-left hover:bg-slate-50"
-                      onClick={() => openDetails(tx.id)}
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-semibold text-slate-900">
-                          {tx.description || "(No description)"}
-                        </div>
-                        <div className="text-xs text-slate-500">
-                          {formatDate(tx.occurred_at)} • {tx.transaction_type}
-                        </div>
-                      </div>
-                      <div className="shrink-0 text-sm font-semibold text-slate-900 tabular-nums">
-                        {formatCurrency(transactionAmountHint(tx))}
-                      </div>
-                    </button>
-                  );
-
-                  return (
-                    <div className="grid gap-4">
-                      <div className="rounded-lg border border-slate-100 bg-white p-3">
-                        <div className="mb-2 text-sm font-semibold text-slate-900">
-                          Similar merchant
-                        </div>
-                        {similarByMerchant.length ? (
-                          <div className="space-y-2">
-                            {similarByMerchant.map(renderSimilar)}
-                          </div>
-                        ) : (
-                          <div className="text-sm text-slate-500">
-                            No similar transactions found in the current list.
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="rounded-lg border border-slate-100 bg-white p-3">
-                        <div className="mb-2 text-sm font-semibold text-slate-900">
-                          Same category
-                        </div>
-                        {similarByCategory.length ? (
-                          <div className="space-y-2">
-                            {similarByCategory.map(renderSimilar)}
-                          </div>
-                        ) : (
-                          <div className="text-sm text-slate-500">
-                            No same-category transactions found in the current
-                            list.
-                          </div>
-                        )}
-                      </div>
+                <div className="grid gap-4">
+                  <div className="rounded-lg border border-slate-100 bg-white p-3">
+                    <div className="mb-2 text-sm font-semibold text-slate-900">
+                      Similar merchant
                     </div>
-                  );
-                })()}
+                    {selectedSimilarTransactions.merchant.length ? (
+                      <div className="space-y-2">
+                        {selectedSimilarTransactions.merchant.map((tx) => (
+                          <button
+                            key={tx.id}
+                            type="button"
+                            className="flex w-full items-start justify-between gap-3 rounded-md border border-slate-100 px-3 py-2 text-left hover:bg-slate-50"
+                            onClick={() => openDetails(tx.id)}
+                          >
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-slate-900">
+                                {tx.description || "(No description)"}
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                {formatDate(tx.occurred_at)} •{" "}
+                                {tx.transaction_type}
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-sm font-semibold text-slate-900 tabular-nums">
+                              {formatCurrency(transactionAmountHint(tx))}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-slate-500">
+                        No similar transactions found in the current list.
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border border-slate-100 bg-white p-3">
+                    <div className="mb-2 text-sm font-semibold text-slate-900">
+                      Same category
+                    </div>
+                    {selectedSimilarTransactions.category.length ? (
+                      <div className="space-y-2">
+                        {selectedSimilarTransactions.category.map((tx) => (
+                          <button
+                            key={tx.id}
+                            type="button"
+                            className="flex w-full items-start justify-between gap-3 rounded-md border border-slate-100 px-3 py-2 text-left hover:bg-slate-50"
+                            onClick={() => openDetails(tx.id)}
+                          >
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-slate-900">
+                                {tx.description || "(No description)"}
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                {formatDate(tx.occurred_at)} •{" "}
+                                {tx.transaction_type}
+                              </div>
+                            </div>
+                            <div className="shrink-0 text-sm font-semibold text-slate-900 tabular-nums">
+                              {formatCurrency(transactionAmountHint(tx))}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-sm text-slate-500">
+                        No same-category transactions found in the current list.
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </>
           ) : (
@@ -1281,23 +1376,4 @@ export const Transactions: React.FC = () => {
   );
 };
 
-const RefreshIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={cn("h-4 w-4", props.className)}
-  >
-    <path d="M21 2v6h-6" />
-    <path d="M3 13v-6h6" />
-    <path d="M21 13a9 9 0 0 1-15 6l-3-3" />
-    <path d="M3 11a9 9 0 0 1 15-6l3 3" />
-  </svg>
-);
-
 export default Transactions;
-
-/* eslint-enable react/prop-types */

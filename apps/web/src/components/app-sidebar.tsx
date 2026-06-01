@@ -106,11 +106,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { state } = useSidebar();
   const select = useAppSelector(selectUser);
   const [animating, setAnimating] = React.useState(false);
-  const hasMounted = React.useRef(false);
+  const hasMountedRef = React.useRef(false);
 
   React.useEffect(() => {
-    if (!hasMounted.current) {
-      hasMounted.current = true;
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
       return;
     }
 

@@ -59,7 +59,7 @@ export const ReportsHeader: React.FC<{
               className="h-9 w-full rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-900"
               value={year}
               onChange={(e) =>
-                navigate(`${PageRoutes.reportsYearly}/${e.target.value}`)
+                void navigate(`${PageRoutes.reportsYearly}/${e.target.value}`)
               }
             >
               {yearOptions.map((optionYear) => (
@@ -89,7 +89,9 @@ export const ReportsHeader: React.FC<{
           variant={routeMode === "yearly" ? "default" : "outline"}
           size="sm"
           onClick={() =>
-            navigate(`${PageRoutes.reportsYearly}/${year}`, { replace: true })
+            void navigate(`${PageRoutes.reportsYearly}/${year}`, {
+              replace: true,
+            })
           }
         >
           Yearly
@@ -97,7 +99,9 @@ export const ReportsHeader: React.FC<{
         <Button
           variant={routeMode === "total" ? "default" : "outline"}
           size="sm"
-          onClick={() => navigate(PageRoutes.reportsTotal, { replace: true })}
+          onClick={() =>
+            void navigate(PageRoutes.reportsTotal, { replace: true })
+          }
         >
           Total
         </Button>

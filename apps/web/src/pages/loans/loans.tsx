@@ -388,7 +388,8 @@ export const Loans: React.FC = () => {
   }, [accountId]);
 
   useEffect(() => {
-    setLoanEventDetailsId(null);
+    const timer = window.setTimeout(() => setLoanEventDetailsId(null), 0);
+    return () => window.clearTimeout(timer);
   }, [accountId]);
 
   const loanAccounts = useMemo(
@@ -686,7 +687,7 @@ export const Loans: React.FC = () => {
       setLoanMinimumPayment("");
       setLoanExpectedMaturityDate("");
       fetchAccounts({ includeInactive });
-      navigate(`${PageRoutes.loans}/${created.data.id}`);
+      void navigate(`${PageRoutes.loans}/${created.data.id}`);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to create loan",
@@ -951,7 +952,7 @@ export const Loans: React.FC = () => {
                       tick={{ fill: "#64748b" }}
                     />
                     <YAxis
-                      tickFormatter={(value) =>
+                      tickFormatter={(value: number) =>
                         new Intl.NumberFormat("sv-SE", {
                           notation: "compact",
                           maximumFractionDigits: 1,
@@ -1050,7 +1051,7 @@ export const Loans: React.FC = () => {
                         tick={{ fill: "#64748b" }}
                       />
                       <YAxis
-                        tickFormatter={(value) =>
+                        tickFormatter={(value: number) =>
                           new Intl.NumberFormat("sv-SE", {
                             notation: "compact",
                             maximumFractionDigits: 1,
@@ -1149,7 +1150,7 @@ export const Loans: React.FC = () => {
                         tick={{ fill: "#64748b" }}
                       />
                       <YAxis
-                        tickFormatter={(value) =>
+                        tickFormatter={(value: number) =>
                           new Intl.NumberFormat("sv-SE", {
                             notation: "compact",
                             maximumFractionDigits: 1,
@@ -1612,7 +1613,7 @@ export const Loans: React.FC = () => {
                             tick={{ fill: "#64748b" }}
                           />
                           <YAxis
-                            tickFormatter={(value) =>
+                            tickFormatter={(value: number) =>
                               new Intl.NumberFormat("sv-SE", {
                                 notation: "compact",
                                 maximumFractionDigits: 1,
@@ -1702,7 +1703,7 @@ export const Loans: React.FC = () => {
                           />
                           <XAxis
                             type="number"
-                            tickFormatter={(value) =>
+                            tickFormatter={(value: number) =>
                               new Intl.NumberFormat("sv-SE", {
                                 notation: "compact",
                                 maximumFractionDigits: 1,
@@ -1892,7 +1893,7 @@ export const Loans: React.FC = () => {
                     className="gap-2"
                     onClick={() => {
                       closeLoanEventDetails();
-                      navigate(
+                      void navigate(
                         `${PageRoutes.transactions}?search=${encodeURIComponent(
                           selectedLoanEvent.transaction_id,
                         )}`,
@@ -2054,7 +2055,7 @@ const LoansDialogs: React.FC<{
   createLoanOpen: boolean;
   setCreateLoanOpen: (open: boolean) => void;
   createLoanLoading: boolean;
-  onCreateLoan: () => void;
+  onCreateLoan: () => Promise<void>;
   loanName: string;
   setLoanName: (value: string) => void;
   loanOriginPrincipal: string;
@@ -2072,7 +2073,7 @@ const LoansDialogs: React.FC<{
   editLoanOpen: boolean;
   setEditLoanOpen: (open: boolean) => void;
   editLoanLoading: boolean;
-  onUpdateLoan: () => void;
+  onUpdateLoan: () => Promise<void>;
   editOriginPrincipal: string;
   setEditOriginPrincipal: (value: string) => void;
   editCurrentPrincipal: string;
@@ -2101,7 +2102,7 @@ const LoansDialogs: React.FC<{
   fundingAccounts: Array<{ id: string; name: string; is_active: boolean }>;
   syncPrincipal: boolean;
   setSyncPrincipal: (value: boolean) => void;
-  onRecordActivity: () => void;
+  onRecordActivity: () => Promise<void>;
 }> = (props) => {
   return (
     <>
@@ -2223,7 +2224,7 @@ const LoansDialogs: React.FC<{
               Cancel
             </Button>
             <Button
-              onClick={props.onCreateLoan}
+              onClick={() => void props.onCreateLoan()}
               disabled={props.createLoanLoading}
             >
               {props.createLoanLoading ? (
@@ -2345,7 +2346,7 @@ const LoansDialogs: React.FC<{
               Cancel
             </Button>
             <Button
-              onClick={props.onUpdateLoan}
+              onClick={() => void props.onUpdateLoan()}
               disabled={props.editLoanLoading}
             >
               {props.editLoanLoading ? (
@@ -2480,7 +2481,7 @@ const LoansDialogs: React.FC<{
               Cancel
             </Button>
             <Button
-              onClick={props.onRecordActivity}
+              onClick={() => void props.onRecordActivity()}
               disabled={props.activityLoading}
             >
               {props.activityLoading ? (

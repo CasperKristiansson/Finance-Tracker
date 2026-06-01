@@ -89,18 +89,15 @@ export const IncomeExpenseChartCard: React.FC<IncomeExpenseChartCardProps> = ({
           content={({ active, payload }) => {
             if (!active || !payload?.length) return null;
 
+            const record = payload[0]?.payload as
+              | Partial<IncomeExpensePoint>
+              | undefined;
             const monthLabel =
-              typeof payload[0]?.payload?.label === "string"
-                ? payload[0].payload.label
-                : "";
+              typeof record?.label === "string" ? record.label : "";
             const monthIndex =
-              typeof payload[0]?.payload?.monthIndex === "number"
-                ? payload[0].payload.monthIndex
-                : null;
+              typeof record?.monthIndex === "number" ? record.monthIndex : null;
             const monthYear =
-              typeof payload[0]?.payload?.year === "number"
-                ? payload[0].payload.year
-                : null;
+              typeof record?.year === "number" ? record.year : null;
             const overviewYear = yearlyOverview?.year ?? null;
 
             const incomeItem = payload.find((p) => p.dataKey === "income");
@@ -115,14 +112,13 @@ export const IncomeExpenseChartCard: React.FC<IncomeExpenseChartCardProps> = ({
                 ? Math.abs(Number(expenseItem.value))
                 : null;
             const investmentMarketGrowth =
-              typeof payload[0]?.payload?.investmentMarketGrowth === "number"
-                ? payload[0].payload.investmentMarketGrowth
+              typeof record?.investmentMarketGrowth === "number"
+                ? record.investmentMarketGrowth
                 : 0;
 
             const buildBreakdown = (
               breakdown:
                 | YearlyOverviewResponse["category_breakdown"]
-                | YearlyOverviewResponse["income_category_breakdown"]
                 | undefined,
               fallbackColor: string,
             ) => {

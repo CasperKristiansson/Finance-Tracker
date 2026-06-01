@@ -77,9 +77,9 @@ export const CategoryMixChartCard: React.FC<CategoryMixChartCardProps> = ({
           outerRadius={90}
           paddingAngle={4}
         >
-          {categoryBreakdown.map((_, index) => (
+          {categoryBreakdown.map((item, index) => (
             <Cell
-              key={index}
+              key={item.name}
               fill={
                 index === 0
                   ? "url(#categoryMixIncomeFill)"

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, LogOut } from "lucide-react";
-import React from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAppDispatch, useAppSelector } from "@/app/hooks";
 import { AppSidebar } from "@/components/app-sidebar";
@@ -41,21 +41,20 @@ const ProfileGate: React.FC = () => {
     loading,
     saving,
     error,
-    lastSavedAt,
     changeFirstName,
     changeLastName,
     saveSettings,
   } = useSettings();
   const isDemo = useAppSelector(selectIsDemo);
-  const [formError, setFormError] = React.useState<string | null>(null);
-  const [submitted, setSubmitted] = React.useState(() => {
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(() => {
     const hasProfile = !!firstName?.trim() && !!lastName?.trim();
     return hasProfile;
   });
 
   const missingProfile = !firstName?.trim() || !lastName?.trim();
   const shouldBlock =
-    !isDemo && (loading || saving || missingProfile || !submitted);
+    !isDemo && (loading || saving || missingProfile || !submitted || !!error);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -68,14 +67,9 @@ const ProfileGate: React.FC = () => {
     changeFirstName(trimmedFirst);
     changeLastName(trimmedLast);
     setFormError(null);
+    setSubmitted(true);
     saveSettings();
   };
-
-  React.useEffect(() => {
-    if (!missingProfile && lastSavedAt && !error) {
-      setSubmitted(true);
-    }
-  }, [error, lastSavedAt, missingProfile]);
 
   if (!shouldBlock) return null;
 
@@ -156,16 +150,16 @@ export const Navigation: React.FC<{
 }> = ({ children, title }) => {
   const dispatch = useAppDispatch();
   const location = useLocation();
-  const contentRef = React.useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const user = useAppSelector(selectUser);
   const isDemo = useAppSelector(selectIsDemo);
   const { firstName, lastName } = useSettings();
 
-  React.useEffect(() => {
+  useEffect(() => {
     contentRef.current?.scrollTo({ top: 0, left: 0, behavior: "auto" });
   }, [location.pathname]);
 
-  const displayName = React.useMemo(() => {
+  const displayName = useMemo(() => {
     const name = [firstName, lastName]
       .filter((part): part is string => Boolean(part))
       .join(" ");
@@ -177,7 +171,7 @@ export const Navigation: React.FC<{
     return user.email.slice(0, 2).toUpperCase();
   }, [firstName, lastName, user.email]);
 
-  const initials = React.useMemo(() => {
+  const initials = useMemo(() => {
     const name = [firstName, lastName].filter((part): part is string =>
       Boolean(part),
     );

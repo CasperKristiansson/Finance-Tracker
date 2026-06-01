@@ -36,7 +36,9 @@ export const useReportsRoute = () => {
       Number.isFinite(parsed) && parsed > MIN_YEAR && parsed < MAX_YEAR;
 
     if (!isValidYear) {
-      navigate(`${PageRoutes.reportsYearly}/${currentYear}`, { replace: true });
+      void navigate(`${PageRoutes.reportsYearly}/${currentYear}`, {
+        replace: true,
+      });
     }
   }, [currentYear, isYearlyRoute, navigate, params.year]);
 

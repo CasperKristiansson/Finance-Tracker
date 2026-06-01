@@ -237,7 +237,7 @@ export const TransactionModal: React.FC<{
     });
   }, [categoryAmountHint, open, reset, today, transaction]);
 
-  const submitTransaction = async (
+  const submitTransaction = (
     values: TransactionFormValues,
     options: { keepOpen: boolean },
   ) => {
@@ -255,7 +255,7 @@ export const TransactionModal: React.FC<{
     }
 
     if (transaction) {
-      await updateTransaction(transaction.id, {
+      updateTransaction(transaction.id, {
         description: values.description.trim(),
         notes: values.notes?.trim() || null,
         category_id: values.category_id || null,
@@ -339,7 +339,7 @@ export const TransactionModal: React.FC<{
             },
           ];
 
-    await createTransaction({
+    createTransaction({
       description: values.description.trim(),
       notes: values.notes?.trim() || undefined,
       category_id:
@@ -415,7 +415,8 @@ export const TransactionModal: React.FC<{
 
   useEffect(() => {
     if (open) return;
-    setDeleteConfirmOpen(false);
+    const timer = window.setTimeout(() => setDeleteConfirmOpen(false), 0);
+    return () => window.clearTimeout(timer);
   }, [open]);
 
   if (!open) return null;
@@ -846,7 +847,7 @@ export const TransactionModal: React.FC<{
               {!transaction ? (
                 <Button
                   variant="outline"
-                  onClick={onSubmitAndAdd}
+                  onClick={() => void onSubmitAndAdd()}
                   disabled={isBusy}
                 >
                   {submitLoading ? (
@@ -859,7 +860,7 @@ export const TransactionModal: React.FC<{
                   )}
                 </Button>
               ) : null}
-              <Button onClick={onSubmit} disabled={isBusy}>
+              <Button onClick={() => void onSubmit()} disabled={isBusy}>
                 {submitLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

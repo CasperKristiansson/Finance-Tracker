@@ -42,25 +42,33 @@ export const useYearlyAnalysis = ({
   year: number;
   includeInvestmentGrowth: boolean;
 }) => {
+  const monthlyRows = overview?.monthly;
+  const prevMonthlyRows = prevOverview?.monthly;
+  const categoryBreakdown = overview?.category_breakdown;
+  const incomeCategoryBreakdown = overview?.income_category_breakdown;
+  const incomeSources = overview?.income_sources;
+  const expenseSources = overview?.expense_sources;
+  const prevIncomeSources = prevOverview?.income_sources;
+  const prevExpenseSources = prevOverview?.expense_sources;
+
   const investmentGrowthMonthly = useMemo(
     () =>
-      overview?.monthly.map((row) =>
-        Number(row.investment_market_growth ?? 0),
-      ) ?? Array.from({ length: 12 }, () => 0),
-    [overview?.monthly],
+      monthlyRows?.map((row) => Number(row.investment_market_growth ?? 0)) ??
+      Array.from({ length: 12 }, () => 0),
+    [monthlyRows],
   );
 
   const prevInvestmentGrowthMonthly = useMemo(
     () =>
-      prevOverview?.monthly.map((row) =>
+      prevMonthlyRows?.map((row) =>
         Number(row.investment_market_growth ?? 0),
       ) ?? Array.from({ length: 12 }, () => 0),
-    [prevOverview?.monthly],
+    [prevMonthlyRows],
   );
 
   const categoryChartData = useMemo(() => {
-    if (!overview?.category_breakdown) return [];
-    const rows = overview.category_breakdown.map((item) => ({
+    if (!categoryBreakdown) return [];
+    const rows = categoryBreakdown.map((item) => ({
       id: item.category_id ?? null,
       name: item.name,
       total: Number(item.total),
@@ -83,11 +91,7 @@ export const useYearlyAnalysis = ({
       }
     }
     return rows;
-  }, [
-    includeInvestmentGrowth,
-    investmentGrowthMonthly,
-    overview?.category_breakdown,
-  ]);
+  }, [categoryBreakdown, includeInvestmentGrowth, investmentGrowthMonthly]);
 
   const heatmap = useMemo(() => {
     if (!categoryChartData.length) return { rows: [], max: 0 };
@@ -99,8 +103,8 @@ export const useYearlyAnalysis = ({
   }, [categoryChartData]);
 
   const incomeCategoryChartData = useMemo(() => {
-    if (!overview?.income_category_breakdown) return [];
-    const rows = overview.income_category_breakdown.map((item) => ({
+    if (!incomeCategoryBreakdown) return [];
+    const rows = incomeCategoryBreakdown.map((item) => ({
       id: item.category_id ?? null,
       name: item.name,
       total: Number(item.total),
@@ -124,9 +128,9 @@ export const useYearlyAnalysis = ({
     }
     return rows;
   }, [
+    incomeCategoryBreakdown,
     includeInvestmentGrowth,
     investmentGrowthMonthly,
-    overview?.income_category_breakdown,
   ]);
 
   const incomeHeatmap = useMemo(() => {
@@ -149,8 +153,8 @@ export const useYearlyAnalysis = ({
   );
 
   const incomeSourceRows = useMemo(() => {
-    if (!overview?.income_sources) return [];
-    const rows = overview.income_sources
+    if (!incomeSources) return [];
+    const rows = incomeSources
       .map((row) => ({
         source: row.source,
         total: Number(row.total),
@@ -177,16 +181,11 @@ export const useYearlyAnalysis = ({
       }
     }
     return rows.sort((a, b) => b.total - a.total);
-  }, [
-    includeInvestmentGrowth,
-    investmentGrowthMonthly,
-    overview?.income_sources,
-    year,
-  ]);
+  }, [incomeSources, includeInvestmentGrowth, investmentGrowthMonthly, year]);
 
   const expenseSourceRows = useMemo(() => {
-    if (!overview?.expense_sources) return [];
-    const rows = overview.expense_sources
+    if (!expenseSources) return [];
+    const rows = expenseSources
       .map((row) => ({
         source: row.source,
         total: Number(row.total),
@@ -213,17 +212,12 @@ export const useYearlyAnalysis = ({
       }
     }
     return rows.sort((a, b) => b.total - a.total);
-  }, [
-    includeInvestmentGrowth,
-    investmentGrowthMonthly,
-    overview?.expense_sources,
-    year,
-  ]);
+  }, [expenseSources, includeInvestmentGrowth, investmentGrowthMonthly, year]);
 
   const prevIncomeSourceRows = useMemo(() => {
-    if (!prevOverview?.income_sources) return [];
+    if (!prevIncomeSources) return [];
     const prevYear = year - 1;
-    const rows = prevOverview.income_sources
+    const rows = prevIncomeSources
       .map((row) => ({
         source: row.source,
         total: Number(row.total),
@@ -251,16 +245,16 @@ export const useYearlyAnalysis = ({
     }
     return rows.sort((a, b) => b.total - a.total);
   }, [
+    prevIncomeSources,
     includeInvestmentGrowth,
     prevInvestmentGrowthMonthly,
-    prevOverview?.income_sources,
     year,
   ]);
 
   const prevExpenseSourceRows = useMemo(() => {
-    if (!prevOverview?.expense_sources) return [];
+    if (!prevExpenseSources) return [];
     const prevYear = year - 1;
-    const rows = prevOverview.expense_sources
+    const rows = prevExpenseSources
       .map((row) => ({
         source: row.source,
         total: Number(row.total),
@@ -288,9 +282,9 @@ export const useYearlyAnalysis = ({
     }
     return rows.sort((a, b) => b.total - a.total);
   }, [
+    prevExpenseSources,
     includeInvestmentGrowth,
     prevInvestmentGrowthMonthly,
-    prevOverview?.expense_sources,
     year,
   ]);
 
@@ -665,8 +659,8 @@ export const useYearlyAnalysis = ({
 
   const yearlyCashflowVolatility =
     useMemo<CashflowVolatilitySummary | null>(() => {
-      if (!overview?.monthly?.length) return null;
-      const series = overview.monthly.map((row) => ({
+      if (!monthlyRows?.length) return null;
+      const series = monthlyRows.map((row) => ({
         ...applyInvestmentGrowth(
           Number(row.income),
           Number(row.expense),
@@ -744,7 +738,7 @@ export const useYearlyAnalysis = ({
         stabilityScore,
         spikes,
       };
-    }, [includeInvestmentGrowth, overview?.monthly, year]);
+    }, [includeInvestmentGrowth, monthlyRows, year]);
 
   return {
     categoryChartData,

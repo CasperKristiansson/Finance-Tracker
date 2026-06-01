@@ -92,20 +92,20 @@ export const SavingsRateChartCard: React.FC<SavingsRateChartCardProps> = ({
           content={({ active, payload }) => {
             if (!active || !payload?.length) return null;
             const item = payload[0];
+            const record = item.payload as
+              | Partial<SavingsRatePoint>
+              | undefined;
             const status =
-              item.payload?.status === "no-income" ||
-              item.payload?.status === "no-activity"
-                ? (item.payload.status as SavingsMonthStatus)
+              record?.status === "no-income" || record?.status === "no-activity"
+                ? record.status
                 : "normal";
             return (
               <div className="rounded-md border bg-white px-3 py-2 text-xs shadow-sm">
-                <p className="font-semibold text-slate-800">
-                  {item.payload.label}
-                </p>
+                <p className="font-semibold text-slate-800">{record?.label}</p>
                 <p className="text-slate-600">Savings rate: {item.value}%</p>
                 <p className="text-slate-500">
-                  Income: {currency(Number(item.payload.income ?? 0))} -
-                  Expense: {currency(Number(item.payload.expense ?? 0))}
+                  Income: {currency(Number(record?.income ?? 0))} - Expense:{" "}
+                  {currency(Number(record?.expense ?? 0))}
                 </p>
                 {status === "no-income" ? (
                   <p className="text-amber-700">

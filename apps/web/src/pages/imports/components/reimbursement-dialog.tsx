@@ -91,14 +91,17 @@ export const ReimbursementDialog: React.FC<ReimbursementDialogProps> = ({
   }, [commitRows]);
 
   useEffect(() => {
-    if (!dialogState) {
-      setSelections([]);
-      setAccountTypeFilter("all");
-      return;
-    }
-    setSelections(
-      reimbursementsByRow[dialogState.rowId]?.reimbursementIds ?? [],
-    );
+    const timer = window.setTimeout(() => {
+      if (!dialogState) {
+        setSelections([]);
+        setAccountTypeFilter("all");
+        return;
+      }
+      setSelections(
+        reimbursementsByRow[dialogState.rowId]?.reimbursementIds ?? [],
+      );
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [dialogState, reimbursementsByRow]);
 
   const handleDialogChange = (nextOpen: boolean) => {

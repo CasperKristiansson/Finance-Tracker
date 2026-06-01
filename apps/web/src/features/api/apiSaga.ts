@@ -1,5 +1,6 @@
-import { call, put, select } from "redux-saga/effects";
+import type { SagaIterator } from "redux-saga";
 import { toast } from "sonner";
+import { call, put, select } from "typed-redux-saga";
 import { setLoading } from "@/features/app/appSlice";
 import authService, { PendingApprovalError } from "@/features/auth/authHelpers";
 import {
@@ -43,13 +44,13 @@ export class DemoModeError extends Error {
 export function* callApiWithAuth<T>(
   request: ApiRequest,
   options: ApiCallOptions = {},
-): Generator<unknown, T, unknown> {
-  const token = (yield select(selectToken)) as string | undefined;
-  const isDemo = (yield select(selectIsDemo)) as boolean;
+): SagaIterator<T> {
+  const token = (yield* select(selectToken)) as string | undefined;
+  const isDemo = yield* select(selectIsDemo);
   const loadingKey = options.loadingKey;
 
   if (loadingKey) {
-    yield put(setLoading({ key: loadingKey, isLoading: true }));
+    yield* put(setLoading({ key: loadingKey, isLoading: true }));
   }
 
   try {
@@ -57,7 +58,7 @@ export function* callApiWithAuth<T>(
       throw new DemoModeError();
     }
 
-    const { data } = (yield call(apiFetch<T>, {
+    const { data } = (yield* call(apiFetch<T>, {
       ...request,
       token,
     })) as { data: T };
@@ -70,14 +71,14 @@ export function* callApiWithAuth<T>(
 
     if (shouldRetry) {
       try {
-        const refreshedSession = (yield call(() =>
+        const refreshedSession = yield* call(() =>
           authService.fetchAuthenticatedUser(true),
-        )) as Awaited<ReturnType<typeof authService.fetchAuthenticatedUser>>;
+        );
 
         if (refreshedSession) {
-          yield put(loginSuccess(refreshedSession));
+          yield* put(loginSuccess(refreshedSession));
           try {
-            const { data } = (yield call(apiFetch<T>, {
+            const { data } = (yield* call(apiFetch<T>, {
               ...request,
               token: refreshedSession.accessToken,
               retryCount: 1,
@@ -93,7 +94,7 @@ export function* callApiWithAuth<T>(
                 description: "Please sign in again.",
               });
             }
-            yield put(logoutSuccess());
+            yield* put(logoutSuccess());
             throw retryError;
           }
         } else {
@@ -102,7 +103,7 @@ export function* callApiWithAuth<T>(
               description: "Please sign in again.",
             });
           }
-          yield put(logoutSuccess());
+          yield* put(logoutSuccess());
           throw error;
         }
       } catch (refreshError) {
@@ -118,7 +119,7 @@ export function* callApiWithAuth<T>(
               "Your account must be approved before continuing. Please sign in again once approved.",
           });
         }
-        yield put(logoutSuccess());
+        yield* put(logoutSuccess());
         throw refreshError;
       }
     }
@@ -132,7 +133,7 @@ export function* callApiWithAuth<T>(
     throw error;
   } finally {
     if (loadingKey) {
-      yield put(setLoading({ key: loadingKey, isLoading: false }));
+      yield* put(setLoading({ key: loadingKey, isLoading: false }));
     }
   }
 }

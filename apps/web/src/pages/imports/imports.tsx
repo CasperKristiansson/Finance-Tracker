@@ -20,7 +20,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
@@ -100,6 +100,11 @@ import {
 
 type StepKey = 1 | 2 | 3 | 4;
 
+const deferEffectUpdate = (callback: () => void) => {
+  const timer = window.setTimeout(callback, 0);
+  return () => window.clearTimeout(timer);
+};
+
 type LocalFile = {
   id: string;
   file: File;
@@ -115,8 +120,13 @@ type PreviewFile = ImportPreviewResponse["files"][number];
 const toBase64 = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(",").pop() || "");
-    reader.onerror = (err) => reject(err);
+    reader.onload = () =>
+      resolve(
+        typeof reader.result === "string"
+          ? (reader.result.split(",").pop() ?? "")
+          : "",
+      );
+    reader.onerror = () => reject(new Error("Failed to read import file."));
     reader.readAsDataURL(file);
   });
 
@@ -355,8 +365,7 @@ const normalizeDraftRow = (
   description: row.description,
   category_id: row.category_id ?? null,
   transfer_account_id: row.transfer_account_id ?? null,
-  tax_event_type:
-    (row.tax_event_type as TaxEventType | null | undefined) ?? null,
+  tax_event_type: row.tax_event_type ?? null,
   delete: Boolean(row.delete),
 });
 
@@ -491,7 +500,10 @@ export const Imports: React.FC = () => {
     defaultValues: { rows: [] },
   });
 
-  const watchedRows = commitForm.watch("rows");
+  const watchedRows = useWatch({
+    control: commitForm.control,
+    name: "rows",
+  });
   const missingCategoryCount = Array.isArray(watchedRows)
     ? watchedRows.reduce((count, row) => {
         if (!row) return count;
@@ -526,17 +538,19 @@ export const Imports: React.FC = () => {
     if (preview) return;
     lastDraftSnapshotRef.current = null;
     pendingDraftSnapshotRef.current = null;
-    setSplitRows([]);
-    setSplitRowIdsBySource({});
-    setSplitBaseRow(null);
-    setSplitDraftItems([]);
-    setSplitDialogOpen(false);
-    setTransferDialogOpen(false);
-    setTransferDialogState(null);
-    setTransferTab("suggested");
-    setReimbursementDialogOpen(false);
-    setReimbursementDialogState(null);
-    setReimbursementsByRow({});
+    return deferEffectUpdate(() => {
+      setSplitRows([]);
+      setSplitRowIdsBySource({});
+      setSplitBaseRow(null);
+      setSplitDraftItems([]);
+      setSplitDialogOpen(false);
+      setTransferDialogOpen(false);
+      setTransferDialogState(null);
+      setTransferTab("suggested");
+      setReimbursementDialogOpen(false);
+      setReimbursementDialogState(null);
+      setReimbursementsByRow({});
+    });
   }, [preview]);
 
   useEffect(() => {
@@ -601,26 +615,30 @@ export const Imports: React.FC = () => {
   }, [preview, commitRows.length, commitForm, replaceCommitRows]);
 
   useEffect(() => {
-    setIsHydratingImportId(Boolean(importIdFromUrl));
+    return deferEffectUpdate(() =>
+      setIsHydratingImportId(Boolean(importIdFromUrl)),
+    );
   }, [importIdFromUrl]);
 
   useEffect(() => {
     if (!preview) return;
-    setFiles((current) =>
-      current.map((file) => {
-        const matched =
-          preview.files.find(
-            (previewFile) =>
-              previewFile.filename === file.filename &&
-              previewFile.account_id === file.accountId,
-          ) ??
-          preview.files.find(
-            (previewFile) => previewFile.account_id === file.accountId,
-          );
-        if (!matched) return file;
-        return { ...file, previewFileId: matched.id };
-      }),
-    );
+    return deferEffectUpdate(() => {
+      setFiles((current) =>
+        current.map((file) => {
+          const matched =
+            preview.files.find(
+              (previewFile) =>
+                previewFile.filename === file.filename &&
+                previewFile.account_id === file.accountId,
+            ) ??
+            preview.files.find(
+              (previewFile) => previewFile.account_id === file.accountId,
+            );
+          if (!matched) return file;
+          return { ...file, previewFileId: matched.id };
+        }),
+      );
+    });
   }, [preview]);
 
   useEffect(() => {
@@ -632,8 +650,10 @@ export const Imports: React.FC = () => {
     if (draftLoadRequestRef.current === importIdFromUrl) return;
 
     draftLoadRequestRef.current = importIdFromUrl;
-    setIsHydratingImportId(true);
-    loadImportDraft(importIdFromUrl);
+    return deferEffectUpdate(() => {
+      setIsHydratingImportId(true);
+      loadImportDraft(importIdFromUrl);
+    });
   }, [importIdFromUrl, loadImportDraft, preview?.import_batch_id]);
 
   useEffect(() => {
@@ -650,13 +670,13 @@ export const Imports: React.FC = () => {
   useEffect(() => {
     if (!importIdFromUrl) return;
     if (preview?.import_batch_id !== importIdFromUrl) return;
-    setIsHydratingImportId(false);
+    return deferEffectUpdate(() => setIsHydratingImportId(false));
   }, [importIdFromUrl, preview?.import_batch_id]);
 
   useEffect(() => {
     if (!importIdFromUrl) return;
     if (!error) return;
-    setIsHydratingImportId(false);
+    return deferEffectUpdate(() => setIsHydratingImportId(false));
   }, [error, importIdFromUrl]);
 
   useEffect(() => {
@@ -674,30 +694,32 @@ export const Imports: React.FC = () => {
   useEffect(() => {
     if (!commitTriggered) return;
     if (saving) return;
-    if (error) {
-      setCommitTriggered(false);
-      setAwaitingPostCommitAccountsRefresh(false);
-      setPostCommitAccountsFetchStarted(false);
-      return;
-    }
-    if (preview) return;
+    return deferEffectUpdate(() => {
+      if (error) {
+        setCommitTriggered(false);
+        setAwaitingPostCommitAccountsRefresh(false);
+        setPostCommitAccountsFetchStarted(false);
+        return;
+      }
+      if (preview) return;
 
-    setCommitTriggered(false);
-    setStep(1);
-    setFiles([]);
-    commitForm.reset({ rows: [] });
-    setSuggestionsRequested(false);
-    lastDraftSnapshotRef.current = null;
-    setSearchParams((current) => {
-      const next = new URLSearchParams(current);
-      next.delete("importId");
-      return next;
+      setCommitTriggered(false);
+      setStep(1);
+      setFiles([]);
+      commitForm.reset({ rows: [] });
+      setSuggestionsRequested(false);
+      lastDraftSnapshotRef.current = null;
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.delete("importId");
+        return next;
+      });
+      if (postCommitReconcileAccountIds.length > 0) {
+        setAwaitingPostCommitAccountsRefresh(true);
+        setPostCommitAccountsFetchStarted(false);
+        fetchAccounts({});
+      }
     });
-    if (postCommitReconcileAccountIds.length > 0) {
-      setAwaitingPostCommitAccountsRefresh(true);
-      setPostCommitAccountsFetchStarted(false);
-      fetchAccounts({});
-    }
   }, [
     commitTriggered,
     saving,
@@ -711,16 +733,18 @@ export const Imports: React.FC = () => {
 
   useEffect(() => {
     if (!awaitingPostCommitAccountsRefresh) return;
-    if (accountsLoading) {
-      setPostCommitAccountsFetchStarted(true);
-      return;
-    }
-    if (!postCommitAccountsFetchStarted) return;
-    setAwaitingPostCommitAccountsRefresh(false);
-    setPostCommitAccountsFetchStarted(false);
-    if (postCommitReconcileAccountIds.length > 0) {
-      setReconcilePromptOpen(true);
-    }
+    return deferEffectUpdate(() => {
+      if (accountsLoading) {
+        setPostCommitAccountsFetchStarted(true);
+        return;
+      }
+      if (!postCommitAccountsFetchStarted) return;
+      setAwaitingPostCommitAccountsRefresh(false);
+      setPostCommitAccountsFetchStarted(false);
+      if (postCommitReconcileAccountIds.length > 0) {
+        setReconcilePromptOpen(true);
+      }
+    });
   }, [
     awaitingPostCommitAccountsRefresh,
     accountsLoading,
@@ -733,20 +757,20 @@ export const Imports: React.FC = () => {
       ? preview.files.some((file) => (file.error_count ?? 0) > 0)
       : false;
     if (!preview || hasErrors) {
-      setSuggestionsRequested(false);
-      return;
+      return deferEffectUpdate(() => setSuggestionsRequested(false));
     }
     if (preview.suggestions_status !== "not_started") {
-      setSuggestionsRequested(false);
-      return;
+      return deferEffectUpdate(() => setSuggestionsRequested(false));
     }
     if (suggestionsRequested) return;
     if (!categories.length) return;
     if (Object.keys(suggestions).length) return;
     if (suggesting) return;
 
-    suggestCategories(preview);
-    setSuggestionsRequested(true);
+    return deferEffectUpdate(() => {
+      suggestCategories(preview);
+      setSuggestionsRequested(true);
+    });
   }, [
     preview,
     suggestionsRequested,
@@ -807,6 +831,7 @@ export const Imports: React.FC = () => {
     () => JSON.stringify(draftRowsPayload),
     [draftRowsPayload],
   );
+  // eslint-disable-next-line react-hooks/refs -- This compares against the last persisted draft snapshot, which is intentionally mutable and not rendered.
   const hasUnsavedDraftChanges = useMemo(() => {
     if (step !== 4) return false;
     if (!preview?.import_batch_id) return false;
@@ -843,7 +868,7 @@ export const Imports: React.FC = () => {
   const leaveToImportsList = useCallback(() => {
     suppressNavigationBlockRef.current = true;
     clearCurrentImportSession({ clearImportId: false });
-    navigate(PageRoutes.imports, { replace: true });
+    void navigate(PageRoutes.imports, { replace: true });
     window.setTimeout(() => {
       suppressNavigationBlockRef.current = false;
     }, 0);
@@ -893,11 +918,13 @@ export const Imports: React.FC = () => {
   useEffect(() => {
     if (draftSaving) return;
     if (!pendingDraftSnapshotRef.current) return;
-    if (!draftsError) {
-      lastDraftSnapshotRef.current = pendingDraftSnapshotRef.current;
-      setDraftSaveState("saved");
-    }
-    pendingDraftSnapshotRef.current = null;
+    return deferEffectUpdate(() => {
+      if (!draftsError) {
+        lastDraftSnapshotRef.current = pendingDraftSnapshotRef.current;
+        setDraftSaveState("saved");
+      }
+      pendingDraftSnapshotRef.current = null;
+    });
   }, [draftSaving, draftsError]);
 
   useEffect(() => {
@@ -909,42 +936,44 @@ export const Imports: React.FC = () => {
   useEffect(() => {
     if (draftSaveState !== "saved") return;
     if (!hasUnsavedDraftChanges) return;
-    setDraftSaveState("idle");
+    return deferEffectUpdate(() => setDraftSaveState("idle"));
   }, [draftSaveState, hasUnsavedDraftChanges]);
 
   useEffect(() => {
     if (autoSaveLeaveState === "idle") return;
-    if (autoSaveLeaveState === "requested") {
-      if (draftSaving) {
-        setAutoSaveLeaveState("saving");
+    return deferEffectUpdate(() => {
+      if (autoSaveLeaveState === "requested") {
+        if (draftSaving) {
+          setAutoSaveLeaveState("saving");
+        }
+        return;
       }
-      return;
-    }
-    if (autoSaveLeaveState !== "saving") return;
-    if (draftSaving) return;
-    if (draftsError) {
+      if (autoSaveLeaveState !== "saving") return;
+      if (draftSaving) return;
+      if (draftsError) {
+        setAutoSaveLeaveState("idle");
+        return;
+      }
       setAutoSaveLeaveState("idle");
-      return;
-    }
-    setAutoSaveLeaveState("idle");
-    leaveToImportsList();
+      leaveToImportsList();
+    });
   }, [autoSaveLeaveState, draftSaving, draftsError, leaveToImportsList]);
 
   useEffect(() => {
     if (!preview) return;
     if (step !== 3) return;
     if (preview.files.some((file) => (file.error_count ?? 0) > 0)) return;
-    setStep(4);
+    return deferEffectUpdate(() => setStep(4));
   }, [preview, step]);
 
   useEffect(() => {
     if (!preview || !importIdFromUrl) return;
     if (preview.import_batch_id !== importIdFromUrl) return;
-    setStep(4);
+    return deferEffectUpdate(() => setStep(4));
   }, [preview, importIdFromUrl]);
 
   useEffect(() => {
-    setSuggestionsRequested(false);
+    return deferEffectUpdate(() => setSuggestionsRequested(false));
   }, [preview?.import_batch_id]);
 
   useEffect(() => {
@@ -952,11 +981,13 @@ export const Imports: React.FC = () => {
     if (step !== 4) return;
     const firstId = preview.files[0]?.id ?? null;
     if (!firstId) return;
-    setActiveAuditFileId((current) => {
-      if (!current) return firstId;
-      return preview.files.some((file) => file.id === current)
-        ? current
-        : firstId;
+    return deferEffectUpdate(() => {
+      setActiveAuditFileId((current) => {
+        if (!current) return firstId;
+        return preview.files.some((file) => file.id === current)
+          ? current
+          : firstId;
+      });
     });
   }, [preview, step]);
 
@@ -1242,16 +1273,17 @@ export const Imports: React.FC = () => {
 
   useEffect(() => {
     if (step !== 3) {
-      setAutoParseRequested(false);
-      return;
+      return deferEffectUpdate(() => setAutoParseRequested(false));
     }
     if (autoParseRequested) return;
     if (!mappedFilesReady) return;
     if (loading) return;
     if (preview) return;
 
-    setAutoParseRequested(true);
-    void parse();
+    return deferEffectUpdate(() => {
+      setAutoParseRequested(true);
+      void parse();
+    });
   }, [step, autoParseRequested, mappedFilesReady, loading, preview, parse]);
 
   const handleOpenSplitDialog = (
@@ -1683,7 +1715,7 @@ export const Imports: React.FC = () => {
     });
   };
 
-  const submit = commitForm.handleSubmit(async (values) => {
+  const submit = commitForm.handleSubmit((values) => {
     if (!token) {
       toast.error("Missing session", { description: "Please sign in again." });
       return;
@@ -1769,9 +1801,9 @@ export const Imports: React.FC = () => {
           <Skeleton className="h-4 w-[560px] max-w-full" />
         </div>
         <div className="grid gap-3 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, index) => (
+          {["upload", "mapping", "preview", "commit"].map((stepKey) => (
             <div
-              key={`imports-step-skeleton-${index}`}
+              key={`imports-step-skeleton-${stepKey}`}
               className="rounded-lg border border-slate-200 bg-white p-3"
             >
               <Skeleton className="h-3 w-16" />
@@ -2080,7 +2112,7 @@ export const Imports: React.FC = () => {
               const shouldReplace =
                 nextPath === PageRoutes.imports ||
                 nextPath.startsWith(`${PageRoutes.imports}?`);
-              navigate(nextPath, { replace: shouldReplace });
+              void navigate(nextPath, { replace: shouldReplace });
               window.setTimeout(() => {
                 suppressNavigationBlockRef.current = false;
               }, 0);
@@ -2264,8 +2296,10 @@ export const Imports: React.FC = () => {
                         </div>
                         {f.errors?.length ? (
                           <ul className="mt-2 space-y-1 text-xs">
-                            {f.errors.slice(0, 5).map((err, idx) => (
-                              <li key={`${f.id}-${idx}`}>
+                            {f.errors.slice(0, 5).map((err) => (
+                              <li
+                                key={`${f.id}-${err.row_number}-${err.message}`}
+                              >
                                 Row {err.row_number}: {err.message}
                               </li>
                             ))}
@@ -2405,9 +2439,7 @@ export const Imports: React.FC = () => {
                                 : null;
 
                               const transferAccountId =
-                                commitForm.watch(
-                                  `rows.${idx}.transfer_account_id`,
-                                ) ?? null;
+                                watchedRows?.[idx]?.transfer_account_id ?? null;
                               const transferTarget = transferAccountId
                                 ? (accountById.get(transferAccountId) ?? null)
                                 : null;
@@ -2446,12 +2478,10 @@ export const Imports: React.FC = () => {
                                 reimbursementsByRow[previewRow.id];
                               const reimbursementCount =
                                 reimbursementLink?.reimbursementIds.length ?? 0;
+                              const watchedRow = watchedRows?.[idx];
 
-                              const occurredAt =
-                                commitForm.watch(`rows.${idx}.occurred_at`) ??
-                                "";
-                              const amountValue =
-                                commitForm.watch(`rows.${idx}.amount`) ?? "";
+                              const occurredAt = watchedRow?.occurred_at ?? "";
+                              const amountValue = watchedRow?.amount ?? "";
                               const rowTransferDirection =
                                 getTransferDirection(amountValue);
                               const rowTransferDirectionLabels =
@@ -2460,19 +2490,14 @@ export const Imports: React.FC = () => {
                                 );
 
                               const currentCategoryId =
-                                commitForm.watch(`rows.${idx}.category_id`) ??
-                                null;
+                                watchedRow?.category_id ?? null;
                               const rowCategories = getCategoriesForAmount(
                                 categories,
                                 amountValue,
                               );
                               const taxEventType =
-                                commitForm.watch(
-                                  `rows.${idx}.tax_event_type`,
-                                ) ?? null;
-                              const isDeleted = Boolean(
-                                commitForm.watch(`rows.${idx}.delete`),
-                              );
+                                watchedRow?.tax_event_type ?? null;
+                              const isDeleted = Boolean(watchedRow?.delete);
                               const isMissingCategory =
                                 !isDeleted &&
                                 !taxEventType &&
@@ -2596,11 +2621,7 @@ export const Imports: React.FC = () => {
                                     <div className="space-y-1">
                                       <input
                                         className="w-full min-w-[260px] rounded border border-slate-200 bg-white px-2 py-1 text-sm"
-                                        value={
-                                          commitForm.watch(
-                                            `rows.${idx}.description`,
-                                          ) ?? ""
-                                        }
+                                        value={watchedRow?.description ?? ""}
                                         onChange={(e) =>
                                           commitForm.setValue(
                                             `rows.${idx}.description`,
@@ -2699,8 +2720,8 @@ export const Imports: React.FC = () => {
                                         categories={rowCategories}
                                         disabled={Boolean(
                                           taxEventType ||
-                                            transferAccountId ||
-                                            isDeleted,
+                                          transferAccountId ||
+                                          isDeleted,
                                         )}
                                         missing={isMissingCategory}
                                         suggesting={

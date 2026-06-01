@@ -3,14 +3,16 @@
   "project": ["src/**/*.{ts,tsx}"],
   "ignoreDependencies": [
     "@react-three/fiber",
+    "@types/dagre",
+    "@xyflow/react",
     "camera-controls",
-    "eslint",
-    "prettier",
+    "dagre",
+    "react-markdown",
+    "remark-gfm",
     "@types/three",
     "three",
     "three-stdlib"
   ],
-  "ignoreBinaries": ["vite", "tsc", "eslint", "prettier", "knip"],
   "ignoreExportsUsedInFile": {
     "interface": true,
     "type": true

@@ -32,26 +32,17 @@ type SankeyDatum = {
   links: SankeyLinkDatum[];
 };
 
-type SankeyNodeRendererProps = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  index: number;
-  payload: SankeyNodePayload & { value: number };
-};
+type FunctionComponentProps<T> = T extends (props: infer Props) => unknown
+  ? Props
+  : never;
 
-type SankeyLinkRendererProps = {
-  sourceX: number;
-  sourceY: number;
-  sourceControlX: number;
-  targetX: number;
-  targetY: number;
-  targetControlX: number;
-  linkWidth: number;
-  source: { payload?: SankeyNodePayload } | number;
-  target: { payload?: SankeyNodePayload } | number;
-};
+type SankeyNodeRendererProps = FunctionComponentProps<
+  NonNullable<React.ComponentProps<typeof Sankey>["node"]>
+>;
+
+type SankeyLinkRendererProps = FunctionComponentProps<
+  NonNullable<React.ComponentProps<typeof Sankey>["link"]>
+>;
 
 const formatCurrency = (value: unknown) => {
   const numeric = Number(value);
@@ -61,6 +52,31 @@ const formatCurrency = (value: unknown) => {
 
 const clampPositive = (value: number) =>
   Number.isFinite(value) ? Math.max(0, value) : 0;
+
+const getSankeyLinkStyle = (
+  sourcePayload: SankeyNodePayload | undefined,
+  targetPayload: SankeyNodePayload | undefined,
+) => {
+  if (sourcePayload?.kind === "incomeCategory") {
+    return { stroke: "#10b981", opacity: 0.14 };
+  }
+  if (sourcePayload?.kind === "income" && targetPayload?.kind === "expenses") {
+    return { stroke: "#94a3b8", opacity: 0.22 };
+  }
+  if (sourcePayload?.kind === "income" && targetPayload?.kind === "saved") {
+    return { stroke: "#0ea5e9", opacity: 0.22 };
+  }
+  if (sourcePayload?.kind === "buffer" && targetPayload?.kind === "expenses") {
+    return { stroke: "#f97316", opacity: 0.22 };
+  }
+  if (
+    sourcePayload?.kind === "expenses" &&
+    targetPayload?.kind === "expenseCategory"
+  ) {
+    return { stroke: "#ef4444", opacity: 0.16 };
+  }
+  return { stroke: "#cbd5e1", opacity: 0.2 };
+};
 
 const topWithOther = (
   items: SankeyCategoryItem[],
@@ -302,7 +318,11 @@ export const MoneyFlowSankeyCard: React.FC<{
                   sort={false}
                   margin={{ top: 12, right: 40, bottom: 12, left: 40 }}
                   node={(props: SankeyNodeRendererProps) => {
-                    const { x, y, width, height, payload } = props;
+                    const { x, y, width, height } = props;
+                    const payload =
+                      props.payload as unknown as SankeyNodePayload & {
+                        value: number;
+                      };
                     const isExpenseCategory =
                       payload.kind === "expenseCategory";
                     const showLabel = isExpenseCategory ? true : height >= 16;
@@ -424,43 +444,18 @@ export const MoneyFlowSankeyCard: React.FC<{
                       targetY,
                       targetControlX,
                       linkWidth,
-                      source,
-                      target,
+                      payload,
                     } = props;
-                    const sourcePayload =
-                      typeof source === "object" ? source?.payload : undefined;
-                    const targetPayload =
-                      typeof target === "object" ? target?.payload : undefined;
-                    const { stroke, opacity } = (() => {
-                      if (sourcePayload?.kind === "incomeCategory") {
-                        return { stroke: "#10b981", opacity: 0.14 };
-                      }
-                      if (
-                        sourcePayload?.kind === "income" &&
-                        targetPayload?.kind === "expenses"
-                      ) {
-                        return { stroke: "#94a3b8", opacity: 0.22 };
-                      }
-                      if (
-                        sourcePayload?.kind === "income" &&
-                        targetPayload?.kind === "saved"
-                      ) {
-                        return { stroke: "#0ea5e9", opacity: 0.22 };
-                      }
-                      if (
-                        sourcePayload?.kind === "buffer" &&
-                        targetPayload?.kind === "expenses"
-                      ) {
-                        return { stroke: "#f97316", opacity: 0.22 };
-                      }
-                      if (
-                        sourcePayload?.kind === "expenses" &&
-                        targetPayload?.kind === "expenseCategory"
-                      ) {
-                        return { stroke: "#ef4444", opacity: 0.16 };
-                      }
-                      return { stroke: "#cbd5e1", opacity: 0.2 };
-                    })();
+                    const sourcePayload = payload.source as unknown as
+                      | SankeyNodePayload
+                      | undefined;
+                    const targetPayload = payload.target as unknown as
+                      | SankeyNodePayload
+                      | undefined;
+                    const { stroke, opacity } = getSankeyLinkStyle(
+                      sourcePayload,
+                      targetPayload,
+                    );
                     const d = `M${sourceX},${sourceY} C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`;
                     return (
                       <path

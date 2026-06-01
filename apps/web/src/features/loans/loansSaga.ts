@@ -8,7 +8,7 @@ import {
   select,
   take,
   takeLatest,
-} from "redux-saga/effects";
+} from "typed-redux-saga";
 import {
   demoLoanEvents,
   demoLoanPortfolioSeries,
@@ -48,8 +48,8 @@ function* handleFetchSchedule(
 ): SagaIterator {
   const { accountId, asOfDate, periods } = action.payload;
   const loadingKey = `loan-schedule-${accountId}`;
-  yield put(setLoanLoading({ key: loadingKey, isLoading: true }));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setLoanLoading({ key: loadingKey, isLoading: true }));
+  const isDemo: boolean = yield* select(selectIsDemo);
 
   try {
     const query = {
@@ -60,11 +60,11 @@ function* handleFetchSchedule(
     if (isDemo) {
       const schedule = demoLoanSchedules[accountId];
       if (schedule) {
-        yield put(setLoanSchedule({ accountId, schedule }));
+        yield* put(setLoanSchedule({ accountId, schedule }));
       }
     } else {
-      const response: EndpointResponse<"getLoanSchedule"> = yield call(
-        callApiWithAuth,
+      const response: EndpointResponse<"getLoanSchedule"> = yield* call(
+        callApiWithAuth<EndpointResponse<"getLoanSchedule">>,
         buildEndpointRequest("getLoanSchedule", {
           pathParams: { accountId },
           query,
@@ -72,16 +72,16 @@ function* handleFetchSchedule(
         { loadingKey },
       );
 
-      yield put(setLoanSchedule({ accountId, schedule: response }));
+      yield* put(setLoanSchedule({ accountId, schedule: response }));
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setLoanError(
         error instanceof Error ? error.message : "Failed to load loan schedule",
       ),
     );
   } finally {
-    yield put(setLoanLoading({ key: loadingKey, isLoading: false }));
+    yield* put(setLoanLoading({ key: loadingKey, isLoading: false }));
   }
 }
 
@@ -90,8 +90,8 @@ function* handleFetchEvents(
 ): SagaIterator {
   const { accountId, limit, offset } = action.payload;
   const loadingKey = `loan-events-${accountId}`;
-  yield put(setLoanLoading({ key: loadingKey, isLoading: true }));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setLoanLoading({ key: loadingKey, isLoading: true }));
+  const isDemo: boolean = yield* select(selectIsDemo);
 
   try {
     const query = {
@@ -101,10 +101,10 @@ function* handleFetchEvents(
 
     if (isDemo) {
       const events = demoLoanEvents[accountId] ?? [];
-      yield put(setLoanEvents({ accountId, events }));
+      yield* put(setLoanEvents({ accountId, events }));
     } else {
-      const response: EndpointResponse<"listLoanEvents"> = yield call(
-        callApiWithAuth,
+      const response: EndpointResponse<"listLoanEvents"> = yield* call(
+        callApiWithAuth<EndpointResponse<"listLoanEvents">>,
         buildEndpointRequest("listLoanEvents", {
           pathParams: { accountId },
           query,
@@ -112,16 +112,16 @@ function* handleFetchEvents(
         { loadingKey },
       );
 
-      yield put(setLoanEvents({ accountId, events: response.events }));
+      yield* put(setLoanEvents({ accountId, events: response.events }));
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setLoanError(
         error instanceof Error ? error.message : "Failed to load loan events",
       ),
     );
   } finally {
-    yield put(setLoanLoading({ key: loadingKey, isLoading: false }));
+    yield* put(setLoanLoading({ key: loadingKey, isLoading: false }));
   }
 }
 
@@ -130,8 +130,8 @@ function* handleFetchPortfolioSeries(
 ): SagaIterator {
   const { startDate, endDate } = action.payload;
   const loadingKey = "loan-portfolio-series";
-  yield put(setLoanLoading({ key: loadingKey, isLoading: true }));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setLoanLoading({ key: loadingKey, isLoading: true }));
+  const isDemo: boolean = yield* select(selectIsDemo);
 
   try {
     const query = {
@@ -140,22 +140,22 @@ function* handleFetchPortfolioSeries(
     };
 
     if (isDemo) {
-      yield put(
+      yield* put(
         setLoanPortfolioSeries({ series: demoLoanPortfolioSeries.series }),
       );
     } else {
-      const response: EndpointResponse<"listLoanPortfolioSeries"> = yield call(
-        callApiWithAuth,
+      const response: EndpointResponse<"listLoanPortfolioSeries"> = yield* call(
+        callApiWithAuth<EndpointResponse<"listLoanPortfolioSeries">>,
         buildEndpointRequest("listLoanPortfolioSeries", {
           query,
         }),
         { loadingKey },
       );
 
-      yield put(setLoanPortfolioSeries({ series: response.series }));
+      yield* put(setLoanPortfolioSeries({ series: response.series }));
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setLoanError(
         error instanceof Error
           ? error.message
@@ -163,7 +163,7 @@ function* handleFetchPortfolioSeries(
       ),
     );
   } finally {
-    yield put(setLoanLoading({ key: loadingKey, isLoading: false }));
+    yield* put(setLoanLoading({ key: loadingKey, isLoading: false }));
   }
 }
 
@@ -171,19 +171,19 @@ function* watchLatestLoanScheduleByAccount(): SagaIterator {
   const tasks = new Map<string, Task>();
 
   while (true) {
-    const action: ReturnType<typeof FetchLoanSchedule> = yield take(
+    const action: ReturnType<typeof FetchLoanSchedule> = yield* take(
       FetchLoanSchedule.type,
     );
     const { accountId } = action.payload;
     const existingTask = tasks.get(accountId);
 
     if (existingTask) {
-      yield cancel(existingTask);
+      yield* cancel(existingTask);
     }
 
-    const task: Task = yield fork(function* loanScheduleTask() {
+    const task: Task = yield* fork(function* loanScheduleTask() {
       try {
-        yield call(handleFetchSchedule, action);
+        yield* call(handleFetchSchedule, action);
       } finally {
         tasks.delete(accountId);
       }
@@ -197,19 +197,19 @@ function* watchLatestLoanEventsByAccount(): SagaIterator {
   const tasks = new Map<string, Task>();
 
   while (true) {
-    const action: ReturnType<typeof FetchLoanEvents> = yield take(
+    const action: ReturnType<typeof FetchLoanEvents> = yield* take(
       FetchLoanEvents.type,
     );
     const { accountId } = action.payload;
     const existingTask = tasks.get(accountId);
 
     if (existingTask) {
-      yield cancel(existingTask);
+      yield* cancel(existingTask);
     }
 
-    const task: Task = yield fork(function* loanEventsTask() {
+    const task: Task = yield* fork(function* loanEventsTask() {
       try {
-        yield call(handleFetchEvents, action);
+        yield* call(handleFetchEvents, action);
       } finally {
         tasks.delete(accountId);
       }
@@ -220,7 +220,7 @@ function* watchLatestLoanEventsByAccount(): SagaIterator {
 }
 
 export function* LoansSaga(): SagaIterator {
-  yield fork(watchLatestLoanScheduleByAccount);
-  yield fork(watchLatestLoanEventsByAccount);
-  yield takeLatest(FetchLoanPortfolioSeries.type, handleFetchPortfolioSeries);
+  yield* fork(watchLatestLoanScheduleByAccount);
+  yield* fork(watchLatestLoanEventsByAccount);
+  yield* takeLatest(FetchLoanPortfolioSeries.type, handleFetchPortfolioSeries);
 }

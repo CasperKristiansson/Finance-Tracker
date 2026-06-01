@@ -31,12 +31,10 @@ export const DatabaseWarmup: React.FC<DatabaseWarmupProps> = ({
   onRetry,
 }) => {
   const [progress, setProgress] = useState(14);
+  const displayProgress = warmupState.status === "ready" ? 100 : progress;
 
   useEffect(() => {
-    if (warmupState.status === "ready") {
-      setProgress(100);
-      return;
-    }
+    if (warmupState.status === "ready") return;
 
     const startTime =
       warmupState.startedAt && !Number.isNaN(Date.parse(warmupState.startedAt))
@@ -55,21 +53,12 @@ export const DatabaseWarmup: React.FC<DatabaseWarmupProps> = ({
         if (warmupState.status === "failed") {
           return Math.max(current, target);
         }
-        if (warmupState.status === "ready") {
-          return 100;
-        }
         return target < current ? current : target;
       });
     }, 650);
 
     return () => window.clearInterval(id);
   }, [warmupState.status, warmupState.startedAt, warmupState.attempts]);
-
-  useEffect(() => {
-    if (warmupState.status === "ready") {
-      setProgress(100);
-    }
-  }, [warmupState.status]);
 
   const statusLabel = useMemo(() => {
     if (warmupState.status === "ready") return "Aurora is online";
@@ -138,7 +127,7 @@ export const DatabaseWarmup: React.FC<DatabaseWarmupProps> = ({
 
           <div className="mt-8 space-y-3">
             <Progress
-              value={progress}
+              value={displayProgress}
               className="h-3 bg-slate-100"
               indicatorClassName="bg-gradient-to-r from-blue-500 via-indigo-400 to-cyan-400 shadow-[0_0_18px_rgba(59,130,246,0.35)]"
             />
@@ -150,7 +139,7 @@ export const DatabaseWarmup: React.FC<DatabaseWarmupProps> = ({
                 </span>
               </div>
               <span className="font-semibold text-blue-600">
-                {Math.min(100, Math.round(progress))}%
+                {Math.min(100, Math.round(displayProgress))}%
               </span>
             </div>
           </div>

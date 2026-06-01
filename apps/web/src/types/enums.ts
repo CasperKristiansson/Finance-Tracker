@@ -1,5 +1,3 @@
-/* eslint-disable no-redeclare */
-
 export const AccountType = {
   NORMAL: "normal",
   DEBT: "debt",

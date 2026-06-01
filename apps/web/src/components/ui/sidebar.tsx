@@ -40,11 +40,10 @@ type SidebarContext = {
   toggleSidebar: () => void;
 };
 
-// eslint-disable-next-line no-redeclare
 const SidebarContext = React.createContext<SidebarContext | null>(null);
 
 function useSidebar() {
-  const context = React.useContext(SidebarContext);
+  const context = React.use(SidebarContext);
   if (!context) {
     throw new Error("useSidebar must be used within a SidebarProvider.");
   }
@@ -70,15 +69,15 @@ function SidebarProvider({
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
-  const [_open, _setOpen] = React.useState(defaultOpen);
-  const open = openProp ?? _open;
+  const [localOpen, setLocalOpen] = React.useState(defaultOpen);
+  const open = openProp ?? localOpen;
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
       const openState = typeof value === "function" ? value(open) : value;
       if (setOpenProp) {
         setOpenProp(openState);
       } else {
-        _setOpen(openState);
+        setLocalOpen(openState);
       }
 
       // This sets the cookie to keep the sidebar state.
@@ -126,7 +125,7 @@ function SidebarProvider({
   );
 
   return (
-    <SidebarContext.Provider value={contextValue}>
+    <SidebarContext value={contextValue}>
       <TooltipProvider delayDuration={0}>
         <div
           data-slot="sidebar-wrapper"
@@ -146,7 +145,7 @@ function SidebarProvider({
           {children}
         </div>
       </TooltipProvider>
-    </SidebarContext.Provider>
+    </SidebarContext>
   );
 }
 
@@ -605,10 +604,14 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean;
 }) {
-  // Random width between 50 to 90%.
+  const skeletonId = React.useId();
   const width = React.useMemo(() => {
-    return `${Math.floor(Math.random() * 40) + 50}%`;
-  }, []);
+    const seed = Array.from(skeletonId).reduce(
+      (sum, char) => sum + char.charCodeAt(0),
+      0,
+    );
+    return `${(seed % 41) + 50}%`;
+  }, [skeletonId]);
 
   return (
     <div

@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { getActiveChartDatum } from "@/lib/recharts";
 
 import type { TotalDrilldownState } from "../reports-types";
 import { compactCurrency, currency, percent } from "../reports-utils";
@@ -92,18 +93,11 @@ export const TotalYearByYearPerformanceCard: React.FC<{
                   <BarChart
                     data={chartData}
                     barGap={6}
-                    onClick={(
-                      state:
-                        | {
-                            activePayload?: Array<{
-                              payload?: { year?: unknown };
-                            }>;
-                          }
-                        | null
-                        | undefined,
-                    ) => {
-                      const clickedYear =
-                        state?.activePayload?.[0]?.payload?.year;
+                    onClick={(state) => {
+                      const clickedYear = getActiveChartDatum(
+                        chartData,
+                        state,
+                      )?.year;
                       if (typeof clickedYear === "number") {
                         onOpenDrilldownDialog({
                           kind: "year",
@@ -128,7 +122,9 @@ export const TotalYearByYearPerformanceCard: React.FC<{
                     <Tooltip
                       content={({ active, payload }) => {
                         if (!active || !payload?.length) return null;
-                        const record = payload[0]?.payload;
+                        const record = payload[0]?.payload as
+                          | (typeof chartData)[number]
+                          | undefined;
                         const yearLabel =
                           typeof record?.year === "number" ? record.year : "";
                         const income = Number(record?.income ?? 0);

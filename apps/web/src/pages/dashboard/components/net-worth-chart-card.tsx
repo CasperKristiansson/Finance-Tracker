@@ -53,7 +53,7 @@ export const NetWorthChartCard: React.FC<NetWorthChartCardProps> = ({
         <CartesianGrid strokeDasharray="3 3" vertical={false} />
         <XAxis
           dataKey="date"
-          tickFormatter={(value) =>
+          tickFormatter={(value: string | number | Date) =>
             new Date(value).toLocaleDateString("en-US", {
               month: "short",
             })

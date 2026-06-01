@@ -1,5 +1,5 @@
 import * as LucideIcons from "lucide-react";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -32,24 +32,29 @@ export const LucideIconPicker: React.FC<LucideIconPickerProps> = ({
   disabled,
   className,
 }) => {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [page, setPage] = useState(0);
-
-  useEffect(() => {
-    const current = value ?? "";
-    if (current.startsWith(LUCIDE_PREFIX)) {
-      setQuery(current.slice(LUCIDE_PREFIX.length));
-    } else {
-      setQuery("");
-    }
-    setOpen(false);
-    setPage(0);
-  }, [value]);
-
-  useEffect(() => {
-    setPage(0);
-  }, [query]);
+  const currentValue = value ?? "";
+  const valueQuery = currentValue.startsWith(LUCIDE_PREFIX)
+    ? currentValue.slice(LUCIDE_PREFIX.length)
+    : "";
+  const [draft, setDraft] = useState(() => ({
+    value: currentValue,
+    query: valueQuery,
+    open: false,
+    page: 0,
+  }));
+  const isCurrentDraft = draft.value === currentValue;
+  const query = isCurrentDraft ? draft.query : valueQuery;
+  const open = isCurrentDraft ? draft.open : false;
+  const page = isCurrentDraft ? draft.page : 0;
+  const updateDraft = (next: Partial<typeof draft>) => {
+    setDraft({
+      value: currentValue,
+      query,
+      open,
+      page,
+      ...next,
+    });
+  };
 
   const allowedEntries = useMemo(() => {
     if (!maxLength) return lucideEntries;
@@ -81,8 +86,8 @@ export const LucideIconPicker: React.FC<LucideIconPickerProps> = ({
           id={inputId}
           placeholder={placeholder}
           value={query}
-          onFocus={() => setOpen(true)}
-          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => updateDraft({ open: true })}
+          onChange={(e) => updateDraft({ query: e.target.value, page: 0 })}
           className="pr-24"
           disabled={disabled}
         />
@@ -91,7 +96,7 @@ export const LucideIconPicker: React.FC<LucideIconPickerProps> = ({
           variant="outline"
           size="sm"
           className="absolute top-1/2 right-1 -translate-y-1/2"
-          onClick={() => setOpen((prev) => !prev)}
+          onClick={() => updateDraft({ open: !open })}
           disabled={disabled}
         >
           {open ? "Close" : "Browse"}
@@ -108,8 +113,7 @@ export const LucideIconPicker: React.FC<LucideIconPickerProps> = ({
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => {
                       onChange(`${LUCIDE_PREFIX}${name}`);
-                      setOpen(false);
-                      setQuery(name);
+                      updateDraft({ open: false, query: name, page: 0 });
                     }}
                     aria-label={name}
                     title={name}
@@ -140,7 +144,7 @@ export const LucideIconPicker: React.FC<LucideIconPickerProps> = ({
                   variant="ghost"
                   size="sm"
                   className="h-7 px-2"
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  onClick={() => updateDraft({ page: Math.max(0, page - 1) })}
                   disabled={page === 0}
                 >
                   Prev
@@ -150,7 +154,9 @@ export const LucideIconPicker: React.FC<LucideIconPickerProps> = ({
                   variant="ghost"
                   size="sm"
                   className="h-7 px-2"
-                  onClick={() => setPage((p) => Math.min(maxPage, p + 1))}
+                  onClick={() =>
+                    updateDraft({ page: Math.min(maxPage, page + 1) })
+                  }
                   disabled={page >= maxPage}
                 >
                   Next

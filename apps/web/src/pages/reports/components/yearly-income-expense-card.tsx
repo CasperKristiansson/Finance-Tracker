@@ -111,7 +111,7 @@ export const YearlyIncomeExpenseCard: React.FC<{
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null;
 
-                const record = payload[0]?.payload;
+                const record = payload[0]?.payload as unknown;
                 if (!isRecord(record)) return null;
 
                 const monthLabel =
@@ -144,7 +144,6 @@ export const YearlyIncomeExpenseCard: React.FC<{
                 const buildBreakdown = (
                   breakdown:
                     | YearlyOverviewResponse["category_breakdown"]
-                    | YearlyOverviewResponse["income_category_breakdown"]
                     | undefined,
                   fallbackColor: string,
                 ) => {

@@ -25,7 +25,13 @@ export const medianAbsoluteDeviation = (values: number[], center?: number) => {
 
 export const csvEscape = (value: unknown) => {
   if (value === null || value === undefined) return "";
-  const raw = String(value);
+  const raw =
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean" ||
+    typeof value === "bigint"
+      ? String(value)
+      : JSON.stringify(value);
   if (/["\n,]/.test(raw)) return `"${raw.replace(/"/g, '""')}"`;
   return raw;
 };

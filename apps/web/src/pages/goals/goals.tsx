@@ -117,12 +117,6 @@ export const Goals: React.FC = () => {
   });
 
   useEffect(() => {
-    void loadGoals();
-    void loadTotalOverview();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
     if (!isDialogOpen) return;
     if (editingGoal) {
       goalForm.reset({
@@ -174,6 +168,15 @@ export const Goals: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadGoals();
+      void loadTotalOverview();
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const submitGoal = goalForm.handleSubmit(async (values) => {
     try {
       if (isDemo) {
@@ -196,7 +199,7 @@ export const Goals: React.FC = () => {
           toast.success("Goal updated (demo mode)");
         } else {
           const nextGoal: GoalRead = {
-            id: `demo-goal-${Date.now()}`,
+            id: `demo-goal-${goals.length + 1}`,
             name: values.name.trim(),
             target_amount: values.target_amount.trim(),
             target_date: values.target_date || null,
@@ -498,7 +501,10 @@ export const Goals: React.FC = () => {
                         : "Your goal will track total assets and show progress over time."}
                     </DialogDescription>
                   </DialogHeader>
-                  <form className="space-y-4" onSubmit={submitGoal}>
+                  <form
+                    className="space-y-4"
+                    onSubmit={(event) => void submitGoal(event)}
+                  >
                     <div className="space-y-1">
                       <label className="text-xs font-semibold text-slate-600">
                         Goal name

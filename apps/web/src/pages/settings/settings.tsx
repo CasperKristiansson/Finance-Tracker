@@ -1,6 +1,6 @@
 import { ArchiveRestore, FileDown, Loader2, Save } from "lucide-react";
 import React, { useEffect, useMemo, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { useAppSelector } from "@/app/hooks";
 import { MotionPage } from "@/components/motion-presets";
@@ -79,7 +79,7 @@ export const Settings: React.FC = () => {
     },
   });
 
-  const watchedProfile = profileForm.watch();
+  const watchedProfile = useWatch({ control: profileForm.control });
   const missingProfile =
     !watchedProfile.first_name || !watchedProfile.last_name;
 
@@ -201,7 +201,7 @@ export const Settings: React.FC = () => {
         <CardContent>
           <form
             className="grid gap-4 md:grid-cols-2"
-            onSubmit={handleProfileSubmit}
+            onSubmit={(event) => void handleProfileSubmit(event)}
           >
             <div className="space-y-2">
               <Label htmlFor="first-name">First name</Label>
@@ -231,7 +231,7 @@ export const Settings: React.FC = () => {
                 )}
                 {...profileForm.register("currency_code", {
                   validate: (value) =>
-                    currencyOptions.includes(value as CurrencyCode) ||
+                    currencyOptions.includes(value) ||
                     "Select a supported currency.",
                 })}
               >
@@ -354,7 +354,7 @@ export const Settings: React.FC = () => {
             </div>
             <Button
               type="button"
-              onClick={handleDownloadEconomySummary}
+              onClick={() => void handleDownloadEconomySummary()}
               disabled={summaryGenerating}
               className="gap-2"
               variant="secondary"

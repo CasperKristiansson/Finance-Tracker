@@ -168,7 +168,7 @@ const safeStringify = (value: unknown): string => {
   const seen = new WeakSet<object>();
   try {
     return (
-      JSON.stringify(value, (_, candidate) => {
+      JSON.stringify(value, (_key: string, candidate: unknown) => {
         if (typeof candidate === "object" && candidate !== null) {
           if (seen.has(candidate)) return undefined;
           seen.add(candidate);

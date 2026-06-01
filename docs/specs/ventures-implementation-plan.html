@@ -1,0 +1,1653 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Ventures Feature Implementation Plan</title>
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --surface-soft: #f1f5f9;
+        --text: #0f172a;
+        --muted: #475569;
+        --subtle: #64748b;
+        --border: #dbe3ee;
+        --teal: #0f766e;
+        --teal-soft: #dff7f3;
+        --amber: #b7791f;
+        --amber-soft: #fff4dd;
+        --red: #b91c1c;
+        --red-soft: #fee2e2;
+        --blue: #1d4ed8;
+        --shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          "Plus Jakarta Sans",
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        line-height: 1.55;
+      }
+
+      main {
+        max-width: 1180px;
+        margin: 0 auto;
+        padding: 40px 24px 80px;
+      }
+
+      h1,
+      h2,
+      h3 {
+        line-height: 1.18;
+        margin: 0;
+      }
+
+      h1 {
+        font-size: 42px;
+        letter-spacing: 0;
+      }
+
+      h2 {
+        font-size: 26px;
+        margin-bottom: 16px;
+      }
+
+      h3 {
+        font-size: 18px;
+        margin-bottom: 10px;
+      }
+
+      p {
+        margin: 0 0 14px;
+      }
+
+      a {
+        color: var(--teal);
+        text-decoration: none;
+        font-weight: 650;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      code {
+        background: #e2e8f0;
+        border-radius: 6px;
+        padding: 2px 6px;
+        font-size: 0.92em;
+      }
+
+      ul,
+      ol {
+        margin: 0;
+        padding-left: 22px;
+      }
+
+      li + li {
+        margin-top: 6px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--border);
+        padding: 12px 10px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .hero {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        padding: 32px;
+        margin-bottom: 24px;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        font-size: 18px;
+        max-width: 860px;
+        margin-top: 14px;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 24px;
+      }
+
+      .pill {
+        align-items: center;
+        background: var(--surface-soft);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--muted);
+        display: inline-flex;
+        font-size: 13px;
+        font-weight: 650;
+        gap: 8px;
+        padding: 7px 11px;
+      }
+
+      .pill.teal {
+        background: var(--teal-soft);
+        border-color: #b7e8df;
+        color: var(--teal);
+      }
+
+      .pill.amber {
+        background: var(--amber-soft);
+        border-color: #f3d08d;
+        color: var(--amber);
+      }
+
+      .section {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+        margin-top: 20px;
+        padding: 26px;
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid.three {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .card {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px;
+      }
+
+      .card.soft {
+        background: #f8fafc;
+      }
+
+      .callout {
+        border-left: 4px solid var(--teal);
+        background: #f0fdfa;
+        border-radius: 10px;
+        color: #134e4a;
+        margin: 16px 0;
+        padding: 14px 16px;
+      }
+
+      .callout.warn {
+        background: var(--amber-soft);
+        border-left-color: var(--amber);
+        color: #7c4a03;
+      }
+
+      .callout.danger {
+        background: var(--red-soft);
+        border-left-color: var(--red);
+        color: #7f1d1d;
+      }
+
+      .milestone {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        margin-top: 14px;
+        overflow: hidden;
+      }
+
+      .milestone header {
+        align-items: center;
+        background: #f8fafc;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 18px;
+      }
+
+      .milestone .body {
+        padding: 18px;
+      }
+
+      .tag {
+        border-radius: 999px;
+        display: inline-flex;
+        font-size: 12px;
+        font-weight: 750;
+        padding: 4px 9px;
+      }
+
+      .tag.backend {
+        background: #eef2ff;
+        color: #3730a3;
+      }
+
+      .tag.frontend {
+        background: var(--teal-soft);
+        color: var(--teal);
+      }
+
+      .tag.product {
+        background: var(--amber-soft);
+        color: var(--amber);
+      }
+
+      .tag.qa {
+        background: #ecfdf5;
+        color: #047857;
+      }
+
+      .small {
+        color: var(--subtle);
+        font-size: 13px;
+      }
+
+      .path-list {
+        display: grid;
+        gap: 8px;
+        margin-top: 10px;
+      }
+
+      .path-list a,
+      .path-list span {
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: var(--text);
+        display: block;
+        font-family:
+          ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", monospace;
+        font-size: 13px;
+        overflow-wrap: anywhere;
+        padding: 8px 10px;
+      }
+
+      .image-grid {
+        display: grid;
+        gap: 14px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .image-ref {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+
+      .image-ref img {
+        aspect-ratio: 16 / 10;
+        background: #e2e8f0;
+        display: block;
+        object-fit: cover;
+        width: 100%;
+      }
+
+      .image-ref div {
+        padding: 12px;
+      }
+
+      .toc {
+        display: grid;
+        gap: 8px;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .toc a {
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        color: var(--text);
+        padding: 10px 12px;
+      }
+
+      @media (max-width: 820px) {
+        main {
+          padding: 24px 14px 56px;
+        }
+
+        h1 {
+          font-size: 32px;
+        }
+
+        .grid.two,
+        .grid.three,
+        .image-grid,
+        .toc {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <h1>Ventures Feature Implementation Plan</h1>
+        <p class="subtitle">
+          A handoff-ready spec for adding a private founder-equity and company
+          history area to Finance Tracker. This feature is for one user only: it
+          should be personal, visually impressive, and financially honest about
+          private-company paper value.
+        </p>
+        <div class="meta">
+          <span class="pill teal">Target route: /ventures</span>
+          <span class="pill">Single-user personal feature</span>
+          <span class="pill amber">Private equity is illiquid by default</span>
+          <span class="pill">Use generated API contracts</span>
+          <span class="pill">XY Flow React selected</span>
+          <span class="pill">S3 + presigned URLs</span>
+        </div>
+      </section>
+
+      <section class="section" id="handoff-rules">
+        <h2>Handoff Rules</h2>
+        <div class="callout warn">
+          <strong>Important:</strong> the reference images define visual
+          direction, not exact requirements. Do not blindly copy fields, labels,
+          currencies, or controls that do not make product sense. Every visible
+          action must either work, be intentionally disabled with a reason, or
+          be omitted until implemented.
+        </div>
+        <div class="grid two">
+          <div class="card">
+            <h3>Follow The Images For</h3>
+            <ul>
+              <li>Overall premium white/slate dashboard direction.</li>
+              <li>Large graph-first main screen with company cards.</li>
+              <li>
+                Bottom sheet interaction pattern for quick inspect/create/edit.
+              </li>
+              <li>
+                Company workspace header, tabs, dense metric cards, and side
+                panels.
+              </li>
+              <li>
+                Teal ongoing states, amber illiquidity, gold valuation/exits,
+                muted red failure states.
+              </li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Improve Or Correct</h3>
+            <ul>
+              <li>
+                Inputs that are awkward, duplicated, or too narrow for real
+                data.
+              </li>
+              <li>
+                Currency inconsistencies. Use SEK as the default unless the
+                product later supports multi-currency.
+              </li>
+              <li>Dead controls. Avoid decorative buttons that do nothing.</li>
+              <li>Generated labels that imply public-market liquidity.</li>
+              <li>
+                The standalone “Lessons” entity. Use normal notes with tags
+                instead.
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="m0-decisions">
+        <h2>Milestone 0 Decisions</h2>
+        <div class="grid two">
+          <div class="card">
+            <h3>Confirmed</h3>
+            <ul>
+              <li>
+                Use <code>@xyflow/react</code> for the interactive graph and
+                <code>dagre</code> for initial hierarchical layout.
+              </li>
+              <li>
+                Use <code>react-markdown</code> and <code>remark-gfm</code> for
+                Markdown note rendering. The editor can start as a textarea with
+                a small formatting toolbar.
+              </li>
+              <li>
+                These dependencies are temporarily ignored in
+                <code>apps/web/knip.json</code> because M0 adds them before the
+                feature imports them. Remove the ignores once implementation
+                milestones consume the packages.
+              </li>
+              <li>
+                Use a dedicated AWS S3 bucket for company logos and documents.
+                All upload/download access should go through presigned URLs.
+              </li>
+              <li>
+                Venture paper values stay inside the Ventures section only and
+                must not affect the main net-worth, reports, or investment
+                totals.
+              </li>
+              <li>
+                Risk-adjusted value is computed from paper value and haircut
+                percentage.
+              </li>
+              <li>
+                Mobile is not a first-build requirement. Optimize for desktop.
+              </li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Domain Decisions</h3>
+            <ul>
+              <li>
+                Real company proceeds and values are not linked to ledger
+                transactions in the first build.
+              </li>
+              <li>
+                Consulting/operating company valuations may be synced from
+                linked Finance Tracker accounts, but the result is still shown
+                only in Ventures.
+              </li>
+              <li>
+                Holding companies are supported: a company can own another
+                company, so the graph is not limited to Casper-to-company edges.
+              </li>
+              <li>
+                Statuses are <code>idea</code>, <code>ongoing</code>,
+                <code>stale</code>, <code>exited</code>, and
+                <code>failed</code>. Do not add <code>archived</code>.
+              </li>
+              <li>
+                Notes are Markdown-capable and can use tags for lesson or
+                reflection content. Do not create a separate Lessons model.
+              </li>
+              <li>
+                Document preview is out of scope for first build; upload and
+                download are enough.
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="reference-images">
+        <h2>Reference Images</h2>
+        <p>
+          Screenshots are stored locally in
+          <code>/Users/casperkristiansson/Desktop/inspiration</code>. Agents
+          should inspect these images before implementing related milestones.
+        </p>
+        <div class="image-grid">
+          <article class="image-ref">
+            <a
+              href="file:///Users/casperkristiansson/Desktop/inspiration/1.png"
+            >
+              <img
+                src="file:///Users/casperkristiansson/Desktop/inspiration/1.png"
+                alt="Ventures main graph"
+              />
+            </a>
+            <div>
+              <strong>1.png</strong>
+              <p class="small">
+                Main graph screen: founder root, KPI cards, company nodes.
+              </p>
+            </div>
+          </article>
+          <article class="image-ref">
+            <a
+              href="file:///Users/casperkristiansson/Desktop/inspiration/2.png"
+            >
+              <img
+                src="file:///Users/casperkristiansson/Desktop/inspiration/2.png"
+                alt="Selected company bottom panel"
+              />
+            </a>
+            <div>
+              <strong>2.png</strong>
+              <p class="small">Selected company bottom panel over the graph.</p>
+            </div>
+          </article>
+          <article class="image-ref">
+            <a
+              href="file:///Users/casperkristiansson/Desktop/inspiration/3.png"
+            >
+              <img
+                src="file:///Users/casperkristiansson/Desktop/inspiration/3.png"
+                alt="Company workspace overview"
+              />
+            </a>
+            <div>
+              <strong>3.png</strong>
+              <p class="small">
+                Full company workspace overview for an active company.
+              </p>
+            </div>
+          </article>
+          <article class="image-ref">
+            <a
+              href="file:///Users/casperkristiansson/Desktop/inspiration/4.png"
+            >
+              <img
+                src="file:///Users/casperkristiansson/Desktop/inspiration/4.png"
+                alt="Add annual valuation bottom sheet"
+              />
+            </a>
+            <div>
+              <strong>4.png</strong>
+              <p class="small">Add annual valuation bottom sheet.</p>
+            </div>
+          </article>
+          <article class="image-ref">
+            <a
+              href="file:///Users/casperkristiansson/Desktop/inspiration/5.png"
+            >
+              <img
+                src="file:///Users/casperkristiansson/Desktop/inspiration/5.png"
+                alt="Add company bottom sheet"
+              />
+            </a>
+            <div>
+              <strong>5.png</strong>
+              <p class="small">
+                Add company bottom sheet with live node preview.
+              </p>
+            </div>
+          </article>
+          <article class="image-ref">
+            <a
+              href="file:///Users/casperkristiansson/Desktop/inspiration/6.png"
+            >
+              <img
+                src="file:///Users/casperkristiansson/Desktop/inspiration/6.png"
+                alt="Timeline tab"
+              />
+            </a>
+            <div>
+              <strong>6.png</strong>
+              <p class="small">
+                Full timeline tab with filters and event groups.
+              </p>
+            </div>
+          </article>
+          <article class="image-ref">
+            <a
+              href="file:///Users/casperkristiansson/Desktop/inspiration/7.png"
+            >
+              <img
+                src="file:///Users/casperkristiansson/Desktop/inspiration/7.png"
+                alt="Notes and reflection tab"
+              />
+            </a>
+            <div>
+              <strong>7.png</strong>
+              <p class="small">
+                Notes/reflection direction. Do not create a separate lesson
+                entity.
+              </p>
+            </div>
+          </article>
+          <article class="image-ref">
+            <a
+              href="file:///Users/casperkristiansson/Desktop/inspiration/8.png"
+            >
+              <img
+                src="file:///Users/casperkristiansson/Desktop/inspiration/8.png"
+                alt="Documents tab"
+              />
+            </a>
+            <div>
+              <strong>8.png</strong>
+              <p class="small">
+                Documents tab with document health, categories, filters.
+              </p>
+            </div>
+          </article>
+          <article class="image-ref">
+            <a
+              href="file:///Users/casperkristiansson/Desktop/inspiration/9.png"
+            >
+              <img
+                src="file:///Users/casperkristiansson/Desktop/inspiration/9.png"
+                alt="Edit ownership bottom sheet"
+              />
+            </a>
+            <div>
+              <strong>9.png</strong>
+              <p class="small">
+                Edit ownership bottom sheet with before/after impact preview.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="product-scope">
+        <h2>Product Scope</h2>
+        <div class="grid two">
+          <div class="card">
+            <h3>In Scope</h3>
+            <ul>
+              <li>
+                Visual venture graph of Casper, holding companies, and
+                owned/associated companies.
+              </li>
+              <li>
+                Company detail workspace with overview, timeline, valuation,
+                notes, and documents.
+              </li>
+              <li>
+                Manual company creation with logo upload or initials fallback.
+              </li>
+              <li>
+                Manual valuation events including paper value, haircut
+                percentage, and computed risk-adjusted value.
+              </li>
+              <li>
+                Account-linked valuation mode for operating/consulting companies
+                where selected account balances drive the current venture value.
+              </li>
+              <li>
+                Ownership change tracking with effective dates and evidence.
+              </li>
+              <li>
+                S3-backed document/logo uploads and downloads via presigned
+                URLs, plus document metadata tied to companies and events.
+              </li>
+              <li>
+                Markdown notes with tags such as <code>lesson</code>,
+                <code>risk</code>, <code>fundraising</code>, <code>board</code>,
+                and <code>strategy</code>.
+              </li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Out Of Scope For First Build</h3>
+            <ul>
+              <li>Multi-user permissions, sharing, or collaboration.</li>
+              <li>Live cap-table import from third-party tools.</li>
+              <li>Automated private-market valuations.</li>
+              <li>Public market trading/price sync.</li>
+              <li>Separate “Lessons” data model. Use tagged notes instead.</li>
+              <li>
+                Document preview, OCR, or full-text search. Upload/download and
+                metadata are enough for the first build.
+              </li>
+              <li>Mobile-specific layouts and mobile QA.</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout">
+          Keep normal investments and venture paper value separate. Private
+          company paper value may be shown prominently in Ventures only, but it
+          must not inflate liquid net worth, reports, or existing investment
+          views.
+        </div>
+      </section>
+
+      <section class="section" id="ux-architecture">
+        <h2>UX Architecture</h2>
+        <div class="toc">
+          <a href="#main-graph">Main Graph</a>
+          <a href="#selected-company">Selected Company Panel</a>
+          <a href="#workspace">Company Workspace</a>
+          <a href="#mutation-flows">Mutation Flows</a>
+          <a href="#timeline-notes-docs">Timeline, Notes, Documents</a>
+          <a href="#desktop-only">Desktop-Only First Build</a>
+        </div>
+
+        <div id="main-graph" class="card soft" style="margin-top: 18px">
+          <h3>Main Graph: <code>/ventures</code></h3>
+          <ul>
+            <li>
+              Top metrics: total paper value, risk-adjusted value, realized
+              value, status counts, and illiquidity share.
+            </li>
+            <li>
+              Graph root is Casper, but companies can also own other companies
+              for holding-company structures. Company cards branch by ownership
+              relationship and saved layout.
+            </li>
+            <li>
+              Use XY Flow React for draggable nodes, edges, zoom controls, fit
+              view, and custom node cards.
+            </li>
+            <li>
+              Connector lines should be cleaner than the earliest sketch: prefer
+              straight, elbow, or restrained curved edges over loose wavy paths.
+            </li>
+            <li>
+              Nodes show logo/initial, company name, status, role, paper value,
+              ownership, and latest update.
+            </li>
+            <li>
+              Graph positions should be persisted once the user moves nodes.
+            </li>
+          </ul>
+        </div>
+
+        <div id="selected-company" class="card soft" style="margin-top: 14px">
+          <h3>Selected Company Bottom Panel</h3>
+          <ul>
+            <li>Clicking a node opens a bottom sheet, not a side drawer.</li>
+            <li>
+              Panel shows the selected company summary, valuation mini-chart,
+              recent notes, documents, and quick actions.
+            </li>
+            <li>
+              Actions should include working routes/flows: Open company, Add
+              valuation, Add note, Edit ownership.
+            </li>
+            <li>
+              Closing the panel should preserve graph state and selected node
+              styling should clear.
+            </li>
+          </ul>
+        </div>
+
+        <div id="workspace" class="card soft" style="margin-top: 14px">
+          <h3>Company Workspace: <code>/ventures/:companyId</code></h3>
+          <ul>
+            <li>
+              Header contains logo, name, status, role, ownership, paper value,
+              risk-adjusted value, liquidity, confidence, and last updated.
+            </li>
+            <li>
+              Tabs: Overview, Timeline, Valuation, Notes, Documents. Do not add
+              a separate Lessons tab in the first implementation.
+            </li>
+            <li>
+              Overview should summarize value history, ownership/risk profile,
+              key details, recent notes, timeline highlights, and document
+              health.
+            </li>
+            <li>
+              Use Recharts for valuation and ownership charts, matching the
+              existing app chart approach.
+            </li>
+          </ul>
+        </div>
+
+        <div id="mutation-flows" class="card soft" style="margin-top: 14px">
+          <h3>Mutation Flows</h3>
+          <ul>
+            <li>
+              Add company: bottom sheet from graph with logo upload,
+              type/status/role, ownership, initial valuation, and live node
+              preview.
+            </li>
+            <li>
+              Add annual valuation: bottom sheet from workspace with
+              before/after preview, source, liquidity, confidence, and note.
+            </li>
+            <li>
+              Edit ownership: bottom sheet with current/new ownership, shares,
+              share class, voting rights, evidence attachment, and
+              timeline-event toggle.
+            </li>
+            <li>
+              Add note: small sheet/dialog with title, body, tags, optional
+              linked event/document, Markdown body, and pinned flag.
+            </li>
+          </ul>
+        </div>
+
+        <div
+          id="timeline-notes-docs"
+          class="card soft"
+          style="margin-top: 14px"
+        >
+          <h3>Timeline, Notes, Documents</h3>
+          <ul>
+            <li>
+              Timeline is an event feed grouped by year with filters for
+              valuations, ownership, notes, documents, and milestones.
+            </li>
+            <li>
+              Notes replace the proposed Lessons concept. Notes can be tagged
+              <code>lesson</code> or <code>reflection</code> when needed.
+            </li>
+            <li>
+              Documents should act as evidence for valuations and ownership, not
+              just file storage.
+            </li>
+            <li>
+              Document health can be computed from required checklist items per
+              company type and status.
+            </li>
+          </ul>
+        </div>
+
+        <div id="desktop-only" class="card soft" style="margin-top: 14px">
+          <h3>Desktop-Only First Build</h3>
+          <ul>
+            <li>
+              Desktop is the only required experience for the first
+              implementation.
+            </li>
+            <li>
+              Do not spend milestone time on mobile-specific graph behavior,
+              mobile sheets, or mobile table layouts.
+            </li>
+            <li>
+              Still avoid fixed-width choices that make later responsive work
+              impossible.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section" id="technical-plan">
+        <h2>Technical Plan</h2>
+        <div class="grid two">
+          <div class="card">
+            <h3>Frontend Stack</h3>
+            <ul>
+              <li>
+                React 19, Vite, TypeScript, Tailwind, Redux Toolkit, Redux Saga.
+              </li>
+              <li>
+                Existing shadcn/Radix-style primitives in
+                <code>apps/web/src/components/ui</code>.
+              </li>
+              <li>
+                Existing charts through Recharts and
+                <code>ChartContainer</code>.
+              </li>
+              <li>Use Framer Motion for subtle sheet/card transitions.</li>
+              <li>
+                Use installed dependencies: <code>@xyflow/react</code> for the
+                graph, <code>dagre</code> plus <code>@types/dagre</code> for
+                initial layout, <code>react-markdown</code> and
+                <code>remark-gfm</code> for Markdown note rendering.
+              </li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Backend Stack</h3>
+            <ul>
+              <li>Python, SQLModel/SQLAlchemy models, Pydantic schemas.</li>
+              <li>Handlers under <code>apps/api/handlers</code>.</li>
+              <li>Services under <code>apps/api/services</code>.</li>
+              <li>Repositories under <code>apps/api/repositories</code>.</li>
+              <li>
+                Alembic migrations under
+                <code>apps/api/migrations/versions</code>.
+              </li>
+              <li>
+                Routes declared in
+                <code>infra/serverless/serverless.yml</code> and contract
+                mapping in <code>apps/api/contracts/http.py</code>.
+              </li>
+              <li>
+                AWS S3 storage for logos/documents with API-generated presigned
+                upload and download URLs.
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout warn">
+          Use local repo patterns first. When package behavior is unclear,
+          consult official package documentation.
+        </div>
+      </section>
+
+      <section class="section" id="data-model">
+        <h2>Proposed Data Model</h2>
+        <p>
+          Names are suggestions. Keep the domain separate from existing
+          investment accounts and snapshots.
+        </p>
+
+        <div class="grid two">
+          <div class="card">
+            <h3><code>venture_companies</code></h3>
+            <ul>
+              <li><code>id</code>, <code>user_id</code>, timestamps.</li>
+              <li>
+                <code>name</code>, <code>legal_name</code>,
+                <code>description</code>.
+              </li>
+              <li>
+                <code>company_type</code>: startup, private_company, consulting,
+                holding, other.
+              </li>
+              <li>
+                <code>status</code>: idea, ongoing, stale, exited, failed.
+              </li>
+              <li>
+                <code>role</code>: founder, co-founder, owner, advisor,
+                investor, board observer, other.
+              </li>
+              <li>
+                <code>valuation_mode</code>: manual, account_balance_sync.
+              </li>
+              <li>
+                <code>industry</code>, <code>stage</code>, <code>country</code>.
+              </li>
+              <li>
+                <code>founded_on</code>, <code>joined_on</code>,
+                <code>exited_on</code>, <code>closed_on</code>.
+              </li>
+              <li>
+                <code>logo_storage_key</code>, <code>logo_file_name</code>,
+                <code>logo_content_type</code>. Serve logos through presigned
+                read URLs or short-lived API URLs.
+              </li>
+              <li><code>node_color</code>, <code>display_order</code>.</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <h3><code>venture_valuation_events</code></h3>
+            <ul>
+              <li>
+                <code>company_id</code>, <code>event_date</code>,
+                <code>label</code>, <code>event_type</code>.
+              </li>
+              <li>
+                <code>paper_value_sek</code>, <code>haircut_percentage</code>.
+                Services compute risk-adjusted value as
+                <code>paper * (1 - haircut)</code>.
+              </li>
+              <li>
+                <code>valuation_source</code>: founder_estimate,
+                financing_round, offer, annual_accounts, model,
+                external_valuation, account_balance_sync.
+              </li>
+              <li>
+                <code>liquidity_level</code>: none, restricted,
+                possible_secondary, liquid.
+              </li>
+              <li><code>confidence_score</code>: 1-5.</li>
+              <li>
+                <code>include_in_venture_totals</code>; default true for current
+                paper views.
+              </li>
+              <li><code>note</code>, linked document IDs.</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <h3><code>venture_ownership_events</code></h3>
+            <ul>
+              <li>
+                <code>company_id</code>, <code>owner_type</code> (person or
+                company), optional <code>owner_company_id</code>,
+                <code>effective_date</code>, <code>reason</code>.
+              </li>
+              <li>
+                <code>direct_ownership_pct</code>,
+                <code>fully_diluted_ownership_pct</code>.
+              </li>
+              <li>
+                <code>shares_owned</code>, <code>total_shares</code>,
+                <code>share_class</code>.
+              </li>
+              <li>
+                <code>voting_rights_pct</code>,
+                <code>option_or_warrant_notes</code>.
+              </li>
+              <li><code>invested_capital_sek</code> where known.</li>
+              <li><code>note</code>, linked document IDs.</li>
+              <li>
+                Latest event derives current ownership shown in graph/workspace.
+              </li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <h3><code>venture_timeline_events</code></h3>
+            <ul>
+              <li>
+                <code>company_id</code>, <code>event_date</code>,
+                <code>event_type</code>.
+              </li>
+              <li><code>title</code>, <code>description</code>.</li>
+              <li>
+                Optional links to valuation, ownership, note, or document rows.
+              </li>
+              <li>
+                Generated automatically for core mutations, plus manual events.
+              </li>
+              <li>Used by Timeline tab and selected-company panel.</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <h3><code>venture_notes</code></h3>
+            <ul>
+              <li>
+                <code>company_id</code>, <code>title</code>,
+                <code>body_markdown</code>.
+              </li>
+              <li>
+                <code>tags</code> JSON/list: lesson, risk, board, fundraising,
+                product, sales, strategy, finance.
+              </li>
+              <li><code>pinned</code>, <code>note_date</code>, timestamps.</li>
+              <li>Optional linked timeline event and document IDs.</li>
+              <li>No separate lessons table for first build.</li>
+            </ul>
+          </div>
+
+          <div class="card">
+            <h3><code>venture_documents</code></h3>
+            <ul>
+              <li>
+                <code>company_id</code>, <code>title</code>,
+                <code>document_type</code>, <code>category</code>.
+              </li>
+              <li>
+                <code>status</code>: verified, linked, draft, pending_review,
+                missing.
+              </li>
+              <li>
+                <code>storage_key</code>, <code>external_url</code>,
+                <code>file_name</code>, <code>mime_type</code>,
+                <code>file_size_bytes</code>.
+              </li>
+              <li>
+                Upload and download use presigned URLs. Document preview is not
+                required for first build.
+              </li>
+              <li><code>document_date</code>, <code>uploaded_at</code>.</li>
+              <li>Optional linked valuation/ownership/timeline event.</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="grid two" style="margin-top: 16px">
+          <div class="card soft">
+            <h3><code>venture_company_account_links</code></h3>
+            <p>
+              Link operating/consulting companies to existing Finance Tracker
+              accounts for account-balance-driven valuations.
+            </p>
+            <ul>
+              <li><code>company_id</code>, <code>account_id</code>.</li>
+              <li>
+                <code>include_in_synced_value</code>, <code>weight</code> or
+                percentage if partial balances are needed later.
+              </li>
+              <li>
+                Services derive the current paper value from linked account
+                balances when <code>valuation_mode</code> is
+                <code>account_balance_sync</code>.
+              </li>
+            </ul>
+          </div>
+          <div class="card soft">
+            <h3><code>venture_document_requirements</code></h3>
+            <p>
+              Optional but recommended for document health. Seed defaults in
+              code rather than requiring user setup.
+            </p>
+            <ul>
+              <li>Company registration / articles of association.</li>
+              <li>Shareholder agreement, share register, and cap table.</li>
+              <li>Investment agreements, term sheets, and valuation memos.</li>
+              <li>
+                Annual reports, management accounts, and financial models.
+              </li>
+              <li>Board/shareholder minutes for major decisions.</li>
+              <li>
+                Exit/closure evidence: SPA or sale agreement, closing memo,
+                closure decision, final accounts, write-off memo.
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="card soft" style="margin-top: 16px">
+          <h3><code>venture_graph_layouts</code></h3>
+          <p>
+            Store graph layout independently from company data:
+            <code>company_id</code>, <code>x</code>, <code>y</code>,
+            <code>pinned</code>, <code>viewport</code>, and
+            <code>updated_at</code>. This lets the user move nodes without
+            corrupting business data.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="api-contracts">
+        <h2>API Contract Sketch</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Method</th>
+              <th>Path</th>
+              <th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>GET</td>
+              <td><code>/ventures/overview</code></td>
+              <td>
+                Graph KPIs, companies, latest valuations, latest ownership,
+                saved layout, recent activity.
+              </td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td><code>/ventures/companies</code></td>
+              <td>
+                Create company with optional initial ownership and valuation.
+              </td>
+            </tr>
+            <tr>
+              <td>GET</td>
+              <td><code>/ventures/companies/{companyId}</code></td>
+              <td>
+                Company workspace payload: summary, charts, timeline preview,
+                notes, document health.
+              </td>
+            </tr>
+            <tr>
+              <td>PATCH</td>
+              <td><code>/ventures/companies/{companyId}</code></td>
+              <td>
+                Edit company metadata, status, role, dates, and logo reference.
+              </td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td><code>/ventures/companies/{companyId}/valuations</code></td>
+              <td>Add valuation event and generated timeline event.</td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td>
+                <code>/ventures/companies/{companyId}/ownership-events</code>
+              </td>
+              <td>Add ownership change and generated timeline event.</td>
+            </tr>
+            <tr>
+              <td>GET/POST</td>
+              <td><code>/ventures/companies/{companyId}/notes</code></td>
+              <td>
+                List/create notes. Tags cover lesson/reflection use cases.
+              </td>
+            </tr>
+            <tr>
+              <td>GET/POST</td>
+              <td><code>/ventures/companies/{companyId}/documents</code></td>
+              <td>List/create document metadata for S3-backed documents.</td>
+            </tr>
+            <tr>
+              <td>PATCH</td>
+              <td><code>/ventures/layout</code></td>
+              <td>Persist XY Flow node positions and viewport.</td>
+            </tr>
+            <tr>
+              <td>POST</td>
+              <td><code>/ventures/uploads/presign</code></td>
+              <td>
+                Create presigned S3 upload/download URLs for company logos and
+                documents.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="callout">
+          After changing routes or schemas, update
+          <code>infra/serverless/serverless.yml</code>,
+          <code>apps/api/contracts/http.py</code>, then run
+          <code>npm run generate:api-contracts</code> and update frontend usage
+          to generated types.
+        </div>
+      </section>
+
+      <section class="section" id="frontend-structure">
+        <h2>Frontend Structure</h2>
+        <div class="path-list">
+          <span>apps/web/src/pages/ventures/ventures.tsx</span>
+          <span>apps/web/src/pages/ventures/company-workspace.tsx</span>
+          <span>apps/web/src/pages/ventures/components/venture-graph.tsx</span>
+          <span>apps/web/src/pages/ventures/components/company-node.tsx</span>
+          <span
+            >apps/web/src/pages/ventures/components/company-bottom-panel.tsx</span
+          >
+          <span
+            >apps/web/src/pages/ventures/components/add-company-sheet.tsx</span
+          >
+          <span
+            >apps/web/src/pages/ventures/components/add-valuation-sheet.tsx</span
+          >
+          <span
+            >apps/web/src/pages/ventures/components/edit-ownership-sheet.tsx</span
+          >
+          <span>apps/web/src/pages/ventures/components/company-header.tsx</span>
+          <span>apps/web/src/pages/ventures/components/timeline-tab.tsx</span>
+          <span>apps/web/src/pages/ventures/components/notes-tab.tsx</span>
+          <span>apps/web/src/pages/ventures/components/documents-tab.tsx</span>
+          <span>apps/web/src/features/ventures/venturesSlice.ts</span>
+          <span>apps/web/src/features/ventures/venturesSaga.ts</span>
+          <span>apps/web/src/lib/venture-format.ts</span>
+        </div>
+        <p class="small" style="margin-top: 12px">
+          Exact file names can change to fit local conventions, but keep feature
+          code grouped and avoid mixing this with existing investments page
+          logic.
+        </p>
+      </section>
+
+      <section class="section" id="milestones">
+        <h2>Milestones</h2>
+
+        <article class="milestone">
+          <header>
+            <h3>M0: Prep, Dependencies, And Final Decisions</h3>
+            <span class="tag qa">Completed</span>
+          </header>
+          <div class="body">
+            <ul>
+              <li>
+                Confirmed dependencies:
+                <code>@xyflow/react</code>, <code>dagre</code>,
+                <code>@types/dagre</code>, <code>react-markdown</code>, and
+                <code>remark-gfm</code>.
+              </li>
+              <li>Use local patterns and official package docs when needed.</li>
+              <li>
+                Logo/document storage is S3 with presigned upload and download
+                URLs.
+              </li>
+              <li>
+                Product decisions are captured in the Milestone 0 Decisions
+                section above.
+              </li>
+              <li>
+                Keep the existing dirty worktree safe; do not touch unrelated
+                local changes.
+              </li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="milestone">
+          <header>
+            <h3>M1: Backend Foundation And API Contracts</h3>
+            <span class="tag backend">Backend</span>
+          </header>
+          <div class="body">
+            <ul>
+              <li>
+                Add SQLModel models and Alembic migration for companies,
+                valuations, ownership events, timeline events, notes, documents,
+                graph layouts, account links, and optional document requirement
+                rows.
+              </li>
+              <li>
+                Add Terraform/infra for a dedicated Ventures S3 bucket and
+                least-privileged API access for presigned URL generation.
+              </li>
+              <li>Add Pydantic schemas for create/update/read responses.</li>
+              <li>
+                Add repositories/services that derive latest valuation, latest
+                ownership, account-synced values, graph KPIs, and document
+                health.
+              </li>
+              <li>Add handlers and Serverless routes.</li>
+              <li>
+                Add integration coverage declaration files for every new
+                serverless function.
+              </li>
+              <li>
+                Register contracts in
+                <code>apps/api/contracts/http.py</code> and regenerate frontend
+                types.
+              </li>
+              <li>
+                Verification: <code>make format</code>,
+                <code>make type-check</code>, targeted backend tests.
+              </li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="milestone">
+          <header>
+            <h3>M2: Frontend Data Layer And Navigation</h3>
+            <span class="tag frontend">Frontend</span>
+          </header>
+          <div class="body">
+            <ul>
+              <li>
+                Add <code>PageRoutes.ventures</code> and
+                <code>PageRoutes.ventureCompany</code>.
+              </li>
+              <li>Add sidebar entry with a suitable lucide icon.</li>
+              <li>
+                Add ventures slice, saga, selectors, and
+                <code>useVenturesApi</code>.
+              </li>
+              <li>
+                Use generated contract types. Do not hand-write duplicate DTOs.
+              </li>
+              <li>
+                Add demo/empty payload support if needed for
+                unauthenticated/demo mode.
+              </li>
+              <li>Verification: frontend format/lint and route smoke.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="milestone">
+          <header>
+            <h3>M3: Main Graph And Selected Bottom Panel</h3>
+            <span class="tag frontend">Frontend</span>
+          </header>
+          <div class="body">
+            <ul>
+              <li>
+                Implement <code>/ventures</code> using XY Flow React custom
+                nodes.
+              </li>
+              <li>
+                Build graph KPIs, zoom controls, fit view, add company action,
+                holding-company edges, and clean connectors.
+              </li>
+              <li>Implement draggable node persistence using layout API.</li>
+              <li>
+                Clicking a company opens the bottom panel from reference
+                <code>2.png</code>.
+              </li>
+              <li>
+                Selected panel actions must work or be hidden until implemented.
+              </li>
+              <li>Verification: browser screenshot at desktop width.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="milestone">
+          <header>
+            <h3>M4: Company Workspace Overview</h3>
+            <span class="tag frontend">Frontend</span>
+          </header>
+          <div class="body">
+            <ul>
+              <li>
+                Implement <code>/ventures/:companyId</code> overview using
+                reference <code>3.png</code>.
+              </li>
+              <li>Build reusable company header and tabs.</li>
+              <li>
+                Add valuation chart, ownership/risk panel, recent notes,
+                timeline highlights, and document checklist.
+              </li>
+              <li>
+                Use honest labels for paper value vs risk-adjusted value and
+                liquidity.
+              </li>
+              <li>Verification: route smoke, loading/empty/error states.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="milestone">
+          <header>
+            <h3>M5: Create/Edit Mutation Flows</h3>
+            <span class="tag frontend">Frontend + Backend</span>
+          </header>
+          <div class="body">
+            <ul>
+              <li>
+                Add company bottom sheet with logo upload/preview, initials
+                fallback, linked-account valuation option, and live node
+                preview.
+              </li>
+              <li>
+                Add annual valuation bottom sheet with before/after preview and
+                validation.
+              </li>
+              <li>
+                Add edit ownership bottom sheet with evidence attachment and
+                before/after value impact.
+              </li>
+              <li>
+                Add note creation/edit flow with tags instead of a separate
+                lessons concept. Notes should support Markdown.
+              </li>
+              <li>
+                Every successful mutation should refresh relevant
+                overview/company data and create timeline events where
+                appropriate.
+              </li>
+              <li>
+                Verification: targeted service tests and frontend validation
+                checks.
+              </li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="milestone">
+          <header>
+            <h3>M6: Timeline, Notes, And Documents Tabs</h3>
+            <span class="tag frontend">Frontend</span>
+          </header>
+          <div class="body">
+            <ul>
+              <li>
+                Timeline tab from reference <code>6.png</code> with year
+                grouping, filters, and linked evidence.
+              </li>
+              <li>
+                Notes tab from reference <code>7.png</code>, simplified to notes
+                and tags. No standalone Lessons tab/model.
+              </li>
+              <li>
+                Documents tab from reference <code>8.png</code> with grouped
+                documents, health panel, filters, and S3 upload/download
+                actions.
+              </li>
+              <li>
+                Do not implement document preview in the first build.
+                List/download/upload must be real if shown.
+              </li>
+              <li>Verification: browser screenshots and frontend lint.</li>
+            </ul>
+          </div>
+        </article>
+
+        <article class="milestone">
+          <header>
+            <h3>M7: Polish, Desktop QA, And Release Readiness</h3>
+            <span class="tag qa">QA</span>
+          </header>
+          <div class="body">
+            <ul>
+              <li>
+                Run required repo checks: frontend format/lint, backend
+                format/type-check, and targeted tests.
+              </li>
+              <li>
+                Use browser screenshots to check the desktop graph, workspace,
+                and sheets.
+              </li>
+              <li>
+                Verify no text overlap, no dead controls, no misleading
+                net-worth inclusion.
+              </li>
+              <li>
+                Check empty states: no companies, company with no valuations, no
+                documents, idea-stage company, stale company, failed company,
+                exited company, and holding-company ownership.
+              </li>
+              <li>Confirm no coverage artifacts are committed.</li>
+            </ul>
+          </div>
+        </article>
+      </section>
+
+      <section class="section" id="validation">
+        <h2>Validation Expectations</h2>
+        <ul>
+          <li>
+            Backend static gate: <code>make format</code> then
+            <code>make type-check</code>.
+          </li>
+          <li>
+            Frontend static gate: <code>npm run format -w apps/web</code> then
+            <code>npm run lint -w apps/web</code>.
+          </li>
+          <li>
+            Regenerate contracts for any route/schema changes with
+            <code>npm run generate:api-contracts</code>.
+          </li>
+          <li>
+            Run targeted backend unit tests for services/repositories and
+            integration handler tests where added.
+          </li>
+          <li>
+            Use the Browser plugin after significant frontend changes; verify
+            the desktop graph is nonblank, draggable, clickable, and not
+            visually broken.
+          </li>
+          <li>
+            Do not run <code>make test</code> and
+            <code>make test-unit</code> back-to-back in one pass.
+          </li>
+        </ul>
+      </section>
+
+      <section class="section" id="open-questions">
+        <h2>Resolved Decisions And Remaining Questions</h2>
+        <div class="grid two">
+          <div class="card">
+            <h3>Resolved In M0</h3>
+            <ul>
+              <li>
+                Venture paper values are only shown inside Ventures and do not
+                affect normal net worth, reports, or investments.
+              </li>
+              <li>
+                Risk-adjusted value is computed from paper value and haircut
+                percentage.
+              </li>
+              <li>
+                Real company proceeds are tracked inside Ventures, not linked to
+                ledger transactions in the first build.
+              </li>
+              <li>
+                Logos and documents use a new S3 bucket with presigned
+                upload/download URLs.
+              </li>
+              <li>
+                Holding-company ownership is supported through company-to-
+                company graph edges.
+              </li>
+              <li>
+                Statuses are <code>idea</code>, <code>ongoing</code>,
+                <code>stale</code>, <code>exited</code>, and
+                <code>failed</code>.
+              </li>
+              <li>
+                Notes support Markdown. Tagged notes replace a separate Lessons
+                concept.
+              </li>
+              <li>
+                Logo upload/edit/remove is required. Document preview and mobile
+                work are not required for the first build.
+              </li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Still Open</h3>
+            <ol>
+              <li>
+                Exact S3 bucket name and lifecycle policy. Recommendation:
+                private encrypted bucket with blocked public access and no
+                automatic expiration for documents.
+              </li>
+              <li>
+                Maximum file size and allowed MIME types. Recommendation: allow
+                PDF, PNG/JPEG/WebP logos, XLSX/CSV, DOCX, and common image
+                formats; reject executable/archive files.
+              </li>
+              <li>
+                Whether document deletes should hard-delete from S3 immediately
+                or soft-delete metadata first. Recommendation: soft-delete
+                metadata, then optional cleanup job later.
+              </li>
+              <li>
+                Whether account-linked valuation should include all account
+                balances or only selected balance types. Recommendation: sum
+                selected linked account current balances for M1.
+              </li>
+              <li>
+                Whether Markdown notes need a full rich editor later.
+                Recommendation: start with textarea + formatting toolbar +
+                rendered preview using <code>react-markdown</code>.
+              </li>
+              <li>
+                Whether valuation and ownership documents are mandatory blockers
+                or health warnings only. Recommendation: warnings only.
+              </li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="final-notes">
+        <h2>Implementation Notes</h2>
+        <ul>
+          <li>
+            Keep this feature separate from existing <code>Investments</code>;
+            the data semantics are different.
+          </li>
+          <li>
+            Prefer real derived data over fake display values. If a metric
+            cannot be computed, show an explicit empty/missing state.
+          </li>
+          <li>
+            Use succinct comments only around non-obvious valuation/ownership
+            derivation logic.
+          </li>
+          <li>
+            Protect unrelated worktree changes. Stage only files that belong to
+            the milestone being shipped.
+          </li>
+          <li>
+            When in doubt, choose financial honesty over visual excitement.
+          </li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

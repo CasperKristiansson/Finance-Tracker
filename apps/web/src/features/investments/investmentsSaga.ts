@@ -1,5 +1,5 @@
 import { createAction } from "@reduxjs/toolkit";
-import { call, put, select, takeLatest } from "redux-saga/effects";
+import { call, put, select, takeLatest } from "typed-redux-saga";
 import {
   demoInvestmentOverview,
   demoInvestmentTransactions,
@@ -15,10 +15,7 @@ import {
   setOverview,
 } from "@/features/investments/investmentsSlice";
 import { buildEndpointRequest } from "@/lib/apiEndpoints";
-import type {
-  InvestmentOverviewResponse,
-  InvestmentTransactionRead,
-} from "@/types/api";
+import type { InvestmentOverviewResponse } from "@/types/api";
 import type { EndpointRequest, EndpointResponse } from "@/types/contracts";
 
 export const FetchInvestmentTransactions = createAction<
@@ -39,38 +36,35 @@ export const CreateInvestmentSnapshot = createAction<{
 function* handleFetchTransactions(
   action: ReturnType<typeof FetchInvestmentTransactions>,
 ): Generator {
-  const isDemo: boolean = yield select(selectIsDemo);
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     if (isDemo) {
-      yield put(setTransactions(demoInvestmentTransactions.transactions));
+      yield* put(setTransactions(demoInvestmentTransactions.transactions));
       return;
     }
 
     const limit = action.payload?.limit ?? 80;
     const offset = action.payload?.offset ?? 0;
 
-    const response: EndpointResponse<"listInvestmentTransactions"> = yield call(
-      callApiWithAuth,
-      buildEndpointRequest("listInvestmentTransactions", {
-        query: {
-          limit,
-          offset,
-          ...(action.payload?.accountName
-            ? { account_name: action.payload.accountName }
-            : {}),
-        },
-      }),
-      { loadingKey: "investments", silent: true },
-    );
-    if (response?.transactions) {
-      yield put(
-        setTransactions(
-          response.transactions as unknown as InvestmentTransactionRead[],
-        ),
+    const response: EndpointResponse<"listInvestmentTransactions"> =
+      yield* call(
+        callApiWithAuth<EndpointResponse<"listInvestmentTransactions">>,
+        buildEndpointRequest("listInvestmentTransactions", {
+          query: {
+            limit,
+            offset,
+            ...(action.payload?.accountName
+              ? { account_name: action.payload.accountName }
+              : {}),
+          },
+        }),
+        { loadingKey: "investments", silent: true },
       );
+    if (response?.transactions) {
+      yield* put(setTransactions(response.transactions));
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setInvestmentsError(
         error instanceof Error
           ? error.message
@@ -81,14 +75,14 @@ function* handleFetchTransactions(
 }
 
 function* handleFetchOverview(): Generator {
-  yield put(setInvestmentsLoading(true));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setInvestmentsLoading(true));
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     if (isDemo) {
-      yield put(setOverview(demoInvestmentOverview));
+      yield* put(setOverview(demoInvestmentOverview));
     } else {
-      const response: EndpointResponse<"investmentOverview"> = yield call(
-        callApiWithAuth,
+      const response: EndpointResponse<"investmentOverview"> = yield* call(
+        callApiWithAuth<EndpointResponse<"investmentOverview">>,
         buildEndpointRequest("investmentOverview"),
         { loadingKey: "investments", silent: true },
       );
@@ -105,10 +99,10 @@ function* handleFetchOverview(): Generator {
         })),
         recent_cashflows: response.recent_cashflows ?? [],
       };
-      yield put(setOverview(normalized));
+      yield* put(setOverview(normalized));
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setInvestmentsError(
         error instanceof Error
           ? error.message
@@ -116,19 +110,19 @@ function* handleFetchOverview(): Generator {
       ),
     );
   } finally {
-    yield put(setInvestmentsLoading(false));
+    yield* put(setInvestmentsLoading(false));
   }
 }
 
 function* handleCreateSnapshot(
   action: ReturnType<typeof CreateInvestmentSnapshot>,
 ): Generator {
-  yield put(setInvestmentsUpdateLoading(true));
-  yield put(setInvestmentsUpdateError(undefined));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setInvestmentsUpdateLoading(true));
+  yield* put(setInvestmentsUpdateError(undefined));
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     if (!isDemo) {
-      yield call(
+      yield* call(
         callApiWithAuth,
         buildEndpointRequest("createInvestmentSnapshot", {
           body: action.payload.data,
@@ -136,10 +130,10 @@ function* handleCreateSnapshot(
         { loadingKey: "investments-create-snapshot" },
       );
     }
-    yield put(setInvestmentsUpdateError(undefined));
-    yield put(FetchInvestmentOverview());
+    yield* put(setInvestmentsUpdateError(undefined));
+    yield* put(FetchInvestmentOverview());
   } catch (error) {
-    yield put(
+    yield* put(
       setInvestmentsUpdateError(
         error instanceof Error
           ? error.message
@@ -147,12 +141,12 @@ function* handleCreateSnapshot(
       ),
     );
   } finally {
-    yield put(setInvestmentsUpdateLoading(false));
+    yield* put(setInvestmentsUpdateLoading(false));
   }
 }
 
 export function* InvestmentsSaga() {
-  yield takeLatest(FetchInvestmentTransactions.type, handleFetchTransactions);
-  yield takeLatest(FetchInvestmentOverview.type, handleFetchOverview);
-  yield takeLatest(CreateInvestmentSnapshot.type, handleCreateSnapshot);
+  yield* takeLatest(FetchInvestmentTransactions.type, handleFetchTransactions);
+  yield* takeLatest(FetchInvestmentOverview.type, handleFetchOverview);
+  yield* takeLatest(CreateInvestmentSnapshot.type, handleCreateSnapshot);
 }

@@ -2,6 +2,22 @@ import React from "react";
 import { Spinner } from "@/components/spinner";
 import { Skeleton } from "@/components/ui/skeleton";
 
+const sidebarSkeletonItems = [
+  "accounts",
+  "transactions",
+  "reports",
+  "taxes",
+  "settings",
+];
+const contentSkeletonCards = [
+  "summary",
+  "cash-flow",
+  "investments",
+  "loans",
+  "tax",
+  "reports",
+];
+
 export const AppLoadingShell: React.FC<{ showSpinner?: boolean }> = ({
   showSpinner = true,
 }) => {
@@ -11,8 +27,8 @@ export const AppLoadingShell: React.FC<{ showSpinner?: boolean }> = ({
         <aside className="hidden h-full flex-col gap-4 border-r bg-white p-4 md:flex">
           <Skeleton className="h-6 w-32" />
           <div className="space-y-2">
-            {[...Array(5)].map((_, idx) => (
-              <Skeleton key={idx} className="h-8 w-full rounded-md" />
+            {sidebarSkeletonItems.map((item) => (
+              <Skeleton key={item} className="h-8 w-full rounded-md" />
             ))}
           </div>
           <div className="mt-auto space-y-2">
@@ -29,9 +45,9 @@ export const AppLoadingShell: React.FC<{ showSpinner?: boolean }> = ({
             <Skeleton className="h-10 w-full max-w-sm" />
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {[...Array(6)].map((_, idx) => (
+            {contentSkeletonCards.map((card) => (
               <div
-                key={idx}
+                key={card}
                 className="rounded-xl border bg-white p-4 shadow-sm"
               >
                 <Skeleton className="mb-3 h-5 w-28" />

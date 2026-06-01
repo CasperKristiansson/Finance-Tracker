@@ -11,6 +11,8 @@ import {
   YAxis,
 } from "recharts";
 
+import { getActiveChartDatum } from "@/lib/recharts";
+
 import { currency, isRecord } from "../reports-utils";
 import { ChartCard } from "./chart-card";
 
@@ -31,6 +33,7 @@ export const YearlyCategoryBreakdownCard: React.FC<{
     flow === "income"
       ? "Category breakdown (income)"
       : "Category breakdown (expenses)";
+  const chartRows = rows.map((row) => ({ ...row, total: row.total }));
 
   return (
     <ChartCard
@@ -40,15 +43,11 @@ export const YearlyCategoryBreakdownCard: React.FC<{
     >
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
-          data={rows.map((row) => ({ ...row, total: row.total }))}
+          data={chartRows}
           layout="vertical"
           margin={{ left: 16, right: 12, top: 8, bottom: 8 }}
-          onClick={(
-            state: {
-              activePayload?: Array<{ payload?: { id?: unknown } }>;
-            } | null,
-          ) => {
-            const id = state?.activePayload?.[0]?.payload?.id;
+          onClick={(state) => {
+            const id = getActiveChartDatum(chartRows, state)?.id;
             if (typeof id === "string" && id.length) onSelectCategory(id);
           }}
         >
@@ -65,7 +64,7 @@ export const YearlyCategoryBreakdownCard: React.FC<{
           <Tooltip
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null;
-              const item = payload[0]?.payload;
+              const item = payload[0]?.payload as unknown;
               if (!isRecord(item)) return null;
               const name =
                 typeof item.name === "string" ? item.name : "Category";

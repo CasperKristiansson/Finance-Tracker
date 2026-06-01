@@ -7,7 +7,6 @@ import type {
   ImportFileListResponse,
   ImportCategorySuggestResponse,
   ImportPreviewResponse,
-  InvestmentHoldingRead,
   InvestmentOverviewResponse,
   InvestmentTransactionListResponse,
   LoanEventRead,
@@ -636,8 +635,7 @@ export const demoInvestmentMetrics = {
     ],
   },
   snapshots: demoInvestmentSnapshots.snapshots,
-  holdings: (demoInvestmentSnapshots.snapshots[0]?.holdings ??
-    []) as unknown as InvestmentHoldingRead[],
+  holdings: demoInvestmentSnapshots.snapshots[0]?.holdings ?? [],
   transactions: demoInvestmentTransactions.transactions,
 };
 

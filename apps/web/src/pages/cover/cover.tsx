@@ -40,7 +40,10 @@ export const Cover: React.FC = () => {
             </span>
           </h2>
 
-          <form onSubmit={onSubmit} className="space-y-4">
+          <form
+            onSubmit={(event) => void onSubmit(event)}
+            className="space-y-4"
+          >
             <div className="mt-8 space-y-4">
               <div>
                 <label

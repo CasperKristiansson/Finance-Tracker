@@ -23,6 +23,7 @@ import {
   compactCurrency,
   currency,
   formatDate,
+  monthLabel,
   percent,
 } from "../reports-utils";
 
@@ -133,20 +134,25 @@ export const TotalHeatmapDialog: React.FC<{
                     contentStyle={{ fontSize: 12 }}
                   />
                   <Bar dataKey="value" radius={[6, 6, 4, 4]}>
-                    {state.yearValues.map((_value, idx) => (
-                      <Cell
-                        key={idx}
-                        fill={
-                          idx === state.monthIndex
-                            ? state.flow === "income"
-                              ? "#059669"
-                              : "#dc2626"
-                            : state.flow === "income"
-                              ? "#10b981"
-                              : "#ef4444"
-                        }
-                      />
-                    ))}
+                    {state.yearValues.map((_value, idx) => {
+                      const month = monthLabel(
+                        new Date(Date.UTC(state.year, idx, 1)).toISOString(),
+                      );
+                      return (
+                        <Cell
+                          key={`${state.flow}-${month}`}
+                          fill={
+                            idx === state.monthIndex
+                              ? state.flow === "income"
+                                ? "#059669"
+                                : "#dc2626"
+                              : state.flow === "income"
+                                ? "#10b981"
+                                : "#ef4444"
+                          }
+                        />
+                      );
+                    })}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>

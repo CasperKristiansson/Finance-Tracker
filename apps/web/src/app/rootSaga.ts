@@ -1,4 +1,5 @@
-import { all, fork, select } from "redux-saga/effects";
+import type { SagaIterator } from "redux-saga";
+import { all, fork, select } from "typed-redux-saga";
 import { AccountsSaga } from "@/features/accounts/accountsSaga";
 import { AuthSaga } from "@/features/auth/authSaga";
 import { CategoriesSaga } from "@/features/categories/categoriesSaga";
@@ -13,14 +14,12 @@ import type { RootState } from "./store";
 
 type Selector<T> = (state: RootState) => T;
 
-export function* TypedSelect<T>(
-  selector: Selector<T>,
-): Generator<ReturnType<typeof select>, T, T> {
-  return yield select(selector);
+export function* TypedSelect<T>(selector: Selector<T>): SagaIterator<T> {
+  return yield* select(selector);
 }
 
 export function* RootSaga() {
-  yield all([
+  yield* all([
     fork(WarmupSaga),
     fork(AuthSaga),
     fork(AccountsSaga),

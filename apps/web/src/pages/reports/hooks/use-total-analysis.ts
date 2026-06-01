@@ -671,7 +671,7 @@ export const useTotalAnalysis = ({
     const rows = totalOverview.expense_category_mix_by_year
       .filter((row) => (windowStartYear ? row.year >= windowStartYear : true))
       .sort((a, b) => a.year - b.year);
-    return buildComposition(rows as MixYearRow[], "#ef4444");
+    return buildComposition(rows, "#ef4444");
   }, [totalOverview, totalWindowRange]);
 
   const totalIncomeComposition = useMemo(() => {
@@ -682,7 +682,7 @@ export const useTotalAnalysis = ({
     const rows = totalOverview.income_category_mix_by_year
       .filter((row) => (windowStartYear ? row.year >= windowStartYear : true))
       .sort((a, b) => a.year - b.year);
-    return buildComposition(rows as MixYearRow[], "#10b981");
+    return buildComposition(rows, "#10b981");
   }, [totalOverview, totalWindowRange]);
 
   const totalYearly = useMemo(() => {
@@ -725,8 +725,7 @@ export const useTotalAnalysis = ({
   );
 
   const totalExpenseMix = useMemo(() => {
-    if (!totalOverview)
-      return { data: [], keys: [], colors: {} as Record<string, string> };
+    if (!totalOverview) return { data: [], keys: [], colors: {} };
     const startYear = new Date(totalOverview.as_of).getUTCFullYear() - 5;
     const growthByYear = new Map(
       totalOverview.yearly.map((row) => [
@@ -759,8 +758,7 @@ export const useTotalAnalysis = ({
         };
       })
       .sort((a, b) => a.year - b.year);
-    if (!rows.length)
-      return { data: [], keys: [], colors: {} as Record<string, string> };
+    if (!rows.length) return { data: [], keys: [], colors: {} };
     const latest = rows[rows.length - 1];
     const sortedCats = [...latest.categories].sort(
       (a, b) => categoryAbsTotal(b) - categoryAbsTotal(a),
@@ -799,8 +797,7 @@ export const useTotalAnalysis = ({
   }, [includeInvestmentGrowth, totalOverview]);
 
   const totalIncomeMix = useMemo(() => {
-    if (!totalOverview)
-      return { data: [], keys: [], colors: {} as Record<string, string> };
+    if (!totalOverview) return { data: [], keys: [], colors: {} };
     const startYear = new Date(totalOverview.as_of).getUTCFullYear() - 5;
     const growthByYear = new Map(
       totalOverview.yearly.map((row) => [
@@ -833,8 +830,7 @@ export const useTotalAnalysis = ({
         };
       })
       .sort((a, b) => a.year - b.year);
-    if (!rows.length)
-      return { data: [], keys: [], colors: {} as Record<string, string> };
+    if (!rows.length) return { data: [], keys: [], colors: {} };
     const latest = rows[rows.length - 1];
     const sortedCats = [...latest.categories].sort(
       (a, b) => categoryAbsTotal(b) - categoryAbsTotal(a),

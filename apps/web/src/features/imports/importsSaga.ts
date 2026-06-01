@@ -1,7 +1,7 @@
 import { createAction } from "@reduxjs/toolkit";
 import { END, eventChannel, type EventChannel } from "redux-saga";
-import { call, put, select, take, takeLatest } from "redux-saga/effects";
 import { toast } from "sonner";
+import { call, put, select, take, takeLatest } from "typed-redux-saga";
 import {
   demoImportDrafts,
   demoImportFiles,
@@ -120,9 +120,9 @@ const createSuggestionsChannel = (
     const socket = new WebSocket(`${WS_API_BASE_URL}?${params.toString()}`);
 
     const handleOpen = () => emit({ type: "open" });
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = (event: MessageEvent<string>) => {
       try {
-        emit({ type: "message", data: JSON.parse(event.data) });
+        emit({ type: "message", data: JSON.parse(event.data) as unknown });
       } catch (error) {
         emit({
           type: "error",
@@ -174,7 +174,7 @@ function* waitForSocketOpen(
   channel: EventChannel<SuggestionSocketEvent>,
 ): Generator<unknown, void, SuggestionSocketEvent> {
   while (true) {
-    const event = yield take(channel);
+    const event = yield* take(channel);
     if (event.type === "open") return;
     if (event.type === "error") {
       throw new Error(event.error);
@@ -190,7 +190,7 @@ function* waitForSuggestionJob(
   jobId: string,
 ): Generator<unknown, ImportCategorySuggestResponse, SuggestionSocketEvent> {
   while (true) {
-    const event = yield take(channel);
+    const event = yield* take(channel);
     if (event.type === "error") {
       throw new Error(event.error);
     }
@@ -214,8 +214,10 @@ function* waitForSuggestionJob(
     if (data.type !== "import_suggestions") continue;
 
     return {
-      suggestions: Array.isArray(data.suggestions) ? data.suggestions : [],
-    } as ImportCategorySuggestResponse;
+      suggestions: Array.isArray(data.suggestions)
+        ? (data.suggestions as ImportCategorySuggestionRead[])
+        : [],
+    };
   }
 }
 
@@ -382,28 +384,28 @@ const buildPersistFilesPayload = (
 };
 
 function* handlePreview(action: ReturnType<typeof PreviewImports>) {
-  yield put(setImportsLoading(true));
-  yield put(clearImportsError());
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setImportsLoading(true));
+  yield* put(clearImportsError());
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     const body: ImportPreviewRequest = action.payload;
     if (isDemo) {
-      yield put(setImportPreview(demoImportPreview));
-      yield put(FetchImportDrafts());
+      yield* put(setImportPreview(demoImportPreview));
+      yield* put(FetchImportDrafts());
       toast.success("Files parsed", {
         description: "Review transactions and submit when ready.",
       });
     } else {
-      const response: ImportPreviewResponse = yield call(
-        callApiWithAuth,
+      const response: ImportPreviewResponse = yield* call(
+        callApiWithAuth<ImportPreviewResponse>,
         buildEndpointRequest("previewImports", {
           body,
         }),
         { loadingKey: "imports" },
       );
       const persistFilesBody = buildPersistFilesPayload(response, body);
-      const persistFilesResponse: ImportPersistFilesResponse = yield call(
-        callApiWithAuth,
+      const persistFilesResponse: ImportPersistFilesResponse = yield* call(
+        callApiWithAuth<ImportPersistFilesResponse>,
         buildEndpointRequest("persistImportFiles", {
           pathParams: { importBatchId: response.import_batch_id },
           body: persistFilesBody,
@@ -417,8 +419,8 @@ function* handlePreview(action: ReturnType<typeof PreviewImports>) {
         rows: draftRows,
         snapshot: response as unknown as EndpointResponse<"getImportDraft">,
       };
-      const bootstrapResponse: ImportDraftSaveResponse = yield call(
-        callApiWithAuth,
+      const bootstrapResponse: ImportDraftSaveResponse = yield* call(
+        callApiWithAuth<ImportDraftSaveResponse>,
         buildEndpointRequest("saveImportDraft", {
           pathParams: { importBatchId: response.import_batch_id },
           body: bootstrapDraft,
@@ -427,14 +429,14 @@ function* handlePreview(action: ReturnType<typeof PreviewImports>) {
       );
       void bootstrapResponse;
 
-      yield put(setImportPreview(response));
-      yield put(FetchImportDrafts());
+      yield* put(setImportPreview(response));
+      yield* put(FetchImportDrafts());
       toast.success("Files parsed", {
         description: "Review transactions and submit when ready.",
       });
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setImportsError(
         error instanceof Error ? error.message : "Unable to parse files.",
       ),
@@ -444,25 +446,25 @@ function* handlePreview(action: ReturnType<typeof PreviewImports>) {
         error instanceof Error ? error.message : "Please try again shortly.",
     });
   } finally {
-    yield put(setImportsLoading(false));
+    yield* put(setImportsLoading(false));
   }
 }
 
 function* handleCommit(action: ReturnType<typeof CommitImports>) {
-  yield put(setImportsSaving(true));
-  yield put(clearImportsError());
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setImportsSaving(true));
+  yield* put(clearImportsError());
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     const body: ImportCommitRequest = action.payload;
     if (isDemo) {
       toast.success("Transactions saved", {
         description: "Demo import saved locally.",
       });
-      yield put(clearImportPreview());
-      yield put(FetchImportDrafts());
+      yield* put(clearImportPreview());
+      yield* put(FetchImportDrafts());
     } else {
-      const response: ImportCommitResponse = yield call(
-        callApiWithAuth,
+      const response: ImportCommitResponse = yield* call(
+        callApiWithAuth<ImportCommitResponse>,
         buildEndpointRequest("commitImports", {
           body,
         }),
@@ -472,11 +474,11 @@ function* handleCommit(action: ReturnType<typeof CommitImports>) {
       toast.success("Transactions saved", {
         description: `Batch ${response.import_batch_id.slice(0, 8)} created.`,
       });
-      yield put(clearImportPreview());
-      yield put(FetchImportDrafts());
+      yield* put(clearImportPreview());
+      yield* put(FetchImportDrafts());
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setImportsError(
         error instanceof Error ? error.message : "Unable to save transactions.",
       ),
@@ -486,20 +488,20 @@ function* handleCommit(action: ReturnType<typeof CommitImports>) {
         error instanceof Error ? error.message : "Please try again shortly.",
     });
   } finally {
-    yield put(setImportsSaving(false));
+    yield* put(setImportsSaving(false));
   }
 }
 
 function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
-  yield put(setImportsSuggesting(true));
-  yield put(setImportsSuggestionsError(undefined));
+  yield* put(setImportsSuggesting(true));
+  yield* put(setImportsSuggestionsError(undefined));
   let channel: EventChannel<SuggestionSocketEvent> | null = null;
   const preview = action.payload.preview;
   const shouldTrackStatus = Boolean(preview.import_batch_id);
-  const isDemo: boolean = yield select(selectIsDemo);
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     if (shouldTrackStatus) {
-      yield put(setImportPreviewSuggestionsStatus("running"));
+      yield* put(setImportPreviewSuggestionsStatus("running"));
     }
 
     const categories: Array<{
@@ -507,7 +509,7 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
       name: string;
       category_type: string;
       is_archived?: boolean;
-    }> = yield select(selectCategories);
+    }> = yield* select(selectCategories);
     const available = categories.filter((cat) => !cat.is_archived);
     if (!available.length) {
       throw new Error("No categories available for suggestions.");
@@ -526,9 +528,9 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
         },
         {} as Record<string, ImportCategorySuggestionRead>,
       );
-      yield put(setImportSuggestions(mapped));
+      yield* put(setImportSuggestions(mapped));
       if (shouldTrackStatus) {
-        yield put(setImportPreviewSuggestionsStatus("completed"));
+        yield* put(setImportPreviewSuggestionsStatus("completed"));
       }
     } else {
       if (!WS_API_BASE_URL) {
@@ -549,8 +551,8 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
       };
       const body: ImportCategorySuggestJobRequest = jobRequest;
 
-      const response: ImportCategorySuggestJobResponse = yield call(
-        callApiWithAuth,
+      const response: ImportCategorySuggestJobResponse = yield* call(
+        callApiWithAuth<ImportCategorySuggestJobResponse>,
         buildEndpointRequest("suggestImportCategoriesJob", {
           body,
         }),
@@ -566,9 +568,9 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
       jobResponse.suggestions.forEach((suggestion) => {
         mapped[suggestion.id] = suggestion;
       });
-      yield put(setImportSuggestions(mapped));
+      yield* put(setImportSuggestions(mapped));
       if (shouldTrackStatus) {
-        yield put(setImportPreviewSuggestionsStatus("completed"));
+        yield* put(setImportPreviewSuggestionsStatus("completed"));
       }
     }
     toast.success("Category suggestions ready");
@@ -576,12 +578,12 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
     const message =
       error instanceof Error ? error.message : "Unable to suggest categories.";
     if (shouldTrackStatus) {
-      yield put(setImportPreviewSuggestionsStatus("failed"));
+      yield* put(setImportPreviewSuggestionsStatus("failed"));
     }
-    yield put(setImportsSuggestionsError(message));
+    yield* put(setImportsSuggestionsError(message));
     toast.error("Category suggestions unavailable", { description: message });
   } finally {
-    yield put(setImportsSuggesting(false));
+    yield* put(setImportsSuggesting(false));
     if (channel) {
       channel.close();
     }
@@ -589,70 +591,70 @@ function* handleSuggest(action: ReturnType<typeof SuggestImportCategories>) {
 }
 
 function* handleFetchDrafts() {
-  yield put(setImportDraftsLoading(true));
-  yield put(setImportDraftsError(undefined));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setImportDraftsLoading(true));
+  yield* put(setImportDraftsError(undefined));
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     if (isDemo) {
-      yield put(setImportDrafts(demoImportDrafts.drafts ?? []));
+      yield* put(setImportDrafts(demoImportDrafts.drafts ?? []));
       return;
     }
 
-    const response: ImportDraftListResponse = yield call(
-      callApiWithAuth,
+    const response: ImportDraftListResponse = yield* call(
+      callApiWithAuth<ImportDraftListResponse>,
       buildEndpointRequest("listImportDrafts", {}),
       { loadingKey: "import-drafts" },
     );
-    yield put(setImportDrafts(response.drafts ?? []));
+    yield* put(setImportDrafts(response.drafts ?? []));
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to load import drafts.";
-    yield put(setImportDraftsError(message));
+    yield* put(setImportDraftsError(message));
   } finally {
-    yield put(setImportDraftsLoading(false));
+    yield* put(setImportDraftsLoading(false));
   }
 }
 
 function* handleLoadDraft(action: ReturnType<typeof LoadImportDraft>) {
-  yield put(setImportsLoading(true));
-  yield put(clearImportsError());
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setImportsLoading(true));
+  yield* put(clearImportsError());
+  const isDemo: boolean = yield* select(selectIsDemo);
 
   try {
     if (isDemo) {
       if (action.payload.importBatchId !== demoImportPreview.import_batch_id) {
         throw new Error("Import draft not found.");
       }
-      yield put(setImportPreview(demoImportPreview));
-      yield put(
+      yield* put(setImportPreview(demoImportPreview));
+      yield* put(
         setImportSuggestions(mapPersistedSuggestions(demoImportPreview)),
       );
       return;
     }
 
-    const response: ImportPreviewResponse = yield call(
-      callApiWithAuth,
+    const response: ImportPreviewResponse = yield* call(
+      callApiWithAuth<ImportPreviewResponse>,
       buildEndpointRequest("getImportDraft", {
         pathParams: { importBatchId: action.payload.importBatchId },
       }),
       { loadingKey: `import-draft-${action.payload.importBatchId}` },
     );
-    yield put(setImportPreview(response));
-    yield put(setImportSuggestions(mapPersistedSuggestions(response)));
+    yield* put(setImportPreview(response));
+    yield* put(setImportSuggestions(mapPersistedSuggestions(response)));
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to load import draft.";
-    yield put(setImportsError(message));
+    yield* put(setImportsError(message));
     toast.error("Could not load import", { description: message });
   } finally {
-    yield put(setImportsLoading(false));
+    yield* put(setImportsLoading(false));
   }
 }
 
 function* handleSaveDraft(action: ReturnType<typeof SaveImportDraft>) {
-  yield put(setImportDraftSaving(true));
-  yield put(setImportDraftsError(undefined));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setImportDraftSaving(true));
+  yield* put(setImportDraftsError(undefined));
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     if (isDemo) {
       return;
@@ -664,8 +666,8 @@ function* handleSaveDraft(action: ReturnType<typeof SaveImportDraft>) {
         .snapshot as unknown as EndpointResponse<"getImportDraft">,
       note: action.payload.note,
     };
-    const response: ImportDraftSaveResponse = yield call(
-      callApiWithAuth,
+    const response: ImportDraftSaveResponse = yield* call(
+      callApiWithAuth<ImportDraftSaveResponse>,
       buildEndpointRequest("saveImportDraft", {
         pathParams: { importBatchId: action.payload.importBatchId },
         body,
@@ -679,24 +681,24 @@ function* handleSaveDraft(action: ReturnType<typeof SaveImportDraft>) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to save import draft.";
-    yield put(setImportDraftsError(message));
+    yield* put(setImportDraftsError(message));
     if (action.payload.showToast) {
       toast.error("Draft save failed", { description: message });
     }
   } finally {
-    yield put(setImportDraftSaving(false));
+    yield* put(setImportDraftSaving(false));
   }
 }
 
 function* handleDeleteDraft(action: ReturnType<typeof DeleteImportDraft>) {
-  yield put(setImportDraftsLoading(true));
-  yield put(setImportDraftsError(undefined));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setImportDraftsLoading(true));
+  yield* put(setImportDraftsError(undefined));
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     if (isDemo) {
       const currentDrafts: ImportDraftListResponse["drafts"] =
-        yield select(selectImportDrafts);
-      yield put(
+        yield* select(selectImportDrafts);
+      yield* put(
         setImportDrafts(
           currentDrafts.filter(
             (draft) => draft.import_batch_id !== action.payload.importBatchId,
@@ -706,54 +708,54 @@ function* handleDeleteDraft(action: ReturnType<typeof DeleteImportDraft>) {
       return;
     }
 
-    yield call(
+    yield* call(
       callApiWithAuth,
       buildEndpointRequest("deleteImportDraft", {
         pathParams: { importBatchId: action.payload.importBatchId },
       }),
       { loadingKey: `import-draft-delete-${action.payload.importBatchId}` },
     );
-    yield put(FetchImportDrafts());
+    yield* put(FetchImportDrafts());
     toast.success("Import draft removed");
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to remove import draft.";
-    yield put(setImportDraftsError(message));
+    yield* put(setImportDraftsError(message));
     toast.error("Could not remove import draft", { description: message });
   } finally {
-    yield put(setImportDraftsLoading(false));
+    yield* put(setImportDraftsLoading(false));
   }
 }
 
 function* handleFetchStoredFiles() {
-  yield put(setStoredImportFilesLoading(true));
-  yield put(setStoredImportFilesError(undefined));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setStoredImportFilesLoading(true));
+  yield* put(setStoredImportFilesError(undefined));
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     if (isDemo) {
-      yield put(setStoredImportFiles(demoImportFiles.files ?? []));
+      yield* put(setStoredImportFiles(demoImportFiles.files ?? []));
     } else {
-      const response: ImportFileListResponse = yield call(
-        callApiWithAuth,
+      const response: ImportFileListResponse = yield* call(
+        callApiWithAuth<ImportFileListResponse>,
         buildEndpointRequest("listImportFiles", {}),
         { loadingKey: "import-files" },
       );
-      yield put(setStoredImportFiles(response.files ?? []));
+      yield* put(setStoredImportFiles(response.files ?? []));
     }
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unable to load import files.";
-    yield put(setStoredImportFilesError(message));
+    yield* put(setStoredImportFilesError(message));
     toast.error("Could not load stored files", { description: message });
   } finally {
-    yield put(setStoredImportFilesLoading(false));
+    yield* put(setStoredImportFilesLoading(false));
   }
 }
 
 function* handleDownloadImportFile(
   action: ReturnType<typeof DownloadImportFile>,
 ) {
-  const isDemo: boolean = yield select(selectIsDemo);
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     if (isDemo) {
       const file = demoImportFiles.files.find(
@@ -763,8 +765,8 @@ function* handleDownloadImportFile(
       window.open(url, "_blank", "noopener,noreferrer");
       toast.success("Download started (demo mode)");
     } else {
-      const response: ImportFileDownloadResponse = yield call(
-        callApiWithAuth,
+      const response: ImportFileDownloadResponse = yield* call(
+        callApiWithAuth<ImportFileDownloadResponse>,
         buildEndpointRequest("downloadImportFile", {
           body: { file_id: action.payload.fileId },
         }),
@@ -782,21 +784,21 @@ function* handleDownloadImportFile(
 }
 
 export function* ImportsSaga() {
-  yield takeLatest(PreviewImports.type, handlePreview);
-  yield takeLatest(CommitImports.type, handleCommit);
-  yield takeLatest(SuggestImportCategories.type, handleSuggest);
-  yield takeLatest(FetchImportDrafts.type, handleFetchDrafts);
-  yield takeLatest(LoadImportDraft.type, handleLoadDraft);
-  yield takeLatest(SaveImportDraft.type, handleSaveDraft);
-  yield takeLatest(DeleteImportDraft.type, handleDeleteDraft);
-  yield takeLatest(FetchStoredImportFiles.type, handleFetchStoredFiles);
-  yield takeLatest(DownloadImportFile.type, handleDownloadImportFile);
-  yield takeLatest(ResetImports.type, function* () {
-    yield put(clearImportPreview());
-    yield put(clearImportsError());
-    yield put(setImportsSuggesting(false));
-    yield put(setImportsSuggestionsError(undefined));
-    yield put(setImportDraftSaving(false));
-    yield put(setImportDraftsError(undefined));
+  yield* takeLatest(PreviewImports.type, handlePreview);
+  yield* takeLatest(CommitImports.type, handleCommit);
+  yield* takeLatest(SuggestImportCategories.type, handleSuggest);
+  yield* takeLatest(FetchImportDrafts.type, handleFetchDrafts);
+  yield* takeLatest(LoadImportDraft.type, handleLoadDraft);
+  yield* takeLatest(SaveImportDraft.type, handleSaveDraft);
+  yield* takeLatest(DeleteImportDraft.type, handleDeleteDraft);
+  yield* takeLatest(FetchStoredImportFiles.type, handleFetchStoredFiles);
+  yield* takeLatest(DownloadImportFile.type, handleDownloadImportFile);
+  yield* takeLatest(ResetImports.type, function* () {
+    yield* put(clearImportPreview());
+    yield* put(clearImportsError());
+    yield* put(setImportsSuggesting(false));
+    yield* put(setImportsSuggestionsError(undefined));
+    yield* put(setImportDraftSaving(false));
+    yield* put(setImportDraftsError(undefined));
   });
 }

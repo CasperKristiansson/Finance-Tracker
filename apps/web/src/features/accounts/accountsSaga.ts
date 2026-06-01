@@ -1,6 +1,6 @@
 import { createAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import { call, put, select, takeLatest } from "redux-saga/effects";
+import { call, put, select, takeLatest } from "typed-redux-saga";
 import { demoAccounts } from "@/data/demoPayloads";
 import {
   setAccountOptions,
@@ -59,57 +59,57 @@ export const ReconcileAccounts = createAction<{
 function* handleFetchAccounts(
   action: ReturnType<typeof FetchAccounts>,
 ): SagaIterator {
-  const stored: AccountsState = yield select(selectAccountsState);
+  const stored: AccountsState = yield* select(selectAccountsState);
   const filters =
     action.payload ??
     ({
       includeInactive: stored.includeInactive,
       asOfDate: stored.asOfDate,
     } satisfies Partial<Pick<AccountsState, "includeInactive" | "asOfDate">>);
-  yield put(setAccountsLoading(true));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setAccountsLoading(true));
+  const isDemo: boolean = yield* select(selectIsDemo);
   if (action.payload) {
-    yield put(setAccountsFilters(action.payload));
+    yield* put(setAccountsFilters(action.payload));
   }
 
   try {
     if (isDemo) {
-      yield put(setAccounts(demoAccounts.accounts));
+      yield* put(setAccounts(demoAccounts.accounts));
     } else {
       const query = {
         include_inactive: filters.includeInactive ?? false,
         ...(filters.asOfDate ? { as_of_date: filters.asOfDate } : {}),
       };
 
-      const response: EndpointResponse<"listAccounts"> = yield call(
-        callApiWithAuth,
+      const response: EndpointResponse<"listAccounts"> = yield* call(
+        callApiWithAuth<EndpointResponse<"listAccounts">>,
         buildEndpointRequest("listAccounts", {
           query,
         }),
         { loadingKey: "accounts" },
       );
 
-      yield put(setAccounts(response.accounts));
+      yield* put(setAccounts(response.accounts));
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setAccountsError(
         error instanceof Error ? error.message : "Failed to load accounts",
       ),
     );
   } finally {
-    yield put(setAccountsLoading(false));
+    yield* put(setAccountsLoading(false));
   }
 }
 
 function* handleFetchAccountOptions(
   action: ReturnType<typeof FetchAccountOptions>,
 ): SagaIterator {
-  const stored: AccountsState = yield select(selectAccountsState);
+  const stored: AccountsState = yield* select(selectAccountsState);
   const includeInactive =
     action.payload?.includeInactive ?? stored.includeInactive;
-  yield put(setAccountOptionsLoading(true));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setAccountOptionsLoading(true));
+  const isDemo: boolean = yield* select(selectIsDemo);
 
   try {
     if (isDemo) {
@@ -121,12 +121,12 @@ function* handleFetchAccountOptions(
         icon: account.icon,
         bank_import_type: account.bank_import_type,
       }));
-      yield put(setAccountOptions(options));
+      yield* put(setAccountOptions(options));
       return;
     }
 
-    const response: EndpointResponse<"listAccountOptions"> = yield call(
-      callApiWithAuth,
+    const response: EndpointResponse<"listAccountOptions"> = yield* call(
+      callApiWithAuth<EndpointResponse<"listAccountOptions">>,
       buildEndpointRequest("listAccountOptions", {
         query: {
           include_inactive: includeInactive,
@@ -134,9 +134,9 @@ function* handleFetchAccountOptions(
       }),
       { loadingKey: "account-options" },
     );
-    yield put(setAccountOptions(response.options));
+    yield* put(setAccountOptions(response.options));
   } catch (error) {
-    yield put(
+    yield* put(
       setAccountOptionsError(
         error instanceof Error
           ? error.message
@@ -144,20 +144,20 @@ function* handleFetchAccountOptions(
       ),
     );
   } finally {
-    yield put(setAccountOptionsLoading(false));
+    yield* put(setAccountOptionsLoading(false));
   }
 }
 
 function* handleCreateAccount(
   action: ReturnType<typeof CreateAccount>,
 ): SagaIterator {
-  yield put(setAccountCreateLoading(true));
-  yield put(setAccountMutationError(undefined));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setAccountCreateLoading(true));
+  yield* put(setAccountMutationError(undefined));
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     const body: EndpointRequest<"createAccount"> = action.payload;
     if (isDemo) {
-      const existing = (yield select(selectAccounts)) as AccountsState["items"];
+      const existing = yield* select(selectAccounts);
       const now = new Date().toISOString();
       const accountId = `demo-account-${Date.now()}`;
       const newAccount = {
@@ -188,24 +188,24 @@ function* handleCreateAccount(
             }
           : null,
       };
-      yield put(setAccounts([...existing, newAccount]));
+      yield* put(setAccounts([...existing, newAccount]));
       return;
     }
 
-    yield call(
+    yield* call(
       callApiWithAuth,
       buildEndpointRequest("createAccount", { body }),
       { loadingKey: "accounts-create" },
     );
-    yield put(FetchAccounts(undefined));
+    yield* put(FetchAccounts(undefined));
   } catch (error) {
-    yield put(
+    yield* put(
       setAccountMutationError(
         error instanceof Error ? error.message : "Failed to create account",
       ),
     );
   } finally {
-    yield put(setAccountCreateLoading(false));
+    yield* put(setAccountCreateLoading(false));
   }
 }
 
@@ -213,13 +213,13 @@ function* handleUpdateAccount(
   action: ReturnType<typeof UpdateAccount>,
 ): SagaIterator {
   const { accountId, data } = action.payload;
-  yield put(setAccountUpdateLoading(true));
-  yield put(setAccountMutationError(undefined));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setAccountUpdateLoading(true));
+  yield* put(setAccountMutationError(undefined));
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     const body: EndpointRequest<"updateAccount"> = data;
     if (isDemo) {
-      const existing = (yield select(selectAccounts)) as AccountsState["items"];
+      const existing = yield* select(selectAccounts);
       const updated = existing.map((acct) =>
         acct.id === accountId
           ? {
@@ -235,11 +235,11 @@ function* handleUpdateAccount(
             }
           : acct,
       );
-      yield put(setAccounts(updated));
+      yield* put(setAccounts(updated));
       return;
     }
 
-    yield call(
+    yield* call(
       callApiWithAuth,
       buildEndpointRequest("updateAccount", {
         pathParams: { accountId },
@@ -247,27 +247,27 @@ function* handleUpdateAccount(
       }),
       { loadingKey: "accounts-update" },
     );
-    yield put(FetchAccounts(undefined));
+    yield* put(FetchAccounts(undefined));
   } catch (error) {
-    yield put(
+    yield* put(
       setAccountMutationError(
         error instanceof Error ? error.message : "Failed to update account",
       ),
     );
   } finally {
-    yield put(setAccountUpdateLoading(false));
+    yield* put(setAccountUpdateLoading(false));
   }
 }
 
 function* handleArchiveAccount(
   action: ReturnType<typeof ArchiveAccount>,
 ): SagaIterator {
-  yield call(
+  yield* call(
     handleUpdateAccount,
     UpdateAccount({
       accountId: action.payload.accountId,
       data: { is_active: false },
-    }) as ReturnType<typeof UpdateAccount>,
+    }),
   );
 }
 
@@ -275,13 +275,13 @@ function* handleAttachLoan(
   action: ReturnType<typeof AttachLoan>,
 ): SagaIterator {
   const { account_id, ...loanData } = action.payload;
-  yield put(setAccountUpdateLoading(true));
-  yield put(setAccountMutationError(undefined));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setAccountUpdateLoading(true));
+  yield* put(setAccountMutationError(undefined));
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     const body: EndpointRequest<"createLoan"> = { account_id, ...loanData };
     if (isDemo) {
-      const existing = (yield select(selectAccounts)) as AccountsState["items"];
+      const existing = yield* select(selectAccounts);
       const now = new Date().toISOString();
       const updated = existing.map((acct) =>
         acct.id === account_id
@@ -303,22 +303,22 @@ function* handleAttachLoan(
             }
           : acct,
       );
-      yield put(setAccounts(updated));
+      yield* put(setAccounts(updated));
       return;
     }
 
-    yield call(callApiWithAuth, buildEndpointRequest("createLoan", { body }), {
+    yield* call(callApiWithAuth, buildEndpointRequest("createLoan", { body }), {
       loadingKey: "loan-attach",
     });
-    yield put(FetchAccounts(undefined));
+    yield* put(FetchAccounts(undefined));
   } catch (error) {
-    yield put(
+    yield* put(
       setAccountMutationError(
         error instanceof Error ? error.message : "Failed to attach loan",
       ),
     );
   } finally {
-    yield put(setAccountUpdateLoading(false));
+    yield* put(setAccountUpdateLoading(false));
   }
 }
 
@@ -326,13 +326,13 @@ function* handleUpdateLoan(
   action: ReturnType<typeof UpdateLoan>,
 ): SagaIterator {
   const { accountId, data } = action.payload;
-  yield put(setAccountUpdateLoading(true));
-  yield put(setAccountMutationError(undefined));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setAccountUpdateLoading(true));
+  yield* put(setAccountMutationError(undefined));
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     const body: EndpointRequest<"updateLoan"> = data;
     if (isDemo) {
-      const existing = (yield select(selectAccounts)) as AccountsState["items"];
+      const existing = yield* select(selectAccounts);
       const now = new Date().toISOString();
       const updated = existing.map((acct) =>
         acct.id === accountId && acct.loan
@@ -362,11 +362,11 @@ function* handleUpdateLoan(
             }
           : acct,
       );
-      yield put(setAccounts(updated));
+      yield* put(setAccounts(updated));
       return;
     }
 
-    yield call(
+    yield* call(
       callApiWithAuth,
       buildEndpointRequest("updateLoan", {
         pathParams: { accountId },
@@ -374,27 +374,27 @@ function* handleUpdateLoan(
       }),
       { loadingKey: "loan-update" },
     );
-    yield put(FetchAccounts(undefined));
+    yield* put(FetchAccounts(undefined));
   } catch (error) {
-    yield put(
+    yield* put(
       setAccountMutationError(
         error instanceof Error ? error.message : "Failed to update loan",
       ),
     );
   } finally {
-    yield put(setAccountUpdateLoading(false));
+    yield* put(setAccountUpdateLoading(false));
   }
 }
 
 function* handleReconcileAccounts(
   action: ReturnType<typeof ReconcileAccounts>,
 ): SagaIterator {
-  yield put(setAccountReconcileLoading(true));
-  yield put(setAccountReconcileError(undefined));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setAccountReconcileLoading(true));
+  yield* put(setAccountReconcileError(undefined));
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     if (isDemo) {
-      const existing = (yield select(selectAccounts)) as AccountsState["items"];
+      const existing = yield* select(selectAccounts);
       const updated = existing.map((acct) => {
         const match = action.payload.items.find(
           (item) => item.accountId === acct.id,
@@ -409,7 +409,7 @@ function* handleReconcileAccounts(
           updated_at: match.capturedAt,
         };
       });
-      yield put(setAccounts(updated));
+      yield* put(setAccounts(updated));
       return;
     }
 
@@ -420,7 +420,7 @@ function* handleReconcileAccounts(
         description: item.description,
         category_id: item.categoryId ?? null,
       };
-      yield call(
+      yield* call(
         callApiWithAuth,
         buildEndpointRequest("reconcileAccount", {
           pathParams: { accountId: item.accountId },
@@ -429,25 +429,25 @@ function* handleReconcileAccounts(
         { loadingKey: "accounts-reconcile" },
       );
     }
-    yield put(FetchAccounts(undefined));
+    yield* put(FetchAccounts(undefined));
   } catch (error) {
-    yield put(
+    yield* put(
       setAccountReconcileError(
         error instanceof Error ? error.message : "Failed to reconcile accounts",
       ),
     );
   } finally {
-    yield put(setAccountReconcileLoading(false));
+    yield* put(setAccountReconcileLoading(false));
   }
 }
 
 export function* AccountsSaga(): SagaIterator {
-  yield takeLatest(FetchAccounts.type, handleFetchAccounts);
-  yield takeLatest(FetchAccountOptions.type, handleFetchAccountOptions);
-  yield takeLatest(CreateAccount.type, handleCreateAccount);
-  yield takeLatest(UpdateAccount.type, handleUpdateAccount);
-  yield takeLatest(ArchiveAccount.type, handleArchiveAccount);
-  yield takeLatest(AttachLoan.type, handleAttachLoan);
-  yield takeLatest(UpdateLoan.type, handleUpdateLoan);
-  yield takeLatest(ReconcileAccounts.type, handleReconcileAccounts);
+  yield* takeLatest(FetchAccounts.type, handleFetchAccounts);
+  yield* takeLatest(FetchAccountOptions.type, handleFetchAccountOptions);
+  yield* takeLatest(CreateAccount.type, handleCreateAccount);
+  yield* takeLatest(UpdateAccount.type, handleUpdateAccount);
+  yield* takeLatest(ArchiveAccount.type, handleArchiveAccount);
+  yield* takeLatest(AttachLoan.type, handleAttachLoan);
+  yield* takeLatest(UpdateLoan.type, handleUpdateLoan);
+  yield* takeLatest(ReconcileAccounts.type, handleReconcileAccounts);
 }

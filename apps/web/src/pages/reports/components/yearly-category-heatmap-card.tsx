@@ -70,21 +70,27 @@ export const YearlyCategoryHeatmapCard: React.FC<{
           <div className="min-w-[560px]">
             <div className="grid grid-cols-[160px_repeat(12,minmax(28px,1fr))] gap-1 text-[11px] text-slate-600">
               <div />
-              {Array.from({ length: 12 }, (_, idx) => (
-                <div key={idx} className="text-center">
-                  {monthLabel(new Date(Date.UTC(year, idx, 1)).toISOString())}
-                </div>
-              ))}
+              {Array.from({ length: 12 }, (_, idx) => {
+                const month = monthLabel(
+                  new Date(Date.UTC(year, idx, 1)).toISOString(),
+                );
+                return (
+                  <div key={month} className="text-center">
+                    {month}
+                  </div>
+                );
+              })}
               {heatmap.rows.map((row) => (
                 <React.Fragment key={row.name}>
                   <div className="truncate pr-2 text-slate-700">{row.name}</div>
                   {row.monthly.map((value, idx) => {
+                    const month = monthName(year, idx + 1);
                     const intensity = heatmap.max > 0 ? value / heatmap.max : 0;
                     const bg = `rgba(${rgb}, ${Math.min(0.08 + intensity * 0.6, 0.7)})`;
                     return (
                       <button
-                        key={idx}
-                        title={`${row.name} — ${monthName(year, idx + 1)}: ${currency(value)}`}
+                        key={`${row.id ?? row.name}-${month}`}
+                        title={`${row.name} — ${month}: ${currency(value)}`}
                         type="button"
                         onClick={() => {
                           if (
@@ -157,26 +163,29 @@ export const YearlyCategoryHeatmapCard: React.FC<{
                   <span>{currency(selectedCell.row.total)} total</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {selectedCell.row.monthly.map((amount, idx) => (
-                    <div
-                      key={`${selectedCell.row.name}-${idx}`}
-                      className={cn(
-                        "rounded-md border px-2 py-2 text-xs text-slate-600",
-                        idx === selectedCell.monthIndex
-                          ? "border-slate-900/40 bg-slate-900/5 text-slate-900"
-                          : "border-slate-100",
-                      )}
-                    >
-                      <p className="text-[10px] font-semibold text-slate-500 uppercase">
-                        {monthLabel(
-                          new Date(Date.UTC(year, idx, 1)).toISOString(),
+                  {selectedCell.row.monthly.map((amount, idx) => {
+                    const month = monthLabel(
+                      new Date(Date.UTC(year, idx, 1)).toISOString(),
+                    );
+                    return (
+                      <div
+                        key={`${selectedCell.row.id ?? selectedCell.row.name}-${month}`}
+                        className={cn(
+                          "rounded-md border px-2 py-2 text-xs text-slate-600",
+                          idx === selectedCell.monthIndex
+                            ? "border-slate-900/40 bg-slate-900/5 text-slate-900"
+                            : "border-slate-100",
                         )}
-                      </p>
-                      <p className="text-sm font-semibold text-slate-900">
-                        {currency(amount)}
-                      </p>
-                    </div>
-                  ))}
+                      >
+                        <p className="text-[10px] font-semibold text-slate-500 uppercase">
+                          {month}
+                        </p>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {currency(amount)}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

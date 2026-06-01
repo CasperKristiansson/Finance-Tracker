@@ -1,5 +1,5 @@
 import { createAction } from "@reduxjs/toolkit";
-import { call, delay, put, takeLatest } from "redux-saga/effects";
+import { call, delay, put, takeLatest } from "typed-redux-saga";
 import { TypedSelect } from "@/app/rootSaga";
 import { selectToken } from "@/features/auth/authSlice";
 import { apiFetch, ApiError } from "@/lib/apiClient";
@@ -35,7 +35,7 @@ function* performWarmup() {
 
   const token: string | undefined = yield* TypedSelect(selectToken);
   if (!token) {
-    yield put(
+    yield* put(
       warmupFailed(
         "Authentication is required before waking the database. Please sign in.",
       ),
@@ -43,17 +43,17 @@ function* performWarmup() {
     return;
   }
 
-  yield put(startWarmup());
+  yield* put(startWarmup());
 
   for (let attempt = 1; attempt <= WARMUP_MAX_ATTEMPTS; attempt += 1) {
     const attemptNote =
       attempt === 1
         ? "Waking Aurora so your data is ready."
         : `Still waiting for Aurora - attempt ${attempt}/${WARMUP_MAX_ATTEMPTS}`;
-    yield put(recordWarmupAttempt({ attempt, note: attemptNote }));
+    yield* put(recordWarmupAttempt({ attempt, note: attemptNote }));
 
     try {
-      const { data } = (yield call(
+      const { data } = (yield* call(
         apiFetch<EndpointResponse<"warmDatabase">>,
         buildEndpointRequest("warmDatabase", {
           retryCount: 1,
@@ -62,19 +62,19 @@ function* performWarmup() {
       )) as { data: EndpointResponse<"warmDatabase"> };
 
       if (data?.status === "ready") {
-        yield put(warmupReady());
+        yield* put(warmupReady());
         return;
       }
 
       const message =
         data?.message ??
         "Database is scaling up from zero. Retrying automatically.";
-      yield put(updateWarmupNote(message));
+      yield* put(updateWarmupNote(message));
     } catch (error) {
       const message = describeWarmupError(error);
 
       if (attempt >= WARMUP_MAX_ATTEMPTS) {
-        yield put(
+        yield* put(
           warmupFailed(
             message ??
               "Could not confirm that the database is awake. Please retry.",
@@ -84,16 +84,16 @@ function* performWarmup() {
       }
 
       if (message) {
-        yield put(updateWarmupNote(message));
+        yield* put(updateWarmupNote(message));
       }
     }
 
     if (attempt < WARMUP_MAX_ATTEMPTS) {
-      yield delay(RETRY_DELAY_MS);
+      yield* delay(RETRY_DELAY_MS);
     }
   }
 
-  yield put(
+  yield* put(
     warmupFailed(
       "Database warmup timed out. Please retry or refresh the page.",
     ),
@@ -101,5 +101,5 @@ function* performWarmup() {
 }
 
 export function* WarmupSaga() {
-  yield takeLatest(BeginWarmup.type, performWarmup);
+  yield* takeLatest(BeginWarmup.type, performWarmup);
 }

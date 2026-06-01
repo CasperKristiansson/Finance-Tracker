@@ -4,7 +4,7 @@ Purpose-built notes for automation agents working on this repo. Assume you often
 
 ## Ground Rules
 
-- Use the context7 MCP to pull up-to-date docs for libraries/services (shadcn/Radix UI, Vite/React 19, Redux Toolkit/Saga, AWS Amplify, Terraform, etc.) instead of relying on memory.
+- Prefer local repo patterns and installed package docs first. For external library/service details, use official documentation or package docs as needed.
 - Default to least surprise: avoid destructive commands; if unsure about user intent, ask.
 - **Never create, update, or push to PRs** unless explicitly instructed by a human.
 - **Assume multiple coding agents may work in parallel**: if `git status` shows other modified/untracked files you didn’t touch, do not remove/revert/stash/reset them—only change files required for your task.
@@ -26,6 +26,7 @@ Purpose-built notes for automation agents working on this repo. Assume you often
 - State/data: Redux Toolkit for slices/selectors, `redux-saga` for side effects (auth, warmup, settings, data fetches); reuse typed hooks `useAppDispatch`/`useAppSelector`.
 - Motion: `framer-motion` for purposeful, light transitions (page/section entrances, list reorders, dialog/sheet open); avoid heavy/parallax effects—keep durations/snappiness aligned with existing patterns.
 - Visualization/UX: `recharts` for charts, `@tanstack/react-virtual` for large lists, `sonner` for toasts, `next-themes` for theme toggles; prefer these before adding alternatives.
+- Ventures-specific UX: use `@xyflow/react` + `dagre` for interactive ownership graphs, and `react-markdown` + `remark-gfm` for Markdown note rendering.
 
 ## Backend Stack & Usage
 

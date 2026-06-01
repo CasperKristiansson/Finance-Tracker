@@ -13,6 +13,7 @@ import {
 import { EmptyState } from "@/components/composed/empty-state";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { getActiveChartDatum } from "@/lib/recharts";
 
 import type { TotalDrilldownState } from "../reports-types";
 import { currency } from "../reports-utils";
@@ -95,12 +96,8 @@ export const TotalLifetimeCategoriesCard: React.FC<{
               data={categoryData}
               layout="vertical"
               margin={{ left: 16, right: 12, top: 8, bottom: 8 }}
-              onClick={(
-                state: { activePayload?: Array<{ payload?: unknown }> } | null,
-              ) => {
-                const payload = state?.activePayload?.[0]?.payload as
-                  | LifetimeCategoryDatum
-                  | undefined;
+              onClick={(state) => {
+                const payload = getActiveChartDatum(categoryData, state);
                 if (!payload || typeof payload.id !== "string") return;
                 handleBarClick(payload.id);
               }}

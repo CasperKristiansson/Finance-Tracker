@@ -93,11 +93,19 @@ const formatAccountType = (value: string) => {
   }
 };
 
-const escapeCell = (value: unknown) =>
-  String(value ?? "")
-    .replace(/\|/g, "\\|")
-    .replace(/\n/g, " ")
-    .trim();
+const escapeCell = (value: unknown) => {
+  const text =
+    value === null || value === undefined
+      ? ""
+      : typeof value === "string" ||
+          typeof value === "number" ||
+          typeof value === "boolean" ||
+          typeof value === "bigint"
+        ? String(value)
+        : JSON.stringify(value);
+
+  return text.replace(/\|/g, "\\|").replace(/\n/g, " ").trim();
+};
 
 const renderTable = (
   headers: string[],

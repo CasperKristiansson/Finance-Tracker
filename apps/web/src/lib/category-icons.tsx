@@ -28,7 +28,7 @@ export const renderCategoryIcon = (
       LucideIcons as unknown as Record<string, LucideIcon | undefined>
     )[key];
     if (IconComp) {
-      const Icon = IconComp as LucideIcon;
+      const Icon = IconComp;
       return <Icon className={className ?? "h-5 w-5 text-slate-700"} />;
     }
   }

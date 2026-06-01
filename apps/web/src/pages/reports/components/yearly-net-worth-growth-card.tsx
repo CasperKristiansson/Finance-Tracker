@@ -88,7 +88,7 @@ export const YearlyNetWorthGrowthCard: React.FC<{
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="date"
-            tickFormatter={(value) =>
+            tickFormatter={(value: string | number | Date) =>
               formatDate(value, { month: "short", locale: "en-US" })
             }
             tickLine={false}

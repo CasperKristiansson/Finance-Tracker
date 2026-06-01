@@ -1,6 +1,7 @@
 import { createAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import { call, put, select, takeLatest } from "redux-saga/effects";
+import { call, put, select, takeLatest } from "typed-redux-saga";
+import type { RootState } from "@/app/store";
 import { demoTransactionsResponse } from "@/data/demoPayloads";
 import { callApiWithAuth } from "@/features/api/apiSaga";
 import { selectIsDemo } from "@/features/auth/authSlice";
@@ -56,12 +57,12 @@ const serializeAccounts = (ids?: string[]) => {
 function* handleFetchTransactions(
   action: ReturnType<typeof FetchTransactions>,
 ): SagaIterator {
-  const stored: TransactionFilters = yield select(selectTransactionFilters);
+  const stored: TransactionFilters = yield* select(selectTransactionFilters);
   const filters = { ...stored, ...(action.payload ?? {}) };
-  yield put(setTransactionsLoading(true));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setTransactionsLoading(true));
+  const isDemo: boolean = yield* select(selectIsDemo);
   if (action.payload) {
-    yield put(setTransactionFilters(action.payload));
+    yield* put(setTransactionFilters(action.payload));
   }
 
   const limit = filters.limit ?? 50;
@@ -99,20 +100,20 @@ function* handleFetchTransactions(
     };
 
     if (isDemo) {
-      const existing: TransactionRead[] = yield select(selectTransactions);
+      const existing: TransactionRead[] = yield* select(selectTransactions);
       const source = demoTransactionsResponse.transactions.map(
         normalizeTransactionRead,
       );
       const combined = offset > 0 ? [...existing, ...source] : source;
-      yield put(setTransactions(combined));
+      yield* put(setTransactions(combined));
       if (includeRunningBalances && demoTransactionsResponse.running_balances) {
-        yield put(
+        yield* put(
           setRunningBalances(demoTransactionsResponse.running_balances),
         );
       } else if (!includeRunningBalances) {
-        yield put(setRunningBalances({}));
+        yield* put(setRunningBalances({}));
       }
-      yield put(
+      yield* put(
         setPagination({
           limit,
           offset,
@@ -120,24 +121,24 @@ function* handleFetchTransactions(
         }),
       );
     } else {
-      const response: EndpointResponse<"listTransactions"> = yield call(
-        callApiWithAuth,
+      const response: EndpointResponse<"listTransactions"> = yield* call(
+        callApiWithAuth<EndpointResponse<"listTransactions">>,
         buildEndpointRequest("listTransactions", {
           query,
         }),
         { loadingKey: "transactions" },
       );
 
-      const existing: TransactionRead[] = yield select(selectTransactions);
+      const existing: TransactionRead[] = yield* select(selectTransactions);
       const normalized = response.transactions.map(normalizeTransactionRead);
       const combined = offset > 0 ? [...existing, ...normalized] : normalized;
-      yield put(setTransactions(combined));
+      yield* put(setTransactions(combined));
       if (includeRunningBalances && response.running_balances) {
-        yield put(setRunningBalances(response.running_balances));
+        yield* put(setRunningBalances(response.running_balances));
       } else if (!includeRunningBalances) {
-        yield put(setRunningBalances({}));
+        yield* put(setRunningBalances({}));
       }
-      yield put(
+      yield* put(
         setPagination({
           limit,
           offset,
@@ -146,13 +147,13 @@ function* handleFetchTransactions(
       );
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setTransactionsError(
         error instanceof Error ? error.message : "Failed to load transactions",
       ),
     );
   } finally {
-    yield put(setTransactionsLoading(false));
+    yield* put(setTransactionsLoading(false));
   }
 }
 
@@ -160,9 +161,9 @@ function* handleFetchRecentTransactions(
   action: ReturnType<typeof FetchRecentTransactions>,
 ): SagaIterator {
   const limit = action.payload?.limit ?? 5;
-  yield put(setRecentLimit(limit));
-  yield put(setRecentLoading(true));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setRecentLimit(limit));
+  yield* put(setRecentLoading(true));
+  const isDemo: boolean = yield* select(selectIsDemo);
 
   try {
     const query = {
@@ -180,10 +181,10 @@ function* handleFetchRecentTransactions(
       const trimmed = demoTransactionsResponse.transactions
         .slice(0, limit)
         .map(normalizeTransactionRead);
-      yield put(setRecentTransactions(trimmed));
+      yield* put(setRecentTransactions(trimmed));
     } else {
-      const response: EndpointResponse<"listRecentTransactions"> = yield call(
-        callApiWithAuth,
+      const response: EndpointResponse<"listRecentTransactions"> = yield* call(
+        callApiWithAuth<EndpointResponse<"listRecentTransactions">>,
         buildEndpointRequest("listRecentTransactions", {
           query,
         }),
@@ -193,10 +194,10 @@ function* handleFetchRecentTransactions(
       const trimmed = response.transactions
         .slice(0, limit)
         .map(normalizeTransactionRead);
-      yield put(setRecentTransactions(trimmed));
+      yield* put(setRecentTransactions(trimmed));
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setRecentError(
         error instanceof Error
           ? error.message
@@ -204,14 +205,14 @@ function* handleFetchRecentTransactions(
       ),
     );
   } finally {
-    yield put(setRecentLoading(false));
+    yield* put(setRecentLoading(false));
   }
 }
 
 function* handleCreateTransaction(
   action: ReturnType<typeof CreateTransaction>,
 ): SagaIterator {
-  const isDemo: boolean = yield select(selectIsDemo);
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     const body: EndpointRequest<"createTransaction"> = action.payload;
     if (isDemo) {
@@ -233,32 +234,32 @@ function* handleCreateTransaction(
           amount: leg.amount,
         })),
       };
-      yield put(upsertTransaction(newTx));
-      const balances = (yield select(
-        (state) => state.transactions.runningBalances,
-      )) as Record<string, number>;
+      yield* put(upsertTransaction(newTx));
+      const balances = yield* select(
+        (state: RootState) => state.transactions.runningBalances,
+      );
       const updatedBalances = { ...balances };
       body.legs.forEach((leg) => {
         const prev = updatedBalances[leg.account_id] ?? 0;
         const delta = parseFloat(String(leg.amount)) || 0;
         updatedBalances[leg.account_id] = prev + delta;
       });
-      yield put(setRunningBalances(updatedBalances));
+      yield* put(setRunningBalances(updatedBalances));
       return;
     }
 
-    const response: TransactionRead = yield call(
-      callApiWithAuth,
+    const response: TransactionRead = yield* call(
+      callApiWithAuth<TransactionRead>,
       buildEndpointRequest("createTransaction", {
         body,
       }),
       { loadingKey: "transaction-create" },
     );
-    yield put(upsertTransaction(response));
-    const filters: TransactionFilters = yield select(selectTransactionFilters);
-    yield call(handleFetchTransactions, FetchTransactions(filters));
+    yield* put(upsertTransaction(response));
+    const filters: TransactionFilters = yield* select(selectTransactionFilters);
+    yield* call(handleFetchTransactions, FetchTransactions(filters));
   } catch (error) {
-    yield put(
+    yield* put(
       setTransactionsError(
         error instanceof Error ? error.message : "Failed to create transaction",
       ),
@@ -269,11 +270,11 @@ function* handleCreateTransaction(
 function* handleUpdateTransaction(
   action: ReturnType<typeof UpdateTransaction>,
 ): SagaIterator {
-  const isDemo: boolean = yield select(selectIsDemo);
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     const body: EndpointRequest<"updateTransaction"> = action.payload.data;
     if (isDemo) {
-      const existing: TransactionRead[] = yield select(selectTransactions);
+      const existing: TransactionRead[] = yield* select(selectTransactions);
       const updated = existing.map((tx) =>
         tx.id === action.payload.id
           ? {
@@ -286,21 +287,21 @@ function* handleUpdateTransaction(
             }
           : tx,
       );
-      yield put(setTransactions(updated));
+      yield* put(setTransactions(updated));
       return;
     }
 
-    const response: TransactionRead = yield call(
-      callApiWithAuth,
+    const response: TransactionRead = yield* call(
+      callApiWithAuth<TransactionRead>,
       buildEndpointRequest("updateTransaction", {
         pathParams: { transactionId: action.payload.id },
         body,
       }),
       { loadingKey: "transaction-update" },
     );
-    yield put(upsertTransaction(response));
+    yield* put(upsertTransaction(response));
   } catch (error) {
-    yield put(
+    yield* put(
       setTransactionsError(
         error instanceof Error ? error.message : "Failed to update transaction",
       ),
@@ -311,23 +312,23 @@ function* handleUpdateTransaction(
 function* handleDeleteTransaction(
   action: ReturnType<typeof DeleteTransaction>,
 ): SagaIterator {
-  const isDemo: boolean = yield select(selectIsDemo);
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     if (isDemo) {
-      yield put(removeTransaction(action.payload));
+      yield* put(removeTransaction(action.payload));
       return;
     }
 
-    yield call(
+    yield* call(
       callApiWithAuth,
       buildEndpointRequest("deleteTransaction", {
         pathParams: { transactionId: action.payload },
       }),
       { loadingKey: "transaction-delete" },
     );
-    yield put(removeTransaction(action.payload));
+    yield* put(removeTransaction(action.payload));
   } catch (error) {
-    yield put(
+    yield* put(
       setTransactionsError(
         error instanceof Error ? error.message : "Failed to delete transaction",
       ),
@@ -336,9 +337,12 @@ function* handleDeleteTransaction(
 }
 
 export function* TransactionsSaga(): SagaIterator {
-  yield takeLatest(FetchTransactions.type, handleFetchTransactions);
-  yield takeLatest(FetchRecentTransactions.type, handleFetchRecentTransactions);
-  yield takeLatest(CreateTransaction.type, handleCreateTransaction);
-  yield takeLatest(UpdateTransaction.type, handleUpdateTransaction);
-  yield takeLatest(DeleteTransaction.type, handleDeleteTransaction);
+  yield* takeLatest(FetchTransactions.type, handleFetchTransactions);
+  yield* takeLatest(
+    FetchRecentTransactions.type,
+    handleFetchRecentTransactions,
+  );
+  yield* takeLatest(CreateTransaction.type, handleCreateTransaction);
+  yield* takeLatest(UpdateTransaction.type, handleUpdateTransaction);
+  yield* takeLatest(DeleteTransaction.type, handleDeleteTransaction);
 }

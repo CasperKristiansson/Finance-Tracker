@@ -30,6 +30,7 @@ import { selectToken } from "@/features/auth/authSlice";
 import { useAccountsApi, useReportsApi } from "@/hooks/use-api";
 import { apiFetch } from "@/lib/apiClient";
 import { compactCurrency, currency, formatDate } from "@/lib/format";
+import { getActiveChartDatum } from "@/lib/recharts";
 import { cn } from "@/lib/utils";
 import type {
   CashflowForecastResponse,
@@ -199,8 +200,11 @@ export const CashFlow: React.FC = () => {
   }, [selectedAccounts, token]);
 
   useEffect(() => {
-    loadCashflowForecast();
-    loadNetWorthProjection();
+    const timer = window.setTimeout(() => {
+      void loadCashflowForecast();
+      void loadNetWorthProjection();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadCashflowForecast, loadNetWorthProjection]);
 
   const toggleAccount = (id: string) => {
@@ -338,24 +342,19 @@ export const CashFlow: React.FC = () => {
     };
   }, [cashflowForecast, cashflowSeries]);
 
-  const netWorthSummary = useMemo(() => {
-    if (!netWorthProjection) return null;
-    const current = coerceMoney(netWorthProjection.current);
-    const twelve = netWorthSeries[11]?.netWorth;
-    const threeYears = netWorthSeries[35]?.netWorth;
-    const cagr =
-      netWorthProjection.cagr === null
-        ? null
-        : coerceMoney(netWorthProjection.cagr);
-    return {
-      current,
-      twelve,
-      threeYears,
-      cagr,
-      recommendedMethod: netWorthProjection.recommended_method ?? null,
-      insights: netWorthProjection.insights ?? null,
-    };
-  }, [netWorthProjection, netWorthSeries]);
+  const netWorthSummary = netWorthProjection
+    ? {
+        current: coerceMoney(netWorthProjection.current),
+        twelve: netWorthSeries[11]?.netWorth,
+        threeYears: netWorthSeries[35]?.netWorth,
+        cagr:
+          netWorthProjection.cagr === null
+            ? null
+            : coerceMoney(netWorthProjection.cagr),
+        recommendedMethod: netWorthProjection.recommended_method ?? null,
+        insights: netWorthProjection.insights ?? null,
+      }
+    : null;
 
   return (
     <MotionPage className="space-y-4">
@@ -430,8 +429,8 @@ export const CashFlow: React.FC = () => {
             variant="outline"
             className="h-10 px-3 text-xs"
             onClick={() => {
-              loadCashflowForecast();
-              loadNetWorthProjection();
+              void loadCashflowForecast();
+              void loadNetWorthProjection();
             }}
             disabled={cashflowLoading || netWorthLoading}
           >
@@ -604,9 +603,10 @@ export const CashFlow: React.FC = () => {
                     data={cashflowSeries}
                     margin={{ top: 10, right: 18, left: 0, bottom: 0 }}
                     onClick={(state) => {
-                      const payload = state?.activePayload?.[0]?.payload as
-                        | (typeof cashflowSeries)[number]
-                        | undefined;
+                      const payload = getActiveChartDatum(
+                        cashflowSeries,
+                        state,
+                      );
                       if (!payload || !cashflowForecast) return;
                       setDrilldown({
                         kind: "cashflow",
@@ -820,9 +820,10 @@ export const CashFlow: React.FC = () => {
                     data={netWorthSeries}
                     margin={{ top: 10, right: 18, left: 12, bottom: 0 }}
                     onClick={(state) => {
-                      const payload = state?.activePayload?.[0]?.payload as
-                        | (typeof netWorthSeries)[number]
-                        | undefined;
+                      const payload = getActiveChartDatum(
+                        netWorthSeries,
+                        state,
+                      );
                       if (!payload || !netWorthProjection) return;
 
                       setDrilldown({

@@ -75,7 +75,11 @@ const coerceMoney = (value: unknown): number => {
 
 const toIsoDate = (value: unknown) => {
   if (!value) return null;
-  return String(value).slice(0, 10);
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === "string" || typeof value === "number") {
+    return String(value).slice(0, 10);
+  }
+  return null;
 };
 
 const daysSinceIsoDate = (isoDate: string | null): number | null => {
@@ -269,13 +273,16 @@ export const InvestmentDetails: React.FC = () => {
 
   useEffect(() => {
     if (!accountId || !token) {
-      setCashflowForecast(null);
-      return;
+      const timer = window.setTimeout(() => setCashflowForecast(null), 0);
+      return () => window.clearTimeout(timer);
     }
 
     let cancelled = false;
-    setCashflowForecastLoading(true);
-    setCashflowForecastError(null);
+    const loadingTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      setCashflowForecastLoading(true);
+      setCashflowForecastError(null);
+    }, 0);
 
     const loadForecasts = async () => {
       const cashflowPromise = apiFetch<EndpointResponse<"cashflowForecast">>(
@@ -306,17 +313,21 @@ export const InvestmentDetails: React.FC = () => {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(loadingTimer);
     };
   }, [accountId, token]);
 
   useEffect(() => {
     if (!snapshotDialogOpen) return;
-    setSnapshotDate(new Date().toISOString().slice(0, 10));
-    setSnapshotNotes("");
-    setSnapshotSubmitted(false);
-    setSnapshotBalance(
-      accountCurrentValue ? accountCurrentValue.toFixed(2) : "",
-    );
+    const timer = window.setTimeout(() => {
+      setSnapshotDate(new Date().toISOString().slice(0, 10));
+      setSnapshotNotes("");
+      setSnapshotSubmitted(false);
+      setSnapshotBalance(
+        accountCurrentValue ? accountCurrentValue.toFixed(2) : "",
+      );
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [accountCurrentValue, snapshotDialogOpen]);
 
   useEffect(() => {
@@ -326,8 +337,11 @@ export const InvestmentDetails: React.FC = () => {
     toast.success(
       account ? `${account.name} balance updated.` : "Balance updated.",
     );
-    setSnapshotDialogOpen(false);
-    setSnapshotSubmitted(false);
+    const timer = window.setTimeout(() => {
+      setSnapshotDialogOpen(false);
+      setSnapshotSubmitted(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [account, snapshotSubmitted, updateError, updateLoading]);
 
   const snapshotSubmitDisabled =
@@ -784,7 +798,7 @@ export const InvestmentDetails: React.FC = () => {
                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                         <XAxis
                           dataKey="date"
-                          tickFormatter={(value) =>
+                          tickFormatter={(value: string | number | Date) =>
                             new Date(value).toLocaleDateString("en-US", {
                               month: "short",
                               year: "2-digit",
@@ -941,7 +955,7 @@ export const InvestmentDetails: React.FC = () => {
                           />
                           <XAxis
                             dataKey="date"
-                            tickFormatter={(value) =>
+                            tickFormatter={(value: string | number | Date) =>
                               new Date(value).toLocaleDateString("en-US", {
                                 month: "short",
                                 day: "numeric",

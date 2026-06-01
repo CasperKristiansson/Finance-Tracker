@@ -54,12 +54,9 @@ export const buildEndpointRequest = <N extends EndpointName>(
   const { pathParams, query, body, ...rest } = options;
   return {
     ...rest,
-    path: interpolatePath(
-      endpoint.path,
-      pathParams as Record<string, PathParamValue> | undefined,
-    ),
+    path: interpolatePath(endpoint.path, pathParams),
     method: endpoint.method,
-    query: query as ApiRequest["query"],
+    query: query,
     body,
   };
 };

@@ -54,7 +54,15 @@ export const App: React.FC = () => {
   const warmupState = useAppSelector(selectWarmupState);
   const shouldShowWarmup =
     isAuthenticated && !isDemo && warmupState.status !== "ready";
-  const [showDetailedWarmup, setShowDetailedWarmup] = useState(false);
+  const warmupDelayKey = shouldShowWarmup ? warmupState.status : "hidden";
+  const [warmupDelayState, setWarmupDelayState] = useState({
+    key: "hidden",
+    expired: false,
+  });
+  const showDetailedWarmup =
+    shouldShowWarmup &&
+    (warmupState.status === "failed" ||
+      (warmupDelayState.key === warmupDelayKey && warmupDelayState.expired));
 
   useEffect(() => {
     dispatch(AuthInitialize());
@@ -73,20 +81,14 @@ export const App: React.FC = () => {
   }, [dispatch, isAuthenticated, isDemo, warmupState.status]);
 
   useEffect(() => {
-    if (!shouldShowWarmup) {
-      setShowDetailedWarmup(false);
-      return;
-    }
-
-    if (warmupState.status === "failed") {
-      setShowDetailedWarmup(true);
-      return;
-    }
-
-    setShowDetailedWarmup(false);
-    const timer = window.setTimeout(() => setShowDetailedWarmup(true), 5000);
+    if (!shouldShowWarmup || warmupState.status === "failed") return;
+    const key = warmupDelayKey;
+    const timer = window.setTimeout(
+      () => setWarmupDelayState({ key, expired: true }),
+      5000,
+    );
     return () => window.clearTimeout(timer);
-  }, [shouldShowWarmup, warmupState.status]);
+  }, [shouldShowWarmup, warmupDelayKey, warmupState.status]);
 
   if (shouldShowWarmup) {
     if (!showDetailedWarmup) {

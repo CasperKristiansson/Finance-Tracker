@@ -1,5 +1,5 @@
 import { Calendar, Copy, Loader2, Plus, Receipt } from "lucide-react";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useId, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
   Bar,
@@ -70,6 +70,15 @@ type CreateTaxEventValues = Pick<
   | "note"
 >;
 
+type TaxChartDatum = {
+  label: string;
+  net: number;
+  month?: number;
+  payments: number;
+  refunds: number;
+  year?: number;
+};
+
 export const Taxes: React.FC = () => {
   const token = useAppSelector(selectToken);
   const isDemo = useAppSelector(selectIsDemo);
@@ -97,7 +106,8 @@ export const Taxes: React.FC = () => {
   }, [fetchAccountOptions]);
 
   useEffect(() => {
-    setDetailsId(null);
+    const timer = window.setTimeout(() => setDetailsId(null), 0);
+    return () => window.clearTimeout(timer);
   }, [year, viewMode]);
 
   const yearOptions = useMemo(
@@ -224,15 +234,18 @@ export const Taxes: React.FC = () => {
   };
 
   useEffect(() => {
-    if (viewMode === "year") {
-      setTotalSummary(null);
-      void loadSummary(year);
-      void loadEvents(yearRangeIso(year));
-    } else {
-      setSummary(null);
-      void loadTotalSummary();
-      void loadEvents();
-    }
+    const timer = window.setTimeout(() => {
+      if (viewMode === "year") {
+        setTotalSummary(null);
+        void loadSummary(year);
+        void loadEvents(yearRangeIso(year));
+      } else {
+        setSummary(null);
+        void loadTotalSummary();
+        void loadEvents();
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, year, viewMode]);
 
@@ -246,9 +259,10 @@ export const Taxes: React.FC = () => {
     try {
       if (isDemo) {
         const now = new Date(values.occurred_at).toISOString();
+        const demoId = (events?.events.length ?? 0) + 1;
         const nextEvent = {
-          id: `demo-tax-${Date.now()}`,
-          transaction_id: `demo-tax-tx-${Date.now()}`,
+          id: `demo-tax-${demoId}`,
+          transaction_id: `demo-tax-tx-${demoId}`,
           occurred_at: now,
           description: values.description.trim(),
           event_type: values.event_type,
@@ -303,7 +317,7 @@ export const Taxes: React.FC = () => {
     }
   });
 
-  const gradientId = React.useId();
+  const gradientId = useId();
 
   const selectedEvent = useMemo(() => {
     if (!detailsId) return null;
@@ -317,7 +331,7 @@ export const Taxes: React.FC = () => {
     return sign * amount;
   }, [selectedEvent]);
 
-  const monthlyBreakdown = useMemo(() => {
+  const monthlyBreakdown = useMemo<TaxChartDatum[]>(() => {
     if (viewMode !== "year") return [];
     const base = Array.from({ length: 12 }, (_, idx) => ({
       month: idx + 1,
@@ -346,11 +360,13 @@ export const Taxes: React.FC = () => {
     return base;
   }, [events?.events, year, viewMode]);
 
-  const yearlyBreakdown = useMemo(() => {
+  const yearlyBreakdown = useMemo<TaxChartDatum[]>(() => {
     if (viewMode !== "total") return [];
     return (totalSummary?.yearly ?? []).map((row) => ({
       year: row.year,
       label: String(row.year),
+      payments: 0,
+      refunds: 0,
       net: toNumber(row.net_tax_paid),
     }));
   }, [totalSummary?.yearly, viewMode]);
@@ -407,11 +423,12 @@ export const Taxes: React.FC = () => {
       };
     }
 
-    const activeYears = yearlyBreakdown.length;
+    const years = yearlyBreakdown.flatMap((row) =>
+      typeof row.year === "number" ? [row.year] : [],
+    );
+    const activeYears = years.length;
     const yearRange =
-      activeYears > 0
-        ? `${Math.min(...yearlyBreakdown.map((row) => row.year))}–${Math.max(...yearlyBreakdown.map((row) => row.year))}`
-        : "—";
+      activeYears > 0 ? `${Math.min(...years)}–${Math.max(...years)}` : "—";
 
     return {
       avgNet: activeYears > 0 ? totals.net / activeYears : 0,
@@ -697,7 +714,7 @@ export const Taxes: React.FC = () => {
                     <Bar dataKey="net" radius={[6, 6, 6, 6]} barSize={16}>
                       {monthlyBreakdown.map((row) => (
                         <Cell
-                          key={row.month}
+                          key={row.label}
                           fill={
                             row.net >= 0
                               ? `url(#${gradientId}-net-pos)`
@@ -710,7 +727,7 @@ export const Taxes: React.FC = () => {
                     <Bar dataKey="net" radius={[6, 6, 6, 6]} barSize={16}>
                       {yearlyBreakdown.map((row) => (
                         <Cell
-                          key={row.year}
+                          key={row.label}
                           fill={
                             row.net >= 0
                               ? `url(#${gradientId}-net-pos)`
@@ -967,7 +984,7 @@ export const Taxes: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Add tax event</DialogTitle>
           </DialogHeader>
-          <form onSubmit={submit} className="space-y-3">
+          <form onSubmit={(event) => void submit(event)} className="space-y-3">
             <div className="grid gap-3 md:grid-cols-2">
               <label className="flex flex-col gap-1 text-sm text-slate-700">
                 Type

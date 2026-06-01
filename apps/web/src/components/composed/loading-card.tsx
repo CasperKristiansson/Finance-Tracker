@@ -10,6 +10,8 @@ type LoadingCardProps = {
   lineClassName?: string;
 };
 
+const lineWidthClasses = ["w-2/3", "w-5/6"];
+
 export const LoadingCard: React.FC<LoadingCardProps> = ({
   lines = 4,
   className,
@@ -21,15 +23,10 @@ export const LoadingCard: React.FC<LoadingCardProps> = ({
       className,
     )}
   >
-    {Array.from({ length: lines }).map((_, idx) => (
+    {Array.from({ length: lines }, (_, index) => index).map((line) => (
       <Skeleton
-        key={idx}
-        className={cn(
-          "h-3 w-full",
-          idx === 0 && "w-2/3",
-          idx === 1 && "w-5/6",
-          lineClassName,
-        )}
+        key={`line-${line}`}
+        className={cn("h-3 w-full", lineWidthClasses[line], lineClassName)}
       />
     ))}
   </div>

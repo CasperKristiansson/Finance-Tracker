@@ -1,6 +1,6 @@
 import { createAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import { call, put, select, takeLatest } from "redux-saga/effects";
+import { call, put, select, takeLatest } from "typed-redux-saga";
 import { demoCategories } from "@/data/demoPayloads";
 import { callApiWithAuth } from "@/features/api/apiSaga";
 import { selectIsDemo } from "@/features/auth/authSlice";
@@ -47,18 +47,18 @@ function* handleFetchCategories(
   action: ReturnType<typeof FetchCategories>,
 ): SagaIterator {
   const filters = action.payload ?? {};
-  const state: CategoriesState = yield select(selectCategoriesState);
+  const state: CategoriesState = yield* select(selectCategoriesState);
   const includeArchived = filters.includeArchived ?? state.includeArchived;
   const includeSpecial = filters.includeSpecial ?? state.includeSpecial;
-  yield put(setCategoriesLoading(true));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setCategoriesLoading(true));
+  const isDemo: boolean = yield* select(selectIsDemo);
   if (action.payload) {
-    yield put(setCategoriesFilters(action.payload));
+    yield* put(setCategoriesFilters(action.payload));
   }
 
   try {
     if (isDemo) {
-      yield put(setCategories(demoCategories.categories));
+      yield* put(setCategories(demoCategories.categories));
       return;
     }
 
@@ -67,8 +67,8 @@ function* handleFetchCategories(
       include_special: includeSpecial,
     };
 
-    const response: EndpointResponse<"listCategories"> = yield call(
-      callApiWithAuth,
+    const response: EndpointResponse<"listCategories"> = yield* call(
+      callApiWithAuth<EndpointResponse<"listCategories">>,
       buildEndpointRequest("listCategories", {
         query,
       }),
@@ -81,27 +81,27 @@ function* handleFetchCategories(
       lifetime_total: category.lifetime_total ?? "0",
       recent_months: category.recent_months ?? [],
     }));
-    yield put(setCategories(normalized));
+    yield* put(setCategories(normalized));
   } catch (error) {
-    yield put(
+    yield* put(
       setCategoriesError(
         error instanceof Error ? error.message : "Failed to load categories",
       ),
     );
   } finally {
-    yield put(setCategoriesLoading(false));
+    yield* put(setCategoriesLoading(false));
   }
 }
 
 function* handleFetchCategoryOptions(
   action: ReturnType<typeof FetchCategoryOptions>,
 ): SagaIterator {
-  const state: CategoriesState = yield select(selectCategoriesState);
+  const state: CategoriesState = yield* select(selectCategoriesState);
   const includeArchived =
     action.payload?.includeArchived ?? state.includeArchived;
   const includeSpecial = action.payload?.includeSpecial ?? state.includeSpecial;
-  yield put(setCategoryOptionsLoading(true));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setCategoryOptionsLoading(true));
+  const isDemo: boolean = yield* select(selectIsDemo);
 
   try {
     if (isDemo) {
@@ -113,12 +113,12 @@ function* handleFetchCategoryOptions(
         icon: category.icon,
         is_archived: category.is_archived,
       }));
-      yield put(setCategoryOptions(options));
+      yield* put(setCategoryOptions(options));
       return;
     }
 
-    const response: EndpointResponse<"listCategoryOptions"> = yield call(
-      callApiWithAuth,
+    const response: EndpointResponse<"listCategoryOptions"> = yield* call(
+      callApiWithAuth<EndpointResponse<"listCategoryOptions">>,
       buildEndpointRequest("listCategoryOptions", {
         query: {
           include_archived: includeArchived,
@@ -127,9 +127,9 @@ function* handleFetchCategoryOptions(
       }),
       { loadingKey: "category-options" },
     );
-    yield put(setCategoryOptions(response.options));
+    yield* put(setCategoryOptions(response.options));
   } catch (error) {
-    yield put(
+    yield* put(
       setCategoryOptionsError(
         error instanceof Error
           ? error.message
@@ -137,24 +137,22 @@ function* handleFetchCategoryOptions(
       ),
     );
   } finally {
-    yield put(setCategoryOptionsLoading(false));
+    yield* put(setCategoryOptionsLoading(false));
   }
 }
 
 function* handleCreateCategory(
   action: ReturnType<typeof CreateCategory>,
 ): SagaIterator {
-  const isDemo: boolean = yield select(selectIsDemo);
-  yield put(setCategoryCreateLoading(true));
-  yield put(setCategoryMutationError(undefined));
+  const isDemo: boolean = yield* select(selectIsDemo);
+  yield* put(setCategoryCreateLoading(true));
+  yield* put(setCategoryMutationError(undefined));
   try {
     const body: EndpointRequest<"createCategory"> = action.payload;
     if (isDemo) {
-      const current = (yield select(
-        selectCategories,
-      )) as CategoriesState["items"];
+      const current = yield* select(selectCategories);
       const now = new Date().toISOString();
-      yield put(
+      yield* put(
         setCategories([
           ...current,
           {
@@ -176,40 +174,38 @@ function* handleCreateCategory(
       return;
     }
 
-    yield call(
+    yield* call(
       callApiWithAuth,
       buildEndpointRequest("createCategory", { body }),
       { loadingKey: "categories" },
     );
-    const state: CategoriesState = yield select(selectCategoriesState);
-    yield call(
+    const state: CategoriesState = yield* select(selectCategoriesState);
+    yield* call(
       handleFetchCategories,
       FetchCategories({ includeArchived: state.includeArchived }),
     );
   } catch (error) {
-    yield put(
+    yield* put(
       setCategoryMutationError(
         error instanceof Error ? error.message : "Failed to create category",
       ),
     );
   } finally {
-    yield put(setCategoryCreateLoading(false));
+    yield* put(setCategoryCreateLoading(false));
   }
 }
 
 function* handleUpdateCategory(
   action: ReturnType<typeof UpdateCategory>,
 ): SagaIterator {
-  const isDemo: boolean = yield select(selectIsDemo);
-  yield put(setCategoryUpdateLoading(true));
-  yield put(setCategoryMutationError(undefined));
+  const isDemo: boolean = yield* select(selectIsDemo);
+  yield* put(setCategoryUpdateLoading(true));
+  yield* put(setCategoryMutationError(undefined));
   try {
     const body: EndpointRequest<"updateCategory"> = action.payload.data;
     if (isDemo) {
-      const current = (yield select(
-        selectCategories,
-      )) as CategoriesState["items"];
-      yield put(
+      const current = yield* select(selectCategories);
+      yield* put(
         setCategories(
           current.map((cat) =>
             cat.id === action.payload.id
@@ -232,7 +228,7 @@ function* handleUpdateCategory(
       return;
     }
 
-    yield call(
+    yield* call(
       callApiWithAuth,
       buildEndpointRequest("updateCategory", {
         pathParams: { categoryId: action.payload.id },
@@ -240,32 +236,30 @@ function* handleUpdateCategory(
       }),
       { loadingKey: "categories" },
     );
-    const state: CategoriesState = yield select(selectCategoriesState);
-    yield call(
+    const state: CategoriesState = yield* select(selectCategoriesState);
+    yield* call(
       handleFetchCategories,
       FetchCategories({ includeArchived: state.includeArchived }),
     );
   } catch (error) {
-    yield put(
+    yield* put(
       setCategoryMutationError(
         error instanceof Error ? error.message : "Failed to update category",
       ),
     );
   } finally {
-    yield put(setCategoryUpdateLoading(false));
+    yield* put(setCategoryUpdateLoading(false));
   }
 }
 
 function* handleMergeCategory(
   action: ReturnType<typeof MergeCategory>,
 ): SagaIterator {
-  const isDemo: boolean = yield select(selectIsDemo);
-  yield put(setCategoryMutationError(undefined));
+  const isDemo: boolean = yield* select(selectIsDemo);
+  yield* put(setCategoryMutationError(undefined));
   try {
     if (isDemo) {
-      const current = (yield select(
-        selectCategories,
-      )) as CategoriesState["items"];
+      const current = yield* select(selectCategories);
       const merged = current.filter(
         (cat) => cat.id !== action.payload.sourceCategoryId,
       );
@@ -279,11 +273,11 @@ function* handleMergeCategory(
           updated_at: new Date().toISOString(),
         };
       }
-      yield put(setCategories(merged));
+      yield* put(setCategories(merged));
       return;
     }
 
-    yield call(
+    yield* call(
       callApiWithAuth,
       buildEndpointRequest("mergeCategories", {
         body: {
@@ -294,13 +288,13 @@ function* handleMergeCategory(
       }),
       { loadingKey: "categories" },
     );
-    const state: CategoriesState = yield select(selectCategoriesState);
-    yield call(
+    const state: CategoriesState = yield* select(selectCategoriesState);
+    yield* call(
       handleFetchCategories,
       FetchCategories({ includeArchived: state.includeArchived }),
     );
   } catch (error) {
-    yield put(
+    yield* put(
       setCategoryMutationError(
         error instanceof Error ? error.message : "Failed to merge categories",
       ),
@@ -309,9 +303,9 @@ function* handleMergeCategory(
 }
 
 export function* CategoriesSaga(): SagaIterator {
-  yield takeLatest(FetchCategories.type, handleFetchCategories);
-  yield takeLatest(FetchCategoryOptions.type, handleFetchCategoryOptions);
-  yield takeLatest(CreateCategory.type, handleCreateCategory);
-  yield takeLatest(UpdateCategory.type, handleUpdateCategory);
-  yield takeLatest(MergeCategory.type, handleMergeCategory);
+  yield* takeLatest(FetchCategories.type, handleFetchCategories);
+  yield* takeLatest(FetchCategoryOptions.type, handleFetchCategoryOptions);
+  yield* takeLatest(CreateCategory.type, handleCreateCategory);
+  yield* takeLatest(UpdateCategory.type, handleUpdateCategory);
+  yield* takeLatest(MergeCategory.type, handleMergeCategory);
 }

@@ -1,6 +1,6 @@
 import { createAction } from "@reduxjs/toolkit";
 import type { SagaIterator } from "redux-saga";
-import { call, put, select, takeLatest } from "redux-saga/effects";
+import { call, put, select, takeLatest } from "typed-redux-saga";
 import { demoReportPayloads } from "@/data/demoPayloads";
 import { callApiWithAuth } from "@/features/api/apiSaga";
 import { selectIsDemo } from "@/features/auth/authSlice";
@@ -78,9 +78,9 @@ function* handleFetchMonthly(
 ): SagaIterator {
   const filters = action.payload ?? {};
   const key = buildReportKey(filters);
-  yield put(setMonthlyCurrentKey(key));
-  yield put(setMonthlyLoading(true));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setMonthlyCurrentKey(key));
+  yield* put(setMonthlyLoading(true));
+  const isDemo: boolean = yield* select(selectIsDemo);
 
   try {
     const query = {
@@ -94,20 +94,20 @@ function* handleFetchMonthly(
     };
 
     if (isDemo) {
-      yield put(setMonthlyReport({ key, data: demoReportPayloads.monthly }));
+      yield* put(setMonthlyReport({ key, data: demoReportPayloads.monthly }));
     } else {
-      const response: EndpointResponse<"monthlyReport"> = yield call(
-        callApiWithAuth,
+      const response: EndpointResponse<"monthlyReport"> = yield* call(
+        callApiWithAuth<EndpointResponse<"monthlyReport">>,
         buildEndpointRequest("monthlyReport", {
           query,
         }),
         { loadingKey: "report-monthly" },
       );
 
-      yield put(setMonthlyReport({ key, data: response.results }));
+      yield* put(setMonthlyReport({ key, data: response.results }));
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setMonthlyError(
         error instanceof Error
           ? error.message
@@ -115,7 +115,7 @@ function* handleFetchMonthly(
       ),
     );
   } finally {
-    yield put(setMonthlyLoading(false));
+    yield* put(setMonthlyLoading(false));
   }
 }
 
@@ -124,9 +124,9 @@ function* handleFetchYearly(
 ): SagaIterator {
   const filters = action.payload ?? {};
   const key = buildReportKey(filters);
-  yield put(setYearlyCurrentKey(key));
-  yield put(setYearlyLoading(true));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setYearlyCurrentKey(key));
+  yield* put(setYearlyLoading(true));
+  const isDemo: boolean = yield* select(selectIsDemo);
 
   try {
     const query = {
@@ -139,26 +139,26 @@ function* handleFetchYearly(
     };
 
     if (isDemo) {
-      yield put(setYearlyReport({ key, data: demoReportPayloads.yearly }));
+      yield* put(setYearlyReport({ key, data: demoReportPayloads.yearly }));
     } else {
-      const response: EndpointResponse<"yearlyReport"> = yield call(
-        callApiWithAuth,
+      const response: EndpointResponse<"yearlyReport"> = yield* call(
+        callApiWithAuth<EndpointResponse<"yearlyReport">>,
         buildEndpointRequest("yearlyReport", {
           query,
         }),
         { loadingKey: "report-yearly" },
       );
 
-      yield put(setYearlyReport({ key, data: response.results }));
+      yield* put(setYearlyReport({ key, data: response.results }));
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setYearlyError(
         error instanceof Error ? error.message : "Failed to load yearly report",
       ),
     );
   } finally {
-    yield put(setYearlyLoading(false));
+    yield* put(setYearlyLoading(false));
   }
 }
 
@@ -167,9 +167,9 @@ function* handleFetchTotal(
 ): SagaIterator {
   const filters = action.payload ?? {};
   const key = buildReportKey(filters);
-  yield put(setTotalCurrentKey(key));
-  yield put(setTotalLoading(true));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setTotalCurrentKey(key));
+  yield* put(setTotalLoading(true));
+  const isDemo: boolean = yield* select(selectIsDemo);
 
   try {
     const query = {
@@ -182,26 +182,26 @@ function* handleFetchTotal(
     };
 
     if (isDemo) {
-      yield put(setTotalReport({ key, data: demoReportPayloads.total }));
+      yield* put(setTotalReport({ key, data: demoReportPayloads.total }));
     } else {
-      const response: EndpointResponse<"totalReport"> = yield call(
-        callApiWithAuth,
+      const response: EndpointResponse<"totalReport"> = yield* call(
+        callApiWithAuth<EndpointResponse<"totalReport">>,
         buildEndpointRequest("totalReport", {
           query,
         }),
         { loadingKey: "report-total" },
       );
 
-      yield put(setTotalReport({ key, data: response }));
+      yield* put(setTotalReport({ key, data: response }));
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setTotalError(
         error instanceof Error ? error.message : "Failed to load totals",
       ),
     );
   } finally {
-    yield put(setTotalLoading(false));
+    yield* put(setTotalLoading(false));
   }
 }
 
@@ -210,9 +210,9 @@ function* handleFetchNetWorth(
 ): SagaIterator {
   const filters = action.payload ?? {};
   const key = buildReportKey(filters);
-  yield put(setNetWorthCurrentKey(key));
-  yield put(setNetWorthLoading(true));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setNetWorthCurrentKey(key));
+  yield* put(setNetWorthLoading(true));
+  const isDemo: boolean = yield* select(selectIsDemo);
 
   try {
     const query = {
@@ -222,22 +222,22 @@ function* handleFetchNetWorth(
     };
 
     if (isDemo) {
-      yield put(
+      yield* put(
         setNetWorthHistory({ key, data: demoReportPayloads.netWorth.points }),
       );
     } else {
-      const response: EndpointResponse<"netWorthHistory"> = yield call(
-        callApiWithAuth,
+      const response: EndpointResponse<"netWorthHistory"> = yield* call(
+        callApiWithAuth<EndpointResponse<"netWorthHistory">>,
         buildEndpointRequest("netWorthHistory", {
           query,
         }),
         { loadingKey: "report-net-worth" },
       );
 
-      yield put(setNetWorthHistory({ key, data: response.points }));
+      yield* put(setNetWorthHistory({ key, data: response.points }));
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setNetWorthError(
         error instanceof Error
           ? error.message
@@ -245,7 +245,7 @@ function* handleFetchNetWorth(
       ),
     );
   } finally {
-    yield put(setNetWorthLoading(false));
+    yield* put(setNetWorthLoading(false));
   }
 }
 
@@ -254,9 +254,9 @@ function* handleFetchQuarterly(
 ): SagaIterator {
   const filters = action.payload ?? {};
   const key = buildReportKey(filters);
-  yield put(setQuarterlyCurrentKey(key));
-  yield put(setQuarterlyLoading(true));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setQuarterlyCurrentKey(key));
+  yield* put(setQuarterlyLoading(true));
+  const isDemo: boolean = yield* select(selectIsDemo);
 
   try {
     const query = {
@@ -269,21 +269,21 @@ function* handleFetchQuarterly(
         : {}),
     };
     if (isDemo) {
-      yield put(
+      yield* put(
         setQuarterlyReport({ key, data: demoReportPayloads.quarterly }),
       );
     } else {
-      const response: EndpointResponse<"quarterlyReport"> = yield call(
-        callApiWithAuth,
+      const response: EndpointResponse<"quarterlyReport"> = yield* call(
+        callApiWithAuth<EndpointResponse<"quarterlyReport">>,
         buildEndpointRequest("quarterlyReport", {
           query,
         }),
         { loadingKey: "report-quarterly" },
       );
-      yield put(setQuarterlyReport({ key, data: response.results }));
+      yield* put(setQuarterlyReport({ key, data: response.results }));
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setQuarterlyError(
         error instanceof Error
           ? error.message
@@ -291,7 +291,7 @@ function* handleFetchQuarterly(
       ),
     );
   } finally {
-    yield put(setQuarterlyLoading(false));
+    yield* put(setQuarterlyLoading(false));
   }
 }
 
@@ -300,9 +300,9 @@ function* handleFetchCustom(
 ): SagaIterator {
   const params = action.payload;
   const key = JSON.stringify(params);
-  yield put(setCustomCurrentKey(key));
-  yield put(setCustomLoading(true));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setCustomCurrentKey(key));
+  yield* put(setCustomLoading(true));
+  const isDemo: boolean = yield* select(selectIsDemo);
 
   try {
     const query = {
@@ -316,31 +316,31 @@ function* handleFetchCustom(
         : {}),
     };
     if (isDemo) {
-      yield put(setCustomReport({ key, data: demoReportPayloads.monthly }));
+      yield* put(setCustomReport({ key, data: demoReportPayloads.monthly }));
     } else {
-      const response: EndpointResponse<"dateRangeReport"> = yield call(
-        callApiWithAuth,
+      const response: EndpointResponse<"dateRangeReport"> = yield* call(
+        callApiWithAuth<EndpointResponse<"dateRangeReport">>,
         buildEndpointRequest("dateRangeReport", { query }),
         { loadingKey: "report-custom" },
       );
-      yield put(setCustomReport({ key, data: response.results }));
+      yield* put(setCustomReport({ key, data: response.results }));
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setCustomError(
         error instanceof Error ? error.message : "Failed to load custom report",
       ),
     );
   } finally {
-    yield put(setCustomLoading(false));
+    yield* put(setCustomLoading(false));
   }
 }
 
 function* handleExportReport(
   action: ReturnType<typeof ExportReport>,
 ): SagaIterator {
-  yield put(setExportLoading(true));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setExportLoading(true));
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     const payload = {
       granularity: action.payload.granularity,
@@ -356,10 +356,10 @@ function* handleExportReport(
         : {}),
     };
     if (isDemo) {
-      yield put(setExportError("Export is not available in demo mode."));
+      yield* put(setExportError("Export is not available in demo mode."));
     } else {
-      const response: EndpointResponse<"exportReport"> = yield call(
-        callApiWithAuth,
+      const response: EndpointResponse<"exportReport"> = yield* call(
+        callApiWithAuth<EndpointResponse<"exportReport">>,
         buildEndpointRequest("exportReport", { body: payload }),
         { loadingKey: "report-export" },
       );
@@ -369,22 +369,22 @@ function* handleExportReport(
       link.click();
     }
   } catch (error) {
-    yield put(
+    yield* put(
       setExportError(
         error instanceof Error ? error.message : "Failed to export report",
       ),
     );
   } finally {
-    yield put(setExportLoading(false));
+    yield* put(setExportLoading(false));
   }
 }
 
 export function* ReportsSaga(): SagaIterator {
-  yield takeLatest(FetchMonthlyReport.type, handleFetchMonthly);
-  yield takeLatest(FetchYearlyReport.type, handleFetchYearly);
-  yield takeLatest(FetchTotalReport.type, handleFetchTotal);
-  yield takeLatest(FetchNetWorthHistory.type, handleFetchNetWorth);
-  yield takeLatest(FetchQuarterlyReport.type, handleFetchQuarterly);
-  yield takeLatest(FetchCustomReport.type, handleFetchCustom);
-  yield takeLatest(ExportReport.type, handleExportReport);
+  yield* takeLatest(FetchMonthlyReport.type, handleFetchMonthly);
+  yield* takeLatest(FetchYearlyReport.type, handleFetchYearly);
+  yield* takeLatest(FetchTotalReport.type, handleFetchTotal);
+  yield* takeLatest(FetchNetWorthHistory.type, handleFetchNetWorth);
+  yield* takeLatest(FetchQuarterlyReport.type, handleFetchQuarterly);
+  yield* takeLatest(FetchCustomReport.type, handleFetchCustom);
+  yield* takeLatest(ExportReport.type, handleExportReport);
 }

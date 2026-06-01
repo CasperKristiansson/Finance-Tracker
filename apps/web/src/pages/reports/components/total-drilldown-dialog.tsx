@@ -83,6 +83,12 @@ type TotalInvestmentsYearRow = {
   impliedReturn: number | null;
 };
 
+type TotalYearCategoryRow = {
+  name: string;
+  total: number;
+  txCount: number;
+};
+
 type TotalDebtAccountRow = {
   id: string;
   name: string;
@@ -197,6 +203,105 @@ export const TotalDrilldownDialog: React.FC<{
       .slice(0, 6);
   }, [totalDrilldown, totalDrilldownSeries]);
 
+  const totalDrilldownYearRows = useMemo(() => {
+    if (
+      !totalDrilldown ||
+      (totalDrilldown.kind !== "category" && totalDrilldown.kind !== "source")
+    ) {
+      return [];
+    }
+
+    const bucket: Record<number, number> = {};
+    totalDrilldownSeries.forEach((row) => {
+      const yr = new Date(row.period).getUTCFullYear();
+      const value =
+        totalDrilldown.flow === "expense" ? row.expense : row.income;
+      bucket[yr] = (bucket[yr] ?? 0) + value;
+    });
+
+    return Object.entries(bucket)
+      .map(([yr, value]) => ({
+        year: Number(yr),
+        total: value,
+      }))
+      .sort((a, b) => b.year - a.year)
+      .slice(0, 20);
+  }, [totalDrilldown, totalDrilldownSeries]);
+
+  const totalYearDetails = useMemo(() => {
+    if (!totalYearDrilldown) return null;
+
+    const monthly = totalYearDrilldown.monthly.map((row) => ({
+      date: row.date,
+      month: monthLabel(row.date),
+      income: Number(row.income),
+      expense: Number(row.expense),
+      net: Number(row.net),
+    }));
+
+    const toCategoryRow = (row: {
+      name: string;
+      total: unknown;
+      transaction_count: number;
+    }): TotalYearCategoryRow => ({
+      name: row.name,
+      total: Number(row.total),
+      txCount: row.transaction_count,
+    });
+
+    const topExpenseCategories = [...totalYearDrilldown.category_breakdown]
+      .map(toCategoryRow)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+
+    const topIncomeCategories = [
+      ...totalYearDrilldown.income_category_breakdown,
+    ]
+      .map(toCategoryRow)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10);
+
+    const summaryItems = [
+      {
+        label: "Income",
+        value: Number(totalYearDrilldown.stats.total_income),
+        className: "text-emerald-700",
+      },
+      {
+        label: "Expense",
+        value: Number(totalYearDrilldown.stats.total_expense),
+        className: "text-rose-700",
+      },
+      {
+        label: "Net saved",
+        value: Number(totalYearDrilldown.stats.net_savings),
+        className: "text-slate-900",
+      },
+      {
+        label: "Savings rate",
+        value: totalYearDrilldown.stats.savings_rate_pct
+          ? Number(totalYearDrilldown.stats.savings_rate_pct)
+          : null,
+        className: "text-slate-900",
+        format: "percent" as const,
+      },
+    ];
+
+    return { monthly, topExpenseCategories, topIncomeCategories, summaryItems };
+  }, [totalYearDrilldown]);
+
+  const totalInvestmentsRows = useMemo(
+    () =>
+      totalInvestmentsYearlyTable.map((row) => ({
+        ...row,
+        marketGrowth: Number(
+          totalOverview?.yearly.find((entry) => entry.year === row.year)
+            ?.investment_market_growth ?? 0,
+        ),
+      })),
+    [totalInvestmentsYearlyTable, totalOverview?.yearly],
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl">
@@ -294,34 +399,16 @@ export const TotalDrilldownDialog: React.FC<{
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {(() => {
-                        const bucket: Record<number, number> = {};
-                        totalDrilldownSeries.forEach((row) => {
-                          const yr = new Date(row.period).getUTCFullYear();
-                          const value =
-                            totalDrilldown.flow === "expense"
-                              ? row.expense
-                              : row.income;
-                          bucket[yr] = (bucket[yr] ?? 0) + value;
-                        });
-                        return Object.entries(bucket)
-                          .map(([yr, value]) => ({
-                            year: Number(yr),
-                            total: value,
-                          }))
-                          .sort((a, b) => b.year - a.year)
-                          .slice(0, 20)
-                          .map((row) => (
-                            <TableRow key={row.year}>
-                              <TableCell className="font-medium">
-                                {row.year}
-                              </TableCell>
-                              <TableCell className="text-right font-semibold">
-                                {currency(row.total)}
-                              </TableCell>
-                            </TableRow>
-                          ));
-                      })()}
+                      {totalDrilldownYearRows.map((row) => (
+                        <TableRow key={row.year}>
+                          <TableCell className="font-medium">
+                            {row.year}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {currency(row.total)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
                     </TableBody>
                   </Table>
                 </div>
@@ -360,14 +447,7 @@ export const TotalDrilldownDialog: React.FC<{
                       />
                       <Tooltip
                         formatter={(value) => currency(Number(value))}
-                        labelFormatter={(_label, payload) =>
-                          payload?.[0]?.payload?.date
-                            ? formatDate(String(payload[0].payload.date), {
-                                year: "numeric",
-                                month: "long",
-                              })
-                            : String(_label)
-                        }
+                        labelFormatter={formatTooltipDateLabel}
                         contentStyle={{ fontSize: 12 }}
                       />
                       <Area
@@ -522,14 +602,7 @@ export const TotalDrilldownDialog: React.FC<{
                       />
                       <Tooltip
                         formatter={(value) => currency(Math.abs(Number(value)))}
-                        labelFormatter={(_label, payload) =>
-                          payload?.[0]?.payload?.date
-                            ? formatDate(String(payload[0].payload.date), {
-                                year: "numeric",
-                                month: "long",
-                              })
-                            : String(_label)
-                        }
+                        labelFormatter={formatTooltipDateLabel}
                         contentStyle={{ fontSize: 12 }}
                       />
                       <ReferenceLine y={0} stroke="#cbd5e1" />
@@ -568,7 +641,9 @@ export const TotalDrilldownDialog: React.FC<{
                 size="sm"
                 variant="outline"
                 onClick={() =>
-                  navigate(`${PageRoutes.reportsYearly}/${totalDrilldown.year}`)
+                  void navigate(
+                    `${PageRoutes.reportsYearly}/${totalDrilldown.year}`,
+                  )
                 }
               >
                 Open yearly report
@@ -585,224 +660,155 @@ export const TotalDrilldownDialog: React.FC<{
               <div className="rounded-md border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
                 No yearly details available.
               </div>
-            ) : (
-              (() => {
-                const monthly = totalYearDrilldown.monthly.map((row) => ({
-                  date: row.date,
-                  month: monthLabel(row.date),
-                  income: Number(row.income),
-                  expense: Number(row.expense),
-                  net: Number(row.net),
-                }));
-                const topExpenseCategories = [
-                  ...totalYearDrilldown.category_breakdown,
-                ]
-                  .map((row) => ({
-                    name: row.name,
-                    total: Number(row.total),
-                    txCount: row.transaction_count,
-                  }))
-                  .sort((a, b) => b.total - a.total)
-                  .slice(0, 10);
-                const topIncomeCategories = [
-                  ...totalYearDrilldown.income_category_breakdown,
-                ]
-                  .map((row) => ({
-                    name: row.name,
-                    total: Number(row.total),
-                    txCount: row.transaction_count,
-                  }))
-                  .sort((a, b) => b.total - a.total)
-                  .slice(0, 10);
-
-                return (
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-3">
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        {[
-                          {
-                            label: "Income",
-                            value: Number(
-                              totalYearDrilldown.stats.total_income,
-                            ),
-                            className: "text-emerald-700",
-                          },
-                          {
-                            label: "Expense",
-                            value: Number(
-                              totalYearDrilldown.stats.total_expense,
-                            ),
-                            className: "text-rose-700",
-                          },
-                          {
-                            label: "Net saved",
-                            value: Number(totalYearDrilldown.stats.net_savings),
-                            className: "text-slate-900",
-                          },
-                          {
-                            label: "Savings rate",
-                            value: totalYearDrilldown.stats.savings_rate_pct
-                              ? Number(
-                                  totalYearDrilldown.stats.savings_rate_pct,
-                                )
-                              : null,
-                            className: "text-slate-900",
-                            format: "percent" as const,
-                          },
-                        ].map((item) => (
-                          <div
-                            key={item.label}
-                            className="rounded-md border border-slate-100 bg-slate-50 p-3"
-                          >
-                            <p className="text-xs tracking-wide text-slate-500 uppercase">
-                              {item.label}
-                            </p>
-                            <p className={`font-semibold ${item.className}`}>
-                              {item.value === null
-                                ? "—"
-                                : item.format === "percent"
-                                  ? percent(item.value)
-                                  : currency(item.value)}
-                            </p>
-                          </div>
-                        ))}
+            ) : totalYearDetails ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {totalYearDetails.summaryItems.map((item) => (
+                      <div
+                        key={item.label}
+                        className="rounded-md border border-slate-100 bg-slate-50 p-3"
+                      >
+                        <p className="text-xs tracking-wide text-slate-500 uppercase">
+                          {item.label}
+                        </p>
+                        <p className={`font-semibold ${item.className}`}>
+                          {item.value === null
+                            ? "—"
+                            : item.format === "percent"
+                              ? percent(item.value)
+                              : currency(item.value)}
+                        </p>
                       </div>
+                    ))}
+                  </div>
 
-                      <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={monthly}>
-                            <CartesianGrid
-                              strokeDasharray="3 3"
-                              vertical={false}
-                            />
-                            <XAxis
-                              dataKey="month"
-                              tickLine={false}
-                              axisLine={false}
-                              tick={{ fill: "#475569", fontSize: 12 }}
-                            />
-                            <YAxis
-                              tickLine={false}
-                              axisLine={false}
-                              tick={{ fill: "#475569", fontSize: 12 }}
-                              tickFormatter={(v) =>
-                                compactCurrency(Math.abs(Number(v)))
-                              }
-                            />
-                            <Tooltip
-                              formatter={(value) =>
-                                currency(Math.abs(Number(value)))
-                              }
-                              contentStyle={{ fontSize: 12 }}
-                            />
-                            <ReferenceLine y={0} stroke="#cbd5e1" />
-                            <Bar
-                              dataKey="income"
-                              name="Income"
-                              fill="#10b981"
-                              radius={[6, 6, 0, 0]}
-                              barSize={16}
-                              isAnimationActive={false}
-                            />
-                            <Bar
-                              dataKey="expense"
-                              name="Expense"
-                              fill="#ef4444"
-                              radius={[6, 6, 0, 0]}
-                              barSize={16}
-                              isAnimationActive={false}
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="net"
-                              name="Net"
-                              stroke="#0f172a"
-                              strokeWidth={2}
-                              dot={false}
-                              isAnimationActive={false}
-                            />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
+                  <div className="h-72 rounded-md border border-slate-100 bg-white p-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={totalYearDetails.monthly}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis
+                          dataKey="month"
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                        />
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          tick={{ fill: "#475569", fontSize: 12 }}
+                          tickFormatter={(v) =>
+                            compactCurrency(Math.abs(Number(v)))
+                          }
+                        />
+                        <Tooltip
+                          formatter={(value) =>
+                            currency(Math.abs(Number(value)))
+                          }
+                          contentStyle={{ fontSize: 12 }}
+                        />
+                        <ReferenceLine y={0} stroke="#cbd5e1" />
+                        <Bar
+                          dataKey="income"
+                          name="Income"
+                          fill="#10b981"
+                          radius={[6, 6, 0, 0]}
+                          barSize={16}
+                          isAnimationActive={false}
+                        />
+                        <Bar
+                          dataKey="expense"
+                          name="Expense"
+                          fill="#ef4444"
+                          radius={[6, 6, 0, 0]}
+                          barSize={16}
+                          isAnimationActive={false}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="net"
+                          name="Net"
+                          stroke="#0f172a"
+                          strokeWidth={2}
+                          dot={false}
+                          isAnimationActive={false}
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                <div className="grid gap-3">
+                  <div className="rounded-md border border-slate-100 bg-white">
+                    <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                      Top expense categories
                     </div>
-
-                    <div className="grid gap-3">
-                      <div className="rounded-md border border-slate-100 bg-white">
-                        <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
-                          Top expense categories
-                        </div>
-                        <div className="max-h-72 overflow-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Category</TableHead>
-                                <TableHead className="text-right">
-                                  Total
-                                </TableHead>
-                                <TableHead className="hidden text-right md:table-cell">
-                                  Tx
-                                </TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {topExpenseCategories.map((row) => (
-                                <TableRow key={row.name}>
-                                  <TableCell className="font-medium">
-                                    {row.name}
-                                  </TableCell>
-                                  <TableCell className="text-right font-semibold">
-                                    {currency(row.total)}
-                                  </TableCell>
-                                  <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
-                                    {row.txCount}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </div>
-
-                      <div className="rounded-md border border-slate-100 bg-white">
-                        <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
-                          Top income categories
-                        </div>
-                        <div className="max-h-72 overflow-auto">
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Category</TableHead>
-                                <TableHead className="text-right">
-                                  Total
-                                </TableHead>
-                                <TableHead className="hidden text-right md:table-cell">
-                                  Tx
-                                </TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {topIncomeCategories.map((row) => (
-                                <TableRow key={row.name}>
-                                  <TableCell className="font-medium">
-                                    {row.name}
-                                  </TableCell>
-                                  <TableCell className="text-right font-semibold text-emerald-700">
-                                    {currency(row.total)}
-                                  </TableCell>
-                                  <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
-                                    {row.txCount}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                        </div>
-                      </div>
+                    <div className="max-h-72 overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Category</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="hidden text-right md:table-cell">
+                              Tx
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {totalYearDetails.topExpenseCategories.map((row) => (
+                            <TableRow key={row.name}>
+                              <TableCell className="font-medium">
+                                {row.name}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold">
+                                {currency(row.total)}
+                              </TableCell>
+                              <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
+                                {row.txCount}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     </div>
                   </div>
-                );
-              })()
-            )}
+
+                  <div className="rounded-md border border-slate-100 bg-white">
+                    <div className="border-b border-slate-100 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">
+                      Top income categories
+                    </div>
+                    <div className="max-h-72 overflow-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Category</TableHead>
+                            <TableHead className="text-right">Total</TableHead>
+                            <TableHead className="hidden text-right md:table-cell">
+                              Tx
+                            </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {totalYearDetails.topIncomeCategories.map((row) => (
+                            <TableRow key={row.name}>
+                              <TableCell className="font-medium">
+                                {row.name}
+                              </TableCell>
+                              <TableCell className="text-right font-semibold text-emerald-700">
+                                {currency(row.total)}
+                              </TableCell>
+                              <TableCell className="hidden text-right text-xs text-slate-600 md:table-cell">
+                                {row.txCount}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </>
         ) : totalDrilldown.kind === "investments" ? (
           <>
@@ -837,45 +843,36 @@ export const TotalDrilldownDialog: React.FC<{
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {totalInvestmentsYearlyTable.map((row) =>
-                        (() => {
-                          const marketGrowth = Number(
-                            totalOverview?.yearly.find(
-                              (entry) => entry.year === row.year,
-                            )?.investment_market_growth ?? 0,
-                          );
-                          return (
-                            <TableRow key={row.year}>
-                              <TableCell className="font-medium">
-                                {row.year}
-                              </TableCell>
-                              <TableCell className="text-right font-semibold">
-                                {currency(row.endValue)}
-                              </TableCell>
-                              <TableCell className="hidden text-right md:table-cell">
-                                {currency(row.netContributions)}
-                              </TableCell>
-                              <TableCell className="hidden text-right md:table-cell">
-                                <span
-                                  className={
-                                    marketGrowth >= 0
-                                      ? "text-indigo-700"
-                                      : "text-rose-700"
-                                  }
-                                >
-                                  {marketGrowth >= 0 ? "+" : "−"}
-                                  {currency(Math.abs(marketGrowth))}
-                                </span>
-                              </TableCell>
-                              <TableCell className="hidden text-right md:table-cell">
-                                {row.impliedReturn === null
-                                  ? "—"
-                                  : currency(row.impliedReturn)}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })(),
-                      )}
+                      {totalInvestmentsRows.map((row) => (
+                        <TableRow key={row.year}>
+                          <TableCell className="font-medium">
+                            {row.year}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold">
+                            {currency(row.endValue)}
+                          </TableCell>
+                          <TableCell className="hidden text-right md:table-cell">
+                            {currency(row.netContributions)}
+                          </TableCell>
+                          <TableCell className="hidden text-right md:table-cell">
+                            <span
+                              className={
+                                row.marketGrowth >= 0
+                                  ? "text-indigo-700"
+                                  : "text-rose-700"
+                              }
+                            >
+                              {row.marketGrowth >= 0 ? "+" : "−"}
+                              {currency(Math.abs(row.marketGrowth))}
+                            </span>
+                          </TableCell>
+                          <TableCell className="hidden text-right md:table-cell">
+                            {row.impliedReturn === null
+                              ? "—"
+                              : currency(row.impliedReturn)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
                     </TableBody>
                   </Table>
                 </div>
@@ -912,14 +909,7 @@ export const TotalDrilldownDialog: React.FC<{
                       />
                       <Tooltip
                         formatter={(value) => currency(Number(value))}
-                        labelFormatter={(_label, payload) =>
-                          payload?.[0]?.payload?.date
-                            ? formatDate(String(payload[0].payload.date), {
-                                year: "numeric",
-                                month: "long",
-                              })
-                            : String(_label)
-                        }
+                        labelFormatter={formatTooltipDateLabel}
                         contentStyle={{ fontSize: 12 }}
                       />
                       <Area
@@ -1004,14 +994,7 @@ export const TotalDrilldownDialog: React.FC<{
                       />
                       <Tooltip
                         formatter={(value) => currency(Number(value))}
-                        labelFormatter={(_label, payload) =>
-                          payload?.[0]?.payload?.date
-                            ? formatDate(String(payload[0].payload.date), {
-                                year: "numeric",
-                                month: "long",
-                              })
-                            : String(_label)
-                        }
+                        labelFormatter={formatTooltipDateLabel}
                         contentStyle={{ fontSize: 12 }}
                       />
                       <Line
@@ -1245,14 +1228,7 @@ export const TotalDrilldownDialog: React.FC<{
                       />
                       <Tooltip
                         formatter={(value) => currency(Number(value))}
-                        labelFormatter={(_label, payload) =>
-                          payload?.[0]?.payload?.date
-                            ? formatDate(String(payload[0].payload.date), {
-                                year: "numeric",
-                                month: "long",
-                              })
-                            : String(_label)
-                        }
+                        labelFormatter={formatTooltipDateLabel}
                         contentStyle={{ fontSize: 12 }}
                       />
                       <Area
@@ -1277,4 +1253,20 @@ export const TotalDrilldownDialog: React.FC<{
       </DialogContent>
     </Dialog>
   );
+};
+
+const formatTooltipDateLabel = (
+  label: unknown,
+  payload: ReadonlyArray<{ payload?: unknown }> | undefined,
+) => {
+  const record = payload?.[0]?.payload as { date?: unknown } | undefined;
+  if (typeof record?.date === "string" || typeof record?.date === "number") {
+    return formatDate(String(record.date), {
+      year: "numeric",
+      month: "long",
+    });
+  }
+  return typeof label === "string" || typeof label === "number"
+    ? String(label)
+    : "";
 };

@@ -3,7 +3,6 @@ import { cn } from "@/lib/utils";
 
 export type LabelProps = React.LabelHTMLAttributes<HTMLLabelElement>;
 
-// eslint-disable-next-line react/prop-types
 function Label({ className, ...props }: LabelProps) {
   return (
     <label

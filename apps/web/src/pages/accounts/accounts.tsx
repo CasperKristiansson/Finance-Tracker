@@ -467,8 +467,8 @@ export const Accounts: React.FC = () => {
             <Separator />
             {loading ? (
               <div className="space-y-2 p-4">
-                {[...Array(4)].map((_, idx) => (
-                  <Skeleton key={idx} className="h-12 w-full" />
+                {["one", "two", "three", "four"].map((item) => (
+                  <Skeleton key={item} className="h-12 w-full" />
                 ))}
               </div>
             ) : sortedItems.length === 0 ? (

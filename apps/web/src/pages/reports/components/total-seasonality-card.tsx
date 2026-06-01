@@ -70,71 +70,74 @@ export const TotalSeasonalityCard: React.FC<{
               {heatmaps.years.map((yr, yrIdx) => (
                 <React.Fragment key={yr}>
                   <div className="pr-2 font-medium text-slate-700">{yr}</div>
-                  {content?.matrix[yrIdx].map((value, idx) => (
-                    <button
-                      type="button"
-                      key={`${yr}-${idx}`}
-                      title={`${yr} ${heatmaps.months[idx]}: ${currency(value)}`}
-                      aria-label={`${yr} ${heatmaps.months[idx]} ${flow} ${currency(value)}`}
-                      className="h-7 rounded-sm border border-slate-100 transition hover:ring-1 hover:ring-slate-300 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:outline-none"
-                      style={{
-                        backgroundColor: heatColor(
-                          content?.color ?? "148,163,184",
-                          value,
-                          content?.max ?? 0,
-                        ),
-                      }}
-                      onMouseEnter={() =>
-                        setHover({ year: yr, monthIndex: idx, value })
-                      }
-                      onFocus={() =>
-                        setHover({ year: yr, monthIndex: idx, value })
-                      }
-                      onClick={() => {
-                        const yearValues = content?.matrix[yrIdx] ?? [];
-                        const yearTotal = yearValues.reduce(
-                          (sum, v) => sum + v,
-                          0,
-                        );
-                        const monthAcrossYears = heatmaps.years.map(
-                          (year, yearIdx) => ({
-                            year,
-                            value: content?.matrix[yearIdx][idx] ?? 0,
-                          }),
-                        );
-                        const prevValue =
-                          yrIdx > 0
-                            ? (content?.matrix[yrIdx - 1][idx] ?? 0)
-                            : null;
-                        const yoyDelta =
-                          prevValue === null ? null : value - prevValue;
-                        const yoyDeltaPct =
-                          prevValue === null || prevValue === 0
-                            ? null
-                            : ((value - prevValue) / prevValue) * 100;
-                        const monthRank =
-                          1 + yearValues.filter((v) => v > value).length;
-                        const monthSharePct =
-                          yearTotal > 0 ? (value / yearTotal) * 100 : null;
-                        onOpenHeatmapDialog({
-                          kind: "seasonality",
-                          flow,
-                          year: yr,
-                          monthIndex: idx,
-                          monthLabel: heatmaps.months[idx],
-                          value,
-                          yearValues,
-                          years: heatmaps.years,
-                          monthAcrossYears,
-                          yearTotal,
-                          monthRank,
-                          monthSharePct,
-                          yoyDelta,
-                          yoyDeltaPct,
-                        });
-                      }}
-                    />
-                  ))}
+                  {content?.matrix[yrIdx].map((value, idx) => {
+                    const month = heatmaps.months[idx] ?? String(idx + 1);
+                    return (
+                      <button
+                        type="button"
+                        key={`${yr}-${month}`}
+                        title={`${yr} ${month}: ${currency(value)}`}
+                        aria-label={`${yr} ${month} ${flow} ${currency(value)}`}
+                        className="h-7 rounded-sm border border-slate-100 transition hover:ring-1 hover:ring-slate-300 focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:outline-none"
+                        style={{
+                          backgroundColor: heatColor(
+                            content?.color ?? "148,163,184",
+                            value,
+                            content?.max ?? 0,
+                          ),
+                        }}
+                        onMouseEnter={() =>
+                          setHover({ year: yr, monthIndex: idx, value })
+                        }
+                        onFocus={() =>
+                          setHover({ year: yr, monthIndex: idx, value })
+                        }
+                        onClick={() => {
+                          const yearValues = content?.matrix[yrIdx] ?? [];
+                          const yearTotal = yearValues.reduce(
+                            (sum, v) => sum + v,
+                            0,
+                          );
+                          const monthAcrossYears = heatmaps.years.map(
+                            (year, yearIdx) => ({
+                              year,
+                              value: content?.matrix[yearIdx][idx] ?? 0,
+                            }),
+                          );
+                          const prevValue =
+                            yrIdx > 0
+                              ? (content?.matrix[yrIdx - 1][idx] ?? 0)
+                              : null;
+                          const yoyDelta =
+                            prevValue === null ? null : value - prevValue;
+                          const yoyDeltaPct =
+                            prevValue === null || prevValue === 0
+                              ? null
+                              : ((value - prevValue) / prevValue) * 100;
+                          const monthRank =
+                            1 + yearValues.filter((v) => v > value).length;
+                          const monthSharePct =
+                            yearTotal > 0 ? (value / yearTotal) * 100 : null;
+                          onOpenHeatmapDialog({
+                            kind: "seasonality",
+                            flow,
+                            year: yr,
+                            monthIndex: idx,
+                            monthLabel: month,
+                            value,
+                            yearValues,
+                            years: heatmaps.years,
+                            monthAcrossYears,
+                            yearTotal,
+                            monthRank,
+                            monthSharePct,
+                            yoyDelta,
+                            yoyDeltaPct,
+                          });
+                        }}
+                      />
+                    );
+                  })}
                 </React.Fragment>
               ))}
             </div>

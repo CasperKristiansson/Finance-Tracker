@@ -1,68 +1,61 @@
-import globals from "globals";
+import eslintReact from "@eslint-react/eslint-plugin";
 import js from "@eslint/js";
-import reactPlugin from "eslint-plugin-react";
-import importPlugin from "eslint-plugin-import";
-import prettierPlugin from "eslint-plugin-prettier";
-import tsParser from "@typescript-eslint/parser";
-import tsPlugin from "@typescript-eslint/eslint-plugin";
+import { defineConfig } from "eslint/config";
+import { importX } from "eslint-plugin-import-x";
+import eslintPluginPrettierRecommended from "eslint-plugin-prettier/recommended";
 import reactHooks from "eslint-plugin-react-hooks";
-import reactRefresh from "eslint-plugin-react-refresh";
+import { reactRefresh } from "eslint-plugin-react-refresh";
+import globals from "globals";
+import tseslint from "typescript-eslint";
 
-export default [
-  js.configs.recommended,
+const browserNodeGlobals = {
+  ...globals.browser,
+  ...globals.es2022,
+  ...globals.node,
+  NodeJS: "readonly",
+};
+
+export default defineConfig(
   {
-    ...reactPlugin.configs.flat.recommended,
-    settings: {
-      react: { version: "detect" },
-    },
-  },
-  {
-    ignores: ["node_modules", "build", "dist"],
+    ignores: ["node_modules", "build", "dist", "src/types/generated/**"],
   },
   {
     files: ["**/*.js", "**/*.cjs", "**/*.mjs"],
+    extends: [js.configs.recommended, importX.flatConfigs.recommended],
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "module",
-      globals: {
-        ...globals.browser,
-        ...globals.es2021,
-        ...globals.node,
-        NodeJS: "readonly",
-      },
+      globals: browserNodeGlobals,
     },
   },
   {
     files: ["**/*.ts", "**/*.tsx"],
+    extends: [
+      js.configs.recommended,
+      ...tseslint.configs.recommendedTypeChecked,
+      importX.flatConfigs.recommended,
+      importX.flatConfigs.typescript,
+      eslintReact.configs["recommended-type-checked"],
+      eslintReact.configs["disable-conflict-eslint-plugin-react-hooks"],
+      reactHooks.configs.flat["recommended-latest"],
+      reactRefresh.configs.vite,
+    ],
     languageOptions: {
-      parser: tsParser,
+      parser: tseslint.parser,
       parserOptions: {
-        project: "./tsconfig.json",
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
         ecmaVersion: "latest",
         sourceType: "module",
         ecmaFeatures: { jsx: true },
       },
-      globals: {
-        ...globals.browser,
-        ...globals.es2021,
-        ...globals.node,
-        NodeJS: "readonly",
-      },
-    },
-    plugins: {
-      "@typescript-eslint": tsPlugin,
-      "react-hooks": reactHooks,
-      "react-refresh": reactRefresh,
-      import: importPlugin,
-      prettier: prettierPlugin,
+      globals: browserNodeGlobals,
     },
     rules: {
-      ...tsPlugin.configs.recommended.rules,
-      ...reactHooks.configs.recommended.rules,
-      ...importPlugin.configs.recommended.rules,
-      ...prettierPlugin.configs.recommended.rules,
-
-      "import/order": [
+      "@eslint-react/exhaustive-deps": "off",
+      "@eslint-react/purity": "off",
+      "@eslint-react/set-state-in-effect": "off",
+      "import-x/order": [
         "error",
         {
           groups: [
@@ -76,13 +69,7 @@ export default [
           alphabetize: { order: "asc", caseInsensitive: true },
         },
       ],
-      "react/react-in-jsx-scope": "off",
-    },
-    settings: {
-      react: { version: "detect" },
-      "import/resolver": {
-        typescript: { project: "./tsconfig.json" },
-      },
     },
   },
-];
+  eslintPluginPrettierRecommended,
+);

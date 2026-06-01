@@ -1,6 +1,6 @@
 import { createAction } from "@reduxjs/toolkit";
-import { all, call, put, select, takeLatest } from "redux-saga/effects";
 import { toast } from "sonner";
+import { all, call, put, select, takeLatest } from "typed-redux-saga";
 import { resetAccounts } from "@/features/accounts/accountsSlice";
 import { resetReports } from "@/features/reports/reportsSlice";
 import { resetTransactions } from "@/features/transactions/transactionsSlice";
@@ -38,7 +38,7 @@ const safeStringify = (value: unknown): string => {
   const seen = new WeakSet<object>();
   try {
     return (
-      JSON.stringify(value, (_, candidate) => {
+      JSON.stringify(value, (_key: string, candidate: unknown) => {
         if (typeof candidate === "object" && candidate !== null) {
           if (seen.has(candidate)) return undefined;
           seen.add(candidate);
@@ -87,10 +87,18 @@ const collectErrorStrings = (error: unknown): string[] => {
       continue;
     }
 
-    if (typeof value !== "object") {
+    if (
+      value === null ||
+      typeof value === "string" ||
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint"
+    ) {
       addString(String(value));
       continue;
     }
+
+    if (typeof value !== "object") continue;
 
     if (seen.has(value)) continue;
     seen.add(value);
@@ -104,7 +112,15 @@ const collectErrorStrings = (error: unknown): string[] => {
 
   const serialized = safeStringify(error);
   addString(serialized);
-  addString(String(error));
+  if (
+    error === null ||
+    typeof error === "string" ||
+    typeof error === "number" ||
+    typeof error === "boolean" ||
+    typeof error === "bigint"
+  ) {
+    addString(String(error));
+  }
 
   return Array.from(new Set(strings));
 };
@@ -150,31 +166,31 @@ const hydrateRemembered = () => {
 };
 
 function* handleLoginWithGoogle() {
-  yield put(setLoading({ key: "login", isLoading: true }));
-  yield put(setLoginError(null));
+  yield* put(setLoading({ key: "login", isLoading: true }));
+  yield* put(setLoginError(null));
   try {
-    const existingSession: AuthenticatedUser | null = yield call(() =>
+    const existingSession: AuthenticatedUser | null = yield* call(() =>
       authService.fetchAuthenticatedUser(),
     );
     if (existingSession) {
-      yield put(loginSuccess(existingSession));
+      yield* put(loginSuccess(existingSession));
       return;
     }
 
-    yield call(() => authService.signInWithGoogle());
+    yield* call(() => authService.signInWithGoogle());
   } catch (error) {
     if (isPendingApprovalError(error)) {
-      yield put(setLoginError(PENDING_APPROVAL_MESSAGE));
-      yield put(setPendingApproval(true));
+      yield* put(setLoginError(PENDING_APPROVAL_MESSAGE));
+      yield* put(setPendingApproval(true));
       toast.error("Account pending approval", {
         description: PENDING_APPROVAL_MESSAGE,
       });
       try {
-        yield call(() => authService.signOut());
+        yield* call(() => authService.signOut());
       } catch {
         // ignore sign-out cleanup errors
       }
-      yield put(setLoading({ key: "login", isLoading: false }));
+      yield* put(setLoading({ key: "login", isLoading: false }));
       return;
     }
 
@@ -184,11 +200,11 @@ function* handleLoginWithGoogle() {
 
     if (alreadySignedIn) {
       try {
-        const session: AuthenticatedUser | null = yield call(() =>
+        const session: AuthenticatedUser | null = yield* call(() =>
           authService.fetchAuthenticatedUser(true),
         );
         if (session) {
-          yield put(loginSuccess(session));
+          yield* put(loginSuccess(session));
           return;
         }
       } catch {
@@ -196,26 +212,26 @@ function* handleLoginWithGoogle() {
       }
     }
 
-    yield put(setLoginError(message));
+    yield* put(setLoginError(message));
     toast.error("Failed to start Google sign-in", {
       description: message,
     });
   }
-  yield put(setLoading({ key: "login", isLoading: false }));
+  yield* put(setLoading({ key: "login", isLoading: false }));
 }
 
 function* handleLogout() {
-  yield put(setLoading({ key: "logout", isLoading: true }));
-  const isDemo: boolean = yield select(selectIsDemo);
+  yield* put(setLoading({ key: "logout", isLoading: true }));
+  const isDemo: boolean = yield* select(selectIsDemo);
   try {
     if (!isDemo) {
-      yield call(() => authService.signOut());
+      yield* call(() => authService.signOut());
     }
-    yield put(logoutSuccess());
-    yield put(resetAccounts());
-    yield put(resetTransactions());
-    yield put(resetReports());
-    yield put(resetWarmup());
+    yield* put(logoutSuccess());
+    yield* put(resetAccounts());
+    yield* put(resetTransactions());
+    yield* put(resetReports());
+    yield* put(resetWarmup());
     toast.success("Logout Successful");
   } catch (error) {
     if (error instanceof Error) {
@@ -226,13 +242,13 @@ function* handleLogout() {
       toast.error("Failed to Logout");
     }
   }
-  yield put(setLoading({ key: "logout", isLoading: false }));
+  yield* put(setLoading({ key: "logout", isLoading: false }));
 }
 
 function* handleForceLogout() {
-  yield put(setLoading({ key: "logout", isLoading: true }));
+  yield* put(setLoading({ key: "logout", isLoading: true }));
   try {
-    yield call(() => authService.signOut());
+    yield* call(() => authService.signOut());
   } catch {
     // Best-effort sign-out for forced logout.
   }
@@ -241,32 +257,32 @@ function* handleForceLogout() {
 
 function* initializeAuth() {
   const { remember, username } = hydrateRemembered();
-  yield put(setRememberMe(remember));
+  yield* put(setRememberMe(remember));
   if (username) {
-    yield put(setLastUsername(username));
+    yield* put(setLastUsername(username));
   }
   try {
-    yield call(() => authService.completeRedirectIfPresent());
-    const existingSession: AuthenticatedUser | null = yield call(() =>
+    yield* call(() => authService.completeRedirectIfPresent());
+    const existingSession: AuthenticatedUser | null = yield* call(() =>
       authService.fetchAuthenticatedUser(),
     );
 
     if (existingSession) {
-      yield put(loginSuccess(existingSession));
+      yield* put(loginSuccess(existingSession));
     }
   } catch (error) {
     if (isPendingApprovalError(error)) {
-      yield put(setLoginError(PENDING_APPROVAL_MESSAGE));
-      yield put(setPendingApproval(true));
+      yield* put(setLoginError(PENDING_APPROVAL_MESSAGE));
+      yield* put(setPendingApproval(true));
       toast.error("Account pending approval", {
         description: PENDING_APPROVAL_MESSAGE,
       });
       try {
-        yield call(() => authService.signOut());
+        yield* call(() => authService.signOut());
       } catch {
         // ignore cleanup failures during sign-out
       }
-      yield put(setInitialLoaded());
+      yield* put(setInitialLoaded());
       return;
     }
 
@@ -279,19 +295,19 @@ function* initializeAuth() {
       toast.error("Failed to restore session");
     }
   }
-  yield put(setInitialLoaded());
+  yield* put(setInitialLoaded());
 }
 
 function* handleLoginDemo() {
-  yield put(setLoading({ key: "login", isLoading: true }));
-  yield put(setLoginError(null));
-  const rememberedUsername: string = yield select(selectLastUsername);
-  const remember: boolean = yield select(selectRememberMe);
+  yield* put(setLoading({ key: "login", isLoading: true }));
+  yield* put(setLoginError(null));
+  const rememberedUsername: string = yield* select(selectLastUsername);
+  const remember: boolean = yield* select(selectRememberMe);
   if (remember) {
     persistRememberMe(true, rememberedUsername || "demo@fintrack.local");
-    yield put(setLastUsername(rememberedUsername || "demo@fintrack.local"));
+    yield* put(setLastUsername(rememberedUsername || "demo@fintrack.local"));
   }
-  yield put(
+  yield* put(
     loginSuccess({
       email: rememberedUsername || "demo@fintrack.local",
       accessToken: "demo-access-token",
@@ -304,11 +320,11 @@ function* handleLoginDemo() {
   toast.success("Demo mode enabled", {
     description: "You are browsing with demo data.",
   });
-  yield put(setLoading({ key: "login", isLoading: false }));
+  yield* put(setLoading({ key: "login", isLoading: false }));
 }
 
 export function* AuthSaga() {
-  yield all([
+  yield* all([
     takeLatest(AuthLoginGoogle.type, handleLoginWithGoogle),
     takeLatest(AuthLogout.type, handleLogout),
     takeLatest(AuthForceLogout.type, handleForceLogout),

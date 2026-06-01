@@ -13,7 +13,7 @@ export const AccountIcon = ({ icon, name }: AccountIconProps) => {
       LucideIcons as unknown as Record<string, LucideIcon | undefined>
     )[key];
     if (IconComp) {
-      const Icon = IconComp as LucideIcon;
+      const Icon = IconComp;
       return (
         <Icon className="h-8 w-8 rounded-full border border-slate-100 bg-white p-1 text-slate-700" />
       );

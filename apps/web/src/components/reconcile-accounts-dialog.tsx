@@ -68,7 +68,7 @@ export function ReconcileAccountsDialog({
   onSuccess,
 }: ReconcileAccountsDialogProps) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [submitted, setSubmitted] = useState(false);
 
   const reconcileableAccounts = useMemo(
@@ -95,13 +95,16 @@ export function ReconcileAccountsDialog({
     if (!open) return;
     const nextDisplayAccounts =
       mode === "all" ? reconcileableAccounts : reconcileableTargets;
-    setDrafts(
-      Object.fromEntries(
-        nextDisplayAccounts.map((acc) => [acc.id, acc.balance]),
-      ),
-    );
-    setSelectedIds(new Set(reconcileableTargets.map((acc) => acc.id)));
-    setSubmitted(false);
+    const timer = window.setTimeout(() => {
+      setDrafts(
+        Object.fromEntries(
+          nextDisplayAccounts.map((acc) => [acc.id, acc.balance]),
+        ),
+      );
+      setSelectedIds(new Set(reconcileableTargets.map((acc) => acc.id)));
+      setSubmitted(false);
+    }, 0);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -109,9 +112,12 @@ export function ReconcileAccountsDialog({
     if (!open || !submitted) return;
     if (loading) return;
     if (error) return;
-    onOpenChange(false);
-    setSubmitted(false);
-    onSuccess?.();
+    const timer = window.setTimeout(() => {
+      onOpenChange(false);
+      setSubmitted(false);
+      onSuccess?.();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [error, loading, onOpenChange, onSuccess, open, submitted]);
 
   const emptyText =

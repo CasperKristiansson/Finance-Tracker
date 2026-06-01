@@ -82,7 +82,7 @@ export const Dashboard: React.FC = () => {
   const isAuthenticated = useAppSelector(selectIsAuthenticated);
   const token = useAppSelector(selectToken);
   const includeInvestmentGrowth = useAppSelector(selectIncludeInvestmentGrowth);
-  const hasFetched = useRef(false);
+  const hasFetchedRef = useRef(false);
   const [filteredMonthly, setFilteredMonthly] = useState<MonthlyReportEntry[]>(
     [],
   );
@@ -101,9 +101,6 @@ export const Dashboard: React.FC = () => {
   const [yearlyOverview, setYearlyOverview] =
     useState<YearlyOverviewResponse | null>(null);
   const [yearlyOverviewLoading, setYearlyOverviewLoading] = useState(false);
-  const [accountDeltas, setAccountDeltas] = useState<Record<string, number>>(
-    {},
-  );
   const [recentTab, setRecentTab] = useState<"all" | "income" | "expense">(
     "all",
   );
@@ -124,8 +121,8 @@ export const Dashboard: React.FC = () => {
   );
 
   useEffect(() => {
-    if (!isAuthenticated || hasFetched.current) return;
-    hasFetched.current = true;
+    if (!isAuthenticated || hasFetchedRef.current) return;
+    hasFetchedRef.current = true;
     setAccountsRequested(true);
     fetchAccounts();
     fetchCategoryOptions({ includeSpecial: true });
@@ -242,12 +239,11 @@ export const Dashboard: React.FC = () => {
     void loadYearlyOverview();
   }, [token]);
 
-  useEffect(() => {
+  const accountDeltas = useMemo(() => {
     const currentYear = new Date().getFullYear();
     const currentYearOverview = yearlyOverviewsByYear[currentYear];
     if (!currentYearOverview || !activeAccounts.length) {
-      setAccountDeltas({});
-      return;
+      return {};
     }
     const activeAccountIds = new Set(
       activeAccounts.map((account) => account.id),
@@ -260,7 +256,7 @@ export const Dashboard: React.FC = () => {
         0,
       );
     });
-    setAccountDeltas(deltaMap);
+    return deltaMap;
   }, [activeAccounts, yearlyOverviewsByYear]);
 
   const kpis: KPI[] = useMemo(() => {
@@ -412,9 +408,7 @@ export const Dashboard: React.FC = () => {
     >();
 
     const addTotals = (
-      rows:
-        | YearlyOverviewResponse["income_category_breakdown"]
-        | YearlyOverviewResponse["category_breakdown"],
+      rows: YearlyOverviewResponse["income_category_breakdown"],
       monthIndex: number,
       target: Map<string, { name: string; total: number; color?: string }>,
     ) => {
@@ -611,14 +605,18 @@ export const Dashboard: React.FC = () => {
     const trend =
       lastNet > prevNet ? "up" : lastNet < prevNet ? "down" : "neutral";
 
-    let running = 0;
-    const sparkline = rollingData.map((entry) => {
-      running += entry.net;
-      return {
-        month: entry.month,
-        balance: running,
-      };
-    });
+    const sparkline = rollingData.reduce<
+      Array<{ month: string; balance: number }>
+    >((points, entry) => {
+      const previous = points.at(-1)?.balance ?? 0;
+      return [
+        ...points,
+        {
+          month: entry.month,
+          balance: previous + entry.net,
+        },
+      ];
+    }, []);
 
     const months = avgBurn > 0 ? cashOnHand / avgBurn : null;
 

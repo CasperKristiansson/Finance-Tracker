@@ -1,10 +1,4 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useRef,
-} from "react";
+import React, { createContext, useCallback, useMemo, useRef, use } from "react";
 
 type NavigationBlocker = (to: string) => boolean;
 
@@ -40,14 +34,12 @@ export const NavigationGuardProvider: React.FC<{
   );
 
   return (
-    <NavigationGuardContext.Provider value={value}>
-      {children}
-    </NavigationGuardContext.Provider>
+    <NavigationGuardContext value={value}>{children}</NavigationGuardContext>
   );
 };
 
 export const useNavigationGuard = () => {
-  const context = useContext(NavigationGuardContext);
+  const context = use(NavigationGuardContext);
   if (!context) {
     throw new Error(
       "useNavigationGuard must be used within a NavigationGuardProvider",
