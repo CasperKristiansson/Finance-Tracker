@@ -473,8 +473,10 @@ export const useVenturesApi = () => {
   );
 
   const presignUpload = useCallback(
-    (data: Parameters<typeof PresignVentureUpload>[0]["data"]) =>
-      dispatch(PresignVentureUpload({ data })),
+    (
+      data: Parameters<typeof PresignVentureUpload>[0]["data"],
+      requestId?: string,
+    ) => dispatch(PresignVentureUpload({ data, requestId })),
     [dispatch],
   );
 

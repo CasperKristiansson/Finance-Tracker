@@ -2,8 +2,11 @@ import {
   ArrowLeft,
   Building2,
   CalendarDays,
+  NotebookPen,
   RefreshCw,
   ShieldCheck,
+  SlidersHorizontal,
+  TrendingUp,
 } from "lucide-react";
 import React from "react";
 import { Link } from "react-router-dom";
@@ -22,12 +25,18 @@ type CompanyHeaderProps = {
   detail: VentureCompanyDetail;
   loading: boolean;
   onRefresh: () => void;
+  onAddValuation: () => void;
+  onAddNote: () => void;
+  onEditOwnership: () => void;
 };
 
 export const CompanyHeader: React.FC<CompanyHeaderProps> = ({
   detail,
   loading,
   onRefresh,
+  onAddValuation,
+  onAddNote,
+  onEditOwnership,
 }) => {
   const { company } = detail.summary;
   const theme = statusTheme(company.status);
@@ -46,16 +55,40 @@ export const CompanyHeader: React.FC<CompanyHeaderProps> = ({
           <span>/</span>
           <span className="font-medium text-slate-950">{company.name}</span>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onRefresh}
-          disabled={loading}
-        >
-          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-          Refresh
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onAddValuation}
+          >
+            <TrendingUp className="h-4 w-4" />
+            Add valuation
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={onAddNote}>
+            <NotebookPen className="h-4 w-4" />
+            Add note
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onEditOwnership}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Edit ownership
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onRefresh}
+            disabled={loading}
+          >
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-start justify-between gap-6">

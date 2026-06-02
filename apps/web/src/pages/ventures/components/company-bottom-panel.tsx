@@ -3,9 +3,11 @@ import {
   Building2,
   CalendarDays,
   FileText,
+  NotebookPen,
   NotebookText,
   RefreshCw,
   ShieldCheck,
+  SlidersHorizontal,
   TrendingUp,
   X,
 } from "lucide-react";
@@ -35,6 +37,9 @@ type CompanyBottomPanelProps = {
   loading: boolean;
   error?: string;
   onClose: () => void;
+  onAddValuation: () => void;
+  onEditOwnership: () => void;
+  onAddNote: () => void;
 };
 
 const Stat: React.FC<{
@@ -64,6 +69,9 @@ export const CompanyBottomPanel: React.FC<CompanyBottomPanelProps> = ({
   loading,
   error,
   onClose,
+  onAddValuation,
+  onEditOwnership,
+  onAddNote,
 }) => {
   const company = summary.company;
   const theme = statusTheme(company.status);
@@ -118,6 +126,28 @@ export const CompanyBottomPanel: React.FC<CompanyBottomPanelProps> = ({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onAddValuation}
+          >
+            <TrendingUp className="h-4 w-4" />
+            Add valuation
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={onAddNote}>
+            <NotebookPen className="h-4 w-4" />
+            Add note
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onEditOwnership}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Edit ownership
+          </Button>
           <Button variant="outline" size="sm" asChild>
             <Link to={ventureCompanyPath(company.id)}>
               Open workspace

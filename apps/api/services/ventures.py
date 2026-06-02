@@ -348,11 +348,14 @@ class VentureService:
     def presign(self, user_id: str, data: VenturePresignRequest) -> VenturePresignResponse:
         storage = self.storage or VentureStorage.from_env()
         if data.operation == "upload":
-            if data.company_id is None or data.file_name is None or data.mime_type is None:
+            if data.file_name is None or data.mime_type is None:
+                raise ValueError("Upload request is incomplete")
+            if data.company_id is None and data.purpose != "logo":
                 raise ValueError("Upload request is incomplete")
             if data.file_size_bytes is None:
                 raise ValueError("file_size_bytes is required")
-            self._require_company(data.company_id)
+            if data.company_id is not None:
+                self._require_company(data.company_id)
             storage.validate_upload(
                 purpose=data.purpose,
                 file_name=data.file_name,

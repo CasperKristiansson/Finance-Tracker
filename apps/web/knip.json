@@ -4,8 +4,6 @@
   "ignoreDependencies": [
     "@react-three/fiber",
     "camera-controls",
-    "react-markdown",
-    "remark-gfm",
     "@types/three",
     "three",
     "three-stdlib"

@@ -38,6 +38,7 @@ type VentureGraphProps = {
   selectedCompanyId?: string;
   onSelectCompany: (companyId?: string) => void;
   onLayoutChange: (layout: VentureOverview["layout"]) => void;
+  onAddCompany?: () => void;
   className?: string;
   children?: React.ReactNode;
 };
@@ -65,6 +66,7 @@ const VentureGraphCanvas: React.FC<VentureGraphCanvasProps> = ({
   selectedCompanyId,
   onSelectCompany,
   onLayoutChange,
+  onAddCompany,
   className,
   children,
 }) => {
@@ -194,7 +196,10 @@ const VentureGraphCanvas: React.FC<VentureGraphCanvasProps> = ({
             color="#d8e0e8"
           />
           <Panel position="top-right" className="m-4">
-            <VentureGraphToolbar onViewportCommit={handleViewportCommit} />
+            <VentureGraphToolbar
+              onViewportCommit={handleViewportCommit}
+              onAddCompany={onAddCompany}
+            />
           </Panel>
         </ReactFlow>
 

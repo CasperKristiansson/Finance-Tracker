@@ -1,5 +1,5 @@
 import { BriefcaseBusiness } from "lucide-react";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { EmptyState } from "@/components/composed/empty-state";
 import { InlineError } from "@/components/composed/inline-error";
@@ -7,6 +7,7 @@ import { LoadingCard } from "@/components/composed/loading-card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageRoutes } from "@/data/routes";
+import type { VentureCompanyDetail } from "@/features/ventures/venturesSlice";
 import { useVenturesApi } from "@/hooks/use-api";
 import { CompanyHeader } from "@/pages/ventures/components/company-header";
 import { CompanyMetricStrip } from "@/pages/ventures/components/company-metric-strip";
@@ -16,6 +17,11 @@ import { OwnershipRiskPanel } from "@/pages/ventures/components/ownership-risk-p
 import { RecentNotesCard } from "@/pages/ventures/components/recent-notes-card";
 import { TimelineHighlights } from "@/pages/ventures/components/timeline-highlights";
 import { ValuationHistoryChart } from "@/pages/ventures/components/valuation-history-chart";
+import {
+  AddValuationSheet,
+  EditOwnershipSheet,
+  NoteSheet,
+} from "@/pages/ventures/components/venture-mutation-sheets";
 
 export const CompanyWorkspace: React.FC = () => {
   const { companyId } = useParams<{ companyId: string }>();
@@ -26,7 +32,17 @@ export const CompanyWorkspace: React.FC = () => {
     errors,
     fetchOverview,
     fetchCompany,
+    createValuation,
+    createOwnershipEvent,
+    createNote,
+    updateNote,
   } = useVenturesApi();
+  const [valuationSheetOpen, setValuationSheetOpen] = useState(false);
+  const [ownershipSheetOpen, setOwnershipSheetOpen] = useState(false);
+  const [noteSheetOpen, setNoteSheetOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState<
+    VentureCompanyDetail["notes"][number] | undefined
+  >();
   const detail = companyId ? companyDetails[companyId] : undefined;
 
   useEffect(() => {
@@ -126,6 +142,12 @@ export const CompanyWorkspace: React.FC = () => {
         detail={detail}
         loading={loading.detail}
         onRefresh={() => fetchCompany(companyId)}
+        onAddValuation={() => setValuationSheetOpen(true)}
+        onAddNote={() => {
+          setEditingNote(undefined);
+          setNoteSheetOpen(true);
+        }}
+        onEditOwnership={() => setOwnershipSheetOpen(true)}
       />
       <CompanyMetricStrip detail={detail} />
       <CompanyRelationshipStrip detail={detail} overview={overview} />
@@ -153,11 +175,48 @@ export const CompanyWorkspace: React.FC = () => {
           </div>
           <div className="grid gap-5 xl:grid-cols-3">
             <TimelineHighlights detail={detail} />
-            <RecentNotesCard detail={detail} />
+            <RecentNotesCard
+              detail={detail}
+              onEditNote={(note) => {
+                setEditingNote(note);
+                setNoteSheetOpen(true);
+              }}
+            />
             <DocumentHealthCard detail={detail} />
           </div>
         </TabsContent>
       </Tabs>
+
+      <AddValuationSheet
+        open={valuationSheetOpen}
+        onOpenChange={setValuationSheetOpen}
+        detail={detail}
+        loading={loading}
+        errors={errors}
+        createValuation={createValuation}
+      />
+      <EditOwnershipSheet
+        open={ownershipSheetOpen}
+        onOpenChange={setOwnershipSheetOpen}
+        detail={detail}
+        companies={overview?.companies ?? []}
+        loading={loading}
+        errors={errors}
+        createOwnershipEvent={createOwnershipEvent}
+      />
+      <NoteSheet
+        open={noteSheetOpen}
+        onOpenChange={(open) => {
+          setNoteSheetOpen(open);
+          if (!open) setEditingNote(undefined);
+        }}
+        detail={detail}
+        note={editingNote}
+        loading={loading}
+        errors={errors}
+        createNote={createNote}
+        updateNote={updateNote}
+      />
     </div>
   );
 };

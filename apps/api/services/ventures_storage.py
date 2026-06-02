@@ -137,11 +137,12 @@ class VentureStorage:
         raise ValueError("Unknown Ventures upload purpose")
 
     def build_object_key(
-        self, *, user_id: str, company_id: UUID, purpose: str, file_name: str
+        self, *, user_id: str, company_id: UUID | None, purpose: str, file_name: str
     ) -> str:
         asset_id = uuid4()
         safe_name = _safe_filename(file_name)
-        parts = ["ventures", user_id, str(company_id), purpose, f"{asset_id}_{safe_name}"]
+        company_part = str(company_id) if company_id is not None else "pending"
+        parts = ["ventures", user_id, company_part, purpose, f"{asset_id}_{safe_name}"]
         key = "/".join(parts)
         if self.prefix:
             return f"{self.prefix}/{key}"

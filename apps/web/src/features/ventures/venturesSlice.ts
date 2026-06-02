@@ -38,6 +38,7 @@ export interface VenturesState {
   documentsByCompany: Record<string, VentureDocuments | undefined>;
   documentHealthByCompany: Record<string, VentureDocumentHealth | undefined>;
   lastPresign?: VenturePresign;
+  presignsByRequestId: Record<string, VenturePresign | undefined>;
   loading: VentureLoadingState;
   errors: VentureErrorState;
 }
@@ -68,6 +69,7 @@ const initialState: VenturesState = {
   documentsByCompany: {},
   documentHealthByCompany: {},
   lastPresign: undefined,
+  presignsByRequestId: {},
   loading: emptyLoadingState(),
   errors: {},
 };
@@ -129,8 +131,15 @@ const venturesSlice = createSlice({
       }
       delete state.errors.listDocuments;
     },
-    setVenturePresign(state, action: PayloadAction<VenturePresign>) {
-      state.lastPresign = action.payload;
+    setVenturePresign(
+      state,
+      action: PayloadAction<{ presign: VenturePresign; requestId?: string }>,
+    ) {
+      state.lastPresign = action.payload.presign;
+      if (action.payload.requestId) {
+        state.presignsByRequestId[action.payload.requestId] =
+          action.payload.presign;
+      }
       delete state.errors.presignUpload;
     },
     setVentureOperationLoading(
@@ -167,6 +176,7 @@ const venturesSlice = createSlice({
     selectVentureLoading: (state) => state.loading,
     selectVentureErrors: (state) => state.errors,
     selectVentureLastPresign: (state) => state.lastPresign,
+    selectVenturePresignsByRequestId: (state) => state.presignsByRequestId,
   },
 });
 
@@ -190,6 +200,7 @@ export const {
   selectVentureLastPresign,
   selectVentureLoading,
   selectVentureNotes,
+  selectVenturePresignsByRequestId,
   selectVenturesOverview,
   selectVenturesState,
 } = venturesSlice.selectors;

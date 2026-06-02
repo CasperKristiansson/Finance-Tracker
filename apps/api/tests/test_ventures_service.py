@@ -189,3 +189,39 @@ def test_direct_storage_key_download_must_belong_to_current_user(session: Sessio
                 storage_key="uploads/ventures/user-b/company/document.pdf",
             ),
         )
+
+
+def test_logo_upload_presign_can_be_created_before_company_exists(session: Session) -> None:
+    storage = VentureStorage(bucket="bucket", prefix="uploads", client=_FakeStorageClient())
+    service = VentureService(session, storage=storage)
+
+    presign = service.presign(
+        "user-a",
+        VenturePresignRequest(
+            operation="upload",
+            purpose="logo",
+            file_name="logo.png",
+            mime_type="image/png",
+            file_size_bytes=512,
+        ),
+    )
+
+    assert presign.method == "PUT"
+    assert presign.storage_key.startswith("uploads/ventures/user-a/pending/logo/")
+
+
+def test_document_upload_presign_requires_existing_company(session: Session) -> None:
+    storage = VentureStorage(bucket="bucket", prefix="uploads", client=_FakeStorageClient())
+    service = VentureService(session, storage=storage)
+
+    with pytest.raises(ValueError, match="Missing upload fields: company_id"):
+        service.presign(
+            "user-a",
+            VenturePresignRequest(
+                operation="upload",
+                purpose="document",
+                file_name="memo.pdf",
+                mime_type="application/pdf",
+                file_size_bytes=512,
+            ),
+        )

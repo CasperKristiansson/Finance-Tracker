@@ -90,6 +90,7 @@ export const UpdateVentureLayout = createAction<{
 }>("ventures/updateLayout");
 export const PresignVentureUpload = createAction<{
   data: EndpointRequest<"presignVentureUpload">;
+  requestId?: string;
 }>("ventures/presignUpload");
 
 const getErrorMessage = (error: unknown, fallback: string) =>
@@ -510,7 +511,12 @@ function* handlePresignUpload(
         }),
         { loadingKey: "ventures-presign-upload" },
       );
-      yield* put(setVenturePresign(response));
+      yield* put(
+        setVenturePresign({
+          presign: response,
+          requestId: action.payload.requestId,
+        }),
+      );
     },
     "Unable to prepare venture file upload.",
   );

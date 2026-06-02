@@ -1,18 +1,22 @@
-import { NotebookText } from "lucide-react";
+import { NotebookText, Pencil } from "lucide-react";
 import React, { useMemo } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { EmptyState } from "@/components/composed/empty-state";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import type { VentureCompanyDetail } from "@/features/ventures/venturesSlice";
 import { formatVentureDate } from "@/pages/ventures/utils/format";
 
 type RecentNotesCardProps = {
   detail: VentureCompanyDetail;
+  onEditNote?: (note: VentureCompanyDetail["notes"][number]) => void;
 };
 
-const notePreview = (body: string) =>
-  body.replace(/\s+/g, " ").trim().slice(0, 150);
-
-export const RecentNotesCard: React.FC<RecentNotesCardProps> = ({ detail }) => {
+export const RecentNotesCard: React.FC<RecentNotesCardProps> = ({
+  detail,
+  onEditNote,
+}) => {
   const notes = useMemo(
     () =>
       [...detail.notes]
@@ -62,10 +66,28 @@ export const RecentNotesCard: React.FC<RecentNotesCardProps> = ({ detail }) => {
                     Pinned
                   </Badge>
                 ) : null}
+                {onEditNote ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    aria-label={`Edit note ${note.title}`}
+                    onClick={() => onEditNote(note)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                ) : null}
               </div>
-              <p className="mt-2 line-clamp-2 text-sm leading-5 text-slate-600">
-                {notePreview(note.body_markdown) || "No note body."}
-              </p>
+              <div className="mt-2 line-clamp-3 text-sm leading-5 text-slate-600">
+                {note.body_markdown.trim() ? (
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {note.body_markdown}
+                  </ReactMarkdown>
+                ) : (
+                  "No note body."
+                )}
+              </div>
               {note.tags.length ? (
                 <div className="mt-3 flex flex-wrap gap-1.5">
                   {note.tags.slice(0, 4).map((tag) => (

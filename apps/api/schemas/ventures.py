@@ -468,13 +468,14 @@ class VenturePresignRequest(BaseModel):
             missing = [
                 name
                 for name, value in (
-                    ("company_id", self.company_id),
                     ("file_name", self.file_name),
                     ("mime_type", self.mime_type),
                     ("file_size_bytes", self.file_size_bytes),
                 )
                 if value is None
             ]
+            if self.purpose != "logo" and self.company_id is None:
+                missing.append("company_id")
             if missing:
                 raise ValueError(f"Missing upload fields: {', '.join(missing)}")
         if self.operation == "download" and self.document_id is None and self.storage_key is None:

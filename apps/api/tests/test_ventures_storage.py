@@ -47,6 +47,15 @@ def test_venture_storage_env_and_presigned_urls(monkeypatch: pytest.MonkeyPatch)
     assert client.calls[0]["ClientMethod"] == "put_object"
     assert client.calls[1]["ClientMethod"] == "get_object"
 
+    pending_logo_key = storage.build_object_key(
+        user_id="user",
+        company_id=None,
+        purpose="logo",
+        file_name="logo.png",
+    )
+    assert pending_logo_key.startswith("private/ventures/user/pending/logo/")
+    assert storage.is_user_key(user_id="user", key=pending_logo_key)
+
 
 def test_venture_storage_validation_blocks_bad_files() -> None:
     storage = VentureStorage(bucket="bucket", client=_FakeClient())

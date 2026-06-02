@@ -14,6 +14,7 @@ import type {
 
 type VentureGraphToolbarProps = {
   onViewportCommit: (viewport: Viewport) => void;
+  onAddCompany?: () => void;
 };
 
 const ToolbarButton: React.FC<{
@@ -40,6 +41,7 @@ const ToolbarButton: React.FC<{
 
 export const VentureGraphToolbar: React.FC<VentureGraphToolbarProps> = ({
   onViewportCommit,
+  onAddCompany,
 }) => {
   const reactFlow = useReactFlow<VentureGraphNode, VentureGraphEdge>();
 
@@ -72,6 +74,13 @@ export const VentureGraphToolbar: React.FC<VentureGraphToolbarProps> = ({
           )
         }
       />
+      {onAddCompany ? (
+        <ToolbarButton
+          label="Add company"
+          icon={<Plus className="h-4 w-4" />}
+          onClick={onAddCompany}
+        />
+      ) : null}
     </div>
   );
 };
