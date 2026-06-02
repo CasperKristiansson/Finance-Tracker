@@ -12,6 +12,12 @@ import { useVenturesApi } from "@/hooks/use-api";
 import { CompanyHeader } from "@/pages/ventures/components/company-header";
 import { CompanyMetricStrip } from "@/pages/ventures/components/company-metric-strip";
 import { CompanyRelationshipStrip } from "@/pages/ventures/components/company-relationship-strip";
+import {
+  DocumentsTab,
+  NotesTab,
+  TimelineTab,
+  ValuationTab,
+} from "@/pages/ventures/components/company-workspace-tabs";
 import { DocumentHealthCard } from "@/pages/ventures/components/document-health-card";
 import { OwnershipRiskPanel } from "@/pages/ventures/components/ownership-risk-panel";
 import { RecentNotesCard } from "@/pages/ventures/components/recent-notes-card";
@@ -28,6 +34,7 @@ export const CompanyWorkspace: React.FC = () => {
   const {
     overview,
     companyDetails,
+    presignsByRequestId,
     loading,
     errors,
     fetchOverview,
@@ -36,6 +43,9 @@ export const CompanyWorkspace: React.FC = () => {
     createOwnershipEvent,
     createNote,
     updateNote,
+    createDocument,
+    deleteDocument,
+    presignUpload,
   } = useVenturesApi();
   const [valuationSheetOpen, setValuationSheetOpen] = useState(false);
   const [ownershipSheetOpen, setOwnershipSheetOpen] = useState(false);
@@ -155,18 +165,10 @@ export const CompanyWorkspace: React.FC = () => {
       <Tabs defaultValue="overview" className="gap-4">
         <TabsList className="bg-white shadow-sm">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="timeline" disabled>
-            Timeline
-          </TabsTrigger>
-          <TabsTrigger value="valuation" disabled>
-            Valuation
-          </TabsTrigger>
-          <TabsTrigger value="notes" disabled>
-            Notes
-          </TabsTrigger>
-          <TabsTrigger value="documents" disabled>
-            Documents
-          </TabsTrigger>
+          <TabsTrigger value="timeline">Timeline</TabsTrigger>
+          <TabsTrigger value="valuation">Valuation</TabsTrigger>
+          <TabsTrigger value="notes">Notes</TabsTrigger>
+          <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
         <TabsContent value="overview" className="space-y-5">
           <div className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr]">
@@ -184,6 +186,39 @@ export const CompanyWorkspace: React.FC = () => {
             />
             <DocumentHealthCard detail={detail} />
           </div>
+        </TabsContent>
+        <TabsContent value="timeline" className="space-y-5">
+          <TimelineTab detail={detail} />
+        </TabsContent>
+        <TabsContent value="valuation" className="space-y-5">
+          <ValuationTab
+            detail={detail}
+            onAddValuation={() => setValuationSheetOpen(true)}
+          />
+        </TabsContent>
+        <TabsContent value="notes" className="space-y-5">
+          <NotesTab
+            detail={detail}
+            onAddNote={() => {
+              setEditingNote(undefined);
+              setNoteSheetOpen(true);
+            }}
+            onEditNote={(note) => {
+              setEditingNote(note);
+              setNoteSheetOpen(true);
+            }}
+          />
+        </TabsContent>
+        <TabsContent value="documents" className="space-y-5">
+          <DocumentsTab
+            detail={detail}
+            loading={loading}
+            errors={errors}
+            presignsByRequestId={presignsByRequestId}
+            createDocument={createDocument}
+            deleteDocument={deleteDocument}
+            presignUpload={presignUpload}
+          />
         </TabsContent>
       </Tabs>
 
