@@ -20,12 +20,18 @@ export const formatVenturePercent = (
     ? emptyLabel
     : percent(toFiniteNumber(value), { maximumFractionDigits: 1 });
 
-export const titleCase = (value: string | null | undefined) =>
-  (value ?? "")
+export const titleCase = (
+  value: string | null | undefined,
+  fallback = "Not set",
+) => {
+  const formatted = (value ?? "")
     .split(/[_ -]/)
     .filter(Boolean)
     .map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`)
     .join(" ");
+
+  return formatted || fallback;
+};
 
 export const formatVentureDate = (
   value: string | null | undefined,
