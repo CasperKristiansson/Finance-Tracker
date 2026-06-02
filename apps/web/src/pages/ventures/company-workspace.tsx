@@ -163,7 +163,7 @@ export const CompanyWorkspace: React.FC = () => {
       <CompanyRelationshipStrip detail={detail} overview={overview} />
 
       <Tabs defaultValue="overview" className="gap-4">
-        <TabsList className="bg-white shadow-sm">
+        <TabsList className="h-auto flex-wrap justify-start bg-white shadow-sm">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="timeline">Timeline</TabsTrigger>
           <TabsTrigger value="valuation">Valuation</TabsTrigger>

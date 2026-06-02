@@ -701,7 +701,8 @@ export const NotesTab: React.FC<{
         <div>
           <h2 className="text-lg font-semibold text-slate-950">Notes</h2>
           <p className="text-sm text-slate-500">
-            Markdown notes with tags for context, reflections, and lessons.
+            Markdown notes with flexible tags for context, reflections, risks,
+            and decisions.
           </p>
         </div>
         <Button type="button" onClick={onAddNote}>
@@ -770,7 +771,7 @@ export const NotesTab: React.FC<{
           description={
             detail.notes.length
               ? "Adjust search, tag, or sorting controls to find the note."
-              : "Add Markdown notes to capture company context without a separate lessons model."
+              : "Add Markdown notes to capture company context with flexible tags."
           }
           icon={<NotebookText className="h-6 w-6" />}
           action={
@@ -826,7 +827,7 @@ const NoteCard: React.FC<{
           Edit
         </Button>
       </div>
-      <div className="mt-4 space-y-2 text-sm leading-6 text-slate-700 [&_a]:font-medium [&_a]:text-teal-700 [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_li]:ml-4 [&_ol]:list-decimal [&_p]:m-0 [&_strong]:font-semibold [&_ul]:list-disc">
+      <div className="mt-4 space-y-2 overflow-hidden text-sm leading-6 break-words text-slate-700 [&_a]:font-medium [&_a]:text-teal-700 [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-3 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_h1]:text-lg [&_h1]:font-semibold [&_h2]:text-base [&_h2]:font-semibold [&_li]:ml-4 [&_ol]:list-decimal [&_p]:m-0 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:bg-slate-100 [&_pre]:p-3 [&_strong]:font-semibold [&_ul]:list-disc">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>
           {note.body_markdown}
         </ReactMarkdown>
@@ -1082,6 +1083,12 @@ export const DocumentsTab: React.FC<
               Upload document
             </Button>
           </div>
+          {isDemo ? (
+            <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              Demo mode does not have access to the private S3 document bucket,
+              so uploads are unavailable in this environment.
+            </div>
+          ) : null}
           <div className="mt-4 grid gap-3 xl:grid-cols-[minmax(18rem,1fr)_9.5rem_9.5rem_9.5rem_10rem_10rem_9.5rem]">
             <div className="relative">
               <Search className="absolute top-2.5 left-3 h-4 w-4 text-slate-400" />
@@ -1178,7 +1185,7 @@ export const DocumentsTab: React.FC<
                   </Badge>
                 </div>
                 <div className="overflow-x-auto">
-                  <Table>
+                  <Table className="min-w-[980px]">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Document</TableHead>
@@ -1194,19 +1201,19 @@ export const DocumentsTab: React.FC<
                       {documents.map((document) => (
                         <TableRow key={document.id}>
                           <TableCell>
-                            <div className="min-w-60">
-                              <p className="font-medium text-slate-950">
+                            <div className="max-w-80 min-w-60">
+                              <p className="truncate font-medium text-slate-950">
                                 {document.title}
                               </p>
-                              <p className="mt-1 text-xs text-slate-500">
+                              <p className="mt-1 truncate text-xs text-slate-500">
                                 {document.file_name ?? "Metadata only"}
                               </p>
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">
                             {titleCase(document.document_type)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">
                             {formatVentureDate(
                               document.document_date ?? document.uploaded_at,
                             )}
@@ -1227,10 +1234,10 @@ export const DocumentsTab: React.FC<
                               document={document}
                             />
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">
                             {formatBytes(document.file_size_bytes)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-nowrap">
                             <div className="flex justify-end gap-2">
                               <Button
                                 type="button"
@@ -1286,14 +1293,19 @@ export const DocumentsTab: React.FC<
             }
             icon={<FileText className="h-6 w-6" />}
             action={
-              <Button
-                type="button"
-                size="sm"
-                disabled={isDemo}
-                onClick={() => setUploadOpen(true)}
-              >
-                Upload document
-              </Button>
+              isDemo ? (
+                <span className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                  S3 uploads unavailable in demo mode
+                </span>
+              ) : (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setUploadOpen(true)}
+                >
+                  Upload document
+                </Button>
+              )
             }
           />
         )}
@@ -1440,6 +1452,7 @@ const DocumentUploadSheet: React.FC<{
   presignUpload,
   createDocument,
 }) => {
+  const isDemo = useAppSelector(selectIsDemo);
   const [title, setTitle] = useState("");
   const [documentType, setDocumentType] = useState("pdf");
   const [category, setCategory] = useState("valuation");
@@ -1573,6 +1586,10 @@ const DocumentUploadSheet: React.FC<{
   ]);
 
   const submit = () => {
+    if (isDemo) {
+      setLocalError("Demo mode cannot upload private S3 documents.");
+      return;
+    }
     if (!title.trim()) {
       setLocalError("Document title is required.");
       return;
@@ -1776,7 +1793,16 @@ const DocumentUploadSheet: React.FC<{
             >
               Cancel
             </Button>
-            <Button type="button" disabled={isSubmitting} onClick={submit}>
+            <Button
+              type="button"
+              disabled={isSubmitting || isDemo}
+              title={
+                isDemo
+                  ? "Demo mode cannot upload private S3 documents."
+                  : undefined
+              }
+              onClick={submit}
+            >
               <UploadCloud className="h-4 w-4" />
               {stage === "uploading" ? "Uploading" : "Upload document"}
             </Button>

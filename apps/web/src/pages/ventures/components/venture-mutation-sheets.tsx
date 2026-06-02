@@ -140,6 +140,13 @@ const ErrorBanner: React.FC<{ message?: string; localError?: string }> = ({
     </div>
   ) : null;
 
+const DemoMutationBanner: React.FC = () => (
+  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+    Demo mode can inspect this form, but saving changes is disabled because
+    Ventures mutations require authenticated API access.
+  </div>
+);
+
 const SheetFrame: React.FC<{
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -584,6 +591,10 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
 
   const submit = () => {
     setLocalError(undefined);
+    if (isDemo) {
+      setLocalError("Demo mode cannot save Ventures company changes.");
+      return;
+    }
     const payload = buildPayload();
     if (!payload) return;
     if (logoFile) {
@@ -605,12 +616,6 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
 
     setStageState("creating");
     createCompany(payload);
-    if (isDemo) {
-      window.setTimeout(() => {
-        reset();
-        onOpenChange(false);
-      }, 0);
-    }
   };
 
   return (
@@ -632,7 +637,16 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
           >
             Cancel
           </Button>
-          <Button type="button" disabled={isSubmitting} onClick={submit}>
+          <Button
+            type="button"
+            disabled={isSubmitting || isDemo}
+            title={
+              isDemo
+                ? "Demo mode cannot save Ventures company changes."
+                : undefined
+            }
+            onClick={submit}
+          >
             <Save className="h-4 w-4" />
             {stageState === "uploading" ? "Uploading logo" : "Add company"}
           </Button>
@@ -645,6 +659,7 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
             message={errors.createCompany ?? errors.presignUpload}
             localError={localError}
           />
+          {isDemo ? <DemoMutationBanner /> : null}
           <Section
             title="Basic details"
             icon={<Building2 className="h-4 w-4 text-teal-700" />}
@@ -766,19 +781,37 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
             title="Logo"
             icon={<FileImage className="h-4 w-4 text-teal-700" />}
           >
+            {isDemo ? (
+              <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Demo mode does not have access to the private S3 logo bucket, so
+                logo upload is unavailable here.
+              </div>
+            ) : null}
             <div className="grid gap-4 md:grid-cols-[1fr_0.8fr]">
-              <label className="flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center hover:bg-slate-100">
+              <label
+                className={cn(
+                  "flex min-h-28 flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center hover:bg-slate-100",
+                  isDemo
+                    ? "cursor-not-allowed opacity-70 hover:bg-slate-50"
+                    : "cursor-pointer",
+                )}
+              >
                 <UploadCloud className="h-8 w-8 text-slate-400" />
                 <span className="mt-2 text-sm font-medium text-slate-700">
-                  Upload or replace logo
+                  {isDemo
+                    ? "Logo upload unavailable"
+                    : "Upload or replace logo"}
                 </span>
                 <span className="mt-1 text-xs text-slate-500">
-                  PNG, JPG, or WebP up to 5 MB
+                  {isDemo
+                    ? "Use initials fallback in demo mode"
+                    : "PNG, JPG, or WebP up to 5 MB"}
                 </span>
                 <input
                   type="file"
                   accept="image/png,image/jpeg,image/webp"
                   className="sr-only"
+                  disabled={isDemo}
                   onChange={(event) => handleLogoFile(event.target.files?.[0])}
                 />
               </label>
@@ -1091,6 +1124,10 @@ export const AddValuationSheet: React.FC<AddValuationSheetProps> = ({
 
   const submit = () => {
     if (!company) return;
+    if (isDemo) {
+      setLocalError("Demo mode cannot save Ventures valuation changes.");
+      return;
+    }
     if (!cleanDecimal(paperValue)) {
       setLocalError("Paper value is required.");
       return;
@@ -1111,9 +1148,6 @@ export const AddValuationSheet: React.FC<AddValuationSheetProps> = ({
       note: note.trim() || null,
       linked_document_ids: linkedDocumentIds,
     });
-    if (isDemo) {
-      window.setTimeout(() => onOpenChange(false), 0);
-    }
   };
 
   return (
@@ -1134,7 +1168,12 @@ export const AddValuationSheet: React.FC<AddValuationSheetProps> = ({
           </Button>
           <Button
             type="button"
-            disabled={isSubmitting || !company}
+            disabled={isSubmitting || !company || isDemo}
+            title={
+              isDemo
+                ? "Demo mode cannot save Ventures valuation changes."
+                : undefined
+            }
             onClick={submit}
           >
             <Save className="h-4 w-4" />
@@ -1149,6 +1188,7 @@ export const AddValuationSheet: React.FC<AddValuationSheetProps> = ({
             message={errors.createValuation}
             localError={localError}
           />
+          {isDemo ? <DemoMutationBanner /> : null}
           {company ? (
             <Badge
               variant="outline"
@@ -1281,7 +1321,7 @@ export const AddValuationSheet: React.FC<AddValuationSheetProps> = ({
             />
           </Section>
         </div>
-        <Section title="Before after">
+        <Section title="Before and after">
           <div className="space-y-3">
             <AfterValueRow
               label="Paper value"
@@ -1425,6 +1465,10 @@ export const EditOwnershipSheet: React.FC<EditOwnershipSheetProps> = ({
 
   const submit = () => {
     if (!company) return;
+    if (isDemo) {
+      setLocalError("Demo mode cannot save Ventures ownership changes.");
+      return;
+    }
     if (!cleanDecimal(directPct)) {
       setLocalError("Direct ownership percentage is required.");
       return;
@@ -1478,7 +1522,12 @@ export const EditOwnershipSheet: React.FC<EditOwnershipSheetProps> = ({
           </Button>
           <Button
             type="button"
-            disabled={isSubmitting || !company}
+            disabled={isSubmitting || !company || isDemo}
+            title={
+              isDemo
+                ? "Demo mode cannot save Ventures ownership changes."
+                : undefined
+            }
             onClick={submit}
           >
             <Save className="h-4 w-4" />
@@ -1493,6 +1542,7 @@ export const EditOwnershipSheet: React.FC<EditOwnershipSheetProps> = ({
             message={errors.createOwnershipEvent}
             localError={localError}
           />
+          {isDemo ? <DemoMutationBanner /> : null}
           <Section
             title="New ownership"
             icon={<ShieldCheck className="h-4 w-4 text-teal-700" />}
@@ -1611,7 +1661,7 @@ export const EditOwnershipSheet: React.FC<EditOwnershipSheetProps> = ({
             />
           </Section>
         </div>
-        <Section title="Before after">
+        <Section title="Before and after">
           <div className="space-y-3">
             <AfterValueRow
               label="Direct ownership"
@@ -1728,6 +1778,10 @@ export const NoteSheet: React.FC<NoteSheetProps> = ({
 
   const submit = () => {
     if (!company) return;
+    if (isDemo) {
+      setLocalError("Demo mode cannot save Ventures notes.");
+      return;
+    }
     if (!title.trim()) {
       setLocalError("Note title is required.");
       return;
@@ -1752,9 +1806,6 @@ export const NoteSheet: React.FC<NoteSheetProps> = ({
     } else {
       createNote(company.id, payload);
     }
-    if (isDemo) {
-      window.setTimeout(() => onOpenChange(false), 0);
-    }
   };
 
   return (
@@ -1775,7 +1826,8 @@ export const NoteSheet: React.FC<NoteSheetProps> = ({
           </Button>
           <Button
             type="button"
-            disabled={operationLoading || !company}
+            disabled={operationLoading || !company || isDemo}
+            title={isDemo ? "Demo mode cannot save Ventures notes." : undefined}
             onClick={submit}
           >
             <Save className="h-4 w-4" />
@@ -1787,6 +1839,7 @@ export const NoteSheet: React.FC<NoteSheetProps> = ({
       <div className="grid gap-5 xl:grid-cols-[1fr_0.6fr]">
         <div className="space-y-4">
           <ErrorBanner message={operationError} localError={localError} />
+          {isDemo ? <DemoMutationBanner /> : null}
           <Section
             title="Note"
             icon={<NotebookText className="h-4 w-4 text-teal-700" />}
@@ -1816,7 +1869,7 @@ export const NoteSheet: React.FC<NoteSheetProps> = ({
             <div className="grid gap-4 md:grid-cols-2">
               <Field
                 label="Tags"
-                helper="Comma-separated. Use lesson or reflection when relevant."
+                helper="Comma-separated. Use flexible tags such as reflection, risk, fundraising, board, or strategy."
               >
                 <Input
                   value={tags}

@@ -125,7 +125,7 @@ export const CompanyBottomPanel: React.FC<CompanyBottomPanelProps> = ({
             </p>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex max-w-full flex-wrap items-center justify-end gap-2">
           <Button
             type="button"
             variant="outline"
@@ -207,7 +207,7 @@ export const CompanyBottomPanel: React.FC<CompanyBottomPanelProps> = ({
           <div className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between gap-4">
               <span className="text-slate-500">Latest valuation</span>
-              <span className="font-medium text-slate-950">
+              <span className="text-right font-medium text-slate-950">
                 {latestValuation
                   ? formatVentureSek(latestValuation.paper_value_sek)
                   : "None"}
@@ -215,19 +215,19 @@ export const CompanyBottomPanel: React.FC<CompanyBottomPanelProps> = ({
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-slate-500">Valuation date</span>
-              <span className="font-medium text-slate-950">
+              <span className="text-right font-medium text-slate-950">
                 {formatVentureDate(latestValuation?.event_date)}
               </span>
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-slate-500">Latest ownership</span>
-              <span className="font-medium text-slate-950">
+              <span className="text-right font-medium text-slate-950">
                 {formatVenturePercent(latestOwnership?.direct_ownership_pct)}
               </span>
             </div>
             <div className="flex justify-between gap-4">
               <span className="text-slate-500">Fully diluted</span>
-              <span className="font-medium text-slate-950">
+              <span className="text-right font-medium text-slate-950">
                 {formatVenturePercent(
                   latestOwnership?.fully_diluted_ownership_pct,
                   "Not set",
