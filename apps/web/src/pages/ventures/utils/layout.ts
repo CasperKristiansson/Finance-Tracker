@@ -56,8 +56,23 @@ const toNumber = (value: string | number | null | undefined) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const statusSortOrder = (status: string | null | undefined) =>
+  (
+    ({
+      ongoing: 0,
+      idea: 1,
+      stale: 2,
+      exited: 3,
+      failed: 4,
+    }) satisfies Record<string, number>
+  )[status ?? ""] ?? 5;
+
 const sortedCompanies = (companies: VentureOverview["companies"]) =>
   [...companies].sort((left, right) => {
+    const statusDelta =
+      statusSortOrder(left.company.status) -
+      statusSortOrder(right.company.status);
+    if (statusDelta !== 0) return statusDelta;
     const orderDelta =
       (left.company.display_order ?? 0) - (right.company.display_order ?? 0);
     if (orderDelta !== 0) return orderDelta;
@@ -171,6 +186,10 @@ const sortCompanyNodes = (nodes: VentureGraphNode[]) =>
     .sort((left, right) => {
       const leftCompany = left.data.summary.company;
       const rightCompany = right.data.summary.company;
+      const statusDelta =
+        statusSortOrder(leftCompany.status) -
+        statusSortOrder(rightCompany.status);
+      if (statusDelta !== 0) return statusDelta;
       const orderDelta =
         (leftCompany.display_order ?? 0) - (rightCompany.display_order ?? 0);
       if (orderDelta !== 0) return orderDelta;
