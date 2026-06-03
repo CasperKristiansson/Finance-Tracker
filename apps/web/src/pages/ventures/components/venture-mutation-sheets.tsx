@@ -2,6 +2,7 @@ import {
   Building2,
   FileImage,
   Link2,
+  Loader2,
   NotebookText,
   Save,
   ShieldCheck,
@@ -388,7 +389,7 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
     useState<EndpointRequest<"createVentureCompany">["valuation_mode"]>(
       "manual",
     );
-  const [linkedAccountId, setLinkedAccountId] = useState("");
+  const [linkedAccountIds, setLinkedAccountIds] = useState<string[]>([]);
   const [paperValue, setPaperValue] = useState("");
   const [haircut, setHaircut] = useState("75");
   const [liquidity, setLiquidity] =
@@ -428,7 +429,7 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
     setShareClass("Common shares");
     setIncludeInitialValuation(true);
     setValuationMode("manual");
-    setLinkedAccountId("");
+    setLinkedAccountIds([]);
     setPaperValue("");
     setHaircut("75");
     setLiquidity("restricted");
@@ -512,6 +513,14 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
     stageState === "presigning" ||
     stageState === "uploading" ||
     stageState === "creating";
+  const submitStatusLabel =
+    stageState === "presigning" || loading.presignUpload
+      ? "Preparing logo upload"
+      : stageState === "uploading"
+        ? "Uploading logo"
+        : stageState === "creating" || loading.createCompany
+          ? "Creating company"
+          : undefined;
 
   const buildPayload = (): EndpointRequest<"createVentureCompany"> | null => {
     const trimmedName = name.trim();
@@ -523,8 +532,13 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
       setLocalError("Choose the holding company owner.");
       return null;
     }
-    if (valuationMode === "account_balance_sync" && !linkedAccountId) {
-      setLocalError("Choose the account that drives synced venture value.");
+    if (
+      valuationMode === "account_balance_sync" &&
+      linkedAccountIds.length === 0
+    ) {
+      setLocalError(
+        "Choose at least one account that drives synced venture value.",
+      );
       return null;
     }
 
@@ -554,13 +568,11 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
     };
 
     if (valuationMode === "account_balance_sync") {
-      payload.account_links = [
-        {
-          account_id: linkedAccountId,
-          include_in_synced_value: true,
-          weight: "1",
-        },
-      ];
+      payload.account_links = linkedAccountIds.map((accountId) => ({
+        account_id: accountId,
+        include_in_synced_value: true,
+        weight: "1",
+      }));
     } else if (includeInitialValuation && cleanDecimal(paperValue)) {
       payload.initial_valuation = {
         event_date: joinedOn || today(),
@@ -576,6 +588,15 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
     }
 
     return payload;
+  };
+
+  const toggleLinkedAccount = (accountId: string, checked: boolean) => {
+    setLinkedAccountIds((current) => {
+      if (checked) {
+        return current.includes(accountId) ? current : [...current, accountId];
+      }
+      return current.filter((selectedId) => selectedId !== accountId);
+    });
   };
 
   const handleLogoFile = (file?: File | null) => {
@@ -640,6 +661,7 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
           <Button
             type="button"
             disabled={isSubmitting || isDemo}
+            aria-busy={isSubmitting}
             title={
               isDemo
                 ? "Demo mode cannot save Ventures company changes."
@@ -647,8 +669,12 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
             }
             onClick={submit}
           >
-            <Save className="h-4 w-4" />
-            {stageState === "uploading" ? "Uploading logo" : "Add company"}
+            {isSubmitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {submitStatusLabel ?? "Add company"}
           </Button>
         </div>
       }
@@ -659,6 +685,16 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
             message={errors.createCompany ?? errors.presignUpload}
             localError={localError}
           />
+          {submitStatusLabel ? (
+            <div
+              role="status"
+              aria-live="polite"
+              className="flex items-center gap-2 rounded-md border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-medium text-teal-800"
+            >
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>{submitStatusLabel}</span>
+            </div>
+          ) : null}
           {isDemo ? <DemoMutationBanner /> : null}
           <Section
             title="Basic details"
@@ -902,21 +938,52 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
               </Field>
               {valuationMode === "account_balance_sync" ? (
                 <Field
-                  label="Linked account"
-                  helper="The account balance drives venture paper value only."
+                  label="Linked accounts"
+                  helper="Selected balances are summed for venture paper value only."
                 >
-                  <select
-                    className={fieldClass}
-                    value={linkedAccountId}
-                    onChange={(event) => setLinkedAccountId(event.target.value)}
-                  >
-                    <option value="">Choose account</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name} ({titleCase(account.account_type)})
-                      </option>
-                    ))}
-                  </select>
+                  <div className="max-h-44 overflow-y-auto rounded-md border border-slate-200 bg-white">
+                    {accounts.length ? (
+                      accounts.map((account) => {
+                        const checked = linkedAccountIds.includes(account.id);
+                        return (
+                          <label
+                            key={account.id}
+                            className="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-2 text-sm last:border-b-0 hover:bg-slate-50"
+                          >
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4 rounded border-slate-300 text-teal-700 focus:ring-teal-600"
+                              checked={checked}
+                              onChange={(event) =>
+                                toggleLinkedAccount(
+                                  account.id,
+                                  event.target.checked,
+                                )
+                              }
+                            />
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium text-slate-800">
+                                {account.name}
+                              </span>
+                              <span className="text-xs text-slate-500">
+                                {titleCase(account.account_type)}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })
+                    ) : (
+                      <div className="px-3 py-2 text-sm text-slate-500">
+                        No active accounts available.
+                      </div>
+                    )}
+                  </div>
+                  {linkedAccountIds.length ? (
+                    <p className="text-xs text-slate-500">
+                      {linkedAccountIds.length} account
+                      {linkedAccountIds.length === 1 ? "" : "s"} selected.
+                    </p>
+                  ) : null}
                 </Field>
               ) : (
                 <div className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">

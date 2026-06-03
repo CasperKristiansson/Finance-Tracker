@@ -1,19 +1,33 @@
 import { useReactFlow, type Viewport } from "@xyflow/react";
-import { Maximize2, Minus, Plus } from "lucide-react";
-import React, { useCallback } from "react";
+import { LayoutGrid, Maximize2, Minus, Plus } from "lucide-react";
+import React, { useCallback, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import type {
+  VentureAutoLayoutPreset,
+  VentureAutoLayoutSpacing,
   VentureGraphEdge,
   VentureGraphNode,
 } from "@/pages/ventures/utils/layout";
 
 type VentureGraphToolbarProps = {
   onViewportCommit: (viewport: Viewport) => void;
+  onAutoLayout: (
+    preset: VentureAutoLayoutPreset,
+    spacing: VentureAutoLayoutSpacing,
+  ) => void;
   onAddCompany?: () => void;
 };
 
@@ -41,9 +55,14 @@ const ToolbarButton: React.FC<{
 
 export const VentureGraphToolbar: React.FC<VentureGraphToolbarProps> = ({
   onViewportCommit,
+  onAutoLayout,
   onAddCompany,
 }) => {
   const reactFlow = useReactFlow<VentureGraphNode, VentureGraphEdge>();
+  const [selectedPreset, setSelectedPreset] =
+    useState<VentureAutoLayoutPreset>("columns-3");
+  const [selectedSpacing, setSelectedSpacing] =
+    useState<VentureAutoLayoutSpacing>("comfortable");
 
   const commitAfter = useCallback(
     async (action: () => Promise<boolean>) => {
@@ -52,6 +71,37 @@ export const VentureGraphToolbar: React.FC<VentureGraphToolbarProps> = ({
     },
     [onViewportCommit, reactFlow],
   );
+
+  const handleAutoLayout = useCallback(
+    (preset: VentureAutoLayoutPreset, spacing: VentureAutoLayoutSpacing) => {
+      onAutoLayout(preset, spacing);
+      window.setTimeout(() => {
+        void commitAfter(() =>
+          reactFlow.fitView({ duration: 180, padding: 0.2 }),
+        );
+      }, 0);
+    },
+    [commitAfter, onAutoLayout, reactFlow],
+  );
+
+  const handlePresetChange = useCallback(
+    (preset: VentureAutoLayoutPreset) => {
+      setSelectedPreset(preset);
+      handleAutoLayout(preset, selectedSpacing);
+    },
+    [handleAutoLayout, selectedSpacing],
+  );
+
+  const handleSpacingChange = useCallback(
+    (spacing: VentureAutoLayoutSpacing) => {
+      setSelectedSpacing(spacing);
+      handleAutoLayout(selectedPreset, spacing);
+    },
+    [handleAutoLayout, selectedPreset],
+  );
+
+  const menuItemClass = (active: boolean) =>
+    active ? "font-semibold text-slate-950" : undefined;
 
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 bg-white/95 shadow-sm backdrop-blur">
@@ -74,6 +124,71 @@ export const VentureGraphToolbar: React.FC<VentureGraphToolbarProps> = ({
           )
         }
       />
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 rounded-none border-r border-slate-200 hover:bg-slate-50"
+                aria-label="Auto sort"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent sideOffset={6}>Auto sort</TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuLabel>Columns</DropdownMenuLabel>
+          <DropdownMenuItem
+            className={menuItemClass(selectedPreset === "columns-2")}
+            onClick={() => handlePresetChange("columns-2")}
+          >
+            2 columns
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className={menuItemClass(selectedPreset === "columns-3")}
+            onClick={() => handlePresetChange("columns-3")}
+          >
+            3 columns
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className={menuItemClass(selectedPreset === "columns-4")}
+            onClick={() => handlePresetChange("columns-4")}
+          >
+            4 columns
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className={menuItemClass(selectedPreset === "columns-5")}
+            onClick={() => handlePresetChange("columns-5")}
+          >
+            5 columns
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuLabel>Spacing</DropdownMenuLabel>
+          <DropdownMenuItem
+            className={menuItemClass(selectedSpacing === "compact")}
+            onClick={() => handleSpacingChange("compact")}
+          >
+            Compact
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className={menuItemClass(selectedSpacing === "comfortable")}
+            onClick={() => handleSpacingChange("comfortable")}
+          >
+            Comfortable
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className={menuItemClass(selectedSpacing === "spacious")}
+            onClick={() => handleSpacingChange("spacious")}
+          >
+            Spacious
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
       {onAddCompany ? (
         <ToolbarButton
           label="Add company"

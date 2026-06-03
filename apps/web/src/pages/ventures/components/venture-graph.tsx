@@ -25,10 +25,13 @@ import { CompanyNode } from "@/pages/ventures/components/company-node";
 import { FounderNode } from "@/pages/ventures/components/founder-node";
 import { VentureGraphToolbar } from "@/pages/ventures/components/venture-graph-toolbar";
 import {
+  applyVentureAutoLayout,
   buildVentureGraph,
   companyIdFromNodeId,
   layoutPayloadFromGraph,
   viewportFromLayout,
+  type VentureAutoLayoutPreset,
+  type VentureAutoLayoutSpacing,
   type VentureGraphEdge,
   type VentureGraphNode,
 } from "@/pages/ventures/utils/layout";
@@ -153,6 +156,20 @@ const VentureGraphCanvas: React.FC<VentureGraphCanvasProps> = ({
     [schedulePersist],
   );
 
+  const handleAutoLayout = useCallback(
+    (preset: VentureAutoLayoutPreset, spacing: VentureAutoLayoutSpacing) => {
+      setNodes((currentNodes) => {
+        const nextNodes = applyVentureAutoLayout(currentNodes, preset, {
+          spacing,
+        });
+        nodesRef.current = nextNodes;
+        schedulePersist(nextNodes, viewportRef.current);
+        return nextNodes;
+      });
+    },
+    [schedulePersist],
+  );
+
   const handleNodeClick = useCallback<NodeMouseHandler<VentureGraphNode>>(
     (_event, node) => {
       const companyId = companyIdFromNodeId(node.id);
@@ -198,6 +215,7 @@ const VentureGraphCanvas: React.FC<VentureGraphCanvasProps> = ({
           <Panel position="top-right" className="m-4">
             <VentureGraphToolbar
               onViewportCommit={handleViewportCommit}
+              onAutoLayout={handleAutoLayout}
               onAddCompany={onAddCompany}
             />
           </Panel>

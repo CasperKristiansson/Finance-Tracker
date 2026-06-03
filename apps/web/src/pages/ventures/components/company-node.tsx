@@ -1,7 +1,11 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { CalendarDays, FileImage } from "lucide-react";
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { useAppSelector } from "@/app/hooks";
 import { Badge } from "@/components/ui/badge";
+import { selectIsDemo, selectToken } from "@/features/auth/authSlice";
+import { apiFetch } from "@/lib/apiClient";
+import { buildEndpointRequest } from "@/lib/apiEndpoints";
 import { cn } from "@/lib/utils";
 import {
   formatVentureDate,
@@ -17,6 +21,8 @@ export const CompanyNode: React.FC<NodeProps<VentureCompanyNode>> = ({
   data,
   selected,
 }) => {
+  const token = useAppSelector(selectToken);
+  const isDemo = useAppSelector(selectIsDemo);
   const summary = data.summary;
   const company = summary.company;
   const theme = statusTheme(company.status);
@@ -24,6 +30,59 @@ export const CompanyNode: React.FC<NodeProps<VentureCompanyNode>> = ({
   const accentStyle = company.node_color
     ? { backgroundColor: company.node_color }
     : undefined;
+  const [logoState, setLogoState] = useState<{
+    storageKey?: string;
+    url?: string;
+    failed?: boolean;
+  }>({});
+  const activeLogoUrl =
+    logoState.storageKey === company.logo_storage_key && !logoState.failed
+      ? logoState.url
+      : undefined;
+
+  useEffect(() => {
+    if (!company.logo_storage_key || !token || isDemo) return;
+
+    let cancelled = false;
+    void apiFetch<{ url: string }>(
+      buildEndpointRequest("presignVentureUpload", {
+        token,
+        body: {
+          operation: "download",
+          purpose: "logo",
+          storage_key: company.logo_storage_key,
+          file_name: company.logo_file_name,
+          mime_type: company.logo_content_type,
+        },
+      }),
+    )
+      .then(({ data: presign }) => {
+        if (!cancelled) {
+          setLogoState({
+            storageKey: company.logo_storage_key ?? undefined,
+            url: presign.url,
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLogoState({
+            storageKey: company.logo_storage_key ?? undefined,
+            failed: true,
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    company.logo_content_type,
+    company.logo_file_name,
+    company.logo_storage_key,
+    isDemo,
+    token,
+  ]);
 
   return (
     <div
@@ -40,42 +99,53 @@ export const CompanyNode: React.FC<NodeProps<VentureCompanyNode>> = ({
         className="!h-2.5 !w-2.5 !border-2 !border-white !bg-slate-500"
       />
       <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-3">
-            <div
-              className={cn(
-                "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold shadow-sm",
-                theme.icon,
-              )}
-              style={accentStyle}
-              title={company.logo_file_name ?? undefined}
-            >
-              {company.logo_storage_key ? (
-                <FileImage className="h-5 w-5" />
-              ) : (
-                initialsForName(company.name)
-              )}
-            </div>
-            <div className="min-w-0">
-              <h3 className="truncate text-[15px] leading-5 font-semibold text-slate-950">
-                {company.name}
-              </h3>
-              <p className="truncate text-xs text-slate-500">
-                {[company.stage, company.industry]
-                  .filter(Boolean)
-                  .join(" · ") || titleCase(company.role)}
-              </p>
+        <div className="flex items-start gap-3">
+          <div
+            className={cn(
+              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold shadow-sm",
+              theme.icon,
+            )}
+            style={accentStyle}
+            title={company.logo_file_name ?? undefined}
+          >
+            {activeLogoUrl ? (
+              <img
+                src={activeLogoUrl}
+                alt=""
+                className="h-full w-full rounded-full object-cover"
+                onError={() =>
+                  setLogoState({
+                    storageKey: company.logo_storage_key ?? undefined,
+                    failed: true,
+                  })
+                }
+              />
+            ) : company.logo_storage_key ? (
+              <FileImage className="h-5 w-5" />
+            ) : (
+              initialsForName(company.name)
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-[15px] leading-5 font-semibold text-slate-950">
+              {company.name}
+            </h3>
+            <p className="truncate text-xs text-slate-500">
+              {[company.stage, company.industry].filter(Boolean).join(" · ") ||
+                titleCase(company.role)}
+            </p>
+            <div className="mt-2 flex">
+              <Badge
+                variant="outline"
+                className={cn("px-2 py-0.5 text-[11px]", theme.badge)}
+              >
+                {titleCase(company.status)}
+              </Badge>
             </div>
           </div>
-          <Badge
-            variant="outline"
-            className={cn("shrink-0 px-2 py-0.5 text-[11px]", theme.badge)}
-          >
-            {titleCase(company.status)}
-          </Badge>
         </div>
 
-        <div className="mt-4 grid grid-cols-[1fr_1px_1fr] items-center gap-3 border-y border-slate-100 py-3">
+        <div className="mt-3 grid grid-cols-[1fr_1px_1fr] items-center gap-3 border-y border-slate-100 py-3">
           <div className="min-w-0">
             <p className="truncate text-[11px] font-medium text-slate-500">
               Paper value

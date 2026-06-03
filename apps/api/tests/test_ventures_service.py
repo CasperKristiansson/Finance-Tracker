@@ -69,10 +69,12 @@ def test_venture_company_detail_and_overview_kpis(session: Session) -> None:
 
 def test_account_synced_valuation_and_holding_company_edge(session: Session) -> None:
     cash = Account(name="Consulting Cash", account_type=AccountType.NORMAL)
+    retained = Account(name="Retained Earnings", account_type=AccountType.NORMAL)
     offset = Account(name="Offset", account_type=AccountType.NORMAL)
-    session.add_all([cash, offset])
+    session.add_all([cash, retained, offset])
     session.commit()
     session.refresh(cash)
+    session.refresh(retained)
     session.refresh(offset)
 
     TransactionService(session).create_transaction(
@@ -84,7 +86,8 @@ def test_account_synced_valuation_and_holding_company_edge(session: Session) -> 
         ),
         [
             TransactionLeg(account_id=cash.id, amount=Decimal("250000")),
-            TransactionLeg(account_id=offset.id, amount=Decimal("-250000")),
+            TransactionLeg(account_id=retained.id, amount=Decimal("75000")),
+            TransactionLeg(account_id=offset.id, amount=Decimal("-325000")),
         ],
     )
 
@@ -95,7 +98,10 @@ def test_account_synced_valuation_and_holding_company_edge(session: Session) -> 
             name="Consulting AB",
             company_type="consulting",
             valuation_mode="account_balance_sync",
-            account_links=[{"account_id": cash.id, "weight": Decimal("1")}],
+            account_links=[
+                {"account_id": cash.id, "weight": Decimal("1")},
+                {"account_id": retained.id, "weight": Decimal("1")},
+            ],
             initial_ownership=VentureOwnershipCreateRequest(
                 owner_type="company",
                 owner_company_id=holding.summary.company.id,
@@ -111,8 +117,8 @@ def test_account_synced_valuation_and_holding_company_edge(session: Session) -> 
         for company in overview.companies
         if company.company.id == operating.summary.company.id
     )
-    assert synced.paper_value_sek == Decimal("250000.00")
-    assert synced.risk_adjusted_value_sek == Decimal("250000.00")
+    assert synced.paper_value_sek == Decimal("325000.00")
+    assert synced.risk_adjusted_value_sek == Decimal("325000.00")
     assert any(
         edge.owner_company_id == holding.summary.company.id
         and edge.company_id == operating.summary.company.id

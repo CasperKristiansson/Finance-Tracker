@@ -27,6 +27,12 @@ export type VentureCompanyNode = Node<VentureCompanyNodeData, "company">;
 export type VentureFounderNode = Node<VentureFounderNodeData, "founder">;
 export type VentureGraphNode = VentureCompanyNode | VentureFounderNode;
 export type VentureGraphEdge = Edge<Record<string, unknown>, "smoothstep">;
+export type VentureAutoLayoutPreset =
+  | "columns-2"
+  | "columns-3"
+  | "columns-4"
+  | "columns-5";
+export type VentureAutoLayoutSpacing = "compact" | "comfortable" | "spacious";
 
 export const companyNodeId = (companyId: string) => `company:${companyId}`;
 
@@ -128,6 +134,91 @@ const computeDagreFallbackPositions = (overview: VentureOverview) => {
   }
 
   return positions;
+};
+
+const nodeSize = (node: VentureGraphNode) =>
+  node.type === "founder"
+    ? { width: FOUNDER_NODE_WIDTH, height: FOUNDER_NODE_HEIGHT }
+    : { width: COMPANY_NODE_WIDTH, height: COMPANY_NODE_HEIGHT };
+
+const nodeCenterPosition = (
+  node: VentureGraphNode,
+  centerX: number,
+  centerY: number,
+) => {
+  const size = nodeSize(node);
+  return {
+    x: centerX - size.width / 2,
+    y: centerY - size.height / 2,
+  };
+};
+
+const sortCompanyNodes = (nodes: VentureGraphNode[]) =>
+  nodes
+    .filter((node): node is VentureCompanyNode => node.type === "company")
+    .sort((left, right) => {
+      const leftCompany = left.data.summary.company;
+      const rightCompany = right.data.summary.company;
+      const orderDelta =
+        (leftCompany.display_order ?? 0) - (rightCompany.display_order ?? 0);
+      if (orderDelta !== 0) return orderDelta;
+      return leftCompany.name.localeCompare(rightCompany.name);
+    });
+
+const layoutSpacing = (
+  spacing: VentureAutoLayoutSpacing,
+): { x: number; y: number } => {
+  if (spacing === "compact") return { x: 305, y: 190 };
+  if (spacing === "spacious") return { x: 430, y: 270 };
+  return { x: 360, y: 225 };
+};
+
+const applyColumnLayout = (
+  nodes: VentureGraphNode[],
+  columnCount: number,
+  spacing: VentureAutoLayoutSpacing,
+): VentureGraphNode[] => {
+  const companyNodes = sortCompanyNodes(nodes);
+  const positions = new Map<string, { x: number; y: number }>();
+  const { x: xSpacing, y: ySpacing } = layoutSpacing(spacing);
+  const topY = 245;
+
+  companyNodes.forEach((node, index) => {
+    const row = Math.floor(index / columnCount);
+    const column = index % columnCount;
+    const columnsInRow = Math.min(
+      columnCount,
+      companyNodes.length - row * columnCount,
+    );
+    const startX = -((columnsInRow - 1) * xSpacing) / 2;
+    positions.set(node.id, {
+      x: startX + column * xSpacing - COMPANY_NODE_WIDTH / 2,
+      y: topY + row * ySpacing,
+    });
+  });
+
+  return nodes.map<VentureGraphNode>((node) => {
+    if (node.id === FOUNDER_NODE_ID) {
+      return { ...node, position: nodeCenterPosition(node, 0, 60) };
+    }
+    return {
+      ...node,
+      position: positions.get(node.id) ?? node.position,
+    };
+  });
+};
+
+export const applyVentureAutoLayout = (
+  nodes: VentureGraphNode[],
+  preset: VentureAutoLayoutPreset,
+  options: { spacing?: VentureAutoLayoutSpacing } = {},
+): VentureGraphNode[] => {
+  const columnCount = Number(preset.replace("columns-", ""));
+  return applyColumnLayout(
+    nodes,
+    Number.isFinite(columnCount) ? columnCount : 3,
+    options.spacing ?? "comfortable",
+  );
 };
 
 const fallbackPositionsFor = (overview: VentureOverview) => {
