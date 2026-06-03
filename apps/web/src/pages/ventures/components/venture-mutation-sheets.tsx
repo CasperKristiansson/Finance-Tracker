@@ -986,20 +986,22 @@ export const AddCompanySheet: React.FC<AddCompanySheetProps> = ({
                   ) : null}
                 </Field>
               ) : (
-                <div className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
-                  <div>
-                    <p className="text-sm font-medium text-slate-700">
-                      Initial valuation
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      Optional first paper value event.
-                    </p>
+                <Field label="Initial valuation">
+                  <div
+                    className={cn(
+                      fieldClass,
+                      "flex items-center justify-between gap-3 py-0 pr-2",
+                    )}
+                  >
+                    <span className="truncate text-slate-700">
+                      Optional first paper value event
+                    </span>
+                    <Switch
+                      checked={includeInitialValuation}
+                      onCheckedChange={setIncludeInitialValuation}
+                    />
                   </div>
-                  <Switch
-                    checked={includeInitialValuation}
-                    onCheckedChange={setIncludeInitialValuation}
-                  />
-                </div>
+                </Field>
               )}
             </div>
             {valuationMode === "manual" && includeInitialValuation ? (

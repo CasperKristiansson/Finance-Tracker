@@ -1525,6 +1525,11 @@ export interface VentureDocumentRead {
   updated_at: string;
 }
 
+export interface VentureGraphEdgeLabel {
+  edge_id: string;
+  position: string;
+}
+
 export interface VentureGraphEdgeRead {
   company_id: string;
   owner_type: string;
@@ -1544,12 +1549,14 @@ export interface VentureGraphLayoutRead {
   layout_key?: string;
   nodes?: VentureGraphLayoutNode[];
   viewport?: VentureGraphViewport | null;
+  edge_labels?: VentureGraphEdgeLabel[];
 }
 
 export interface VentureGraphLayoutUpdateRequest {
   layout_key?: string;
   nodes?: VentureGraphLayoutNode[];
   viewport?: VentureGraphViewport | null;
+  edge_labels?: VentureGraphEdgeLabel[];
 }
 
 export interface VentureGraphViewport {

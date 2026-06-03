@@ -8,6 +8,7 @@ import {
   type NodeChange,
   type NodeMouseHandler,
   type OnNodeDrag,
+  type ReactFlowInstance,
   type Viewport,
 } from "@xyflow/react";
 import { Building2 } from "lucide-react";
@@ -23,16 +24,22 @@ import type { VentureOverview } from "@/features/ventures/venturesSlice";
 import { cn } from "@/lib/utils";
 import { CompanyNode } from "@/pages/ventures/components/company-node";
 import { FounderNode } from "@/pages/ventures/components/founder-node";
+import { OwnershipEdge } from "@/pages/ventures/components/ownership-edge";
 import { VentureGraphToolbar } from "@/pages/ventures/components/venture-graph-toolbar";
 import {
   applyVentureAutoLayout,
   buildVentureGraph,
   companyIdFromNodeId,
+  COMPANY_NODE_HEIGHT,
+  COMPANY_NODE_WIDTH,
+  FOUNDER_NODE_HEIGHT,
+  FOUNDER_NODE_WIDTH,
   layoutPayloadFromGraph,
   viewportFromLayout,
   type VentureAutoLayoutPreset,
   type VentureAutoLayoutSpacing,
   type VentureGraphEdge,
+  type VentureGraphNodeRect,
   type VentureGraphNode,
 } from "@/pages/ventures/utils/layout";
 
@@ -50,6 +57,36 @@ const nodeTypes = {
   company: CompanyNode,
   founder: FounderNode,
 };
+
+const edgeTypes = {
+  ownership: OwnershipEdge,
+};
+
+const edgeLabelPositionsFromEdges = (edges: VentureGraphEdge[]) =>
+  Object.fromEntries(
+    edges
+      .map((edge) => [edge.id, edge.data?.labelPosition])
+      .filter(
+        (entry): entry is [string, number] => typeof entry[1] === "number",
+      ),
+  );
+
+const nodeRectsFromGraph = (
+  nodes: VentureGraphNode[],
+): VentureGraphNodeRect[] =>
+  nodes.map((node) => {
+    const fallbackWidth =
+      node.type === "founder" ? FOUNDER_NODE_WIDTH : COMPANY_NODE_WIDTH;
+    const fallbackHeight =
+      node.type === "founder" ? FOUNDER_NODE_HEIGHT : COMPANY_NODE_HEIGHT;
+    return {
+      id: node.id,
+      x: node.position.x,
+      y: node.position.y,
+      width: node.measured?.width ?? node.width ?? fallbackWidth,
+      height: node.measured?.height ?? node.height ?? fallbackHeight,
+    };
+  });
 
 type VentureGraphCanvasProps = {
   graphKey: string;
@@ -74,7 +111,16 @@ const VentureGraphCanvas: React.FC<VentureGraphCanvasProps> = ({
   children,
 }) => {
   const [nodes, setNodes] = useState<VentureGraphNode[]>(initialNodes);
+  const [edgeLabelPositions, setEdgeLabelPositions] = useState<
+    Record<string, number>
+  >(() => edgeLabelPositionsFromEdges(edges));
   const nodesRef = useRef(nodes);
+  const edgeLabelPositionsRef = useRef(edgeLabelPositions);
+  const graphViewportRef = useRef<HTMLDivElement>(null);
+  const reactFlowRef = useRef<ReactFlowInstance<
+    VentureGraphNode,
+    VentureGraphEdge
+  > | null>(null);
   const viewportRef = useRef<Viewport>(
     initialViewport ?? { x: 0, y: 0, zoom: 1 },
   );
@@ -88,21 +134,12 @@ const VentureGraphCanvas: React.FC<VentureGraphCanvasProps> = ({
     [nodes, selectedCompanyId],
   );
 
-  useEffect(() => {
-    nodesRef.current = nodes;
-  }, [nodes]);
-
-  useEffect(
-    () => () => {
-      if (persistTimerRef.current) {
-        window.clearTimeout(persistTimerRef.current);
-      }
-    },
-    [],
-  );
-
   const schedulePersist = useCallback(
-    (nextNodes: VentureGraphNode[], nextViewport: Viewport) => {
+    (
+      nextNodes: VentureGraphNode[],
+      nextViewport: Viewport,
+      nextEdgeLabelPositions = edgeLabelPositionsRef.current,
+    ) => {
       if (persistTimerRef.current) {
         window.clearTimeout(persistTimerRef.current);
       }
@@ -112,11 +149,58 @@ const VentureGraphCanvas: React.FC<VentureGraphCanvasProps> = ({
             nextNodes,
             nextViewport,
             layoutKey ?? "default",
+            nextEdgeLabelPositions,
           ),
         );
       }, 700);
     },
     [layoutKey, onLayoutChange],
+  );
+
+  const handleEdgeLabelPositionChange = useCallback(
+    (edgeId: string, position: number) => {
+      const clampedPosition = Math.min(0.95, Math.max(0.05, position));
+      setEdgeLabelPositions((currentPositions) => {
+        const nextPositions = {
+          ...currentPositions,
+          [edgeId]: clampedPosition,
+        };
+        edgeLabelPositionsRef.current = nextPositions;
+        schedulePersist(nodesRef.current, viewportRef.current, nextPositions);
+        return nextPositions;
+      });
+    },
+    [schedulePersist],
+  );
+
+  const displayEdges = useMemo(() => {
+    const nodeRects = nodeRectsFromGraph(nodes);
+    return edges.map((edge) => ({
+      ...edge,
+      data: {
+        ...(edge.data ?? {}),
+        labelPosition: edgeLabelPositions[edge.id],
+        nodeRects,
+        onLabelPositionChange: handleEdgeLabelPositionChange,
+      },
+    }));
+  }, [edges, edgeLabelPositions, handleEdgeLabelPositionChange, nodes]);
+
+  useEffect(() => {
+    nodesRef.current = nodes;
+  }, [nodes]);
+
+  useEffect(() => {
+    edgeLabelPositionsRef.current = edgeLabelPositions;
+  }, [edgeLabelPositions]);
+
+  useEffect(
+    () => () => {
+      if (persistTimerRef.current) {
+        window.clearTimeout(persistTimerRef.current);
+      }
+    },
+    [],
   );
 
   const handleNodesChange = useCallback(
@@ -162,27 +246,55 @@ const VentureGraphCanvas: React.FC<VentureGraphCanvasProps> = ({
         const nextNodes = applyVentureAutoLayout(currentNodes, preset, {
           spacing,
         });
+        const nextEdgeLabelPositions = {};
         nodesRef.current = nextNodes;
-        schedulePersist(nextNodes, viewportRef.current);
+        edgeLabelPositionsRef.current = nextEdgeLabelPositions;
+        setEdgeLabelPositions(nextEdgeLabelPositions);
+        schedulePersist(nextNodes, viewportRef.current, nextEdgeLabelPositions);
         return nextNodes;
       });
     },
     [schedulePersist],
   );
 
+  const focusNodeInViewport = useCallback((node: VentureGraphNode) => {
+    const reactFlow = reactFlowRef.current;
+    const bounds = graphViewportRef.current?.getBoundingClientRect();
+    if (!reactFlow || !bounds) return;
+
+    const currentViewport = reactFlow.getViewport();
+    const zoom = Math.min(Math.max(currentViewport.zoom, 0.75), 1.2);
+    const nodeWidth = node.measured?.width ?? node.width ?? COMPANY_NODE_WIDTH;
+    const nodeHeight =
+      node.measured?.height ?? node.height ?? COMPANY_NODE_HEIGHT;
+    const centerX = node.position.x + nodeWidth / 2;
+    const centerY = node.position.y + nodeHeight / 2;
+    const topFocusOffset = Math.min(Math.max(bounds.height * 0.22, 110), 170);
+    const nextViewport = {
+      x: bounds.width / 2 - centerX * zoom,
+      y: topFocusOffset - centerY * zoom,
+      zoom,
+    };
+
+    viewportRef.current = nextViewport;
+    void reactFlow.setViewport(nextViewport, { duration: 260 });
+  }, []);
+
   const handleNodeClick = useCallback<NodeMouseHandler<VentureGraphNode>>(
     (_event, node) => {
       const companyId = companyIdFromNodeId(node.id);
       if (companyId) {
+        focusNodeInViewport(node);
         onSelectCompany(companyId);
       }
     },
-    [onSelectCompany],
+    [focusNodeInViewport, onSelectCompany],
   );
 
   return (
     <ReactFlowProvider>
       <div
+        ref={graphViewportRef}
         className={cn(
           "relative min-h-[680px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm",
           className,
@@ -190,12 +302,16 @@ const VentureGraphCanvas: React.FC<VentureGraphCanvasProps> = ({
       >
         <ReactFlow<VentureGraphNode, VentureGraphEdge>
           nodes={displayNodes}
-          edges={edges}
+          edges={displayEdges}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           onNodesChange={handleNodesChange}
           onNodeClick={handleNodeClick}
           onNodeDragStop={handleNodeDragStop}
           onMoveEnd={handleMoveEnd}
+          onInit={(instance) => {
+            reactFlowRef.current = instance;
+          }}
           onPaneClick={() => onSelectCompany(undefined)}
           defaultViewport={initialViewport}
           fitView={!initialViewport}
@@ -250,12 +366,20 @@ export const VentureGraph: React.FC<VentureGraphProps> = ({
     () =>
       [
         overview.layout.layout_key ?? "default",
-        overview.companies.map((summary) => summary.company.id).join(","),
-        (overview.layout.nodes ?? [])
-          .map((node) => `${node.company_id}:${node.x}:${node.y}`)
+        overview.companies
+          .map(
+            (summary) =>
+              `${summary.company.id}:${summary.company.updated_at}:${summary.company.logo_storage_key ?? ""}`,
+          )
+          .join(","),
+        overview.ownership_edges
+          .map(
+            (edge) =>
+              `${edge.owner_company_id ?? "founder"}:${edge.company_id}:${edge.ownership_pct}`,
+          )
           .join(","),
       ].join("|"),
-    [overview.companies, overview.layout.layout_key, overview.layout.nodes],
+    [overview.companies, overview.layout.layout_key, overview.ownership_edges],
   );
 
   return (

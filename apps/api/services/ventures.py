@@ -35,6 +35,7 @@ from ..schemas import (
     VentureDocumentHealthWarning,
     VentureDocumentListResponse,
     VentureDocumentRead,
+    VentureGraphEdgeLabel,
     VentureGraphEdgeRead,
     VentureGraphLayoutNode,
     VentureGraphLayoutRead,
@@ -308,6 +309,7 @@ class VentureService:
         layouts = self.repository.list_layouts(layout_key=layout_key)
         nodes: list[VentureGraphLayoutNode] = []
         viewport: Optional[VentureGraphViewport] = None
+        edge_labels: list[VentureGraphEdgeLabel] = []
         for layout in layouts:
             if layout.company_id is not None and layout.x is not None and layout.y is not None:
                 nodes.append(
@@ -320,7 +322,18 @@ class VentureService:
                 )
             if layout.company_id is None and layout.viewport is not None:
                 viewport = VentureGraphViewport.model_validate(layout.viewport)
-        return VentureGraphLayoutRead(layout_key=layout_key, nodes=nodes, viewport=viewport)
+                raw_edge_labels = layout.viewport.get("edge_labels", [])
+                if isinstance(raw_edge_labels, list):
+                    edge_labels = [
+                        VentureGraphEdgeLabel.model_validate(edge_label)
+                        for edge_label in raw_edge_labels
+                    ]
+        return VentureGraphLayoutRead(
+            layout_key=layout_key,
+            nodes=nodes,
+            viewport=viewport,
+            edge_labels=edge_labels,
+        )
 
     def save_graph_layout(self, data: VentureGraphLayoutUpdateRequest) -> VentureGraphLayoutRead:
         company_ids = {company.id for company in self.repository.list_companies()}
@@ -338,6 +351,11 @@ class VentureService:
             for node in data.nodes
         ]
         viewport = data.viewport.model_dump(mode="json") if data.viewport is not None else None
+        if data.edge_labels:
+            viewport = viewport or {}
+            viewport["edge_labels"] = [
+                edge_label.model_dump(mode="json") for edge_label in data.edge_labels
+            ]
         self.repository.replace_layouts(
             layout_key=data.layout_key,
             layouts=layouts,

@@ -26,7 +26,19 @@ export type VentureFounderNodeData = Record<string, unknown> & {
 export type VentureCompanyNode = Node<VentureCompanyNodeData, "company">;
 export type VentureFounderNode = Node<VentureFounderNodeData, "founder">;
 export type VentureGraphNode = VentureCompanyNode | VentureFounderNode;
-export type VentureGraphEdge = Edge<Record<string, unknown>, "smoothstep">;
+export type VentureGraphNodeRect = {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+export type VentureGraphEdgeData = Record<string, unknown> & {
+  labelPosition?: number;
+  nodeRects?: VentureGraphNodeRect[];
+  onLabelPositionChange?: (edgeId: string, position: number) => void;
+};
+export type VentureGraphEdge = Edge<VentureGraphEdgeData, "ownership">;
 export type VentureAutoLayoutPreset =
   | "columns-2"
   | "columns-3"
@@ -168,9 +180,9 @@ const sortCompanyNodes = (nodes: VentureGraphNode[]) =>
 const layoutSpacing = (
   spacing: VentureAutoLayoutSpacing,
 ): { x: number; y: number } => {
-  if (spacing === "compact") return { x: 305, y: 190 };
-  if (spacing === "spacious") return { x: 430, y: 270 };
-  return { x: 360, y: 225 };
+  if (spacing === "compact") return { x: 305, y: 245 };
+  if (spacing === "spacious") return { x: 430, y: 340 };
+  return { x: 360, y: 285 };
 };
 
 const applyColumnLayout = (
@@ -254,6 +266,12 @@ export const buildVentureGraph = (
       },
     ]),
   );
+  const edgeLabelPositions = new Map(
+    (overview.layout.edge_labels ?? []).map((edgeLabel) => [
+      edgeLabel.edge_id,
+      toNumber(edgeLabel.position),
+    ]),
+  );
   const fallbackPositions = fallbackPositionsFor(overview);
 
   const nodes: VentureGraphNode[] = [
@@ -314,7 +332,7 @@ export const buildVentureGraph = (
       const color = statusTheme(targetSummary?.company.status).edge;
       return {
         id: `ownership-${source}-${target}-${index}`,
-        type: "smoothstep",
+        type: "ownership",
         source,
         target,
         sourceHandle: "source-bottom",
@@ -328,6 +346,9 @@ export const buildVentureGraph = (
         data: {
           ownerType: ownershipEdge.owner_type,
           ownershipPct: ownershipEdge.ownership_pct,
+          labelPosition: edgeLabelPositions.get(
+            `ownership-${source}-${target}-${index}`,
+          ),
         },
         markerEnd: {
           type: MarkerType.ArrowClosed,
@@ -340,14 +361,6 @@ export const buildVentureGraph = (
           stroke: color,
           strokeOpacity: 0.42,
           strokeWidth: 1.8,
-        },
-        labelStyle: {
-          fill: "#475569",
-          fontSize: 11,
-          fontWeight: 600,
-        },
-        labelBgStyle: {
-          fill: "rgba(255,255,255,0.86)",
         },
         selectable: false,
       };
@@ -362,7 +375,7 @@ export const buildVentureGraph = (
       const color = statusTheme(summary.company.status).edge;
       return {
         id: `tracked-${FOUNDER_NODE_ID}-${target}`,
-        type: "smoothstep",
+        type: "ownership",
         source: FOUNDER_NODE_ID,
         target,
         sourceHandle: "source-bottom",
@@ -395,6 +408,7 @@ export const layoutPayloadFromGraph = (
   nodes: VentureGraphNode[],
   viewport: Viewport,
   layoutKey = "default",
+  edgeLabelPositions: Record<string, number> = {},
 ): VentureOverview["layout"] => ({
   layout_key: layoutKey,
   nodes: nodes
@@ -410,4 +424,8 @@ export const layoutPayloadFromGraph = (
     y: String(Math.round(viewport.y)),
     zoom: String(Number(viewport.zoom.toFixed(4))),
   },
+  edge_labels: Object.entries(edgeLabelPositions).map(([edgeId, position]) => ({
+    edge_id: edgeId,
+    position: String(Number(position.toFixed(3))),
+  })),
 });

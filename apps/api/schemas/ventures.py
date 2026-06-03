@@ -357,12 +357,20 @@ class VentureGraphViewport(BaseModel):
     zoom: Decimal
 
 
+class VentureGraphEdgeLabel(BaseModel):
+    """Persisted edge label position along an ownership edge path."""
+
+    edge_id: str = Field(min_length=1, max_length=240)
+    position: Decimal = Field(ge=Decimal("0.05"), le=Decimal("0.95"))
+
+
 class VentureGraphLayoutUpdateRequest(BaseModel):
     """Patch graph layout positions and viewport."""
 
     layout_key: str = "default"
     nodes: list[VentureGraphLayoutNode] = Field(default_factory=list)
     viewport: Optional[VentureGraphViewport] = None
+    edge_labels: list[VentureGraphEdgeLabel] = Field(default_factory=list)
 
 
 class VentureGraphLayoutRead(BaseModel):
@@ -371,6 +379,7 @@ class VentureGraphLayoutRead(BaseModel):
     layout_key: str = "default"
     nodes: list[VentureGraphLayoutNode] = Field(default_factory=list)
     viewport: Optional[VentureGraphViewport] = None
+    edge_labels: list[VentureGraphEdgeLabel] = Field(default_factory=list)
 
 
 class VentureCompanySummaryRead(BaseModel):

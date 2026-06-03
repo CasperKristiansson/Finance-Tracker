@@ -7,6 +7,7 @@ import {
   removeVentureCompanyDetail,
   setVentureCompanyDetail,
   setVentureDocuments,
+  setVentureLayout,
   setVentureNotes,
   setVentureOperationError,
   setVentureOperationLoading,
@@ -481,14 +482,14 @@ function* handleUpdateLayout(
     function* updateLayout() {
       const isDemo: boolean = yield* select(selectIsDemo);
       if (isDemo) return;
-      yield* call(
+      const response: EndpointResponse<"updateVentureLayout"> = yield* call(
         callApiWithAuth<EndpointResponse<"updateVentureLayout">>,
         buildEndpointRequest("updateVentureLayout", {
           body: action.payload.data,
         }),
         { loadingKey: "ventures-update-layout" },
       );
-      yield* put(FetchVenturesOverview());
+      yield* put(setVentureLayout(response));
     },
     "Unable to update venture layout.",
   );

@@ -10,6 +10,7 @@ from apps.api.models import Account, Transaction, TransactionLeg
 from apps.api.schemas import (
     VentureCompanyCreateRequest,
     VentureDocumentCreateRequest,
+    VentureGraphEdgeLabel,
     VentureGraphLayoutNode,
     VentureGraphLayoutUpdateRequest,
     VentureGraphViewport,
@@ -171,11 +172,18 @@ def test_notes_documents_soft_delete_and_layout(session: Session) -> None:
                 )
             ],
             viewport=VentureGraphViewport(x=Decimal("1"), y=Decimal("2"), zoom=Decimal("1.2")),
+            edge_labels=[
+                VentureGraphEdgeLabel(
+                    edge_id="ownership-founder-root-company-a-0",
+                    position=Decimal("0.35"),
+                )
+            ],
         )
     )
     assert layout.nodes[0].pinned is True
     assert layout.viewport is not None
     assert layout.viewport.zoom == Decimal("1.2")
+    assert layout.edge_labels[0].position == Decimal("0.35")
 
     service.delete_note(company_id, note.id)
     service.delete_document(company_id, document.id)

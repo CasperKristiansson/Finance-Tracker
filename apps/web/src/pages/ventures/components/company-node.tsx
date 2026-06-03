@@ -1,17 +1,13 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { CalendarDays, FileImage } from "lucide-react";
-import React, { useEffect, useState } from "react";
-import { useAppSelector } from "@/app/hooks";
+import { CalendarDays } from "lucide-react";
+import React from "react";
 import { Badge } from "@/components/ui/badge";
-import { selectIsDemo, selectToken } from "@/features/auth/authSlice";
-import { apiFetch } from "@/lib/apiClient";
-import { buildEndpointRequest } from "@/lib/apiEndpoints";
 import { cn } from "@/lib/utils";
+import { VentureCompanyLogo } from "@/pages/ventures/components/company-logo";
 import {
   formatVentureDate,
   formatVenturePercent,
   formatVentureSek,
-  initialsForName,
   statusTheme,
   titleCase,
 } from "@/pages/ventures/utils/format";
@@ -21,68 +17,10 @@ export const CompanyNode: React.FC<NodeProps<VentureCompanyNode>> = ({
   data,
   selected,
 }) => {
-  const token = useAppSelector(selectToken);
-  const isDemo = useAppSelector(selectIsDemo);
   const summary = data.summary;
   const company = summary.company;
   const theme = statusTheme(company.status);
   const lastActivity = summary.last_activity_at ?? company.updated_at;
-  const accentStyle = company.node_color
-    ? { backgroundColor: company.node_color }
-    : undefined;
-  const [logoState, setLogoState] = useState<{
-    storageKey?: string;
-    url?: string;
-    failed?: boolean;
-  }>({});
-  const activeLogoUrl =
-    logoState.storageKey === company.logo_storage_key && !logoState.failed
-      ? logoState.url
-      : undefined;
-
-  useEffect(() => {
-    if (!company.logo_storage_key || !token || isDemo) return;
-
-    let cancelled = false;
-    void apiFetch<{ url: string }>(
-      buildEndpointRequest("presignVentureUpload", {
-        token,
-        body: {
-          operation: "download",
-          purpose: "logo",
-          storage_key: company.logo_storage_key,
-          file_name: company.logo_file_name,
-          mime_type: company.logo_content_type,
-        },
-      }),
-    )
-      .then(({ data: presign }) => {
-        if (!cancelled) {
-          setLogoState({
-            storageKey: company.logo_storage_key ?? undefined,
-            url: presign.url,
-          });
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLogoState({
-            storageKey: company.logo_storage_key ?? undefined,
-            failed: true,
-          });
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    company.logo_content_type,
-    company.logo_file_name,
-    company.logo_storage_key,
-    isDemo,
-    token,
-  ]);
 
   return (
     <div
@@ -100,32 +38,10 @@ export const CompanyNode: React.FC<NodeProps<VentureCompanyNode>> = ({
       />
       <div className="p-4">
         <div className="flex items-start gap-3">
-          <div
-            className={cn(
-              "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-semibold shadow-sm",
-              theme.icon,
-            )}
-            style={accentStyle}
-            title={company.logo_file_name ?? undefined}
-          >
-            {activeLogoUrl ? (
-              <img
-                src={activeLogoUrl}
-                alt=""
-                className="h-full w-full rounded-full object-cover"
-                onError={() =>
-                  setLogoState({
-                    storageKey: company.logo_storage_key ?? undefined,
-                    failed: true,
-                  })
-                }
-              />
-            ) : company.logo_storage_key ? (
-              <FileImage className="h-5 w-5" />
-            ) : (
-              initialsForName(company.name)
-            )}
-          </div>
+          <VentureCompanyLogo
+            company={company}
+            className={cn("h-11 w-11", theme.icon)}
+          />
           <div className="min-w-0 flex-1">
             <h3 className="truncate text-[15px] leading-5 font-semibold text-slate-950">
               {company.name}

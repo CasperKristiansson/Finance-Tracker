@@ -82,6 +82,12 @@ const venturesSlice = createSlice({
       state.overview = action.payload;
       delete state.errors.overview;
     },
+    setVentureLayout(state, action: PayloadAction<VentureOverview["layout"]>) {
+      if (state.overview) {
+        state.overview.layout = action.payload;
+      }
+      delete state.errors.updateLayout;
+    },
     setVentureCompanyDetail(
       state,
       action: PayloadAction<{
@@ -185,6 +191,7 @@ export const {
   resetVentures,
   setVentureCompanyDetail,
   setVentureDocuments,
+  setVentureLayout,
   setVentureNotes,
   setVentureOperationError,
   setVentureOperationLoading,

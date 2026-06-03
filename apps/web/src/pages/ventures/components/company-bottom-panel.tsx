@@ -20,11 +20,11 @@ import type {
   VentureOverview,
 } from "@/features/ventures/venturesSlice";
 import { cn } from "@/lib/utils";
+import { VentureCompanyLogo } from "@/pages/ventures/components/company-logo";
 import {
   formatVentureDate,
   formatVenturePercent,
   formatVentureSek,
-  initialsForName,
   statusTheme,
   titleCase,
   ventureCompanyPath,
@@ -91,19 +91,10 @@ export const CompanyBottomPanel: React.FC<CompanyBottomPanelProps> = ({
     <div className="absolute right-4 bottom-4 left-4 z-20 rounded-lg border border-slate-200 bg-white/98 shadow-2xl backdrop-blur">
       <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
         <div className="flex min-w-0 items-center gap-3">
-          <div
-            className={cn(
-              "flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-semibold shadow-sm",
-              theme.icon,
-            )}
-            style={
-              company.node_color
-                ? { backgroundColor: company.node_color }
-                : undefined
-            }
-          >
-            {initialsForName(company.name)}
-          </div>
+          <VentureCompanyLogo
+            company={company}
+            className={cn("h-12 w-12", theme.icon)}
+          />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="truncate text-xl font-semibold text-slate-950">
